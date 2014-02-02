@@ -1,0 +1,204 @@
+#include "unixs.h"
+#include "base/mainloop.h"
+#include "base/module.h"
+#include <sys/socket.h>
+#include <sys/un.h>
+
+struct unixs_state {
+	int unixSocketDescriptor;
+	bool validOnly;
+	struct iovec *sgioMemory;
+};
+
+typedef struct unixs_state *unixsState;
+
+static bool caerOutputUnixSInit(caerModuleData moduleData);
+static void caerOutputUnixSRun(caerModuleData moduleData, size_t argsNumber, va_list args);
+static void caerOutputUnixSConfig(caerModuleData moduleData);
+static void caerOutputUnixSExit(caerModuleData moduleData);
+
+static struct caer_module_functions caerOutputUnixSFunctions = { .moduleInit = &caerOutputUnixSInit, .moduleRun =
+	&caerOutputUnixSRun, .moduleConfig = &caerOutputUnixSConfig, .moduleExit = &caerOutputUnixSExit };
+
+void caerOutputUnixS(uint16_t moduleID, size_t outputTypesNumber, ...) {
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "UnixSocketOutput");
+
+	va_list args;
+	va_start(args, outputTypesNumber);
+	caerModuleSMv(&caerOutputUnixSFunctions, moduleData, sizeof(struct unixs_state), outputTypesNumber, args);
+	va_end(args);
+}
+
+static void caerOutputUnixSConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
+
+static bool caerOutputUnixSInit(caerModuleData moduleData) {
+	unixsState state = moduleData->moduleState;
+
+	// First, always create all needed setting nodes, set their default values
+	// and add their listeners.
+	sshsNodePutStringIfAbsent(moduleData->moduleNode, "socketPath", "/tmp/caer.sock");
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "validEventsOnly", false);
+
+	// Install default listener to signal configuration updates asynchronously.
+	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerOutputUnixSConfigListener);
+
+	// Open a Unix local socket on a known path, to be accessed by other processes.
+	state->unixSocketDescriptor = socket(AF_UNIX, SOCK_DGRAM, 0);
+	if (state->unixSocketDescriptor < 0) {
+		caerLog(LOG_CRITICAL, "Could not create local Unix socket. Error: %s (%d).", caerLogStrerror(errno), errno);
+		return (false);
+	}
+
+	struct sockaddr_un unixSocketAddr;
+	memset(&unixSocketAddr, 0, sizeof(struct sockaddr_un));
+
+	unixSocketAddr.sun_family = AF_UNIX;
+	char *socketPath = sshsNodeGetString(moduleData->moduleNode, "socketPath");
+	strncpy(unixSocketAddr.sun_path, socketPath, sizeof(unixSocketAddr.sun_path) - 1);
+	free(socketPath);
+
+	// Connect socket to above address.
+	if (connect(state->unixSocketDescriptor, (struct sockaddr *) &unixSocketAddr, sizeof(struct sockaddr_un)) < 0) {
+		caerLog(LOG_CRITICAL, "Could not connect to local Unix socket. Error: %s (%d).", caerLogStrerror(errno), errno);
+		close(state->unixSocketDescriptor);
+		return (false);
+	}
+
+	// Set valid events flag, and allocate memory for scatter/gather IO for it.
+	state->validOnly = sshsNodeGetBool(moduleData->moduleNode, "validEventsOnly");
+
+	if (state->validOnly) {
+		state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
+		if (state->sgioMemory == NULL) {
+			caerLog(LOG_ALERT, "Impossible to allocate memory for scatter/gather IO, using memory copy method.");
+		}
+		else {
+			caerLog(LOG_INFO, "Using scatter/gather IO for outputting valid events only.");
+		}
+	}
+	else {
+		state->sgioMemory = NULL;
+	}
+
+	caerLog(LOG_INFO, "Local Unix socket ready at %s.", unixSocketAddr.sun_path);
+
+	return (true);
+}
+
+static void caerOutputUnixSRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
+	unixsState state = moduleData->moduleState;
+
+	// For each output argument, write it to the local Unix socket.
+	// Each type has a header first thing, that gives us the length, so we can
+	// cast it to that and use this information to correctly interpret it.
+	for (size_t i = 0; i < argsNumber; i++) {
+		caerEventPacketHeader packetHeader = va_arg(args, caerEventPacketHeader);
+
+		// Only work if there is any content.
+		if (packetHeader != NULL) {
+			if ((state->validOnly && caerEventPacketHeaderGetEventValid(packetHeader) > 0)
+				|| (!state->validOnly && caerEventPacketHeaderGetEventNumber(packetHeader) > 0)) {
+				caerOutputCommonSend(packetHeader, state->unixSocketDescriptor, state->validOnly, state->sgioMemory);
+			}
+		}
+	}
+}
+
+static void caerOutputUnixSConfig(caerModuleData moduleData) {
+	unixsState state = moduleData->moduleState;
+
+	// Get the current value to examine by atomic exchange, since we don't
+	// want there to be any possible store between a load/store pair.
+	uintptr_t configUpdate = atomic_ops_uint_swap(&moduleData->configUpdate, 0, ATOMIC_OPS_FENCE_NONE);
+
+	if (configUpdate & (0x01 << 0)) {
+		// validOnly flag changed.
+		bool validOnlyFlag = sshsNodeGetBool(moduleData->moduleNode, "validEventsOnly");
+
+		// Only react if the actual state differs from the wanted one.
+		if (state->validOnly != validOnlyFlag) {
+			// If we want it, turn it on.
+			if (validOnlyFlag) {
+				state->validOnly = true;
+
+				state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
+				if (state->sgioMemory == NULL) {
+					caerLog(LOG_ALERT,
+						"Impossible to allocate memory for scatter/gather IO, using memory copy method.");
+				}
+				else {
+					caerLog(LOG_INFO, "Using scatter/gather IO for outputting valid events only.");
+				}
+			}
+			else {
+				// Else disable it.
+				state->validOnly = false;
+
+				free(state->sgioMemory);
+				state->sgioMemory = NULL;
+			}
+		}
+	}
+
+	if (configUpdate & (0x01 << 1)) {
+		// Local Unix socket path changed.
+		// Open a local Unix socket on the new supplied path.
+		int newUnixSocketDescriptor = socket(AF_UNIX, SOCK_DGRAM, 0);
+		if (newUnixSocketDescriptor < 0) {
+			caerLog(LOG_CRITICAL, "Could not create local Unix socket. Error: %s (%d).", caerLogStrerror(errno), errno);
+			return;
+		}
+
+		struct sockaddr_un unixSocketAddr;
+		memset(&unixSocketAddr, 0, sizeof(struct sockaddr_un));
+
+		unixSocketAddr.sun_family = AF_UNIX;
+		char *socketPath = sshsNodeGetString(moduleData->moduleNode, "socketPath");
+		strncpy(unixSocketAddr.sun_path, socketPath, sizeof(unixSocketAddr.sun_path) - 1);
+		free(socketPath);
+
+		// Connect socket to above address.
+		if (connect(newUnixSocketDescriptor, (struct sockaddr *) &unixSocketAddr, sizeof(struct sockaddr_un)) < 0) {
+			caerLog(LOG_CRITICAL, "Could not connect to local Unix socket. Error: %s (%d).", caerLogStrerror(errno),
+				errno);
+			close(newUnixSocketDescriptor);
+			return;
+		}
+
+		// New fd ready and connected, close old and set new.
+		close(state->unixSocketDescriptor);
+		state->unixSocketDescriptor = newUnixSocketDescriptor;
+	}
+}
+
+static void caerOutputUnixSExit(caerModuleData moduleData) {
+	unixsState state = moduleData->moduleState;
+
+	// Close open local Unix socket.
+	close(state->unixSocketDescriptor);
+
+	// Make sure to free scatter/gather IO memory.
+	free(state->sgioMemory);
+	state->sgioMemory = NULL;
+}
+
+static void caerOutputUnixSConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
+	UNUSED_ARGUMENT(node);
+	UNUSED_ARGUMENT(changeValue);
+
+	caerModuleData data = userData;
+
+	// Distinguish changes to the validOnly flag or to Unix socket path, by setting
+	// configUpdate appropriately like a bit-field.
+	if (event == ATTRIBUTE_MODIFIED) {
+		if (changeType == BOOL && strcmp(changeKey, "validEventsOnly") == 0) {
+			atomic_ops_uint_or(&data->configUpdate, (0x01 << 0), ATOMIC_OPS_FENCE_NONE);
+		}
+
+		if (changeType == STRING && strcmp(changeKey, "socketPath") == 0) {
+			atomic_ops_uint_or(&data->configUpdate, (0x01 << 1), ATOMIC_OPS_FENCE_NONE);
+		}
+	}
+}
