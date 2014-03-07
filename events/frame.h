@@ -45,12 +45,12 @@ typedef struct caer_frame_event_packet *caerFrameEventPacket;
 static inline caerFrameEventPacket caerFrameEventPacketAllocate(uint32_t eventCapacity, uint16_t eventSource,
 	uint8_t maxADCDepth, uint16_t maxYLength, uint16_t maxXLength) {
 	// Calculate maximum needed bits for storing pixel data.
-	uint32_t pixelBits = maxADCDepth * maxYLength * maxXLength;
+	uint32_t pixelBits = (uint32_t) maxADCDepth * maxYLength * maxXLength;
 
 	// Round up (ceil) to bytes (8 bits per byte).
 	uint32_t pixelBytes = (pixelBits + 7) / 8;
 
-	uint32_t eventSize = sizeof(struct caer_frame_event) + pixelBytes;
+	uint32_t eventSize = (uint32_t) sizeof(struct caer_frame_event) + pixelBytes;
 	size_t eventPacketSize = sizeof(struct caer_frame_event_packet) + (eventCapacity * eventSize);
 
 	caerFrameEventPacket packet = malloc(eventPacketSize);
@@ -99,7 +99,8 @@ static inline caerFrameEvent caerFrameEventPacketGetEvent(caerFrameEventPacket p
 	}
 
 	// Return a pointer to the specified event.
-	return (((uint8_t *) packet->events) + (n * caerEventPacketHeaderGetEventSize(&packet->packetHeader)));
+	return ((caerFrameEvent) (((uint8_t *) packet->events)
+		+ (n * caerEventPacketHeaderGetEventSize(&packet->packetHeader))));
 }
 
 static inline uint32_t caerFrameEventGetTSStartOfResetRead(caerFrameEvent event) {
@@ -202,6 +203,14 @@ static inline uint8_t caerFrameEventGetADCDepth(caerFrameEvent event) {
 	return U8T((le32toh(event->info) >> ADC_DEPTH_SHIFT) & ADC_DEPTH_MASK);
 }
 
+static inline uint16_t caerFrameEventGetYLength(caerFrameEvent event) {
+	return U16T((le32toh(event->info) >> Y_LENGTH_SHIFT) & Y_LENGTH_MASK);
+}
+
+static inline uint16_t caerFrameEventGetXLength(caerFrameEvent event) {
+	return U16T((le32toh(event->info) >> X_LENGTH_SHIFT) & X_LENGTH_MASK);
+}
+
 static inline void caerFrameEventSetADCDepth(caerFrameEvent event, caerFrameEventPacket packet, uint8_t adcDepth) {
 	// Check value against maximum allowed in this packet.
 	uint32_t maxBits = (caerEventPacketHeaderGetEventSize(&packet->packetHeader) - sizeof(struct caer_frame_event)) * 8;
@@ -221,14 +230,6 @@ static inline void caerFrameEventSetADCDepth(caerFrameEvent event, caerFrameEven
 	}
 
 	event->info |= htole32((U32T(adcDepth) & ADC_DEPTH_MASK) << ADC_DEPTH_SHIFT);
-}
-
-static inline uint16_t caerFrameEventGetYLength(caerFrameEvent event) {
-	return U16T((le32toh(event->info) >> Y_LENGTH_SHIFT) & Y_LENGTH_MASK);
-}
-
-static inline uint16_t caerFrameEventGetXLength(caerFrameEvent event) {
-	return U16T((le32toh(event->info) >> X_LENGTH_SHIFT) & X_LENGTH_MASK);
 }
 
 static inline void caerFrameEventSetYXLength(caerFrameEvent event, caerFrameEventPacket packet, uint16_t yLength,
