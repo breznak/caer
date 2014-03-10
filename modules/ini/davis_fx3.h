@@ -22,7 +22,7 @@
 #define VR_CHIP_DIAG 0xC1
 #define VR_FPGA_SREG 0xC2
 
-void caerInputDAViSFX3(uint16_t moduleID, caerPolarityEventPacket *polarity, caerSpecialEventPacket *special,
-	caerFrameEventPacket *frame, caerIMU6EventPacket *imu6);
+void caerInputDAViSFX3(uint16_t moduleID, caerPolarityEventPacket *polarity, caerFrameEventPacket *frame,
+	caerIMU6EventPacket *imu6, caerSpecialEventPacket *special);
 
 #endif /* DAVIS_FX3_H_ */

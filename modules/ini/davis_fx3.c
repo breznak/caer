@@ -33,6 +33,16 @@ struct davisFX3_state {
 	uint32_t currentPolarityPacketPosition;
 	uint32_t maxPolarityPacketSize;
 	uint32_t maxPolarityPacketInterval;
+	// Frame Packet State
+	caerFrameEventPacket currentFramePacket;
+	uint32_t currentFramePacketPosition;
+	uint32_t maxFramePacketSize;
+	uint32_t maxFramePacketInterval;
+	// IMU6 Packet State
+	caerIMU6EventPacket currentIMU6Packet;
+	uint32_t currentIMU6PacketPosition;
+	uint32_t maxIMU6PacketSize;
+	uint32_t maxIMU6PacketInterval;
 	// Special Packet State
 	caerSpecialEventPacket currentSpecialPacket;
 	uint32_t currentSpecialPacketPosition;
@@ -53,16 +63,13 @@ static void caerInputDAViSFX3Exit(caerModuleData moduleData);
 static struct caer_module_functions caerInputDAViSFX3Functions = { .moduleInit = &caerInputDAViSFX3Init, .moduleRun =
 	&caerInputDAViSFX3Run, .moduleConfig = NULL, .moduleExit = &caerInputDAViSFX3Exit };
 
-void caerInputDAViSFX3(uint16_t moduleID, caerPolarityEventPacket *polarity, caerSpecialEventPacket *special,
-	caerFrameEventPacket *frame, caerIMU6EventPacket *imu6) {
+void caerInputDAViSFX3(uint16_t moduleID, caerPolarityEventPacket *polarity, caerFrameEventPacket *frame,
+	caerIMU6EventPacket *imu6, caerSpecialEventPacket *special) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "DAViSFX3");
 
 	// IMPORTANT: THE CONTENT OF OUTPUT ARGUMENTS MUST BE SET TO NULL!
 	if (polarity != NULL) {
 		*polarity = NULL;
-	}
-	if (special != NULL) {
-		*special = NULL;
 	}
 	if (frame != NULL) {
 		*frame = NULL;
@@ -70,20 +77,27 @@ void caerInputDAViSFX3(uint16_t moduleID, caerPolarityEventPacket *polarity, cae
 	if (imu6 != NULL) {
 		*imu6 = NULL;
 	}
+	if (special != NULL) {
+		*special = NULL;
+	}
 
-	caerModuleSM(&caerInputDAViSFX3Functions, moduleData, sizeof(struct davisFX3_state), 4, polarity, special, frame,
-		imu6);
+	caerModuleSM(&caerInputDAViSFX3Functions, moduleData, sizeof(struct davisFX3_state), 4, polarity, frame, imu6,
+		special);
 }
 
+static void createAddressedCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type,
+	const char *sex, uint8_t coarseValue, uint16_t fineValue, bool enabled);
+static void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasName, uint8_t regValue, uint8_t refValue,
+	const char *operatingMode, const char *voltageLevel);
 static void *dataAcquisitionThread(void *inPtr);
 static void dataAcquisitionThreadConfig(caerModuleData data);
 static void allocateDataTransfers(davisFX3State state, uint32_t bufferNum, uint32_t bufferSize);
 static void deallocateDataTransfers(davisFX3State state);
+static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer);
+static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent);
 static void allocateDebugTransfers(davisFX3State state);
 static void deallocateDebugTransfers(davisFX3State state);
-static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer);
 static void LIBUSB_CALL libUsbDebugCallback(struct libusb_transfer *transfer);
-static void eventTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent);
 static void debugTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent);
 static void sendAddressedBias(uint16_t biasAddress, uint16_t biasValue, libusb_device_handle *devHandle);
 static void sendBiases(sshsNode biasNode, libusb_device_handle *devHandle);
@@ -94,35 +108,76 @@ static void deviceClose(libusb_device_handle *devHandle);
 static void caerInputDAViSFX3ConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
+static void createAddressedCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type,
+	const char *sex, uint8_t coarseValue, uint16_t fineValue, bool enabled) {
+	// Add trailing slash to node name (required!).
+	size_t biasNameLength = strlen(biasName);
+	char biasNameFull[biasNameLength + 2];
+	memcpy(biasNameFull, biasName, biasNameLength);
+	biasNameFull[biasNameLength] = '/';
+	biasNameFull[biasNameLength + 1] = '\0';
+
+	// Create configuration node for this particular bias.
+	sshsNode biasConfigNode = sshsGetRelativeNode(biasNode, biasNameFull);
+
+	// Add bias settings.
+	sshsNodePutStringIfAbsent(biasConfigNode, "type", type);
+	sshsNodePutStringIfAbsent(biasConfigNode, "sex", sex);
+	sshsNodePutByteIfAbsent(biasConfigNode, "coarseValue", coarseValue);
+	sshsNodePutShortIfAbsent(biasConfigNode, "fineValue", fineValue);
+	sshsNodePutBoolIfAbsent(biasConfigNode, "enabled", enabled);
+	sshsNodePutStringIfAbsent(biasConfigNode, "currentLevel", "Normal");
+}
+
+static void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasName, uint8_t regValue, uint8_t refValue,
+	const char *operatingMode, const char *voltageLevel) {
+	// Add trailing slash to node name (required!).
+	size_t biasNameLength = strlen(biasName);
+	char biasNameFull[biasNameLength + 2];
+	memcpy(biasNameFull, biasName, biasNameLength);
+	biasNameFull[biasNameLength] = '/';
+	biasNameFull[biasNameLength + 1] = '\0';
+
+	// Create configuration node for this particular bias.
+	sshsNode biasConfigNode = sshsGetRelativeNode(biasNode, biasNameFull);
+
+	// Add bias settings.
+	sshsNodePutByteIfAbsent(biasConfigNode, "regValue", regValue);
+	sshsNodePutByteIfAbsent(biasConfigNode, "refValue", refValue);
+	sshsNodePutStringIfAbsent(biasConfigNode, "operatingMode", operatingMode);
+	sshsNodePutStringIfAbsent(biasConfigNode, "voltageLevel", voltageLevel);
+}
+
 static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	caerLog(LOG_DEBUG, "Initializing DAViSFX3 module ...");
 
 	// First, always create all needed setting nodes, set their default values
 	// and add their listeners.
-	// Set default biases, from DAViSFX3Fast.xml settings.
+	// Set default biases, from SBRet10s.xml settings.
 	sshsNode biasNode = sshsGetRelativeNode(moduleData->moduleNode, "bias/");
-	sshsNodePutShortIfAbsent(biasNode, "DiffBn", 0);
-	sshsNodePutShortIfAbsent(biasNode, "OnBn", 0);
-	sshsNodePutShortIfAbsent(biasNode, "OffBn", 0);
-	sshsNodePutShortIfAbsent(biasNode, "ApsCasEpc", 0);
-	sshsNodePutShortIfAbsent(biasNode, "DiffCasBnc", 0);
-	sshsNodePutShortIfAbsent(biasNode, "ApsROSFBn", 0);
-	sshsNodePutShortIfAbsent(biasNode, "LocalBufBn", 0);
-	sshsNodePutShortIfAbsent(biasNode, "PixInvBn", 0);
-	sshsNodePutShortIfAbsent(biasNode, "PrBp", 0);
-	sshsNodePutShortIfAbsent(biasNode, "PrSFBp", 0);
-	sshsNodePutShortIfAbsent(biasNode, "RefrBp", 0);
-	sshsNodePutShortIfAbsent(biasNode, "AEPdBn", 0);
-	sshsNodePutShortIfAbsent(biasNode, "LcolTimeoutBn", 0);
-	sshsNodePutShortIfAbsent(biasNode, "AEPuXBp", 0);
-	sshsNodePutShortIfAbsent(biasNode, "AEPuYBp", 0);
-	sshsNodePutShortIfAbsent(biasNode, "IFThrBn", 0);
-	sshsNodePutShortIfAbsent(biasNode, "IFRefrBn", 0);
-	sshsNodePutShortIfAbsent(biasNode, "PadFollBn", 0);
-	sshsNodePutShortIfAbsent(biasNode, "apsOverflowLevel", 0);
-	sshsNodePutShortIfAbsent(biasNode, "biasBuffer", 0);
-	sshsNodePutShortIfAbsent(biasNode, "SSP", 0);
-	sshsNodePutShortIfAbsent(biasNode, "SSN", 0);
+	createAddressedCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 3, 39, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 2, 117, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 3, 7, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "ApsCasEpc", "Cascode", "N", 2, 144, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "DiffCasBnc", "Cascode", "N", 2, 115, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 1, 188, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "LocalBufBn", "Normal", "N", 2, 164, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 2, 129, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "P", 5, 34, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 6, 4, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "P", 3, 25, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 1, 91, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 2, 49, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "P", 3, 80, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "P", 3, 152, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 2, 255, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "IFRefrBn", "Normal", "N", 2, 255, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 0, 211, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "apsOverflowLevel", "Normal", "N", 0, 36, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "biasBuffer", "Normal", "N", 1, 251, true);
+
+	createShiftedSourceBiasSetting(biasNode, "SSP", 33, 1, "ShiftedSource", "SplitGate");
+	createShiftedSourceBiasSetting(biasNode, "SSN", 33, 1, "ShiftedSource", "SplitGate");
 
 	sshsNode chipNode = sshsGetRelativeNode(moduleData->moduleNode, "chip/");
 	sshsNodePutBoolIfAbsent(chipNode, "globalShutter", false);
@@ -147,6 +202,10 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	// Packet settings (size (in events) and time interval (in µs)).
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "polarityPacketMaxSize", 4096);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "polarityPacketMaxInterval", 5000);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "framePacketMaxSize", 4);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "framePacketMaxInterval", 50000);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "imu6PacketMaxSize", 32);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "imu6PacketMaxInterval", 10000);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "specialPacketMaxSize", 128);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "specialPacketMaxInterval", 1000);
 
@@ -166,18 +225,33 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 
 	// Put global source information into SSHS.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
-	sshsNodePutShort(sourceInfoNode, "sizeX", 240);
-	sshsNodePutShort(sourceInfoNode, "sizeY", 180);
+	sshsNodePutShort(sourceInfoNode, "dvsSizeX", 240);
+	sshsNodePutShort(sourceInfoNode, "dvsSizeY", 180);
+	sshsNodePutShort(sourceInfoNode, "frameSizeX", 240);
+	sshsNodePutShort(sourceInfoNode, "frameSizeY", 180);
+	sshsNodePutShort(sourceInfoNode, "frameADCDepth", 10);
 
 	// Initialize state fields.
 	state->maxPolarityPacketSize = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxSize");
 	state->maxPolarityPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxInterval");
+
+	state->maxFramePacketSize = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxSize");
+	state->maxFramePacketInterval = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxInterval");
+
+	state->maxIMU6PacketSize = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxSize");
+	state->maxIMU6PacketInterval = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxInterval");
 
 	state->maxSpecialPacketSize = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxSize");
 	state->maxSpecialPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxInterval");
 
 	state->currentPolarityPacket = caerPolarityEventPacketAllocate(state->maxPolarityPacketSize, state->sourceID);
 	state->currentPolarityPacketPosition = 0;
+
+	state->currentFramePacket = caerFrameEventPacketAllocate(state->maxFramePacketSize, state->sourceID, 10, 180, 240);
+	state->currentFramePacketPosition = 0;
+
+	state->currentIMU6Packet = caerIMU6EventPacketAllocate(state->maxIMU6PacketSize, state->sourceID);
+	state->currentIMU6PacketPosition = 0;
 
 	state->currentSpecialPacket = caerSpecialEventPacketAllocate(state->maxSpecialPacketSize, state->sourceID);
 	state->currentSpecialPacketPosition = 0;
@@ -193,6 +267,8 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	state->dataExchangeBuffer = ringBufferInit(sshsNodeGetInt(moduleData->moduleNode, "dataExchangeBufferSize"));
 	if (state->dataExchangeBuffer == NULL) {
 		free(state->currentPolarityPacket);
+		free(state->currentFramePacket);
+		free(state->currentIMU6Packet);
 		free(state->currentSpecialPacket);
 
 		caerLog(LOG_CRITICAL, "Failed to initialize data exchange buffer.");
@@ -203,6 +279,8 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	// This is to correctly support one thread per device.
 	if ((errno = libusb_init(&state->deviceContext)) != LIBUSB_SUCCESS) {
 		free(state->currentPolarityPacket);
+		free(state->currentFramePacket);
+		free(state->currentIMU6Packet);
 		free(state->currentSpecialPacket);
 		ringBufferFree(state->dataExchangeBuffer);
 
@@ -214,6 +292,8 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	state->deviceHandle = deviceOpen(state->deviceContext);
 	if (state->deviceHandle == NULL) {
 		free(state->currentPolarityPacket);
+		free(state->currentFramePacket);
+		free(state->currentIMU6Packet);
 		free(state->currentSpecialPacket);
 		ringBufferFree(state->dataExchangeBuffer);
 		libusb_exit(state->deviceContext);
@@ -225,6 +305,8 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	// Start data acquisition thread.
 	if ((errno = pthread_create(&state->dataAcquisitionThread, NULL, &dataAcquisitionThread, moduleData)) != 0) {
 		free(state->currentPolarityPacket);
+		free(state->currentFramePacket);
+		free(state->currentIMU6Packet);
 		free(state->currentSpecialPacket);
 		ringBufferFree(state->dataExchangeBuffer);
 		deviceClose(state->deviceHandle);
@@ -271,6 +353,8 @@ static void caerInputDAViSFX3Exit(caerModuleData moduleData) {
 
 	// Free remaining incomplete packets.
 	free(state->currentPolarityPacket);
+	free(state->currentFramePacket);
+	free(state->currentIMU6Packet);
 	free(state->currentSpecialPacket);
 
 	caerLog(LOG_DEBUG, "Shutdown DAViSFX3 module successfully.");
@@ -548,7 +632,7 @@ static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer) {
 
 	if (transfer->status == LIBUSB_TRANSFER_COMPLETED) {
 		// Handle event data.
-		eventTranslator(state, transfer->buffer, (size_t) transfer->actual_length);
+		dataTranslator(state, transfer->buffer, (size_t) transfer->actual_length);
 	}
 
 	if (transfer->status != LIBUSB_TRANSFER_CANCELLED && transfer->status != LIBUSB_TRANSFER_NO_DEVICE) {
@@ -572,7 +656,7 @@ static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer) {
 #define DAViSFX3_X_ADDR_MASK 0x007F
 #define DAViSFX3_SYNC_EVENT_MASK 0x8000
 
-static void eventTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent) {
+static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent) {
 	// Truncate off any extra partial event.
 	bytesSent &= (size_t) ~0x03;
 
