@@ -77,6 +77,11 @@ static void dvs128Close(libusb_device_handle *devHandle);
 static void caerInputDVS128ConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
+static inline freeAllPackets(dvs128State state) {
+	free(state->currentPolarityPacket);
+	free(state->currentSpecialPacket);
+}
+
 static bool caerInputDVS128Init(caerModuleData moduleData) {
 	caerLog(LOG_DEBUG, "Initializing DVS128 module ...");
 
@@ -157,8 +162,7 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 	// Initialize libusb using a separate context for each device.
 	// This is to correctly support one thread per device.
 	if ((errno = libusb_init(&state->deviceContext)) != LIBUSB_SUCCESS) {
-		free(state->currentPolarityPacket);
-		free(state->currentSpecialPacket);
+		freeAllPackets(state);
 		ringBufferFree(state->dataExchangeBuffer);
 
 		caerLog(LOG_CRITICAL, "Failed to initialize libusb context. Error: %s (%d).", libusb_strerror(errno), errno);
@@ -168,8 +172,7 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 	// Try to open a DVS128 device.
 	state->deviceHandle = dvs128Open(state->deviceContext);
 	if (state->deviceHandle == NULL) {
-		free(state->currentPolarityPacket);
-		free(state->currentSpecialPacket);
+		freeAllPackets(state);
 		ringBufferFree(state->dataExchangeBuffer);
 		libusb_exit(state->deviceContext);
 
@@ -179,8 +182,7 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 
 	// Start data acquisition thread.
 	if ((errno = pthread_create(&state->dataAcquisitionThread, NULL, &dvs128DataAcquisitionThread, moduleData)) != 0) {
-		free(state->currentPolarityPacket);
-		free(state->currentSpecialPacket);
+		freeAllPackets(state);
 		ringBufferFree(state->dataExchangeBuffer);
 		dvs128Close(state->deviceHandle);
 		libusb_exit(state->deviceContext);
@@ -225,8 +227,7 @@ static void caerInputDVS128Exit(caerModuleData moduleData) {
 	ringBufferFree(state->dataExchangeBuffer);
 
 	// Free remaining incomplete packets.
-	free(state->currentPolarityPacket);
-	free(state->currentSpecialPacket);
+	freeAllPackets(state);
 
 	caerLog(LOG_DEBUG, "Shutdown DVS128 module successfully.");
 }
@@ -257,7 +258,7 @@ static void caerInputDVS128Run(caerModuleData moduleData, size_t argsNumber, va_
 		// Check what kind it is and assign accordingly.
 		caerEventPacketHeader packetHeader = packet;
 
-		// Check polarity events first.
+		// Check polarity events first, then the special ones.
 		if (packetHeader->eventType == POLARITY_EVENT) {
 			// Throw away unwanted packets first.
 			if (!wantPolarity) {
@@ -285,9 +286,7 @@ static void caerInputDVS128Run(caerModuleData moduleData, size_t argsNumber, va_
 			// break off and defer to next iteration of mainloop.
 			break;
 		}
-
-		// Then check special events.
-		if (packetHeader->eventType == SPECIAL_EVENT) {
+		else if (packetHeader->eventType == SPECIAL_EVENT) {
 			// Throw away unwanted packets first.
 			if (!wantSpecial) {
 				caerMainloopDataAvailableDecrease(state->mainloopNotify);
@@ -796,19 +795,19 @@ static void caerInputDVS128ConfigListener(sshsNode node, void *userData, enum ss
 	// using configUpdate like a bit-field.
 	if (event == ATTRIBUTE_MODIFIED) {
 		// Changes to the bias node.
-		if (strcmp(sshsNodeGetName(node), "bias") == 0 && changeType == INT) {
+		if (str_equals(sshsNodeGetName(node), "bias") && changeType == INT) {
 			atomic_ops_uint_or(&data->configUpdate, (0x01 << 0), ATOMIC_OPS_FENCE_NONE);
 		}
 
 		// Changes to the USB transfer settings (requires reallocation).
-		if (changeType == INT && (strcmp(changeKey, "bufferNumber") == 0 || strcmp(changeKey, "bufferSize") == 0)) {
+		if (changeType == INT && (str_equals(changeKey, "bufferNumber") || str_equals(changeKey, "bufferSize"))) {
 			atomic_ops_uint_or(&data->configUpdate, (0x01 << 1), ATOMIC_OPS_FENCE_NONE);
 		}
 
 		// Changes to packet size and interval.
 		if (changeType == INT
-			&& (strcmp(changeKey, "polarityPacketMaxSize") == 0 || strcmp(changeKey, "polarityPacketMaxInterval") == 0
-				|| strcmp(changeKey, "specialPacketMaxSize") == 0 || strcmp(changeKey, "specialPacketMaxInterval") == 0)) {
+			&& (str_equals(changeKey, "polarityPacketMaxSize") || str_equals(changeKey, "polarityPacketMaxInterval")
+				|| str_equals(changeKey, "specialPacketMaxSize") || str_equals(changeKey, "specialPacketMaxInterval"))) {
 			atomic_ops_uint_or(&data->configUpdate, (0x01 << 2), ATOMIC_OPS_FENCE_NONE);
 		}
 	}

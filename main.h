@@ -31,4 +31,16 @@
 #define MASK_NUMBITS64(X) U64T(U64T(U64T(1) << X) - 1)
 #define SWAP_VAR(type, x, y) { type tmpv; tmpv = (x); (x) = (y); (y) = tmpv; }
 
+static inline bool str_equals(const char *s1, const char *s2) {
+	if (s1 == NULL || s2 == NULL) {
+		return (false);
+	}
+
+	if (strcmp(s1, s2) == 0) {
+		return (true);
+	}
+
+	return (false);
+}
+
 #endif /* MAIN_H_ */
