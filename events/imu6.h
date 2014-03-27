@@ -121,7 +121,7 @@ static inline void caerIMU6EventValidate(caerIMU6Event event, caerIMU6EventPacke
 
 static inline void caerIMU6EventInvalidate(caerIMU6Event event, caerIMU6EventPacket packet) {
 	if (caerIMU6EventIsValid(event)) {
-		event->info &= htole16(~(U16T(1) << VALID_MARK_SHIFT));
+		event->info &= htole16((uint16_t)(~(U16T(1) << VALID_MARK_SHIFT)));
 
 		// Also decrease number of valid events. Number of total events doesn't change.
 		// Only call this on valid events!

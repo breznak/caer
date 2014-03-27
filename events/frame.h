@@ -9,6 +9,7 @@
 #define FRAME_H_
 
 #include "common.h"
+#include "base/misc.h"
 
 #define ADC_DEPTH_SHIFT 1
 #define ADC_DEPTH_MASK 0x0000001F
@@ -209,8 +210,9 @@ static inline uint16_t caerFrameEventGetXLength(caerFrameEvent event) {
 
 static inline void caerFrameEventSetADCDepth(caerFrameEvent event, caerFrameEventPacket packet, uint8_t adcDepth) {
 	// Check value against maximum allowed in this packet.
-	uint32_t maxBits = (caerEventPacketHeaderGetEventSize(&packet->packetHeader) - sizeof(struct caer_frame_event)) * 8;
-	uint32_t neededBits = adcDepth * caerFrameEventGetYLength(event) * caerFrameEventGetXLength(event);
+	uint32_t maxBits = (caerEventPacketHeaderGetEventSize(&packet->packetHeader)
+		- (uint32_t) sizeof(struct caer_frame_event)) * 8;
+	uint32_t neededBits = (uint32_t) adcDepth * caerFrameEventGetYLength(event) * caerFrameEventGetXLength(event);
 
 	if (neededBits > maxBits) {
 #if !defined(LOG_NONE)
@@ -231,8 +233,9 @@ static inline void caerFrameEventSetADCDepth(caerFrameEvent event, caerFrameEven
 static inline void caerFrameEventSetYXLength(caerFrameEvent event, caerFrameEventPacket packet, uint16_t yLength,
 	uint16_t xLength) {
 	// Check value against maximum allowed in this packet.
-	uint32_t maxBits = (caerEventPacketHeaderGetEventSize(&packet->packetHeader) - sizeof(struct caer_frame_event)) * 8;
-	uint32_t neededBits = caerFrameEventGetADCDepth(event) * yLength * xLength;
+	uint32_t maxBits = (caerEventPacketHeaderGetEventSize(&packet->packetHeader)
+		- (uint32_t) sizeof(struct caer_frame_event)) * 8;
+	uint32_t neededBits = (uint32_t) caerFrameEventGetADCDepth(event) * yLength * xLength;
 
 	if (neededBits > maxBits) {
 #if !defined(LOG_NONE)
