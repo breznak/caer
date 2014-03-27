@@ -549,7 +549,7 @@ static void caerInputDAViSFX3Run(caerModuleData moduleData, size_t argsNumber, v
 				haveIMU6 = true;
 
 				// Ensure memory gets recycled after the loop is over.
-				caerMainloopFreeAfterLoop(*special);
+				caerMainloopFreeAfterLoop(*imu6);
 
 				continue;
 			}
@@ -805,13 +805,12 @@ static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer) {
 #define DAViSFX3_SYNC_EVENT_MASK 0x8000
 
 static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent) {
+	printf("Translator got something! %zu bytes, here's a printout:\n%.*s\n\n\n", bytesSent, (int) bytesSent, buffer);
+
 	// Truncate off any extra partial event.
-	bytesSent &= (size_t) ~0x03;
+	bytesSent &= (size_t) ~0x01;
 
-	printf("I got something, YAAAAYYY!!!! %zu bytes, here's a printout:\n%.*s\n\n\n", bytesSent, (int) bytesSent,
-		buffer);
-
-	for (size_t i = 0; i < bytesSent; i += 4) {
+	for (size_t i = 0; i < bytesSent; i += 2) {
 		bool forcePacketCommit = false;
 
 		if ((buffer[i + 3] & 0x80) == 0x80) {
@@ -1063,7 +1062,55 @@ static void LIBUSB_CALL libUsbDebugCallback(struct libusb_transfer *transfer) {
 }
 
 static void debugTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent) {
+	// Right now, this is either a debug message (length 7-64 bytes) or
+	// an IMU sample (length 15 bytes).
+	if (bytesSent < 7) {
+		// Not enough to do anything with it.
+		return;
+	}
 
+	if (buffer[0] == 0x00) {
+		// Debug message, log this.
+		caerLog(LOG_ERROR, "Error message from DAViSFX3: '%s' (code %u at time %u).", &buffer[6], buffer[1],
+			*((uint32_t *) &buffer[2]));
+	}
+	else if (buffer[0] == 0x01) {
+		// IMU sample, convert to event and add to packet.
+		caerIMU6Event currentEvent = caerIMU6EventPacketGetEvent(state->currentIMU6Packet,
+			state->currentIMU6PacketPosition++);
+		caerIMU6EventSetTimestamp(currentEvent, state->lastTimestamp); // Get TS from DVS packets.
+		caerIMU6EventSetAccelX(currentEvent, be16toh(*((uint16_t * ) &buffer[1])));
+		caerIMU6EventSetAccelY(currentEvent, be16toh(*((uint16_t * ) &buffer[3])));
+		caerIMU6EventSetAccelZ(currentEvent, be16toh(*((uint16_t * ) &buffer[5])));
+		caerIMU6EventSetTemp(currentEvent, be16toh(*((uint16_t * ) &buffer[7])));
+		caerIMU6EventSetGyroX(currentEvent, be16toh(*((uint16_t * ) &buffer[9])));
+		caerIMU6EventSetGyroY(currentEvent, be16toh(*((uint16_t * ) &buffer[11])));
+		caerIMU6EventSetGyroZ(currentEvent, be16toh(*((uint16_t * ) &buffer[13])));
+		caerIMU6EventValidate(currentEvent, state->currentIMU6Packet);
+
+		// Commit packet to the ring-buffer, so they can be processed by the
+		// main-loop, when their stated conditions are met.
+		if ((state->currentIMU6PacketPosition
+			>= caerEventPacketHeaderGetEventCapacity(&state->currentIMU6Packet->packetHeader))
+			|| ((state->currentIMU6PacketPosition > 1)
+				&& (caerIMU6EventGetTimestamp(
+					caerIMU6EventPacketGetEvent(state->currentIMU6Packet, state->currentIMU6PacketPosition - 1))
+					- caerIMU6EventGetTimestamp(caerIMU6EventPacketGetEvent(state->currentIMU6Packet, 0))
+					>= state->maxIMU6PacketInterval))) {
+			if (!ringBufferPut(state->dataExchangeBuffer, state->currentIMU6Packet)) {
+				// Failed to forward packet, drop it.
+				free(state->currentIMU6Packet);
+				caerLog(LOG_DEBUG, "Dropped IMU6 Event Packet because ring-buffer full!");
+			}
+			else {
+				caerMainloopDataAvailableIncrease(state->mainloopNotify);
+			}
+
+			// Allocate new packet for next iteration.
+			state->currentIMU6Packet = caerIMU6EventPacketAllocate(state->maxIMU6PacketSize, state->sourceID);
+			state->currentIMU6PacketPosition = 0;
+		}
+	}
 }
 
 static void sendBiases(sshsNode biasNode, libusb_device_handle *devHandle) {

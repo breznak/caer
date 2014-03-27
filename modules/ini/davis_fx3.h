@@ -8,7 +8,7 @@
 #include "events/imu6.h"
 
 #define DAVIS_FX3_VID 0x152A
-#define DAVIS_FX3_PID 0x8410
+#define DAVIS_FX3_PID 0x841A
 #define DAVIS_FX3_DID_TYPE 0x00
 
 #define DEBUG_ENDPOINT 0x81
