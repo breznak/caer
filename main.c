@@ -10,18 +10,20 @@
 #include "base/config_server.h"
 #include "base/mainloop.h"
 #include "base/misc.h"
-#include "modules/ini/dvs128.h"
+#include "modules/ini/davis_fx3.h"
 #include "modules/misc/out/file.h"
 
 static bool mainloop_1(void);
 
 static bool mainloop_1(void) {
 	// Typed EventPackets contain events of a certain type.
-	caerPolarityEventPacket dvs128_polarity;
-	caerInputDVS128(1, &dvs128_polarity, NULL);
+	caerPolarityEventPacket davisfx3_polarity;
+	caerFrameEventPacket davisfx3_frame;
+	caerIMU6EventPacket davisfx3_imu;
+	caerInputDAViSFX3(1, &davisfx3_polarity, &davisfx3_frame, &davisfx3_imu, NULL);
 
 	// Output to file in user home directory.
-	caerOutputFile(2, 1, dvs128_polarity);
+	caerOutputFile(2, 3, davisfx3_polarity, davisfx3_frame, davisfx3_imu);
 
 	return (true); // If false is returned, processing of this loop stops.
 }

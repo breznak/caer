@@ -805,7 +805,7 @@ static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer) {
 #define DAViSFX3_SYNC_EVENT_MASK 0x8000
 
 static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent) {
-	printf("Translator got something! %zu bytes, here's a printout:\n%.*s\n\n\n", bytesSent, (int) bytesSent, buffer);
+	printf("Translator got something! %zu bytes were sent.\n", bytesSent);
 
 	// Truncate off any extra partial event.
 	bytesSent &= (size_t) ~0x01;
