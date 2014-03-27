@@ -77,7 +77,7 @@ static void dvs128Close(libusb_device_handle *devHandle);
 static void caerInputDVS128ConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
-static inline freeAllPackets(dvs128State state) {
+static inline void freeAllPackets(dvs128State state) {
 	free(state->currentPolarityPacket);
 	free(state->currentSpecialPacket);
 }

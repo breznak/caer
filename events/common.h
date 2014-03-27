@@ -10,6 +10,11 @@
 
 #include "main.h"
 
+// 0 in the 0th bit means invalid, 1 means valid.
+// This way zeroing-out an event packet sets all its events to invalid.
+#define VALID_MARK_SHIFT 0
+#define VALID_MARK_MASK 0x00000001
+
 enum caer_event_types {
 	SPECIAL_EVENT = 0,
 	POLARITY_EVENT = 1,

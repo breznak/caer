@@ -10,11 +10,6 @@
 
 #include "common.h"
 
-// 0 in the 0th bit means invalid, 1 means valid.
-// This way zeroing-out an event packet sets all its events to invalid.
-#define VALID_MARK_SHIFT 0
-#define VALID_MARK_MASK 0x0001
-
 struct caer_imu6_event {
 	uint16_t info;
 	uint16_t accel_x;

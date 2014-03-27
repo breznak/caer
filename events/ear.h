@@ -10,10 +10,6 @@
 
 #include "common.h"
 
-// 0 in the 0th bit means invalid, 1 means valid.
-// This way zeroing-out an event packet sets all its events to invalid.
-#define VALID_MARK_SHIFT 0
-#define VALID_MARK_MASK 0x00000001
 #define EAR_SHIFT 8
 #define EAR_MASK 0x00000007
 #define GANGLION_SHIFT 11
