@@ -744,6 +744,8 @@ static libusb_device_handle *dvs128Open(libusb_context *devContext) {
 			if (devDesc.idVendor == DVS128_VID && devDesc.idProduct == DVS128_PID
 				&& (uint8_t) ((devDesc.bcdDevice & 0xFF00) >> 8) == DVS128_DID_TYPE) {
 				if (libusb_open(devicesList[i], &devHandle) != LIBUSB_SUCCESS) {
+					devHandle = NULL;
+
 					continue;
 				}
 
@@ -751,12 +753,16 @@ static libusb_device_handle *dvs128Open(libusb_context *devContext) {
 				int activeConfiguration;
 				if (libusb_get_configuration(devHandle, &activeConfiguration) != LIBUSB_SUCCESS) {
 					libusb_close(devHandle);
+					devHandle = NULL;
+
 					continue;
 				}
 
 				if (activeConfiguration != 1) {
 					if (libusb_set_configuration(devHandle, 1) != LIBUSB_SUCCESS) {
 						libusb_close(devHandle);
+						devHandle = NULL;
+
 						continue;
 					}
 				}
@@ -764,6 +770,8 @@ static libusb_device_handle *dvs128Open(libusb_context *devContext) {
 				// Claim interface 0 (default).
 				if (libusb_claim_interface(devHandle, 0) != LIBUSB_SUCCESS) {
 					libusb_close(devHandle);
+					devHandle = NULL;
+
 					continue;
 				}
 

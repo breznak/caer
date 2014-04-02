@@ -805,8 +805,6 @@ static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer) {
 #define DAViSFX3_SYNC_EVENT_MASK 0x8000
 
 static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent) {
-	printf("Translator got something! %zu bytes were sent.\n", bytesSent);
-
 	// Truncate off any extra partial event.
 	bytesSent &= (size_t) ~0x01;
 
@@ -1239,6 +1237,8 @@ static libusb_device_handle *deviceOpen(libusb_context *devContext) {
 			if (devDesc.idVendor == DAVIS_FX3_VID && devDesc.idProduct == DAVIS_FX3_PID
 				&& (uint8_t) ((devDesc.bcdDevice & 0xFF00) >> 8) == DAVIS_FX3_DID_TYPE) {
 				if (libusb_open(devicesList[i], &devHandle) != LIBUSB_SUCCESS) {
+					devHandle = NULL;
+
 					continue;
 				}
 
@@ -1246,12 +1246,16 @@ static libusb_device_handle *deviceOpen(libusb_context *devContext) {
 				int activeConfiguration;
 				if (libusb_get_configuration(devHandle, &activeConfiguration) != LIBUSB_SUCCESS) {
 					libusb_close(devHandle);
+					devHandle = NULL;
+
 					continue;
 				}
 
 				if (activeConfiguration != 1) {
 					if (libusb_set_configuration(devHandle, 1) != LIBUSB_SUCCESS) {
 						libusb_close(devHandle);
+						devHandle = NULL;
+
 						continue;
 					}
 				}
@@ -1259,6 +1263,8 @@ static libusb_device_handle *deviceOpen(libusb_context *devContext) {
 				// Claim interface 0 (default).
 				if (libusb_claim_interface(devHandle, 0) != LIBUSB_SUCCESS) {
 					libusb_close(devHandle);
+					devHandle = NULL;
+
 					continue;
 				}
 
