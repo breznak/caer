@@ -12,6 +12,8 @@ struct netTCP_state {
 	size_t clientDescriptorsLength;
 	struct pollfd *clientDescriptors;
 	bool validOnly;
+	bool excludeHeader;
+	size_t maxBytesPerPacket;
 	struct iovec *sgioMemory;
 };
 
@@ -49,6 +51,8 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	sshsNodePutShortIfAbsent(moduleData->moduleNode, "backlogSize", 5);
 	sshsNodePutShortIfAbsent(moduleData->moduleNode, "concurrentConnections", 5);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "validEventsOnly", false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "excludeHeader", false);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "maxBytesPerPacket", 0);
 
 	// Install default listener to signal configuration updates asynchronously.
 	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerOutputNetTCPServerConfigListener);
@@ -113,6 +117,8 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 
 	// Set valid events flag, and allocate memory for scatter/gather IO for it.
 	state->validOnly = sshsNodeGetBool(moduleData->moduleNode, "validEventsOnly");
+	state->excludeHeader = sshsNodeGetBool(moduleData->moduleNode, "excludeHeader");
+	state->maxBytesPerPacket = sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
 
 	if (state->validOnly) {
 		state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
@@ -217,8 +223,8 @@ static void caerOutputNetTCPServerRun(caerModuleData moduleData, size_t argsNumb
 				// Send to each connected client.
 				for (size_t c = 0; c < state->clientDescriptorsLength; c++) {
 					if (state->clientDescriptors[c].fd >= 0) {
-						caerOutputCommonSend(packetHeader, state->clientDescriptors[c].fd, state->validOnly,
-							state->sgioMemory);
+						caerOutputCommonSend(packetHeader, state->clientDescriptors[c].fd, state->sgioMemory,
+							state->validOnly, state->excludeHeader, state->maxBytesPerPacket);
 					}
 				}
 			}
@@ -260,6 +266,11 @@ static void caerOutputNetTCPServerConfig(caerModuleData moduleData) {
 				state->sgioMemory = NULL;
 			}
 		}
+	}
+
+	if (configUpdate & (0x01 << 3)) {
+		state->excludeHeader = sshsNodeGetBool(moduleData->moduleNode, "excludeHeader");
+		state->maxBytesPerPacket = sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
 	}
 
 	if (configUpdate & (0x01 << 1)) {
@@ -401,6 +412,11 @@ static void caerOutputNetTCPServerConfigListener(sshsNode node, void *userData, 
 
 		if (changeType == SHORT && strcmp(changeKey, "concurrentConnections") == 0) {
 			atomic_ops_uint_or(&data->configUpdate, (0x01 << 2), ATOMIC_OPS_FENCE_NONE);
+		}
+
+		if ((changeType == BOOL && strcmp(changeKey, "excludeHeader") == 0)
+			|| (changeType == INT && strcmp(changeKey, "maxBytesPerPacket") == 0)) {
+			atomic_ops_uint_or(&data->configUpdate, (0x01 << 3), ATOMIC_OPS_FENCE_NONE);
 		}
 	}
 }

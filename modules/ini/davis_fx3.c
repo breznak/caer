@@ -98,7 +98,7 @@ static void debugTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSe
 static void sendBiases(sshsNode biasNode, libusb_device_handle *devHandle);
 static void sendChipSR(sshsNode chipNode, libusb_device_handle *devHandle);
 static void sendFpgaSR(sshsNode fpgaNode, libusb_device_handle *devHandle);
-static libusb_device_handle *deviceOpen(libusb_context *devContext);
+static libusb_device_handle *deviceOpen(libusb_context *devContext, uint8_t busNumber, uint8_t devAddress);
 static void deviceClose(libusb_device_handle *devHandle);
 static void caerInputDAViSFX3ConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
@@ -288,6 +288,10 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	sshsNodePutShortIfAbsent(fpgaNode, "colSettle", 300);
 	sshsNodePutShortIfAbsent(fpgaNode, "exposure", 28);
 
+	// USB port settings/restrictions.
+	sshsNodePutByteIfAbsent(moduleData->moduleNode, "usbBusNumber", 0);
+	sshsNodePutByteIfAbsent(moduleData->moduleNode, "usbDevAddress", 0);
+
 	// USB buffer settings.
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferNumber", 8);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferSize", 4096);
@@ -375,8 +379,9 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 		return (false);
 	}
 
-	// Try to open a DAViSFX3 device.
-	state->deviceHandle = deviceOpen(state->deviceContext);
+	// Try to open a DAViSFX3 device on a specific USB port.
+	state->deviceHandle = deviceOpen(state->deviceContext, sshsNodeGetByte(moduleData->moduleNode, "usbBusNumber"),
+		sshsNodeGetByte(moduleData->moduleNode, "usbDevAddress"));
 	if (state->deviceHandle == NULL) {
 		freeAllPackets(state);
 		ringBufferFree(state->dataExchangeBuffer);
@@ -598,6 +603,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 	// Send default start-up biases and config values to device before enabling it.
 	sendBiases(sshsGetRelativeNode(data->moduleNode, "bias/"), state->deviceHandle);
 	sendChipSR(sshsGetRelativeNode(data->moduleNode, "chip/"), state->deviceHandle);
+	sendFpgaSR(sshsGetRelativeNode(data->moduleNode, "fpga/"), state->deviceHandle);
 	sendFpgaSR(sshsGetRelativeNode(data->moduleNode, "fpga/"), state->deviceHandle);
 
 	// Create buffers as specified in config file.
@@ -1218,7 +1224,7 @@ void sendFpgaSR(sshsNode fpgaNode, libusb_device_handle *devHandle) {
 	VR_FPGA_SREG, 0, 0, fpgaSR, sizeof(fpgaSR), 0);
 }
 
-static libusb_device_handle *deviceOpen(libusb_context *devContext) {
+static libusb_device_handle *deviceOpen(libusb_context *devContext, uint8_t busNumber, uint8_t devAddress) {
 	libusb_device_handle *devHandle = NULL;
 	libusb_device **devicesList;
 
@@ -1236,6 +1242,15 @@ static libusb_device_handle *deviceOpen(libusb_context *devContext) {
 			// Check if this is the device we want (VID/PID).
 			if (devDesc.idVendor == DAVIS_FX3_VID && devDesc.idProduct == DAVIS_FX3_PID
 				&& (uint8_t) ((devDesc.bcdDevice & 0xFF00) >> 8) == DAVIS_FX3_DID_TYPE) {
+				// If a USB port restriction is given, honor it.
+				if (busNumber > 0 && libusb_get_bus_number(devicesList[i]) != busNumber) {
+					continue;
+				}
+
+				if (devAddress > 0 && libusb_get_device_address(devicesList[i]) != devAddress) {
+					continue;
+				}
+
 				if (libusb_open(devicesList[i], &devHandle) != LIBUSB_SUCCESS) {
 					devHandle = NULL;
 

@@ -15,8 +15,64 @@
 
 #define IOVEC_SIZE 512
 
-static inline void caerOutputCommonSend(caerEventPacketHeader packetHeader, int fileDescriptor, bool validOnly,
-	struct iovec *sgioMemory) {
+static inline void caerOutputCommonWriteFull(int fileDescriptor, void *startAddress, size_t fullLength,
+bool excludeHeader, size_t maxBytesPerPacket) {
+	// Skip header if requested.
+	if (excludeHeader) {
+		startAddress = ((uint8_t *) startAddress) + sizeof(struct caer_event_packet_header);
+		fullLength -= sizeof(struct caer_event_packet_header);
+	}
+
+	if (maxBytesPerPacket == 0) {
+		// Write out everything in one big packet.
+		write(fileDescriptor, startAddress, fullLength);
+	}
+	else {
+		// Write data out in chunks of specified size.
+		// TODO: ensure event size boundaries are automatically met.
+		while (fullLength > 0) {
+			size_t bytesToSend = maxBytesPerPacket;
+			if (bytesToSend > fullLength) {
+				bytesToSend = fullLength;
+			}
+
+			write(fileDescriptor, startAddress, bytesToSend);
+
+			startAddress = ((uint8_t *) startAddress) + bytesToSend;
+			fullLength -= bytesToSend;
+		}
+	}
+}
+
+static inline void caerOutputCommonWriteFullSGIO(int fileDescriptor, struct iovec *sgioMemory, size_t sgioLength,
+bool excludeHeader, size_t maxBytesPerPacket) {
+	// Skip header if requested.
+	if (excludeHeader) {
+		sgioMemory[0].iov_base = ((uint8_t *) sgioMemory[0].iov_base) + sizeof(struct caer_event_packet_header);
+		sgioMemory[0].iov_len -= sizeof(struct caer_event_packet_header);
+
+		// Handle case where first IOVEC was only the header, so we skip it altogether.
+		if (sgioMemory[0].iov_len == 0) {
+			sgioMemory[0].iov_base = NULL;
+
+			// Don't consider this IOVEC for the writev() call.
+			sgioMemory += 1;
+			sgioLength -= 1;
+		}
+	}
+
+	if (maxBytesPerPacket == 0) {
+		// Write out everything in one big packet.
+		writev(fileDescriptor, sgioMemory, (int) sgioLength);
+	}
+	else {
+		// TODO: implement this.
+	}
+}
+
+static inline void caerOutputCommonSend(caerEventPacketHeader packetHeader, int fileDescriptor,
+	struct iovec *sgioMemory, bool validOnly,
+	bool excludeHeader, size_t maxBytesPerPacket) {
 	// If validOnly is not specified, we can just send the whole packet
 	// in one go directly.
 	if (!validOnly) {
@@ -29,8 +85,9 @@ static inline void caerOutputCommonSend(caerEventPacketHeader packetHeader, int 
 		caerEventPacketHeaderSetEventCapacity(packetHeader, eventNumber);
 
 		// Write the whole packet, up to the last event.
-		write(fileDescriptor, packetHeader,
-			sizeof(*packetHeader) + (eventNumber * caerEventPacketHeaderGetEventSize(packetHeader)));
+		caerOutputCommonWriteFull(fileDescriptor, packetHeader,
+			sizeof(*packetHeader) + (eventNumber * caerEventPacketHeaderGetEventSize(packetHeader)), excludeHeader,
+			maxBytesPerPacket);
 
 		// Reset to old value.
 		caerEventPacketHeaderSetEventCapacity(packetHeader, oldCapacity);
@@ -84,7 +141,7 @@ static inline void caerOutputCommonSend(caerEventPacketHeader packetHeader, int 
 			caerEventPacketHeaderSetEventNumber(packetHeader, eventValid);
 
 			// Done, do the call.
-			writev(fileDescriptor, sgioMemory, (int) iovecUsed + 1);
+			caerOutputCommonWriteFullSGIO(fileDescriptor, sgioMemory, iovecUsed + 1, excludeHeader, maxBytesPerPacket);
 		}
 		else {
 			// Else we use a much slower allocate-copy-free approach.
@@ -113,7 +170,7 @@ static inline void caerOutputCommonSend(caerEventPacketHeader packetHeader, int 
 				// Last, copy the header, _after_ it's been manipulated/updated.
 				memcpy(tmpValidEvents, packetHeader, sizeof(struct caer_event_packet_header));
 
-				write(fileDescriptor, tmpValidEvents, currOffset);
+				caerOutputCommonWriteFull(fileDescriptor, tmpValidEvents, currOffset, excludeHeader, maxBytesPerPacket);
 
 				free(tmpValidEvents);
 			}

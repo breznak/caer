@@ -8,6 +8,8 @@
 struct netTCP_state {
 	int netTCPDescriptor;
 	bool validOnly;
+	bool excludeHeader;
+	size_t maxBytesPerPacket;
 	struct iovec *sgioMemory;
 };
 
@@ -41,6 +43,8 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "ipAddress", "127.0.0.1");
 	sshsNodePutShortIfAbsent(moduleData->moduleNode, "portNumber", 8888);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "validEventsOnly", false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "excludeHeader", false);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "maxBytesPerPacket", 0);
 
 	// Install default listener to signal configuration updates asynchronously.
 	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerOutputNetTCPConfigListener);
@@ -70,6 +74,8 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 
 	// Set valid events flag, and allocate memory for scatter/gather IO for it.
 	state->validOnly = sshsNodeGetBool(moduleData->moduleNode, "validEventsOnly");
+	state->excludeHeader = sshsNodeGetBool(moduleData->moduleNode, "excludeHeader");
+	state->maxBytesPerPacket = sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
 
 	if (state->validOnly) {
 		state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
@@ -103,7 +109,8 @@ static void caerOutputNetTCPRun(caerModuleData moduleData, size_t argsNumber, va
 		if (packetHeader != NULL) {
 			if ((state->validOnly && caerEventPacketHeaderGetEventValid(packetHeader) > 0)
 				|| (!state->validOnly && caerEventPacketHeaderGetEventNumber(packetHeader) > 0)) {
-				caerOutputCommonSend(packetHeader, state->netTCPDescriptor, state->validOnly, state->sgioMemory);
+				caerOutputCommonSend(packetHeader, state->netTCPDescriptor, state->sgioMemory, state->validOnly,
+					state->excludeHeader, state->maxBytesPerPacket);
 			}
 		}
 	}
@@ -143,6 +150,11 @@ static void caerOutputNetTCPConfig(caerModuleData moduleData) {
 				state->sgioMemory = NULL;
 			}
 		}
+	}
+
+	if (configUpdate & (0x01 << 2)) {
+		state->excludeHeader = sshsNodeGetBool(moduleData->moduleNode, "excludeHeader");
+		state->maxBytesPerPacket = sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
 	}
 
 	if (configUpdate & (0x01 << 1)) {
@@ -204,6 +216,11 @@ static void caerOutputNetTCPConfigListener(sshsNode node, void *userData, enum s
 		if ((changeType == STRING && strcmp(changeKey, "ipAddress") == 0)
 			|| (changeType == SHORT && strcmp(changeKey, "portNumber") == 0)) {
 			atomic_ops_uint_or(&data->configUpdate, (0x01 << 1), ATOMIC_OPS_FENCE_NONE);
+		}
+
+		if ((changeType == BOOL && strcmp(changeKey, "excludeHeader") == 0)
+			|| (changeType == INT && strcmp(changeKey, "maxBytesPerPacket") == 0)) {
+			atomic_ops_uint_or(&data->configUpdate, (0x01 << 2), ATOMIC_OPS_FENCE_NONE);
 		}
 	}
 }

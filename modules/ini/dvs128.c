@@ -72,7 +72,7 @@ static void dvs128DeallocateTransfers(dvs128State state);
 static void LIBUSB_CALL dvs128LibUsbCallback(struct libusb_transfer *transfer);
 static void dvs128EventTranslator(dvs128State state, uint8_t *buffer, size_t bytesSent);
 static void dvs128SendBiases(sshsNode biasNode, libusb_device_handle *devHandle);
-static libusb_device_handle *dvs128Open(libusb_context *devContext);
+static libusb_device_handle *dvs128Open(libusb_context *devContext, uint8_t busNumber, uint8_t devAddress);
 static void dvs128Close(libusb_device_handle *devHandle);
 static void caerInputDVS128ConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
@@ -101,6 +101,10 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(biasNode, "diff", 13125);
 	sshsNodePutIntIfAbsent(biasNode, "foll", 271);
 	sshsNodePutIntIfAbsent(biasNode, "pr", 217);
+
+	// USB port settings/restrictions.
+	sshsNodePutByteIfAbsent(moduleData->moduleNode, "usbBusNumber", 0);
+	sshsNodePutByteIfAbsent(moduleData->moduleNode, "usbDevAddress", 0);
 
 	// USB buffer settings.
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferNumber", 8);
@@ -169,8 +173,9 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 		return (false);
 	}
 
-	// Try to open a DVS128 device.
-	state->deviceHandle = dvs128Open(state->deviceContext);
+	// Try to open a DVS128 device on a specific USB port.
+	state->deviceHandle = dvs128Open(state->deviceContext, sshsNodeGetByte(moduleData->moduleNode, "usbBusNumber"),
+		sshsNodeGetByte(moduleData->moduleNode, "usbDevAddress"));
 	if (state->deviceHandle == NULL) {
 		freeAllPackets(state);
 		ringBufferFree(state->dataExchangeBuffer);
@@ -725,7 +730,7 @@ static void dvs128SendBiases(sshsNode biasNode, libusb_device_handle *devHandle)
 	VENDOR_REQUEST_SEND_BIASES, 0, 0, biases, sizeof(biases), 0);
 }
 
-static libusb_device_handle *dvs128Open(libusb_context *devContext) {
+static libusb_device_handle *dvs128Open(libusb_context *devContext, uint8_t busNumber, uint8_t devAddress) {
 	libusb_device_handle *devHandle = NULL;
 	libusb_device **devicesList;
 
@@ -743,6 +748,15 @@ static libusb_device_handle *dvs128Open(libusb_context *devContext) {
 			// Check if this is the device we want (VID/PID).
 			if (devDesc.idVendor == DVS128_VID && devDesc.idProduct == DVS128_PID
 				&& (uint8_t) ((devDesc.bcdDevice & 0xFF00) >> 8) == DVS128_DID_TYPE) {
+				// If a USB port restriction is given, honor it.
+				if (busNumber > 0 && libusb_get_bus_number(devicesList[i]) != busNumber) {
+					continue;
+				}
+
+				if (devAddress > 0 && libusb_get_device_address(devicesList[i]) != devAddress) {
+					continue;
+				}
+
 				if (libusb_open(devicesList[i], &devHandle) != LIBUSB_SUCCESS) {
 					devHandle = NULL;
 

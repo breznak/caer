@@ -7,6 +7,8 @@
 struct unixs_state {
 	int unixSocketDescriptor;
 	bool validOnly;
+	bool excludeHeader;
+	size_t maxBytesPerPacket;
 	struct iovec *sgioMemory;
 };
 
@@ -39,6 +41,8 @@ static bool caerOutputUnixSInit(caerModuleData moduleData) {
 	// and add their listeners.
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "socketPath", "/tmp/caer.sock");
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "validEventsOnly", false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "excludeHeader", false);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "maxBytesPerPacket", 0);
 
 	// Install default listener to signal configuration updates asynchronously.
 	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerOutputUnixSConfigListener);
@@ -67,6 +71,8 @@ static bool caerOutputUnixSInit(caerModuleData moduleData) {
 
 	// Set valid events flag, and allocate memory for scatter/gather IO for it.
 	state->validOnly = sshsNodeGetBool(moduleData->moduleNode, "validEventsOnly");
+	state->excludeHeader = sshsNodeGetBool(moduleData->moduleNode, "excludeHeader");
+	state->maxBytesPerPacket = sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
 
 	if (state->validOnly) {
 		state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
@@ -99,7 +105,8 @@ static void caerOutputUnixSRun(caerModuleData moduleData, size_t argsNumber, va_
 		if (packetHeader != NULL) {
 			if ((state->validOnly && caerEventPacketHeaderGetEventValid(packetHeader) > 0)
 				|| (!state->validOnly && caerEventPacketHeaderGetEventNumber(packetHeader) > 0)) {
-				caerOutputCommonSend(packetHeader, state->unixSocketDescriptor, state->validOnly, state->sgioMemory);
+				caerOutputCommonSend(packetHeader, state->unixSocketDescriptor, state->sgioMemory, state->validOnly,
+					state->excludeHeader, state->maxBytesPerPacket);
 			}
 		}
 	}
@@ -141,6 +148,11 @@ static void caerOutputUnixSConfig(caerModuleData moduleData) {
 		}
 	}
 
+	if (configUpdate & (0x01 << 2)) {
+		state->excludeHeader = sshsNodeGetBool(moduleData->moduleNode, "excludeHeader");
+		state->maxBytesPerPacket = sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
+	}
+
 	if (configUpdate & (0x01 << 1)) {
 		// Local Unix socket path changed.
 		// Open a local Unix socket on the new supplied path.
@@ -161,7 +173,7 @@ static void caerOutputUnixSConfig(caerModuleData moduleData) {
 		// Connect socket to above address.
 		if (connect(newUnixSocketDescriptor, (struct sockaddr *) &unixSocketAddr, sizeof(struct sockaddr_un)) < 0) {
 			caerLog(LOG_CRITICAL, "Could not connect to local Unix socket. Error: %s (%d).", caerLogStrerror(errno),
-				errno);
+			errno);
 			close(newUnixSocketDescriptor);
 			return;
 		}
@@ -199,6 +211,11 @@ static void caerOutputUnixSConfigListener(sshsNode node, void *userData, enum ss
 
 		if (changeType == STRING && strcmp(changeKey, "socketPath") == 0) {
 			atomic_ops_uint_or(&data->configUpdate, (0x01 << 1), ATOMIC_OPS_FENCE_NONE);
+		}
+
+		if ((changeType == BOOL && strcmp(changeKey, "excludeHeader") == 0)
+			|| (changeType == INT && strcmp(changeKey, "maxBytesPerPacket") == 0)) {
+			atomic_ops_uint_or(&data->configUpdate, (0x01 << 2), ATOMIC_OPS_FENCE_NONE);
 		}
 	}
 }
