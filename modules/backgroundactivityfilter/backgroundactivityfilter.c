@@ -143,9 +143,11 @@ static void caerBackgroundActivityFilterExit(caerModuleData moduleData) {
 	BAFilterState state = moduleData->moduleState;
 
 	// Ensure map is freed.
-	free(state->timestampMap[0]);
-	free(state->timestampMap);
-	state->timestampMap = NULL;
+	if (state->timestampMap != NULL) {
+		free(state->timestampMap[0]);
+		free(state->timestampMap);
+		state->timestampMap = NULL;
+	}
 }
 
 static bool allocateTimestampMap(BAFilterState state, uint16_t sourceID) {
