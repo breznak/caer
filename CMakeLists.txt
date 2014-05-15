@@ -73,6 +73,9 @@ IF (HAVE_PTHREADS)
 	ADD_DEFINITIONS(-D_BSD_SOURCE=1)
 ENDIF()
 
+# Support for large files (>2GB) on 32-bit systems
+ADD_DEFINITIONS(-D_FILE_OFFSET_BITS=64)
+
 # Enable all warnings for GCC
 IF (CC_GCC OR CC_CLANG)
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic -Wall -Wextra")
