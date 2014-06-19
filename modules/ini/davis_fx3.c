@@ -28,6 +28,9 @@ struct davisFX3_state {
 	atomic_ops_uint debugTransfersLength;
 	uint32_t wrapAdd;
 	uint32_t lastTimestamp;
+	uint32_t currentTimestamp;
+	uint16_t lastY;
+	bool gotY;
 	// Polarity Packet State
 	caerPolarityEventPacket currentPolarityPacket;
 	uint32_t currentPolarityPacketPosition;
@@ -294,7 +297,7 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 
 	// USB buffer settings.
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferNumber", 8);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferSize", 4096);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferSize", 8192);
 
 	// Packet settings (size (in events) and time interval (in µs)).
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "polarityPacketMaxSize", 4096);
@@ -355,6 +358,9 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 
 	state->wrapAdd = 0;
 	state->lastTimestamp = 0;
+	state->currentTimestamp = 0;
+	state->lastY = 0;
+	state->gotY = false;
 
 	// Store reference to parent mainloop, so that we can correctly notify
 	// the availability or not of data to consume.
@@ -604,7 +610,6 @@ static void *dataAcquisitionThread(void *inPtr) {
 	sendBiases(sshsGetRelativeNode(data->moduleNode, "bias/"), state->deviceHandle);
 	sendChipSR(sshsGetRelativeNode(data->moduleNode, "chip/"), state->deviceHandle);
 	sendFpgaSR(sshsGetRelativeNode(data->moduleNode, "fpga/"), state->deviceHandle);
-	sendFpgaSR(sshsGetRelativeNode(data->moduleNode, "fpga/"), state->deviceHandle);
 
 	// Create buffers as specified in config file.
 	allocateDebugTransfers(state);
@@ -802,14 +807,6 @@ static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer) {
 	libusb_free_transfer(transfer);
 }
 
-#define DAViSFX3_POLARITY_SHIFT 0
-#define DAViSFX3_POLARITY_MASK 0x0001
-#define DAViSFX3_Y_ADDR_SHIFT 8
-#define DAViSFX3_Y_ADDR_MASK 0x007F
-#define DAViSFX3_X_ADDR_SHIFT 1
-#define DAViSFX3_X_ADDR_MASK 0x007F
-#define DAViSFX3_SYNC_EVENT_MASK 0x8000
-
 static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent) {
 	// Truncate off any extra partial event.
 	bytesSent &= (size_t) ~0x01;
@@ -817,85 +814,111 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 	for (size_t i = 0; i < bytesSent; i += 2) {
 		bool forcePacketCommit = false;
 
-		if ((buffer[i + 3] & 0x80) == 0x80) {
-			// timestamp bit 15 is one -> wrap: now we need to increment
-			// the wrapAdd, uses only 14 bit timestamps
-			state->wrapAdd += 0x4000;
+		uint16_t event = le16toh(*((uint16_t * ) (&buffer[i])));
 
-			// Detect big timestamp wrap-around.
-			if (state->wrapAdd == 0) {
-				// Reset lastTimestamp to zero at this point, so we can again
-				// start detecting overruns of the 32bit value.
-				state->lastTimestamp = 0;
-
-				caerSpecialEvent currentEvent = caerSpecialEventPacketGetEvent(state->currentSpecialPacket,
-					state->currentSpecialPacketPosition++);
-				caerSpecialEventSetTimestamp(currentEvent, UINT32_MAX);
-				caerSpecialEventSetType(currentEvent, TIMESTAMP_WRAP);
-				caerSpecialEventValidate(currentEvent, state->currentSpecialPacket);
-
-				// Commit packets to separate before wrap from after cleanly.
-				forcePacketCommit = true;
-			}
-		}
-		else if ((buffer[i + 3] & 0x40) == 0x40) {
-			// timestamp bit 14 is one -> wrapAdd reset: this firmware
-			// version uses reset events to reset timestamps
-			state->wrapAdd = 0;
-			state->lastTimestamp = 0;
-
-			// Create timestamp reset event.
-			caerSpecialEvent currentEvent = caerSpecialEventPacketGetEvent(state->currentSpecialPacket,
-				state->currentSpecialPacketPosition++);
-			caerSpecialEventSetTimestamp(currentEvent, UINT32_MAX);
-			caerSpecialEventSetType(currentEvent, TIMESTAMP_RESET);
-			caerSpecialEventValidate(currentEvent, state->currentSpecialPacket);
-
-			// Commit packets when doing a reset to clearly separate them.
-			forcePacketCommit = true;
-		}
-		else {
-			// address is LSB MSB (USB is LE)
-			uint16_t addressUSB = le16toh(*((uint16_t * ) (&buffer[i])));
-
-			// same for timestamp, LSB MSB (USB is LE)
-			// 15 bit value of timestamp in 1 us tick
-			uint16_t timestampUSB = le16toh(*((uint16_t * ) (&buffer[i + 2])));
-
-			// Expand to 32 bits. (Tick is 1µs already.)
-			uint32_t timestamp = timestampUSB + state->wrapAdd;
+		// Check if timestamp.
+		if ((event & 0x8000) != 0) {
+			// Is a timestamp! Expand to 32 bits. (Tick is 1µs already.)
+			state->lastTimestamp = state->currentTimestamp;
+			state->currentTimestamp = state->wrapAdd + (event & 0x7FFF);
 
 			// Check monotonicity of timestamps.
-			if (timestamp < state->lastTimestamp) {
+			if (state->currentTimestamp < state->lastTimestamp) {
 				caerLog(LOG_ALERT,
-					"DAViSFX3: non-monotonic time-stamp detected: lastTimestamp=%" PRIu32 ", timestamp=%" PRIu32 ".",
-					state->lastTimestamp, timestamp);
+					"DAViSFX3: non-monotonic time-stamp detected: lastTimestamp=%" PRIu32 ", currentTimestamp=%" PRIu32 ".",
+					state->lastTimestamp, state->currentTimestamp);
 			}
+		}
+		else {
+			// Look at the code, to determine event and data type.
+			uint8_t code = (uint8_t) ((event & 0x7000) >> 12);
+			uint16_t data = (event & 0x0FFF);
 
-			state->lastTimestamp = timestamp;
+			switch (code) {
+				case 0: // Special event
+					switch (data) {
+						case 0: // Ignore this, but log it.
+							caerLog(LOG_ERROR, "Caught special reserved event!");
+							break;
 
-			if ((addressUSB & DAViSFX3_SYNC_EVENT_MASK) != 0) {
-				// Special Trigger Event (MSB is set)
-				caerSpecialEvent currentEvent = caerSpecialEventPacketGetEvent(state->currentSpecialPacket,
-					state->currentSpecialPacketPosition++);
-				caerSpecialEventSetTimestamp(currentEvent, timestamp);
-				caerSpecialEventSetType(currentEvent, EXTERNAL_TRIGGER);
-				caerSpecialEventValidate(currentEvent, state->currentSpecialPacket);
-			}
-			else {
-				// Invert x values (flip along the x axis).
-				uint16_t x = (uint16_t) (127
-					- ((uint16_t) ((addressUSB >> DAViSFX3_X_ADDR_SHIFT) & DAViSFX3_X_ADDR_MASK)));
-				uint16_t y = (uint16_t) ((addressUSB >> DAViSFX3_Y_ADDR_SHIFT) & DAViSFX3_Y_ADDR_MASK);
-				bool polarity = (((addressUSB >> DAViSFX3_POLARITY_SHIFT) & DAViSFX3_POLARITY_MASK) == 0) ? (1) : (0);
+						case 1: // Timetamp reset
+							state->wrapAdd = 0;
+							state->lastTimestamp = 0;
+							state->currentTimestamp = 0;
 
-				caerPolarityEvent currentEvent = caerPolarityEventPacketGetEvent(state->currentPolarityPacket,
-					state->currentPolarityPacketPosition++);
-				caerPolarityEventSetTimestamp(currentEvent, timestamp);
-				caerPolarityEventSetPolarity(currentEvent, polarity);
-				caerPolarityEventSetY(currentEvent, y);
-				caerPolarityEventSetX(currentEvent, x);
-				caerPolarityEventValidate(currentEvent, state->currentPolarityPacket);
+							caerLog(LOG_INFO, "Timestamp reset event received.");
+
+							// Create timestamp reset event.
+							caerSpecialEvent currentResetEvent = caerSpecialEventPacketGetEvent(
+								state->currentSpecialPacket, state->currentSpecialPacketPosition++);
+							caerSpecialEventSetTimestamp(currentResetEvent, UINT32_MAX);
+							caerSpecialEventSetType(currentResetEvent, TIMESTAMP_RESET);
+							caerSpecialEventValidate(currentResetEvent, state->currentSpecialPacket);
+
+							// Commit packets when doing a reset to clearly separate them.
+							forcePacketCommit = true;
+
+							break;
+
+						case 2: { // External trigger
+							caerSpecialEvent currentExtTriggerEvent = caerSpecialEventPacketGetEvent(
+								state->currentSpecialPacket, state->currentSpecialPacketPosition++);
+							caerSpecialEventSetTimestamp(currentExtTriggerEvent, state->currentTimestamp);
+							caerSpecialEventSetType(currentExtTriggerEvent, EXTERNAL_TRIGGER);
+							caerSpecialEventValidate(currentExtTriggerEvent, state->currentSpecialPacket);
+							break;
+						}
+
+						default:
+							caerLog(LOG_ERROR, "Caught special event that can't be handled.");
+							break;
+					}
+					break;
+
+				case 1: // Y address
+					if (state->gotY) {
+						caerSpecialEvent currentRowOnlyEvent = caerSpecialEventPacketGetEvent(
+							state->currentSpecialPacket, state->currentSpecialPacketPosition++);
+						caerSpecialEventSetTimestamp(currentRowOnlyEvent, state->currentTimestamp);
+						caerSpecialEventSetType(currentRowOnlyEvent, ROW_ONLY);
+						caerSpecialEventValidate(currentRowOnlyEvent, state->currentSpecialPacket);
+
+						caerLog(LOG_DEBUG, "Row only event at address Y=%" PRIu16 ".", state->lastY);
+					}
+
+					state->lastY = data;
+					state->gotY = true;
+
+					break;
+
+				case 2: // X address, Polarity OFF
+				case 3: { // X address, Polarity ON
+					caerPolarityEvent currentPolarityEvent = caerPolarityEventPacketGetEvent(
+						state->currentPolarityPacket, state->currentPolarityPacketPosition++);
+					caerPolarityEventSetTimestamp(currentPolarityEvent, state->currentTimestamp);
+					caerPolarityEventSetPolarity(currentPolarityEvent, (code & 0x01));
+					caerPolarityEventSetY(currentPolarityEvent, state->lastY);
+					caerPolarityEventSetX(currentPolarityEvent, data);
+					caerPolarityEventValidate(currentPolarityEvent, state->currentPolarityPacket);
+
+					state->gotY = false;
+
+					break;
+				}
+
+				case 7: // Timestamp wrap
+					// Each wrap is 2^15 µs (~32ms), and we have
+					// to multiply it with the wrap counter,
+					// which is located in the data part of this
+					// event.
+					state->wrapAdd += (uint32_t) (0x8000 * data);
+
+					caerLog(LOG_INFO, "Timestamp wrap event received with multiplier of %" PRIu16 ".", data);
+					break;
+
+				default:
+					caerLog(LOG_ERROR, "Caught event that can't be handled.");
+					break;
 			}
 		}
 
@@ -1066,54 +1089,17 @@ static void LIBUSB_CALL libUsbDebugCallback(struct libusb_transfer *transfer) {
 }
 
 static void debugTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent) {
-	// Right now, this is either a debug message (length 7-64 bytes) or
-	// an IMU sample (length 15 bytes).
-	if (bytesSent < 7) {
-		// Not enough to do anything with it.
-		return;
-	}
+	UNUSED_ARGUMENT(state);
 
-	if (buffer[0] == 0x00) {
+	// Check if this is a debug message (length 7-64 bytes).
+	if (bytesSent >= 7 && buffer[0] == 0x00) {
 		// Debug message, log this.
 		caerLog(LOG_ERROR, "Error message from DAViSFX3: '%s' (code %u at time %u).", &buffer[6], buffer[1],
 			*((uint32_t *) &buffer[2]));
 	}
-	else if (buffer[0] == 0x01) {
-		// IMU sample, convert to event and add to packet.
-		caerIMU6Event currentEvent = caerIMU6EventPacketGetEvent(state->currentIMU6Packet,
-			state->currentIMU6PacketPosition++);
-		caerIMU6EventSetTimestamp(currentEvent, state->lastTimestamp); // Get TS from DVS packets.
-		caerIMU6EventSetAccelX(currentEvent, be16toh(*((uint16_t * ) &buffer[1])));
-		caerIMU6EventSetAccelY(currentEvent, be16toh(*((uint16_t * ) &buffer[3])));
-		caerIMU6EventSetAccelZ(currentEvent, be16toh(*((uint16_t * ) &buffer[5])));
-		caerIMU6EventSetTemp(currentEvent, be16toh(*((uint16_t * ) &buffer[7])));
-		caerIMU6EventSetGyroX(currentEvent, be16toh(*((uint16_t * ) &buffer[9])));
-		caerIMU6EventSetGyroY(currentEvent, be16toh(*((uint16_t * ) &buffer[11])));
-		caerIMU6EventSetGyroZ(currentEvent, be16toh(*((uint16_t * ) &buffer[13])));
-		caerIMU6EventValidate(currentEvent, state->currentIMU6Packet);
-
-		// Commit packet to the ring-buffer, so they can be processed by the
-		// main-loop, when their stated conditions are met.
-		if ((state->currentIMU6PacketPosition
-			>= caerEventPacketHeaderGetEventCapacity(&state->currentIMU6Packet->packetHeader))
-			|| ((state->currentIMU6PacketPosition > 1)
-				&& (caerIMU6EventGetTimestamp(
-					caerIMU6EventPacketGetEvent(state->currentIMU6Packet, state->currentIMU6PacketPosition - 1))
-					- caerIMU6EventGetTimestamp(caerIMU6EventPacketGetEvent(state->currentIMU6Packet, 0))
-					>= state->maxIMU6PacketInterval))) {
-			if (!ringBufferPut(state->dataExchangeBuffer, state->currentIMU6Packet)) {
-				// Failed to forward packet, drop it.
-				free(state->currentIMU6Packet);
-				caerLog(LOG_DEBUG, "Dropped IMU6 Event Packet because ring-buffer full!");
-			}
-			else {
-				caerMainloopDataAvailableIncrease(state->mainloopNotify);
-			}
-
-			// Allocate new packet for next iteration.
-			state->currentIMU6Packet = caerIMU6EventPacketAllocate(state->maxIMU6PacketSize, state->sourceID);
-			state->currentIMU6PacketPosition = 0;
-		}
+	else {
+		// Unknown/invalid debug message, log this.
+		caerLog(LOG_WARNING, "Unknown/invalid debug message from DAViSFX3.");
 	}
 }
 
