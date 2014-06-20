@@ -11,6 +11,7 @@
 #include "ext/ringbuffer/ringbuffer.h"
 #include <pthread.h>
 #include <libusb.h>
+#include <unistd.h>
 
 struct davisFX3_state {
 	// Data Acquisition Thread -> Mainloop Exchange
@@ -249,34 +250,34 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 
 	// First, always create all needed setting nodes, set their default values
 	// and add their listeners.
-	// Set default biases, from SBRet10s.xml settings.
+	// Set default biases, from SBRet20gs.xml settings.
 	sshsNode biasNode = sshsGetRelativeNode(moduleData->moduleNode, "bias/");
 	createAddressedCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 3, 39, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 2, 117, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 3, 7, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "ApsCasEpc", "Cascode", "N", 2, 144, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 2, 168, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 3, 1, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "ApsCasEpc", "Cascode", "N", 2, 185, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "DiffCasBnc", "Cascode", "N", 2, 115, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 1, 188, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 1, 219, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "LocalBufBn", "Normal", "N", 2, 164, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 2, 129, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "P", 5, 34, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 6, 4, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "P", 5, 63, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 6, 18, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "P", 3, 25, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 1, 91, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 2, 49, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "P", 3, 80, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "P", 3, 152, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "P", 7, 80, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "P", 0, 152, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 2, 255, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "IFRefrBn", "Normal", "N", 2, 255, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 0, 211, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "apsOverflowLevel", "Normal", "N", 0, 36, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "biasBuffer", "Normal", "N", 1, 251, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 0, 215, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "apsOverflowLevel", "Normal", "N", 1, 253, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "biasBuffer", "Normal", "N", 2, 254, true);
 
 	createShiftedSourceBiasSetting(biasNode, "SSP", 33, 1, "ShiftedSource", "SplitGate");
 	createShiftedSourceBiasSetting(biasNode, "SSN", 33, 1, "ShiftedSource", "SplitGate");
 
 	sshsNode chipNode = sshsGetRelativeNode(moduleData->moduleNode, "chip/");
-	sshsNodePutBoolIfAbsent(chipNode, "globalShutter", false);
+	sshsNodePutBoolIfAbsent(chipNode, "globalShutter", true);
 	sshsNodePutBoolIfAbsent(chipNode, "useAout", false);
 	sshsNodePutBoolIfAbsent(chipNode, "nArow", false);
 	sshsNodePutBoolIfAbsent(chipNode, "hotPixelSuppression", false);
@@ -615,6 +616,9 @@ static void *dataAcquisitionThread(void *inPtr) {
 	allocateDebugTransfers(state);
 	allocateDataTransfers(state, sshsNodeGetInt(data->moduleNode, "bufferNumber"),
 		sshsNodeGetInt(data->moduleNode, "bufferSize"));
+
+	// Wait to ensure configuration has taken hold.
+	sleep(10);
 
 	// Enable AER data transfer on USB end-point 6.
 	libusb_control_transfer(state->deviceHandle,
