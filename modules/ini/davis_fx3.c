@@ -153,11 +153,11 @@ static inline void sendAddressedCoarseFineBias(sshsNode biasNode, libusb_device_
 	if (sshsNodeGetBool(biasConfigNode, "enabled")) {
 		biasValue |= 0x01;
 	}
-	if (str_equals(sshsNodeGetString(biasConfigNode, "type"), "Normal")) {
-		biasValue |= 0x04;
-	}
 	if (str_equals(sshsNodeGetString(biasConfigNode, "sex"), "N")) {
 		biasValue |= 0x02;
+	}
+	if (str_equals(sshsNodeGetString(biasConfigNode, "type"), "Normal")) {
+		biasValue |= 0x04;
 	}
 	if (str_equals(sshsNodeGetString(biasConfigNode, "currentLevel"), "Normal")) {
 		biasValue |= 0x08;
@@ -170,7 +170,11 @@ static inline void sendAddressedCoarseFineBias(sshsNode biasNode, libusb_device_
 	uint8_t reversedCoarseValue = (uint8_t) (((coarseValue * 0x0802LU & 0x22110LU)
 		| (coarseValue * 0x8020LU & 0x88440LU)) * 0x10101LU >> 16);
 
-	biasValue |= (uint16_t) (reversedCoarseValue << 12);
+	// Reversing the byte produces a fully reversed byte, so the lower three
+	// bits end up reversed, but as the highest three bits! That means shifting
+	// them right by 5, and then shifting them left by 12 to put them in their
+	// final position. This can be expressed by just a left shift of 7 (12 - 5).
+	biasValue |= (uint16_t) (reversedCoarseValue << 7);
 
 	// All biases are two byte quantities.
 	uint8_t bias[2];
@@ -250,31 +254,31 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 
 	// First, always create all needed setting nodes, set their default values
 	// and add their listeners.
-	// Set default biases, from SBRet20gs.xml settings.
+	// Set default biases, from SBRet20s_gs.xml settings.
 	sshsNode biasNode = sshsGetRelativeNode(moduleData->moduleNode, "bias/");
-	createAddressedCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 3, 39, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 2, 168, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 3, 1, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "ApsCasEpc", "Cascode", "N", 2, 185, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 3, 72, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 2, 112, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 3, 6, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "ApsCasEpc", "Cascode", "N", 2, 144, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "DiffCasBnc", "Cascode", "N", 2, 115, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 1, 219, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 1, 188, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "LocalBufBn", "Normal", "N", 2, 164, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 2, 129, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "P", 5, 63, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 6, 18, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "P", 3, 25, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 1, 91, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 2, 49, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "P", 7, 80, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "P", 0, 152, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 1, 129, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "P", 6, 255, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 5, 2, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "P", 3, 19, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 0, 140, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 2, 55, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "P", 1, 80, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "P", 1, 152, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 2, 255, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "IFRefrBn", "Normal", "N", 2, 255, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 0, 215, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "apsOverflowLevel", "Normal", "N", 1, 253, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "biasBuffer", "Normal", "N", 2, 254, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 0, 211, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "apsOverflowLevel", "Normal", "N", 0, 36, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "biasBuffer", "Normal", "N", 1, 251, true);
 
-	createShiftedSourceBiasSetting(biasNode, "SSP", 33, 1, "ShiftedSource", "SplitGate");
-	createShiftedSourceBiasSetting(biasNode, "SSN", 33, 1, "ShiftedSource", "SplitGate");
+	createShiftedSourceBiasSetting(biasNode, "SSP", 33, 1, "TiedToRail", "SplitGate");
+	createShiftedSourceBiasSetting(biasNode, "SSN", 33, 2, "ShiftedSource", "SplitGate");
 
 	sshsNode chipNode = sshsGetRelativeNode(moduleData->moduleNode, "chip/");
 	sshsNodePutBoolIfAbsent(chipNode, "globalShutter", true);
@@ -326,11 +330,11 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 
 	// Put global source information into SSHS.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
-	sshsNodePutShort(sourceInfoNode, "dvsSizeX", 240);
-	sshsNodePutShort(sourceInfoNode, "dvsSizeY", 180);
-	sshsNodePutShort(sourceInfoNode, "frameSizeX", 240);
-	sshsNodePutShort(sourceInfoNode, "frameSizeY", 180);
-	sshsNodePutShort(sourceInfoNode, "frameADCDepth", 10);
+	sshsNodePutShort(sourceInfoNode, "dvsSizeX", DAVIS_FX3_ARRAY_SIZE_X);
+	sshsNodePutShort(sourceInfoNode, "dvsSizeY", DAVIS_FX3_ARRAY_SIZE_Y);
+	sshsNodePutShort(sourceInfoNode, "frameSizeX", DAVIS_FX3_ARRAY_SIZE_X);
+	sshsNodePutShort(sourceInfoNode, "frameSizeY", DAVIS_FX3_ARRAY_SIZE_Y);
+	sshsNodePutShort(sourceInfoNode, "frameADCDepth", DAVIS_FX3_ADC_DEPTH);
 
 	// Initialize state fields.
 	state->maxPolarityPacketSize = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxSize");
@@ -348,7 +352,8 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	state->currentPolarityPacket = caerPolarityEventPacketAllocate(state->maxPolarityPacketSize, state->sourceID);
 	state->currentPolarityPacketPosition = 0;
 
-	state->currentFramePacket = caerFrameEventPacketAllocate(state->maxFramePacketSize, state->sourceID, 10, 180, 240);
+	state->currentFramePacket = caerFrameEventPacketAllocate(state->maxFramePacketSize, state->sourceID,
+	DAVIS_FX3_ADC_DEPTH, DAVIS_FX3_ARRAY_SIZE_Y, DAVIS_FX3_ARRAY_SIZE_X);
 	state->currentFramePacketPosition = 0;
 
 	state->currentIMU6Packet = caerIMU6EventPacketAllocate(state->maxIMU6PacketSize, state->sourceID);
@@ -617,9 +622,6 @@ static void *dataAcquisitionThread(void *inPtr) {
 	allocateDataTransfers(state, sshsNodeGetInt(data->moduleNode, "bufferNumber"),
 		sshsNodeGetInt(data->moduleNode, "bufferSize"));
 
-	// Wait to ensure configuration has taken hold.
-	sleep(10);
-
 	// Enable AER data transfer on USB end-point 6.
 	libusb_control_transfer(state->deviceHandle,
 		LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE, VR_DATA_ENABLE, 1, 0,
@@ -880,6 +882,13 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 					break;
 
 				case 1: // Y address
+					// Check range conformity.
+					if (data >= DAVIS_FX3_ARRAY_SIZE_Y) {
+						caerLog(LOG_DEBUG, "Y address out of range (0-%d): %" PRIu16 ".", DAVIS_FX3_ARRAY_SIZE_Y - 1,
+							data);
+						data = 0;
+					}
+
 					if (state->gotY) {
 						caerSpecialEvent currentRowOnlyEvent = caerSpecialEventPacketGetEvent(
 							state->currentSpecialPacket, state->currentSpecialPacketPosition++);
@@ -897,6 +906,13 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 
 				case 2: // X address, Polarity OFF
 				case 3: { // X address, Polarity ON
+					// Check range conformity.
+					if (data >= DAVIS_FX3_ARRAY_SIZE_X) {
+						caerLog(LOG_DEBUG, "X address out of range (0-%d): %" PRIu16 ".", DAVIS_FX3_ARRAY_SIZE_X - 1,
+							data);
+						data = 0;
+					}
+
 					caerPolarityEvent currentPolarityEvent = caerPolarityEventPacketGetEvent(
 						state->currentPolarityPacket, state->currentPolarityPacketPosition++);
 					caerPolarityEventSetTimestamp(currentPolarityEvent, state->currentTimestamp);
