@@ -130,8 +130,8 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 
 	// Put global source information into SSHS.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
-	sshsNodePutShort(sourceInfoNode, "sizeX", 128);
-	sshsNodePutShort(sourceInfoNode, "sizeY", 128);
+	sshsNodePutShort(sourceInfoNode, "sizeX", DVS128_ARRAY_SIZE_X);
+	sshsNodePutShort(sourceInfoNode, "sizeY", DVS128_ARRAY_SIZE_Y);
 
 	// Initialize state fields.
 	state->maxPolarityPacketSize = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxSize");
@@ -436,7 +436,7 @@ static void dvs128AllocateTransfers(dvs128State state, uint32_t bufferNum, uint3
 
 		// Initialize Transfer.
 		state->transfers[i]->dev_handle = state->deviceHandle;
-		state->transfers[i]->endpoint = USB_IO_ENDPOINT;
+		state->transfers[i]->endpoint = DATA_ENDPOINT;
 		state->transfers[i]->type = LIBUSB_TRANSFER_TYPE_BULK;
 		state->transfers[i]->callback = &dvs128LibUsbCallback;
 		state->transfers[i]->user_data = state;
@@ -592,6 +592,16 @@ static void dvs128EventTranslator(dvs128State state, uint8_t *buffer, size_t byt
 				uint16_t x = (uint16_t) (127 - ((uint16_t) ((addressUSB >> DVS128_X_ADDR_SHIFT) & DVS128_X_ADDR_MASK)));
 				uint16_t y = (uint16_t) ((addressUSB >> DVS128_Y_ADDR_SHIFT) & DVS128_Y_ADDR_MASK);
 				bool polarity = (((addressUSB >> DVS128_POLARITY_SHIFT) & DVS128_POLARITY_MASK) == 0) ? (1) : (0);
+
+				// Check range conformity.
+				if (x >= DVS128_ARRAY_SIZE_X) {
+					caerLog(LOG_ALERT, "X address out of range (0-%d): %" PRIu16 ".", DVS128_ARRAY_SIZE_X - 1, x);
+					continue; // Skip invalid event.
+				}
+				if (y >= DVS128_ARRAY_SIZE_Y) {
+					caerLog(LOG_ALERT, "Y address out of range (0-%d): %" PRIu16 ".", DVS128_ARRAY_SIZE_Y - 1, y);
+					continue; // Skip invalid event.
+				}
 
 				caerPolarityEvent currentEvent = caerPolarityEventPacketGetEvent(state->currentPolarityPacket,
 					state->currentPolarityPacketPosition++);
