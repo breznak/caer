@@ -11,7 +11,7 @@
 #include "base/mainloop.h"
 #include "base/misc.h"
 #include "modules/ini/davis_fx3.h"
-#include "modules/misc/out/file.h"
+#include "modules/misc/out/net_udp.h"
 
 static bool mainloop_1(void);
 
@@ -23,7 +23,7 @@ static bool mainloop_1(void) {
 	caerInputDAViSFX3(1, &davisfx3_polarity, &davisfx3_frame, &davisfx3_imu, NULL);
 
 	// Output to file in user home directory.
-	caerOutputFile(2, 3, davisfx3_polarity, davisfx3_frame, davisfx3_imu);
+	caerOutputNetUDP(2, 3, davisfx3_polarity, davisfx3_frame, davisfx3_imu);
 
 	return (true); // If false is returned, processing of this loop stops.
 }

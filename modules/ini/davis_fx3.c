@@ -813,6 +813,10 @@ static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer) {
 	libusb_free_transfer(transfer);
 }
 
+static uint32_t msgCounter = 0;
+static uint32_t msgXCounter = 0;
+static uint32_t msgYCounter = 0;
+
 static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent) {
 	// Truncate off any extra partial event.
 	bytesSent &= (size_t) ~0x01;
@@ -884,8 +888,12 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 				case 1: // Y address
 					// Check range conformity.
 					if (data >= DAVIS_FX3_ARRAY_SIZE_Y) {
-						caerLog(LOG_DEBUG, "Y address out of range (0-%d): %" PRIu16 ".", DAVIS_FX3_ARRAY_SIZE_Y - 1,
-							data);
+						msgYCounter++;
+						if (msgYCounter == 2000) {
+							caerLog(LOG_ALERT, "Y address out of range (0-%d): %" PRIu16 ".",
+							DAVIS_FX3_ARRAY_SIZE_Y - 1, data);
+							msgYCounter = 0;
+						}
 						data = 0;
 					}
 
@@ -904,19 +912,47 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 
 					break;
 
-				case 2: // X address, Polarity OFF
-				case 3: { // X address, Polarity ON
+				case 2: { // X address, Polarity OFF
 					// Check range conformity.
 					if (data >= DAVIS_FX3_ARRAY_SIZE_X) {
-						caerLog(LOG_DEBUG, "X address out of range (0-%d): %" PRIu16 ".", DAVIS_FX3_ARRAY_SIZE_X - 1,
-							data);
+						msgCounter++;
+						if (msgCounter == 2000) {
+							caerLog(LOG_ALERT, "X-OFF address out of range (0-%d): %" PRIu16 ".",
+							DAVIS_FX3_ARRAY_SIZE_X - 1, data);
+							msgCounter = 0;
+						}
 						data = 0;
 					}
 
 					caerPolarityEvent currentPolarityEvent = caerPolarityEventPacketGetEvent(
 						state->currentPolarityPacket, state->currentPolarityPacketPosition++);
 					caerPolarityEventSetTimestamp(currentPolarityEvent, state->currentTimestamp);
-					caerPolarityEventSetPolarity(currentPolarityEvent, (code & 0x01));
+					caerPolarityEventSetPolarity(currentPolarityEvent, false);
+					caerPolarityEventSetY(currentPolarityEvent, state->lastY);
+					caerPolarityEventSetX(currentPolarityEvent, data);
+					caerPolarityEventValidate(currentPolarityEvent, state->currentPolarityPacket);
+
+					state->gotY = false;
+
+					break;
+				}
+
+				case 3: { // X address, Polarity ON
+					// Check range conformity.
+					if (data >= DAVIS_FX3_ARRAY_SIZE_X) {
+						msgXCounter++;
+						if (msgXCounter == 2000) {
+							caerLog(LOG_ALERT, "X-ON address out of range (0-%d): %" PRIu16 ".",
+							DAVIS_FX3_ARRAY_SIZE_X - 1, data);
+							msgXCounter = 0;
+						}
+						data = 0;
+					}
+
+					caerPolarityEvent currentPolarityEvent = caerPolarityEventPacketGetEvent(
+						state->currentPolarityPacket, state->currentPolarityPacketPosition++);
+					caerPolarityEventSetTimestamp(currentPolarityEvent, state->currentTimestamp);
+					caerPolarityEventSetPolarity(currentPolarityEvent, true);
 					caerPolarityEventSetY(currentPolarityEvent, state->lastY);
 					caerPolarityEventSetX(currentPolarityEvent, data);
 					caerPolarityEventValidate(currentPolarityEvent, state->currentPolarityPacket);
