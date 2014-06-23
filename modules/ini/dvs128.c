@@ -517,7 +517,10 @@ static void LIBUSB_CALL dvs128LibUsbCallback(struct libusb_transfer *transfer) {
 
 static void dvs128EventTranslator(dvs128State state, uint8_t *buffer, size_t bytesSent) {
 	// Truncate off any extra partial event.
-	bytesSent &= (size_t) ~0x03;
+	if ((bytesSent & 0x03) != 0) {
+		caerLog(LOG_ALERT, "%zu bytes sent via USB, which is not a multiple of four.", bytesSent);
+		bytesSent &= (size_t) ~0x03;
+	}
 
 	for (size_t i = 0; i < bytesSent; i += 4) {
 		bool forcePacketCommit = false;
