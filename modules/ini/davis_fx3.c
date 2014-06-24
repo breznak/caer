@@ -855,7 +855,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 							state->lastTimestamp = 0;
 							state->currentTimestamp = 0;
 
-							caerLog(LOG_INFO, "Timestamp reset event received.");
+							caerLog(LOG_DEBUG, "Timestamp reset event received.");
 
 							// Create timestamp reset event.
 							caerSpecialEvent currentResetEvent = caerSpecialEventPacketGetEvent(
@@ -936,7 +936,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 					// event.
 					state->wrapAdd += (uint32_t) (0x8000 * data);
 
-					caerLog(LOG_INFO, "Timestamp wrap event received with multiplier of %" PRIu16 ".", data);
+					caerLog(LOG_DEBUG, "Timestamp wrap event received with multiplier of %" PRIu16 ".", data);
 					break;
 
 				default:
@@ -959,7 +959,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 			if (!ringBufferPut(state->dataExchangeBuffer, state->currentPolarityPacket)) {
 				// Failed to forward packet, drop it.
 				free(state->currentPolarityPacket);
-				caerLog(LOG_DEBUG, "Dropped Polarity Event Packet because ring-buffer full!");
+				caerLog(LOG_INFO, "Dropped Polarity Event Packet because ring-buffer full!");
 			}
 			else {
 				caerMainloopDataAvailableIncrease(state->mainloopNotify);
@@ -990,7 +990,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 				else {
 					// Failed to forward packet, drop it.
 					free(state->currentSpecialPacket);
-					caerLog(LOG_DEBUG, "Dropped Special Event Packet because ring-buffer full!");
+					caerLog(LOG_INFO, "Dropped Special Event Packet because ring-buffer full!");
 				}
 			}
 			else {

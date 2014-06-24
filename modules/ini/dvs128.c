@@ -630,7 +630,7 @@ static void dvs128EventTranslator(dvs128State state, uint8_t *buffer, size_t byt
 			if (!ringBufferPut(state->dataExchangeBuffer, state->currentPolarityPacket)) {
 				// Failed to forward packet, drop it.
 				free(state->currentPolarityPacket);
-				caerLog(LOG_DEBUG, "Dropped Polarity Event Packet because ring-buffer full!");
+				caerLog(LOG_INFO, "Dropped Polarity Event Packet because ring-buffer full!");
 			}
 			else {
 				caerMainloopDataAvailableIncrease(state->mainloopNotify);
@@ -661,7 +661,7 @@ static void dvs128EventTranslator(dvs128State state, uint8_t *buffer, size_t byt
 				else {
 					// Failed to forward packet, drop it.
 					free(state->currentSpecialPacket);
-					caerLog(LOG_DEBUG, "Dropped Special Event Packet because ring-buffer full!");
+					caerLog(LOG_INFO, "Dropped Special Event Packet because ring-buffer full!");
 				}
 			}
 			else {
