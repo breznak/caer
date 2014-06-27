@@ -268,7 +268,7 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	createAddressedCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 5, 2, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "P", 3, 19, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 0, 140, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 2, 55, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 6, 132, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "P", 1, 80, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "P", 1, 152, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 2, 255, true);
@@ -897,9 +897,10 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 							state->currentSpecialPacket, state->currentSpecialPacketPosition++);
 						caerSpecialEventSetTimestamp(currentRowOnlyEvent, state->currentTimestamp);
 						caerSpecialEventSetType(currentRowOnlyEvent, ROW_ONLY);
+						caerSpecialEventSetData(currentRowOnlyEvent, state->lastY);
 						caerSpecialEventValidate(currentRowOnlyEvent, state->currentSpecialPacket);
 
-						caerLog(LOG_DEBUG, "Row only event at address Y=%" PRIu16 ".", state->lastY);
+						caerLog(LOG_DEBUG, "Row-only event at address Y=%" PRIu16 ".", state->lastY);
 					}
 
 					state->lastY = data;
