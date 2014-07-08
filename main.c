@@ -11,19 +11,17 @@
 #include "base/mainloop.h"
 #include "base/misc.h"
 #include "modules/ini/davis_fx3.h"
-#include "modules/misc/out/net_udp.h"
+#include "modules/statistics/statistics.h"
 
 static bool mainloop_1(void);
 
 static bool mainloop_1(void) {
 	// Typed EventPackets contain events of a certain type.
 	caerPolarityEventPacket davisfx3_polarity;
-	caerFrameEventPacket davisfx3_frame;
-	caerIMU6EventPacket davisfx3_imu;
-	caerInputDAViSFX3(1, &davisfx3_polarity, &davisfx3_frame, &davisfx3_imu, NULL);
+	caerInputDAViSFX3(1, &davisfx3_polarity, NULL, NULL, NULL);
 
-	// Output to file in user home directory.
-	caerOutputNetUDP(2, 3, davisfx3_polarity, davisfx3_frame, davisfx3_imu);
+	// Show statistics about event-rate.
+	caerStatistics(2, (caerEventPacketHeader) davisfx3_polarity);
 
 	return (true); // If false is returned, processing of this loop stops.
 }

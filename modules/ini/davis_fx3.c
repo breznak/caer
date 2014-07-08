@@ -102,6 +102,7 @@ static void debugTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSe
 static void sendBiases(sshsNode biasNode, libusb_device_handle *devHandle);
 static void sendChipSR(sshsNode chipNode, libusb_device_handle *devHandle);
 static void sendFpgaSR(sshsNode fpgaNode, libusb_device_handle *devHandle);
+static void sendSpiConfigCommand(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr, uint32_t param);
 static libusb_device_handle *deviceOpen(libusb_context *devContext, uint8_t busNumber, uint8_t devAddress);
 static void deviceClose(libusb_device_handle *devHandle);
 static void caerInputDAViSFX3ConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
@@ -615,17 +616,20 @@ static void *dataAcquisitionThread(void *inPtr) {
 	// Send default start-up biases and config values to device before enabling it.
 	sendBiases(sshsGetRelativeNode(data->moduleNode, "bias/"), state->deviceHandle);
 	sendChipSR(sshsGetRelativeNode(data->moduleNode, "chip/"), state->deviceHandle);
-	sendFpgaSR(sshsGetRelativeNode(data->moduleNode, "fpga/"), state->deviceHandle);
+	//sendFpgaSR(sshsGetRelativeNode(data->moduleNode, "fpga/"), state->deviceHandle);
 
 	// Create buffers as specified in config file.
 	allocateDebugTransfers(state);
 	allocateDataTransfers(state, sshsNodeGetInt(data->moduleNode, "bufferNumber"),
 		sshsNodeGetInt(data->moduleNode, "bufferSize"));
 
-	// Enable AER data transfer on USB end-point 6.
+	// Enable AER data transfer on USB end-point.
 	libusb_control_transfer(state->deviceHandle,
 		LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE, VR_DATA_ENABLE, 1, 0,
 		NULL, 0, 0);
+	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x01, 0x01);
+	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x02, 0x01);
+	sendSpiConfigCommand(state->deviceHandle, 0x02, 0x01, 0x01);
 
 	// Handle USB events (1 second timeout).
 	struct timeval te = { .tv_sec = 0, .tv_usec = 1000000 };
@@ -644,7 +648,10 @@ static void *dataAcquisitionThread(void *inPtr) {
 
 	caerLog(LOG_DEBUG, "DAViSFX3: shutting down data acquisition thread ...");
 
-	// Disable AER data transfer on USB end-point 6.
+	// Disable AER data transfer on USB end-point (reverse order than enabling).
+	sendSpiConfigCommand(state->deviceHandle, 0x02, 0x01, 0x00);
+	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x02, 0x00);
+	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x01, 0x00);
 	libusb_control_transfer(state->deviceHandle,
 		LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE, VR_DATA_ENABLE, 0, 0,
 		NULL, 0, 0);
@@ -680,7 +687,7 @@ static void dataAcquisitionThreadConfig(caerModuleData moduleData) {
 
 	if (configUpdate & (0x01 << 2)) {
 		// FPGA config update required.
-		sendFpgaSR(sshsGetRelativeNode(moduleData->moduleNode, "fpga/"), state->deviceHandle);
+		//sendFpgaSR(sshsGetRelativeNode(moduleData->moduleNode, "fpga/"), state->deviceHandle);
 	}
 
 	if (configUpdate & (0x01 << 3)) {
@@ -1232,6 +1239,22 @@ void sendFpgaSR(sshsNode fpgaNode, libusb_device_handle *devHandle) {
 
 	libusb_control_transfer(devHandle, LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 	VR_FPGA_SREG, 0, 0, fpgaSR, sizeof(fpgaSR), 0);
+}
+
+
+static void sendSpiConfigCommand(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr, uint32_t param) {
+	uint8_t spiConfig[6] = { 0 };
+
+	spiConfig[0] = moduleAddr;
+	spiConfig[1] = paramAddr;
+	spiConfig[2] = U8T(param >> 24);
+	spiConfig[3] = U8T(param >> 16);
+	spiConfig[4] = U8T(param >> 8);
+	spiConfig[5] = U8T(param >> 0);
+
+	libusb_control_transfer(devHandle,
+		LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE, VR_FPGA_SREG, 0, 0,
+		spiConfig, sizeof(spiConfig), 0);
 }
 
 static libusb_device_handle *deviceOpen(libusb_context *devContext, uint8_t busNumber, uint8_t devAddress) {
