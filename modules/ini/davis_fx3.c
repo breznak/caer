@@ -101,7 +101,6 @@ static void LIBUSB_CALL libUsbDebugCallback(struct libusb_transfer *transfer);
 static void debugTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent);
 static void sendBiases(sshsNode biasNode, libusb_device_handle *devHandle);
 static void sendChipSR(sshsNode chipNode, libusb_device_handle *devHandle);
-static void sendFpgaSR(sshsNode fpgaNode, libusb_device_handle *devHandle);
 static void sendSpiConfigCommand(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr, uint32_t param);
 static libusb_device_handle *deviceOpen(libusb_context *devContext, uint8_t busNumber, uint8_t devAddress);
 static void deviceClose(libusb_device_handle *devHandle);
@@ -291,11 +290,7 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(chipNode, "resetCalib", true);
 
 	sshsNode fpgaNode = sshsGetRelativeNode(moduleData->moduleNode, "fpga/");
-	sshsNodePutShortIfAbsent(fpgaNode, "frameDelay", 4345);
-	sshsNodePutShortIfAbsent(fpgaNode, "resSettle", 11);
-	sshsNodePutShortIfAbsent(fpgaNode, "rowSettle", 10);
-	sshsNodePutShortIfAbsent(fpgaNode, "colSettle", 300);
-	sshsNodePutShortIfAbsent(fpgaNode, "exposure", 28);
+	// TODO: sshsNodePutShortIfAbsent(fpgaNode, "TODO", 0);
 
 	// USB port settings/restrictions.
 	sshsNodePutByteIfAbsent(moduleData->moduleNode, "usbBusNumber", 0);
@@ -616,7 +611,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 	// Send default start-up biases and config values to device before enabling it.
 	sendBiases(sshsGetRelativeNode(data->moduleNode, "bias/"), state->deviceHandle);
 	sendChipSR(sshsGetRelativeNode(data->moduleNode, "chip/"), state->deviceHandle);
-	//sendFpgaSR(sshsGetRelativeNode(data->moduleNode, "fpga/"), state->deviceHandle);
+	// TODO: fpga config here.
 
 	// Create buffers as specified in config file.
 	allocateDebugTransfers(state);
@@ -624,9 +619,6 @@ static void *dataAcquisitionThread(void *inPtr) {
 		sshsNodeGetInt(data->moduleNode, "bufferSize"));
 
 	// Enable AER data transfer on USB end-point.
-	libusb_control_transfer(state->deviceHandle,
-		LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE, VR_DATA_ENABLE, 1, 0,
-		NULL, 0, 0);
 	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x01, 0x01);
 	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x02, 0x01);
 	sendSpiConfigCommand(state->deviceHandle, 0x02, 0x01, 0x01);
@@ -652,9 +644,6 @@ static void *dataAcquisitionThread(void *inPtr) {
 	sendSpiConfigCommand(state->deviceHandle, 0x02, 0x01, 0x00);
 	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x02, 0x00);
 	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x01, 0x00);
-	libusb_control_transfer(state->deviceHandle,
-		LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE, VR_DATA_ENABLE, 0, 0,
-		NULL, 0, 0);
 
 	// Cancel all transfers and handle them.
 	deallocateDataTransfers(state);
@@ -687,7 +676,7 @@ static void dataAcquisitionThreadConfig(caerModuleData moduleData) {
 
 	if (configUpdate & (0x01 << 2)) {
 		// FPGA config update required.
-		//sendFpgaSR(sshsGetRelativeNode(moduleData->moduleNode, "fpga/"), state->deviceHandle);
+		// TODO: figure this out.
 	}
 
 	if (configUpdate & (0x01 << 3)) {
@@ -1213,47 +1202,16 @@ void sendChipSR(sshsNode chipNode, libusb_device_handle *devHandle) {
 	VR_CHIP_DIAG, 0, 0, chipSR, sizeof(chipSR), 0);
 }
 
-void sendFpgaSR(sshsNode fpgaNode, libusb_device_handle *devHandle) {
-	// Five two byte configuration settings
-	uint8_t fpgaSR[5 * 2] = { 0 };
-
-	uint16_t frameDelay = sshsNodeGetShort(fpgaNode, "frameDelay");
-	fpgaSR[0] = U8T(frameDelay >> 8);
-	fpgaSR[1] = U8T(frameDelay >> 0);
-
-	uint16_t resSettle = sshsNodeGetShort(fpgaNode, "resSettle");
-	fpgaSR[2] = U8T(resSettle >> 8);
-	fpgaSR[3] = U8T(resSettle >> 0);
-
-	uint16_t rowSettle = sshsNodeGetShort(fpgaNode, "rowSettle");
-	fpgaSR[4] = U8T(rowSettle >> 8);
-	fpgaSR[5] = U8T(rowSettle >> 0);
-
-	uint16_t colSettle = sshsNodeGetShort(fpgaNode, "colSettle");
-	fpgaSR[6] = U8T(colSettle >> 8);
-	fpgaSR[7] = U8T(colSettle >> 0);
-
-	uint16_t exposure = sshsNodeGetShort(fpgaNode, "exposure");
-	fpgaSR[8] = U8T(exposure >> 8);
-	fpgaSR[9] = U8T(exposure >> 0);
-
-	libusb_control_transfer(devHandle, LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
-	VR_FPGA_SREG, 0, 0, fpgaSR, sizeof(fpgaSR), 0);
-}
-
-
 static void sendSpiConfigCommand(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr, uint32_t param) {
-	uint8_t spiConfig[6] = { 0 };
+	uint8_t spiConfig[4] = { 0 };
 
-	spiConfig[0] = moduleAddr;
-	spiConfig[1] = paramAddr;
-	spiConfig[2] = U8T(param >> 24);
-	spiConfig[3] = U8T(param >> 16);
-	spiConfig[4] = U8T(param >> 8);
-	spiConfig[5] = U8T(param >> 0);
+	spiConfig[0] = U8T(param >> 24);
+	spiConfig[1] = U8T(param >> 16);
+	spiConfig[2] = U8T(param >> 8);
+	spiConfig[3] = U8T(param >> 0);
 
 	libusb_control_transfer(devHandle,
-		LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE, VR_FPGA_SREG, 0, 0,
+		LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE, VR_FPGA_CONFIG, moduleAddr, paramAddr,
 		spiConfig, sizeof(spiConfig), 0);
 }
 

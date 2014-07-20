@@ -21,10 +21,9 @@
 
 #define DATA_ENDPOINT 0x82
 
-#define VR_DATA_ENABLE 0xBF
+#define VR_FPGA_CONFIG 0xBF
 #define VR_CHIP_BIAS 0xC0
 #define VR_CHIP_DIAG 0xC1
-#define VR_FPGA_SREG 0xC2
 
 void caerInputDAViSFX3(uint16_t moduleID, caerPolarityEventPacket *polarity, caerFrameEventPacket *frame,
 	caerIMU6EventPacket *imu6, caerSpecialEventPacket *special);
