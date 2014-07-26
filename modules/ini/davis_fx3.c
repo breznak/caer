@@ -619,9 +619,9 @@ static void *dataAcquisitionThread(void *inPtr) {
 		sshsNodeGetInt(data->moduleNode, "bufferSize"));
 
 	// Enable AER data transfer on USB end-point.
-	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x01, 0x01);
-	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x02, 0x01);
-	sendSpiConfigCommand(state->deviceHandle, 0x02, 0x01, 0x01);
+	sendSpiConfigCommand(state->deviceHandle, 0x00, 0x00, 0x01);
+	sendSpiConfigCommand(state->deviceHandle, 0x00, 0x01, 0x01);
+	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x00, 0x01);
 
 	// Handle USB events (1 second timeout).
 	struct timeval te = { .tv_sec = 0, .tv_usec = 1000000 };
@@ -641,9 +641,9 @@ static void *dataAcquisitionThread(void *inPtr) {
 	caerLog(LOG_DEBUG, "DAViSFX3: shutting down data acquisition thread ...");
 
 	// Disable AER data transfer on USB end-point (reverse order than enabling).
-	sendSpiConfigCommand(state->deviceHandle, 0x02, 0x01, 0x00);
-	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x02, 0x00);
-	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x01, 0x00);
+	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x00, 0x00);
+	sendSpiConfigCommand(state->deviceHandle, 0x00, 0x01, 0x00);
+	sendSpiConfigCommand(state->deviceHandle, 0x00, 0x00, 0x00);
 
 	// Cancel all transfers and handle them.
 	deallocateDataTransfers(state);
