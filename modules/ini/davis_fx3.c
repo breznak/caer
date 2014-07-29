@@ -165,7 +165,7 @@ static inline void sendAddressedCoarseFineBias(sshsNode biasNode, libusb_device_
 
 	biasValue |= (uint16_t) ((sshsNodeGetByte(biasConfigNode, "fineValue") & 0xFF) << 4);
 
-	// Reverse coarse part.
+	// Reverse coarse part. TODO: remove for revision 2 boards!
 	uint8_t coarseValue = (sshsNodeGetByte(biasConfigNode, "coarseValue") & 0x07);
 	uint8_t reversedCoarseValue = (uint8_t) (((coarseValue * 0x0802LU & 0x22110LU)
 		| (coarseValue * 0x8020LU & 0x88440LU)) * 0x10101LU >> 16);
