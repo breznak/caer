@@ -622,6 +622,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 	sendSpiConfigCommand(state->deviceHandle, 0x00, 0x00, 0x01);
 	sendSpiConfigCommand(state->deviceHandle, 0x00, 0x01, 0x01);
 	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x00, 0x01);
+	sendSpiConfigCommand(state->deviceHandle, 0x03, 0x00, 0x01);
 
 	// Handle USB events (1 second timeout).
 	struct timeval te = { .tv_sec = 0, .tv_usec = 1000000 };
@@ -641,6 +642,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 	caerLog(LOG_DEBUG, "DAViSFX3: shutting down data acquisition thread ...");
 
 	// Disable AER data transfer on USB end-point (reverse order than enabling).
+	sendSpiConfigCommand(state->deviceHandle, 0x03, 0x00, 0x00);
 	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x00, 0x00);
 	sendSpiConfigCommand(state->deviceHandle, 0x00, 0x01, 0x00);
 	sendSpiConfigCommand(state->deviceHandle, 0x00, 0x00, 0x00);
@@ -809,6 +811,13 @@ static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer) {
 	libusb_free_transfer(transfer);
 }
 
+#define CHECK_MONOTONIC_TIMESTAMP(CURR_TS, LAST_TS) \
+	if (CURR_TS <= LAST_TS) { \
+		caerLog(LOG_ALERT, \
+			"DAViSFX3: non-monotonic time-stamp detected: lastTimestamp=%" PRIu32 ", currentTimestamp=%" PRIu32 ", difference=%" PRIu32 ".", \
+			LAST_TS, CURR_TS, (LAST_TS - CURR_TS)); \
+	}
+
 static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent) {
 	// Truncate off any extra partial event.
 	if ((bytesSent & 0x01) != 0) {
@@ -828,11 +837,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 			state->currentTimestamp = state->wrapAdd + (event & 0x7FFF);
 
 			// Check monotonicity of timestamps.
-			if (state->currentTimestamp < state->lastTimestamp) {
-				caerLog(LOG_ALERT,
-					"DAViSFX3: non-monotonic time-stamp detected: lastTimestamp=%" PRIu32 ", currentTimestamp=%" PRIu32 ".",
-					state->lastTimestamp, state->currentTimestamp);
-			}
+			CHECK_MONOTONIC_TIMESTAMP(state->currentTimestamp, state->lastTimestamp);
 		}
 		else {
 			// Look at the code, to determine event and data type.
@@ -865,7 +870,9 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 
 							break;
 
-						case 2: { // External trigger
+						case 2: // External trigger (falling edge)
+						case 3: // External trigger (rising edge)
+						case 4: { // External trigger (pulse)
 							caerSpecialEvent currentExtTriggerEvent = caerSpecialEventPacketGetEvent(
 								state->currentSpecialPacket, state->currentSpecialPacketPosition++);
 							caerSpecialEventSetTimestamp(currentExtTriggerEvent, state->currentTimestamp);
@@ -873,6 +880,12 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 							caerSpecialEventValidate(currentExtTriggerEvent, state->currentSpecialPacket);
 							break;
 						}
+
+						case 5: // IMU Start (6 axes)
+							break;
+
+						case 7: // IMU End
+							break;
 
 						default:
 							caerLog(LOG_ERROR, "Caught special event that can't be handled.");
@@ -926,12 +939,22 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 					break;
 				}
 
+				case 5: // Misc 8bit data, used currently only
+						// for IMU events in DAViS FX3 boards
+					break;
+
 				case 7: // Timestamp wrap
 					// Each wrap is 2^15 µs (~32ms), and we have
 					// to multiply it with the wrap counter,
 					// which is located in the data part of this
 					// event.
 					state->wrapAdd += (uint32_t) (0x8000 * data);
+
+					state->lastTimestamp = state->currentTimestamp;
+					state->currentTimestamp = state->wrapAdd;
+
+					// Check monotonicity of timestamps.
+					CHECK_MONOTONIC_TIMESTAMP(state->currentTimestamp, state->lastTimestamp);
 
 					caerLog(LOG_DEBUG, "Timestamp wrap event received with multiplier of %" PRIu16 ".", data);
 					break;
