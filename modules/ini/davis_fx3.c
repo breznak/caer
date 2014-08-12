@@ -30,6 +30,9 @@ struct davisFX3_state {
 	uint32_t wrapAdd;
 	uint32_t lastTimestamp;
 	uint32_t currentTimestamp;
+	uint32_t dvsTimestamp;
+	uint32_t imuTimestamp;
+	uint32_t extTriggerTimestamp;
 	uint16_t lastY;
 	bool gotY;
 	// Polarity Packet State
@@ -361,6 +364,9 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	state->wrapAdd = 0;
 	state->lastTimestamp = 0;
 	state->currentTimestamp = 0;
+	state->dvsTimestamp = 0;
+	state->imuTimestamp = 0;
+	state->extTriggerTimestamp = 0;
 	state->lastY = 0;
 	state->gotY = false;
 
@@ -855,6 +861,9 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 							state->wrapAdd = 0;
 							state->lastTimestamp = 0;
 							state->currentTimestamp = 0;
+							state->dvsTimestamp = 0;
+							state->imuTimestamp = 0;
+							state->extTriggerTimestamp = 0;
 
 							caerLog(LOG_DEBUG, "Timestamp reset event received.");
 
@@ -873,15 +882,18 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 						case 2: // External trigger (falling edge)
 						case 3: // External trigger (rising edge)
 						case 4: { // External trigger (pulse)
+							state->extTriggerTimestamp = state->currentTimestamp;
+
 							caerSpecialEvent currentExtTriggerEvent = caerSpecialEventPacketGetEvent(
 								state->currentSpecialPacket, state->currentSpecialPacketPosition++);
-							caerSpecialEventSetTimestamp(currentExtTriggerEvent, state->currentTimestamp);
+							caerSpecialEventSetTimestamp(currentExtTriggerEvent, state->extTriggerTimestamp);
 							caerSpecialEventSetType(currentExtTriggerEvent, EXTERNAL_TRIGGER);
 							caerSpecialEventValidate(currentExtTriggerEvent, state->currentSpecialPacket);
 							break;
 						}
 
 						case 5: // IMU Start (6 axes)
+							state->imuTimestamp = state->currentTimestamp;
 							break;
 
 						case 7: // IMU End
@@ -904,7 +916,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 					if (state->gotY) {
 						caerSpecialEvent currentRowOnlyEvent = caerSpecialEventPacketGetEvent(
 							state->currentSpecialPacket, state->currentSpecialPacketPosition++);
-						caerSpecialEventSetTimestamp(currentRowOnlyEvent, state->currentTimestamp);
+						caerSpecialEventSetTimestamp(currentRowOnlyEvent, state->dvsTimestamp);
 						caerSpecialEventSetType(currentRowOnlyEvent, ROW_ONLY);
 						caerSpecialEventSetData(currentRowOnlyEvent, state->lastY);
 						caerSpecialEventValidate(currentRowOnlyEvent, state->currentSpecialPacket);
@@ -914,6 +926,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 
 					state->lastY = data;
 					state->gotY = true;
+					state->dvsTimestamp = state->currentTimestamp;
 
 					break;
 
@@ -928,7 +941,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 
 					caerPolarityEvent currentPolarityEvent = caerPolarityEventPacketGetEvent(
 						state->currentPolarityPacket, state->currentPolarityPacketPosition++);
-					caerPolarityEventSetTimestamp(currentPolarityEvent, state->currentTimestamp);
+					caerPolarityEventSetTimestamp(currentPolarityEvent, state->dvsTimestamp);
 					caerPolarityEventSetPolarity(currentPolarityEvent, (code & 0x01));
 					caerPolarityEventSetY(currentPolarityEvent, state->lastY);
 					caerPolarityEventSetX(currentPolarityEvent, data);
