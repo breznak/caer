@@ -11,6 +11,7 @@
 #include "base/mainloop.h"
 #include "base/misc.h"
 #include "modules/ini/davis_fx3.h"
+#include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
 #include "modules/statistics/statistics.h"
 
 static bool mainloop_1(void);
@@ -18,10 +19,19 @@ static bool mainloop_1(void);
 static bool mainloop_1(void) {
 	// Typed EventPackets contain events of a certain type.
 	caerPolarityEventPacket davisfx3_polarity;
+
+	// Input modules grab data from outside sources (like devices, files, ...)
+	// and put events into an event packet.
 	caerInputDAViSFX3(1, &davisfx3_polarity, NULL, NULL, NULL);
 
-	// Show statistics about event-rate.
-	caerStatistics(2, (caerEventPacketHeader) davisfx3_polarity);
+	// Filters process event packets: for example to suppress certain events,
+	// like with the Background Activity Filter, which suppresses events that
+	// look to be uncorrelated with real scene changes (noise reduction).
+	caerBackgroundActivityFilter(2, davisfx3_polarity);
+
+	// Filters can also extract information from event packets: for example
+	// to show statistics about the current event-rate.
+	caerStatistics(3, (caerEventPacketHeader) davisfx3_polarity);
 
 	return (true); // If false is returned, processing of this loop stops.
 }
