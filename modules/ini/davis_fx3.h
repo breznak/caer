@@ -8,7 +8,7 @@
 #include "events/imu6.h"
 
 #define DAVIS_FX3_VID 0x152A
-#define DAVIS_FX3_PID 0x841A
+#define DAVIS_FX3_PID 0x841B
 #define DAVIS_FX3_DID_TYPE 0x00
 
 #define DAVIS_FX3_ARRAY_SIZE_X 240
@@ -24,6 +24,10 @@
 #define VR_FPGA_CONFIG 0xBF
 #define VR_CHIP_BIAS 0xC0
 #define VR_CHIP_DIAG 0xC1
+
+#define APS_READOUT_TYPES_NUM 2
+#define APS_READOUT_RESET 0
+#define APS_READOUT_SIGNAL 1
 
 void caerInputDAViSFX3(uint16_t moduleID, caerPolarityEventPacket *polarity, caerFrameEventPacket *frame,
 	caerIMU6EventPacket *imu6, caerSpecialEventPacket *special);

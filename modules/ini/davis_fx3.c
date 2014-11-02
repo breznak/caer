@@ -31,10 +31,14 @@ struct davisFX3_state {
 	uint32_t lastTimestamp;
 	uint32_t currentTimestamp;
 	uint32_t dvsTimestamp;
+	uint32_t apsTimestamp;
 	uint32_t imuTimestamp;
 	uint32_t extTriggerTimestamp;
 	uint16_t lastY;
 	bool gotY;
+	uint16_t apsCurrentReadoutType;
+	uint16_t apsCountX[APS_READOUT_TYPES_NUM];
+	uint16_t apsCountY[APS_READOUT_TYPES_NUM];
 	// Polarity Packet State
 	caerPolarityEventPacket currentPolarityPacket;
 	uint32_t currentPolarityPacketPosition;
@@ -365,10 +369,16 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	state->lastTimestamp = 0;
 	state->currentTimestamp = 0;
 	state->dvsTimestamp = 0;
+	state->apsTimestamp = 0;
 	state->imuTimestamp = 0;
 	state->extTriggerTimestamp = 0;
 	state->lastY = 0;
 	state->gotY = false;
+	state->apsCurrentReadoutType = APS_READOUT_RESET;
+	for (size_t i = 0; i < APS_READOUT_TYPES_NUM; i++) {
+		state->apsCountX[i] = 0;
+		state->apsCountY[i] = 0;
+	}
 
 	// Store reference to parent mainloop, so that we can correctly notify
 	// the availability or not of data to consume.
@@ -620,15 +630,20 @@ static void *dataAcquisitionThread(void *inPtr) {
 	// TODO: fpga config here.
 
 	// Create buffers as specified in config file.
-	allocateDebugTransfers(state);
+	//allocateDebugTransfers(state);
 	allocateDataTransfers(state, sshsNodeGetInt(data->moduleNode, "bufferNumber"),
 		sshsNodeGetInt(data->moduleNode, "bufferSize"));
 
 	// Enable AER data transfer on USB end-point.
 	sendSpiConfigCommand(state->deviceHandle, 0x00, 0x00, 0x01);
 	sendSpiConfigCommand(state->deviceHandle, 0x00, 0x01, 0x01);
-	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x00, 0x01);
-	sendSpiConfigCommand(state->deviceHandle, 0x03, 0x00, 0x01);
+	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x00, 0x00);
+	sendSpiConfigCommand(state->deviceHandle, 0x03, 0x00, 0x00);
+
+	// APS tests.
+	sendSpiConfigCommand(state->deviceHandle, 0x02, 14, 1); // Wait on transfer stall.
+	sendSpiConfigCommand(state->deviceHandle, 0x02, 2, 1); // Global shutter.
+	sendSpiConfigCommand(state->deviceHandle, 0x02, 0, 1); // Run APS.
 
 	// Handle USB events (1 second timeout).
 	struct timeval te = { .tv_sec = 0, .tv_usec = 1000000 };
@@ -655,7 +670,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 
 	// Cancel all transfers and handle them.
 	deallocateDataTransfers(state);
-	deallocateDebugTransfers(state);
+	//deallocateDebugTransfers(state);
 
 	// Ensure parent also shuts down (on disconnected device for example).
 	sshsNodePutBool(data->moduleNode, "shutdown", true);
@@ -862,6 +877,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 							state->lastTimestamp = 0;
 							state->currentTimestamp = 0;
 							state->dvsTimestamp = 0;
+							state->apsTimestamp = 0;
 							state->imuTimestamp = 0;
 							state->extTriggerTimestamp = 0;
 
@@ -897,6 +913,57 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 							break;
 
 						case 7: // IMU End
+							break;
+
+						case 8: // APS Frame Start
+							state->apsTimestamp = state->currentTimestamp;
+
+							caerLog(LOG_DEBUG, "APS Frame Start");
+							for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
+								state->apsCountX[j] = 0;
+								state->apsCountY[j] = 0;
+							}
+							break;
+
+						case 9: // APS Frame End
+							caerLog(LOG_DEBUG, "APS Frame End");
+							for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
+								caerLog(LOG_DEBUG, "APS Frame End: CountX[%zu] is %d.", j, state->apsCountX[j]);
+
+								if (state->apsCountX[j] < DAVIS_FX3_ARRAY_SIZE_X) {
+									caerLog(LOG_ERROR, "APS Frame End: incomplete frame [%zu] detected.", j);
+								}
+							}
+							break;
+
+						case 10: // APS Reset Column Start
+							caerLog(LOG_DEBUG, "APS Reset Column Start");
+							state->apsCurrentReadoutType = APS_READOUT_RESET;
+							state->apsCountY[state->apsCurrentReadoutType] = 0;
+							break;
+
+						case 11: // APS Signal Column Start
+							caerLog(LOG_DEBUG, "APS Signal Column Start");
+							state->apsCurrentReadoutType = APS_READOUT_SIGNAL;
+							state->apsCountY[state->apsCurrentReadoutType] = 0;
+							break;
+
+						case 12: // APS Column End
+							caerLog(LOG_DEBUG, "APS Column End");
+
+							if (state->apsCountY[state->apsCurrentReadoutType] < DAVIS_FX3_ARRAY_SIZE_Y) {
+								caerLog(LOG_ERROR, "APS Column End: incomplete column [%d] detected.", state->apsCurrentReadoutType);
+							}
+
+							caerLog(LOG_DEBUG, "APS Column End: CountX[%d] is %d.", state->apsCurrentReadoutType, state->apsCountX[state->apsCurrentReadoutType]);
+							caerLog(LOG_DEBUG, "APS Column End: CountY[%d] is %d.", state->apsCurrentReadoutType, state->apsCountY[state->apsCurrentReadoutType]);
+							state->apsCountX[state->apsCurrentReadoutType]++;
+							break;
+
+						case 13: // APS ADC Overflow
+							caerLog(LOG_ERROR, "APS ADC Overflow");
+							caerLog(LOG_DEBUG, "APS ADC Overflow: row is %d.", state->apsCountY[state->apsCurrentReadoutType]);
+							state->apsCountY[state->apsCurrentReadoutType]++;
 							break;
 
 						default:
@@ -951,6 +1018,12 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 
 					break;
 				}
+
+				case 4:
+					caerLog(LOG_DEBUG, "APS ADC Sample");
+					caerLog(LOG_DEBUG, "APS ADC Sample: row is %d.", state->apsCountY[state->apsCurrentReadoutType]);
+					state->apsCountY[state->apsCurrentReadoutType]++;
+					break;
 
 				case 5: // Misc 8bit data, used currently only
 						// for IMU events in DAViS FX3 boards
