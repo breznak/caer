@@ -130,8 +130,8 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 
 	// Put global source information into SSHS.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
-	sshsNodePutShort(sourceInfoNode, "sizeX", DVS128_ARRAY_SIZE_X);
-	sshsNodePutShort(sourceInfoNode, "sizeY", DVS128_ARRAY_SIZE_Y);
+	sshsNodePutShort(sourceInfoNode, "dvsSizeX", DVS128_ARRAY_SIZE_X);
+	sshsNodePutShort(sourceInfoNode, "dvsSizeY", DVS128_ARRAY_SIZE_Y);
 
 	// Initialize state fields.
 	state->maxPolarityPacketSize = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxSize");

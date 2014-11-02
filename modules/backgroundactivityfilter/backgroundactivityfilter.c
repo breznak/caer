@@ -153,8 +153,8 @@ static void caerBackgroundActivityFilterExit(caerModuleData moduleData) {
 static bool allocateTimestampMap(BAFilterState state, uint16_t sourceID) {
 	// Get size information from source.
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(sourceID);
-	uint16_t sizeX = sshsNodeGetShort(sourceInfoNode, "sizeX");
-	uint16_t sizeY = sshsNodeGetShort(sourceInfoNode, "sizeY");
+	uint16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
+	uint16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
 	// Initialize double-indirection contiguous 2D array, so that array[x][y]
 	// is possible, see http://c-faq.com/aryptr/dynmuldimary.html for info.
