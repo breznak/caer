@@ -31,14 +31,14 @@ struct davisFX3_state {
 	uint32_t lastTimestamp;
 	uint32_t currentTimestamp;
 	uint32_t dvsTimestamp;
-	uint32_t apsTimestamp;
 	uint32_t imuTimestamp;
-	uint32_t extTriggerTimestamp;
 	uint16_t lastY;
 	bool gotY;
+	bool apsGlobalShutter;
 	uint16_t apsCurrentReadoutType;
 	uint16_t apsCountX[APS_READOUT_TYPES_NUM];
 	uint16_t apsCountY[APS_READOUT_TYPES_NUM];
+	uint16_t apsCurrentResetFrame[DAVIS_FX3_ARRAY_SIZE_X * DAVIS_FX3_ARRAY_SIZE_Y];
 	// Polarity Packet State
 	caerPolarityEventPacket currentPolarityPacket;
 	uint32_t currentPolarityPacketPosition;
@@ -311,9 +311,9 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "polarityPacketMaxSize", 4096);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "polarityPacketMaxInterval", 5000);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "framePacketMaxSize", 4);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "framePacketMaxInterval", 50000);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "framePacketMaxInterval", 20000);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "imu6PacketMaxSize", 32);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "imu6PacketMaxInterval", 10000);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "imu6PacketMaxInterval", 4000);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "specialPacketMaxSize", 128);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "specialPacketMaxInterval", 1000);
 
@@ -337,7 +337,6 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	sshsNodePutShort(sourceInfoNode, "dvsSizeY", DAVIS_FX3_ARRAY_SIZE_Y);
 	sshsNodePutShort(sourceInfoNode, "frameSizeX", DAVIS_FX3_ARRAY_SIZE_X);
 	sshsNodePutShort(sourceInfoNode, "frameSizeY", DAVIS_FX3_ARRAY_SIZE_Y);
-	sshsNodePutShort(sourceInfoNode, "frameADCDepth", DAVIS_FX3_ADC_DEPTH);
 
 	// Initialize state fields.
 	state->maxPolarityPacketSize = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxSize");
@@ -356,7 +355,7 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	state->currentPolarityPacketPosition = 0;
 
 	state->currentFramePacket = caerFrameEventPacketAllocate(state->maxFramePacketSize, state->sourceID,
-	DAVIS_FX3_ADC_DEPTH, DAVIS_FX3_ARRAY_SIZE_Y, DAVIS_FX3_ARRAY_SIZE_X);
+	DAVIS_FX3_ARRAY_SIZE_Y, DAVIS_FX3_ARRAY_SIZE_X);
 	state->currentFramePacketPosition = 0;
 
 	state->currentIMU6Packet = caerIMU6EventPacketAllocate(state->maxIMU6PacketSize, state->sourceID);
@@ -369,16 +368,16 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	state->lastTimestamp = 0;
 	state->currentTimestamp = 0;
 	state->dvsTimestamp = 0;
-	state->apsTimestamp = 0;
 	state->imuTimestamp = 0;
-	state->extTriggerTimestamp = 0;
 	state->lastY = 0;
 	state->gotY = false;
+	state->apsGlobalShutter = true; // TODO: external control.
 	state->apsCurrentReadoutType = APS_READOUT_RESET;
 	for (size_t i = 0; i < APS_READOUT_TYPES_NUM; i++) {
 		state->apsCountX[i] = 0;
 		state->apsCountY[i] = 0;
 	}
+	memset(state->apsCurrentResetFrame, 0, DAVIS_FX3_ARRAY_SIZE_X * DAVIS_FX3_ARRAY_SIZE_Y);
 
 	// Store reference to parent mainloop, so that we can correctly notify
 	// the availability or not of data to consume.
@@ -641,6 +640,8 @@ static void *dataAcquisitionThread(void *inPtr) {
 	sendSpiConfigCommand(state->deviceHandle, 0x03, 0x00, 0x00);
 
 	// APS tests.
+	sendSpiConfigCommand(state->deviceHandle, 0x02, 7, 30000 * 5); // Exposure control.
+	sendSpiConfigCommand(state->deviceHandle, 0x02, 8, 30000); // Wait 1ms between frames.
 	sendSpiConfigCommand(state->deviceHandle, 0x02, 14, 1); // Wait on transfer stall.
 	sendSpiConfigCommand(state->deviceHandle, 0x02, 2, 1); // Global shutter.
 	sendSpiConfigCommand(state->deviceHandle, 0x02, 0, 1); // Run APS.
@@ -872,14 +873,12 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 							caerLog(LOG_ERROR, "Caught special reserved event!");
 							break;
 
-						case 1: // Timetamp reset
+						case 1: { // Timetamp reset
 							state->wrapAdd = 0;
 							state->lastTimestamp = 0;
 							state->currentTimestamp = 0;
 							state->dvsTimestamp = 0;
-							state->apsTimestamp = 0;
 							state->imuTimestamp = 0;
-							state->extTriggerTimestamp = 0;
 
 							caerLog(LOG_DEBUG, "Timestamp reset event received.");
 
@@ -894,15 +893,14 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 							forcePacketCommit = true;
 
 							break;
+						}
 
 						case 2: // External trigger (falling edge)
 						case 3: // External trigger (rising edge)
 						case 4: { // External trigger (pulse)
-							state->extTriggerTimestamp = state->currentTimestamp;
-
 							caerSpecialEvent currentExtTriggerEvent = caerSpecialEventPacketGetEvent(
 								state->currentSpecialPacket, state->currentSpecialPacketPosition++);
-							caerSpecialEventSetTimestamp(currentExtTriggerEvent, state->extTriggerTimestamp);
+							caerSpecialEventSetTimestamp(currentExtTriggerEvent, state->currentTimestamp);
 							caerSpecialEventSetType(currentExtTriggerEvent, EXTERNAL_TRIGGER);
 							caerSpecialEventValidate(currentExtTriggerEvent, state->currentSpecialPacket);
 							break;
@@ -915,40 +913,87 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 						case 7: // IMU End
 							break;
 
-						case 8: // APS Frame Start
-							state->apsTimestamp = state->currentTimestamp;
-
+						case 8: { // APS Frame Start
 							caerLog(LOG_DEBUG, "APS Frame Start");
 							for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
 								state->apsCountX[j] = 0;
 								state->apsCountY[j] = 0;
 							}
-							break;
 
-						case 9: // APS Frame End
+							// Write out start of frame timestamp.
+							caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
+									state->currentFramePacketPosition);
+							caerFrameEventSetTSStartOfFrame(currentFrameEvent, state->currentTimestamp);
+
+							// Setup frame.
+							caerFrameEventSetADCDepth(currentFrameEvent, DAVIS_FX3_ADC_DEPTH);
+							caerFrameEventSetLengthXY(currentFrameEvent, state->currentFramePacket,
+								DAVIS_FX3_ARRAY_SIZE_X, DAVIS_FX3_ARRAY_SIZE_Y);
+
+							break;
+						}
+
+						case 9: { // APS Frame End
 							caerLog(LOG_DEBUG, "APS Frame End");
+							bool validFrame = true;
+
 							for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
 								caerLog(LOG_DEBUG, "APS Frame End: CountX[%zu] is %d.", j, state->apsCountX[j]);
 
 								if (state->apsCountX[j] < DAVIS_FX3_ARRAY_SIZE_X) {
 									caerLog(LOG_ERROR, "APS Frame End: incomplete frame [%zu] detected.", j);
+									validFrame = false;
 								}
 							}
-							break;
 
-						case 10: // APS Reset Column Start
+							// Write out end of frame timestamp.
+							caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
+								state->currentFramePacketPosition);
+							caerFrameEventSetTSEndOfFrame(currentFrameEvent, state->currentTimestamp);
+
+							// Validate event and advance frame packet position.
+							if (validFrame) {
+								caerFrameEventValidate(currentFrameEvent, state->currentFramePacket);
+							}
+							state->currentFramePacketPosition++;
+
+							break;
+						}
+
+						case 10: { // APS Reset Column Start
 							caerLog(LOG_DEBUG, "APS Reset Column Start");
 							state->apsCurrentReadoutType = APS_READOUT_RESET;
 							state->apsCountY[state->apsCurrentReadoutType] = 0;
-							break;
 
-						case 11: // APS Signal Column Start
+							// The first Reset Column Read Start is also the start
+							// of the exposure for the RS.
+							if (!state->apsGlobalShutter
+								&& state->apsCountX[APS_READOUT_RESET] == 0) {
+								caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
+									state->currentFramePacketPosition);
+								caerFrameEventSetTSStartOfExposure(currentFrameEvent, state->currentTimestamp);
+							}
+
+							break;
+						}
+
+						case 11: { // APS Signal Column Start
 							caerLog(LOG_DEBUG, "APS Signal Column Start");
 							state->apsCurrentReadoutType = APS_READOUT_SIGNAL;
 							state->apsCountY[state->apsCurrentReadoutType] = 0;
-							break;
 
-						case 12: // APS Column End
+							// The first Signal Column Read Start is also always the end
+							// of the exposure time, for both RS and GS.
+							if (state->apsCountX[APS_READOUT_SIGNAL] == 0) {
+								caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
+									state->currentFramePacketPosition);
+								caerFrameEventSetTSEndOfExposure(currentFrameEvent, state->currentTimestamp);
+							}
+
+							break;
+						}
+
+						case 12: { // APS Column End
 							caerLog(LOG_DEBUG, "APS Column End");
 
 							if (state->apsCountY[state->apsCurrentReadoutType] < DAVIS_FX3_ARRAY_SIZE_Y) {
@@ -958,13 +1003,41 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 							caerLog(LOG_DEBUG, "APS Column End: CountX[%d] is %d.", state->apsCurrentReadoutType, state->apsCountX[state->apsCurrentReadoutType]);
 							caerLog(LOG_DEBUG, "APS Column End: CountY[%d] is %d.", state->apsCurrentReadoutType, state->apsCountY[state->apsCurrentReadoutType]);
 							state->apsCountX[state->apsCurrentReadoutType]++;
-							break;
 
-						case 13: // APS ADC Overflow
-							caerLog(LOG_ERROR, "APS ADC Overflow");
+							// The last Reset Column Read End is also the start
+							// of the exposure for the GS.
+							if (state->apsGlobalShutter
+								&& state->apsCountX[APS_READOUT_RESET] == DAVIS_FX3_ARRAY_SIZE_X) {
+								caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
+										state->currentFramePacketPosition);
+								caerFrameEventSetTSStartOfExposure(currentFrameEvent, state->currentTimestamp);
+							}
+
+							break;
+						}
+
+						case 13: { // APS ADC Overflow
+							// Detect overflow, log it and put an all-ones pixel in its place.
+							caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
+								state->currentFramePacketPosition);
+
+							size_t pixelPosition = (size_t) (state->apsCountY[state->apsCurrentReadoutType] *
+								caerFrameEventGetLengthX(currentFrameEvent)) + state->apsCountX[state->apsCurrentReadoutType];
+
+							if (state->apsCurrentReadoutType == APS_READOUT_RESET) {
+								state->apsCurrentResetFrame[pixelPosition] = 0xFFFF;
+							}
+							else {
+								caerFrameEventGetPixelArrayUnsafe(currentFrameEvent)[pixelPosition] =
+										htole16(U16T(0xFFFF - state->apsCurrentResetFrame[pixelPosition]));
+							}
+
+							caerLog(LOG_INFO, "APS ADC Overflow");
 							caerLog(LOG_DEBUG, "APS ADC Overflow: row is %d.", state->apsCountY[state->apsCurrentReadoutType]);
 							state->apsCountY[state->apsCurrentReadoutType]++;
+
 							break;
+						}
 
 						default:
 							caerLog(LOG_ERROR, "Caught special event that can't be handled.");
@@ -983,6 +1056,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 					if (state->gotY) {
 						caerSpecialEvent currentRowOnlyEvent = caerSpecialEventPacketGetEvent(
 							state->currentSpecialPacket, state->currentSpecialPacketPosition++);
+						// Use the previous timestamp here, since this refers to the previous Y.
 						caerSpecialEventSetTimestamp(currentRowOnlyEvent, state->dvsTimestamp);
 						caerSpecialEventSetType(currentRowOnlyEvent, ROW_ONLY);
 						caerSpecialEventSetData(currentRowOnlyEvent, state->lastY);
@@ -1019,11 +1093,36 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 					break;
 				}
 
-				case 4:
+				case 4: {
+					// First, let's normalize the ADC value to 16bit generic depth.
+					data = U16T(data << (16 - DAVIS_FX3_ADC_DEPTH));
+
+					// If reset read, we store the values in a local array. If signal read, we
+					// store the final pixel value directly in the output frame event. We already
+					// do the subtraction between reset and signal here, to avoid carrying that
+					// around all the time and consuming memory. This way we can also only take
+					// sporadic reset reads and re-use them for multiple frames, which can heavily
+					// reduce traffic, and should not impact image quality heavily, at least in GS.
+					caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
+						state->currentFramePacketPosition);
+
+					size_t pixelPosition = (size_t) (state->apsCountY[state->apsCurrentReadoutType] *
+						caerFrameEventGetLengthX(currentFrameEvent)) + state->apsCountX[state->apsCurrentReadoutType];
+
+					if (state->apsCurrentReadoutType == APS_READOUT_RESET) {
+						state->apsCurrentResetFrame[pixelPosition] = data;
+					}
+					else {
+						caerFrameEventGetPixelArrayUnsafe(currentFrameEvent)[pixelPosition] =
+							htole16(U16T(data - state->apsCurrentResetFrame[pixelPosition]));
+					}
+
 					caerLog(LOG_DEBUG, "APS ADC Sample");
 					caerLog(LOG_DEBUG, "APS ADC Sample: row is %d.", state->apsCountY[state->apsCurrentReadoutType]);
 					state->apsCountY[state->apsCurrentReadoutType]++;
+
 					break;
+				}
 
 				case 5: // Misc 8bit data, used currently only
 						// for IMU events in DAViS FX3 boards
@@ -1106,6 +1205,30 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 			// Allocate new packet for next iteration.
 			state->currentSpecialPacket = caerSpecialEventPacketAllocate(state->maxSpecialPacketSize, state->sourceID);
 			state->currentSpecialPacketPosition = 0;
+		}
+
+		if (forcePacketCommit
+			|| (state->currentFramePacketPosition
+				>= caerEventPacketHeaderGetEventCapacity(&state->currentFramePacket->packetHeader))
+			|| ((state->currentFramePacketPosition > 1)
+				&& (caerFrameEventGetTSStartOfExposure(
+					caerFrameEventPacketGetEvent(state->currentFramePacket,
+						state->currentFramePacketPosition - 1))
+					- caerFrameEventGetTSStartOfExposure(caerFrameEventPacketGetEvent(state->currentFramePacket, 0))
+					>= state->maxFramePacketInterval))) {
+			if (!ringBufferPut(state->dataExchangeBuffer, state->currentFramePacket)) {
+				// Failed to forward packet, drop it.
+				free(state->currentFramePacket);
+				caerLog(LOG_INFO, "Dropped Frame Event Packet because ring-buffer full!");
+			}
+			else {
+				caerMainloopDataAvailableIncrease(state->mainloopNotify);
+			}
+
+			// Allocate new packet for next iteration.
+			state->currentFramePacket = caerFrameEventPacketAllocate(state->maxFramePacketSize,
+				state->sourceID, DAVIS_FX3_ARRAY_SIZE_X, DAVIS_FX3_ARRAY_SIZE_Y);
+			state->currentFramePacketPosition = 0;
 		}
 	}
 }

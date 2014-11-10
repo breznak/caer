@@ -11,8 +11,10 @@
 #include "common.h"
 #include "base/misc.h"
 
+// All pixels are always normalized to 16bit depth.
+// The stored ADC depth is purely informative (fex. for logging).
 #define ADC_DEPTH_SHIFT 1
-#define ADC_DEPTH_MASK 0x0000001F
+#define ADC_DEPTH_MASK 0x0000003F
 
 struct caer_frame_event {
 	uint32_t info;
@@ -22,7 +24,7 @@ struct caer_frame_event {
 	uint32_t ts_endframe;
 	uint32_t ts_startexposure;
 	uint32_t ts_endexposure;
-	uint8_t pixels[];
+	uint16_t pixels[];
 }__attribute__((__packed__));
 
 typedef struct caer_frame_event *caerFrameEvent;
@@ -36,32 +38,11 @@ typedef struct caer_frame_event_packet *caerFrameEventPacket;
 
 // Need pixel info too here, so storage requirement for pixel data can be determined.
 static inline caerFrameEventPacket caerFrameEventPacketAllocate(uint32_t eventCapacity, uint16_t eventSource,
-	uint8_t maxADCDepth, uint16_t maxYLength, uint16_t maxXLength) {
-	// Align pixels to either 8bits or 16bits, depending on their ADC value length.
-	// 16bits is the maximum supported for now, though this could be trivially expanded.
-	uint8_t ADCDepthBytes = 0;
-
-	if (maxADCDepth <= 8) {
-		ADCDepthBytes = 1;
-	}
-	else if (maxADCDepth <= 16) {
-		ADCDepthBytes = 2;
-	}
-	else {
-#if !defined(LOG_NONE)
-#if defined(PRINTF_LOG)
-		fprintf(stderr,
-#else
-		caerLog(LOG_ERROR,
-#endif
-			"Maximum ADC size exceeds 16, the highest value currently supported.");
-#endif
-	}
-
+	uint16_t maxLengthX, uint16_t maxLengthY) {
 	// Calculate maximum needed bytes for storing pixel data.
-	uint32_t pixelBytes = (uint32_t) ADCDepthBytes * maxYLength * maxXLength;
+	uint32_t pixelBytes = U32T(sizeof(uint16_t)) * maxLengthX * maxLengthY;
 
-	uint32_t eventSize = (uint32_t) sizeof(struct caer_frame_event) + pixelBytes;
+	uint32_t eventSize = U32T(sizeof(struct caer_frame_event)) + pixelBytes;
 	size_t eventPacketSize = sizeof(struct caer_frame_event_packet) + (eventCapacity * eventSize);
 
 	caerFrameEventPacket packet = malloc(eventPacketSize);
@@ -198,61 +179,43 @@ static inline uint8_t caerFrameEventGetADCDepth(caerFrameEvent event) {
 	return U8T((le32toh(event->info) >> ADC_DEPTH_SHIFT) & ADC_DEPTH_MASK);
 }
 
-static inline uint16_t caerFrameEventGetLengthX(caerFrameEvent event) {
-	return U16T(le32toh(event->lengthX));
-}
-
-static inline uint16_t caerFrameEventGetLengthY(caerFrameEvent event) {
-	return U16T(le32toh(event->lengthY));
-}
-
-static inline void caerFrameEventSetADCDepth(caerFrameEvent event, caerFrameEventPacket packet, uint8_t adcDepth) {
-	// Check value against maximum allowed in this packet.
-	uint32_t maxBits = (caerEventPacketHeaderGetEventSize(&packet->packetHeader)
-		- (uint32_t) sizeof(struct caer_frame_event)) * 8;
-	uint32_t neededBits = (uint32_t) adcDepth * caerFrameEventGetYLength(event) * caerFrameEventGetXLength(event);
-
-	if (neededBits > maxBits) {
-#if !defined(LOG_NONE)
-#if defined(PRINTF_LOG)
-		fprintf(stderr,
-#else
-		caerLog(LOG_ERROR,
-#endif
-			"Called caerFrameEventSetADCDepth() with adcDepth=%" PRIu8 ", needing %" PRIu32 " bits, while storage is possible only for up to %" PRIu32 " bits.",
-			adcDepth, neededBits, maxBits);
-#endif
-		return;
-	}
-
+static inline void caerFrameEventSetADCDepth(caerFrameEvent event, uint8_t adcDepth) {
 	event->info |= htole32((U32T(adcDepth) & ADC_DEPTH_MASK) << ADC_DEPTH_SHIFT);
 }
 
-static inline void caerFrameEventSetYXLength(caerFrameEvent event, caerFrameEventPacket packet, uint16_t xLength,
-	uint16_t yLength) {
-	// Check value against maximum allowed in this packet.
-	uint32_t maxBits = (caerEventPacketHeaderGetEventSize(&packet->packetHeader)
-		- (uint32_t) sizeof(struct caer_frame_event)) * 8;
-	uint32_t neededBits = (uint32_t) caerFrameEventGetADCDepth(event) * xLength * yLength;
+static inline uint16_t caerFrameEventGetLengthX(caerFrameEvent event) {
+	return (le16toh(event->lengthX));
+}
 
-	if (neededBits > maxBits) {
+static inline uint16_t caerFrameEventGetLengthY(caerFrameEvent event) {
+	return (le16toh(event->lengthY));
+}
+
+static inline void caerFrameEventSetLengthXY(caerFrameEvent event, caerFrameEventPacket packet, uint16_t lengthX,
+	uint16_t lengthY) {
+	// Check value against maximum allowed in this packet.
+	uint32_t maxPixels = (caerEventPacketHeaderGetEventSize(&packet->packetHeader)
+		- U32T(sizeof(struct caer_frame_event)));
+	uint32_t neededPixels = U32T(lengthX * lengthY);
+
+	if (neededPixels > maxPixels) {
 #if !defined(LOG_NONE)
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
 		caerLog(LOG_ERROR,
 #endif
-			"Called caerFrameEventSetYXLength() with yLength=%" PRIu16 " and xLength=%" PRIu16 ", needing %" PRIu32 " bits, while storage is possible only for up to %" PRIu32 " bits.",
-			yLength, xLength, neededBits, maxBits);
+			"Called caerFrameEventSetXYLength() with lengthX=%" PRIu16 " and lengthY=%" PRIu16 ", needing %" PRIu32 " bytes, while storage is possible only for up to %" PRIu32 " bytes.",
+			lengthX, lengthY, neededPixels, maxPixels);
 #endif
 		return;
 	}
 
-	event->lengthX = htole32(xLength);
-	event->lengthY = htole32(yLength);
+	event->lengthX = htole16(lengthX);
+	event->lengthY = htole16(lengthY);
 }
 
-static inline uint32_t caerFrameEventGetPixel(caerFrameEvent event, uint16_t yAddress, uint16_t xAddress) {
+static inline uint16_t caerFrameEventGetPixel(caerFrameEvent event, uint16_t xAddress, uint16_t yAddress) {
 	// Check frame bounds first.
 	if (yAddress >= caerFrameEventGetLengthY(event)) {
 #if !defined(LOG_NONE)
@@ -282,23 +245,14 @@ static inline uint32_t caerFrameEventGetPixel(caerFrameEvent event, uint16_t yAd
 		return (0);
 	}
 
-	// Need adcDepth to calculate stride.
-	uint8_t adcDepth = caerFrameEventGetADCDepth(event);
-	uint32_t pixelValue = 0;
-
 	// Get pixel value at specified position.
-	caerBitArrayCopy(event->pixels, (yAddress * xLength * adcDepth) + (xAddress * adcDepth), &pixelValue, 32 - adcDepth,
-		adcDepth);
-
-	// The copy algorithm works as if the integer was big endian (byte-wise increasing).
-	// So convert it back to host format here.
-	return (be32toh(pixelValue));
+	return (le16toh(event->pixels[(yAddress * xLength) + xAddress]));
 }
 
-static inline void caerFrameEventSetPixel(caerFrameEvent event, uint16_t yAddress, uint16_t xAddress,
-	uint32_t pixelValue) {
+static inline void caerFrameEventSetPixel(caerFrameEvent event, uint16_t xAddress, uint16_t yAddress,
+	uint16_t pixelValue) {
 	// Check frame bounds first.
-	if (yAddress >= caerFrameEventGetYLength(event)) {
+	if (yAddress >= caerFrameEventGetLengthY(event)) {
 #if !defined(LOG_NONE)
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
@@ -306,12 +260,12 @@ static inline void caerFrameEventSetPixel(caerFrameEvent event, uint16_t yAddres
 		caerLog(LOG_ERROR,
 #endif
 			"Called caerFrameEventSetPixel() with invalid Y address of %" PRIu16 ", should be between 0 and %" PRIu16 ".",
-			yAddress, caerFrameEventGetYLength(event) - 1);
+			yAddress, caerFrameEventGetLengthY(event) - 1);
 #endif
 		return;
 	}
 
-	uint16_t xLength = caerFrameEventGetXLength(event);
+	uint16_t xLength = caerFrameEventGetLengthX(event);
 
 	if (xAddress >= xLength) {
 #if !defined(LOG_NONE)
@@ -326,29 +280,24 @@ static inline void caerFrameEventSetPixel(caerFrameEvent event, uint16_t yAddres
 		return;
 	}
 
-	// Check that value isn't above the depth bound.
-	uint8_t adcDepth = caerFrameEventGetADCDepth(event);
+	// Set pixel value at specified position.
+	event->pixels[(yAddress * xLength) + xAddress] = htole16(pixelValue);
+}
 
-	if (pixelValue >= (U32T(1) << adcDepth)) {
-#if !defined(LOG_NONE)
-#if defined(PRINTF_LOG)
-		fprintf(stderr,
-#else
-		caerLog(LOG_ERROR,
-#endif
-			"Called caerFrameEventSetPixel() with invalid pixel value of %" PRIu32 ", should be between 0 and %" PRIu32 ".",
-			pixelValue, (U32T(1) << adcDepth) - 1);
-#endif
-		return;
-	}
+static inline uint16_t caerFrameEventGetPixelUnsafe(caerFrameEvent event, uint16_t xAddress, uint16_t yAddress) {
+	// Get pixel value at specified position.
+	return (le16toh(event->pixels[(yAddress * caerFrameEventGetLengthX(event)) + xAddress]));
+}
 
-	// Working with the pixel value as big endian is much easier, as the bits
-	// are in the byte order the copy algorithm can most easily deal with.
-	pixelValue = htobe32(pixelValue);
+static inline void caerFrameEventSetPixelUnsafe(caerFrameEvent event, uint16_t xAddress, uint16_t yAddress,
+	uint16_t pixelValue) {
+	// Set pixel value at specified position.
+	event->pixels[(yAddress * caerFrameEventGetLengthX(event)) + xAddress] = htole16(pixelValue);
+}
 
-	// Set the pixel value at the specified position to the given value.
-	caerBitArrayCopy(&pixelValue, 32 - adcDepth, event->pixels, (yAddress * xLength * adcDepth) + (xAddress * adcDepth),
-		adcDepth);
+static inline uint16_t *caerFrameEventGetPixelArrayUnsafe(caerFrameEvent event) {
+	// Get pixel array.
+	return (event->pixels);
 }
 
 #endif /* FRAME_H_ */
