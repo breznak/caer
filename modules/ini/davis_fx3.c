@@ -640,7 +640,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 	sendSpiConfigCommand(state->deviceHandle, 0x03, 0x00, 0x00);
 
 	// APS tests.
-	sendSpiConfigCommand(state->deviceHandle, 0x02, 7, 30000 * 5); // Exposure control.
+	sendSpiConfigCommand(state->deviceHandle, 0x02, 7, 30000 * 3); // Exposure control.
 	sendSpiConfigCommand(state->deviceHandle, 0x02, 8, 30000); // Wait 1ms between frames.
 	sendSpiConfigCommand(state->deviceHandle, 0x02, 14, 1); // Wait on transfer stall.
 	sendSpiConfigCommand(state->deviceHandle, 0x02, 2, 1); // Global shutter.
@@ -1114,7 +1114,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 					}
 					else {
 						caerFrameEventGetPixelArrayUnsafe(currentFrameEvent)[pixelPosition] =
-							htole16(U16T(data - state->apsCurrentResetFrame[pixelPosition]));
+							htole16(U16T(state->apsCurrentResetFrame[pixelPosition] - data));
 					}
 
 					caerLog(LOG_DEBUG, "APS ADC Sample");
