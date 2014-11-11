@@ -337,6 +337,8 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	sshsNodePutShort(sourceInfoNode, "dvsSizeY", DAVIS_FX3_ARRAY_SIZE_Y);
 	sshsNodePutShort(sourceInfoNode, "frameSizeX", DAVIS_FX3_ARRAY_SIZE_X);
 	sshsNodePutShort(sourceInfoNode, "frameSizeY", DAVIS_FX3_ARRAY_SIZE_Y);
+	sshsNodePutShort(sourceInfoNode, "frameOriginalDepth", DAVIS_FX3_ADC_DEPTH);
+	sshsNodePutShort(sourceInfoNode, "frameOriginalChannels", DAVIS_FX3_COLOR_CHANNELS);
 
 	// Initialize state fields.
 	state->maxPolarityPacketSize = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxSize");
@@ -355,7 +357,7 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	state->currentPolarityPacketPosition = 0;
 
 	state->currentFramePacket = caerFrameEventPacketAllocate(state->maxFramePacketSize, state->sourceID,
-	DAVIS_FX3_ARRAY_SIZE_Y, DAVIS_FX3_ARRAY_SIZE_X);
+	DAVIS_FX3_ARRAY_SIZE_Y, DAVIS_FX3_ARRAY_SIZE_X, DAVIS_FX3_COLOR_CHANNELS);
 	state->currentFramePacketPosition = 0;
 
 	state->currentIMU6Packet = caerIMU6EventPacketAllocate(state->maxIMU6PacketSize, state->sourceID);
@@ -926,7 +928,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 							caerFrameEventSetTSStartOfFrame(currentFrameEvent, state->currentTimestamp);
 
 							// Setup frame.
-							caerFrameEventSetADCDepth(currentFrameEvent, DAVIS_FX3_ADC_DEPTH);
+							caerFrameEventSetChannelNumber(currentFrameEvent, DAVIS_FX3_COLOR_CHANNELS);
 							caerFrameEventSetLengthXY(currentFrameEvent, state->currentFramePacket,
 								DAVIS_FX3_ARRAY_SIZE_X, DAVIS_FX3_ARRAY_SIZE_Y);
 
@@ -1227,7 +1229,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 
 			// Allocate new packet for next iteration.
 			state->currentFramePacket = caerFrameEventPacketAllocate(state->maxFramePacketSize,
-				state->sourceID, DAVIS_FX3_ARRAY_SIZE_X, DAVIS_FX3_ARRAY_SIZE_Y);
+				state->sourceID, DAVIS_FX3_ARRAY_SIZE_X, DAVIS_FX3_ARRAY_SIZE_Y, DAVIS_FX3_COLOR_CHANNELS);
 			state->currentFramePacketPosition = 0;
 		}
 	}

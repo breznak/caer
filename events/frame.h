@@ -12,9 +12,9 @@
 #include "base/misc.h"
 
 // All pixels are always normalized to 16bit depth.
-// The stored ADC depth is purely informative (fex. for logging).
-#define ADC_DEPTH_SHIFT 1
-#define ADC_DEPTH_MASK 0x0000003F
+// Multiple channels (such as RGB) are possible.
+#define CHANNEL_NUMBER_SHIFT 1
+#define CHANNEL_NUMBER_MASK 0x0000001F
 
 struct caer_frame_event {
 	uint32_t info;
@@ -38,9 +38,9 @@ typedef struct caer_frame_event_packet *caerFrameEventPacket;
 
 // Need pixel info too here, so storage requirement for pixel data can be determined.
 static inline caerFrameEventPacket caerFrameEventPacketAllocate(uint32_t eventCapacity, uint16_t eventSource,
-	uint16_t maxLengthX, uint16_t maxLengthY) {
+	uint16_t maxLengthX, uint16_t maxLengthY, uint8_t maxChannels) {
 	// Calculate maximum needed bytes for storing pixel data.
-	uint32_t pixelBytes = U32T(sizeof(uint16_t)) * maxLengthX * maxLengthY;
+	uint32_t pixelBytes = U32T(sizeof(uint16_t)) * maxLengthX * maxLengthY * maxChannels;
 
 	uint32_t eventSize = U32T(sizeof(struct caer_frame_event)) + pixelBytes;
 	size_t eventPacketSize = sizeof(struct caer_frame_event_packet) + (eventCapacity * eventSize);
@@ -175,12 +175,12 @@ static inline void caerFrameEventInvalidate(caerFrameEvent event, caerFrameEvent
 	}
 }
 
-static inline uint8_t caerFrameEventGetADCDepth(caerFrameEvent event) {
-	return U8T((le32toh(event->info) >> ADC_DEPTH_SHIFT) & ADC_DEPTH_MASK);
+static inline uint8_t caerFrameEventGetChannelNumber(caerFrameEvent event) {
+	return U8T((le32toh(event->info) >> CHANNEL_NUMBER_SHIFT) & CHANNEL_NUMBER_MASK);
 }
 
-static inline void caerFrameEventSetADCDepth(caerFrameEvent event, uint8_t adcDepth) {
-	event->info |= htole32((U32T(adcDepth) & ADC_DEPTH_MASK) << ADC_DEPTH_SHIFT);
+static inline void caerFrameEventSetChannelNumber(caerFrameEvent event, uint8_t channelNumber) {
+	event->info |= htole32((U32T(channelNumber) & CHANNEL_NUMBER_MASK) << CHANNEL_NUMBER_SHIFT);
 }
 
 static inline uint16_t caerFrameEventGetLengthX(caerFrameEvent event) {
@@ -194,19 +194,19 @@ static inline uint16_t caerFrameEventGetLengthY(caerFrameEvent event) {
 static inline void caerFrameEventSetLengthXY(caerFrameEvent event, caerFrameEventPacket packet, uint16_t lengthX,
 	uint16_t lengthY) {
 	// Check value against maximum allowed in this packet.
-	uint32_t maxPixels = (caerEventPacketHeaderGetEventSize(&packet->packetHeader)
+	uint32_t maxBytes = (caerEventPacketHeaderGetEventSize(&packet->packetHeader)
 		- U32T(sizeof(struct caer_frame_event)));
-	uint32_t neededPixels = U32T(lengthX * lengthY);
+	uint32_t neededBytes = U32T(lengthX * lengthY * caerFrameEventGetChannelNumber(event));
 
-	if (neededPixels > maxPixels) {
+	if (neededBytes > maxBytes) {
 #if !defined(LOG_NONE)
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
 		caerLog(LOG_ERROR,
 #endif
-			"Called caerFrameEventSetXYLength() with lengthX=%" PRIu16 " and lengthY=%" PRIu16 ", needing %" PRIu32 " bytes, while storage is possible only for up to %" PRIu32 " bytes.",
-			lengthX, lengthY, neededPixels, maxPixels);
+			"Called caerFrameEventSetLengthXY() with lengthX=%" PRIu16 " and lengthY=%" PRIu16 ", needing %" PRIu32 " bytes, while storage is possible only for up to %" PRIu32 " bytes.",
+			lengthX, lengthY, neededBytes, maxBytes);
 #endif
 		return;
 	}
@@ -284,6 +284,106 @@ static inline void caerFrameEventSetPixel(caerFrameEvent event, uint16_t xAddres
 	event->pixels[(yAddress * xLength) + xAddress] = htole16(pixelValue);
 }
 
+static inline uint16_t caerFrameEventGetPixelForChannel(caerFrameEvent event, uint16_t xAddress, uint16_t yAddress,
+	uint8_t channel) {
+	// Check frame bounds first.
+	if (yAddress >= caerFrameEventGetLengthY(event)) {
+#if !defined(LOG_NONE)
+#if defined(PRINTF_LOG)
+		fprintf(stderr,
+#else
+		caerLog(LOG_ERROR,
+#endif
+			"Called caerFrameEventGetPixelForChannel() with invalid Y address of %" PRIu16 ", should be between 0 and %" PRIu16 ".",
+			yAddress, caerFrameEventGetLengthY(event) - 1);
+#endif
+		return (0);
+	}
+
+	uint16_t xLength = caerFrameEventGetLengthX(event);
+
+	if (xAddress >= xLength) {
+#if !defined(LOG_NONE)
+#if defined(PRINTF_LOG)
+		fprintf(stderr,
+#else
+		caerLog(LOG_ERROR,
+#endif
+			"Called caerFrameEventGetPixelForChannel() with invalid X address of %" PRIu16 ", should be between 0 and %" PRIu16 ".",
+			xAddress, xLength - 1);
+#endif
+		return (0);
+	}
+
+	uint16_t channelNumber = caerFrameEventGetChannelNumber(event);
+
+	if (channel >= channelNumber) {
+#if !defined(LOG_NONE)
+#if defined(PRINTF_LOG)
+		fprintf(stderr,
+#else
+		caerLog(LOG_ERROR,
+#endif
+			"Called caerFrameEventGetPixelForChannel() with invalid channel number of %" PRIu16 ", should be between 0 and %" PRIu16 ".",
+			channel, channelNumber - 1);
+#endif
+		return (0);
+	}
+
+	// Get pixel value at specified position.
+	return (le16toh(event->pixels[(((yAddress * xLength) + xAddress) * channelNumber) + channel]));
+}
+
+static inline void caerFrameEventSetPixelForChannel(caerFrameEvent event, uint16_t xAddress, uint16_t yAddress,
+	uint8_t channel, uint16_t pixelValue) {
+	// Check frame bounds first.
+	if (yAddress >= caerFrameEventGetLengthY(event)) {
+#if !defined(LOG_NONE)
+#if defined(PRINTF_LOG)
+		fprintf(stderr,
+#else
+		caerLog(LOG_ERROR,
+#endif
+			"Called caerFrameEventSetPixelForChannel() with invalid Y address of %" PRIu16 ", should be between 0 and %" PRIu16 ".",
+			yAddress, caerFrameEventGetLengthY(event) - 1);
+#endif
+		return;
+	}
+
+	uint16_t xLength = caerFrameEventGetLengthX(event);
+
+	if (xAddress >= xLength) {
+#if !defined(LOG_NONE)
+#if defined(PRINTF_LOG)
+		fprintf(stderr,
+#else
+		caerLog(LOG_ERROR,
+#endif
+			"Called caerFrameEventSetPixelForChannel() with invalid X address of %" PRIu16 ", should be between 0 and %" PRIu16 ".",
+			xAddress, xLength - 1);
+#endif
+		return;
+	}
+
+	uint16_t channelNumber = caerFrameEventGetChannelNumber(event);
+
+	if (channel >= channelNumber) {
+#if !defined(LOG_NONE)
+#if defined(PRINTF_LOG)
+		fprintf(stderr,
+#else
+		caerLog(LOG_ERROR,
+#endif
+			"Called caerFrameEventSetPixelForChannel() with invalid channel number of %" PRIu16 ", should be between 0 and %" PRIu16 ".",
+			channel, channelNumber - 1);
+#endif
+		return;
+	}
+
+	// Set pixel value at specified position.
+	event->pixels[(((yAddress * xLength) + xAddress) * channelNumber) + channel] = htole16(pixelValue);
+}
+
 static inline uint16_t caerFrameEventGetPixelUnsafe(caerFrameEvent event, uint16_t xAddress, uint16_t yAddress) {
 	// Get pixel value at specified position.
 	return (le16toh(event->pixels[(yAddress * caerFrameEventGetLengthX(event)) + xAddress]));
@@ -293,6 +393,18 @@ static inline void caerFrameEventSetPixelUnsafe(caerFrameEvent event, uint16_t x
 	uint16_t pixelValue) {
 	// Set pixel value at specified position.
 	event->pixels[(yAddress * caerFrameEventGetLengthX(event)) + xAddress] = htole16(pixelValue);
+}
+
+static inline uint16_t caerFrameEventGetPixelForChannelUnsafe(caerFrameEvent event, uint16_t xAddress, uint16_t yAddress,
+	uint8_t channel) {
+	// Get pixel value at specified position.
+	return (le16toh(event->pixels[(((yAddress * caerFrameEventGetLengthX(event)) + xAddress) * caerFrameEventGetChannelNumber(event)) + channel]));
+}
+
+static inline void caerFrameEventSetPixelForChannelUnsafe(caerFrameEvent event, uint16_t xAddress, uint16_t yAddress,
+	uint8_t channel, uint16_t pixelValue) {
+	// Set pixel value at specified position.
+	event->pixels[(((yAddress * caerFrameEventGetLengthX(event)) + xAddress) * caerFrameEventGetChannelNumber(event)) + channel] = htole16(pixelValue);
 }
 
 static inline uint16_t *caerFrameEventGetPixelArrayUnsafe(caerFrameEvent event) {
