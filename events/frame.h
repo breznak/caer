@@ -179,6 +179,7 @@ static inline uint8_t caerFrameEventGetChannelNumber(caerFrameEvent event) {
 	return U8T((le32toh(event->info) >> CHANNEL_NUMBER_SHIFT) & CHANNEL_NUMBER_MASK);
 }
 
+// Always set channel before setting X/Y lengths.
 static inline void caerFrameEventSetChannelNumber(caerFrameEvent event, uint8_t channelNumber) {
 	event->info |= htole32((U32T(channelNumber) & CHANNEL_NUMBER_MASK) << CHANNEL_NUMBER_SHIFT);
 }
@@ -191,6 +192,7 @@ static inline uint16_t caerFrameEventGetLengthY(caerFrameEvent event) {
 	return (le16toh(event->lengthY));
 }
 
+// Always set channel before setting X/Y lengths.
 static inline void caerFrameEventSetLengthXY(caerFrameEvent event, caerFrameEventPacket packet, uint16_t lengthX,
 	uint16_t lengthY) {
 	// Check value against maximum allowed in this packet.
