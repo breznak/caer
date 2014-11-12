@@ -1,11 +1,5 @@
-/*
- * davisFX3.c
- *
- *  Created on: Nov 26, 2013
- *      Author: chtekk
- */
-
 #include "davis_fx3.h"
+#include "davis_common.h"
 #include "base/mainloop.h"
 #include "base/module.h"
 #include "ext/ringbuffer/ringbuffer.h"
@@ -38,7 +32,7 @@ struct davisFX3_state {
 	uint16_t apsCurrentReadoutType;
 	uint16_t apsCountX[APS_READOUT_TYPES_NUM];
 	uint16_t apsCountY[APS_READOUT_TYPES_NUM];
-	uint16_t apsCurrentResetFrame[DAVIS_FX3_ARRAY_SIZE_X * DAVIS_FX3_ARRAY_SIZE_Y];
+	uint16_t apsCurrentResetFrame[DAVIS_ARRAY_SIZE_X * DAVIS_ARRAY_SIZE_Y];
 	// Polarity Packet State
 	caerPolarityEventPacket currentPolarityPacket;
 	uint32_t currentPolarityPacketPosition;
@@ -333,12 +327,12 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 
 	// Put global source information into SSHS.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
-	sshsNodePutShort(sourceInfoNode, "dvsSizeX", DAVIS_FX3_ARRAY_SIZE_X);
-	sshsNodePutShort(sourceInfoNode, "dvsSizeY", DAVIS_FX3_ARRAY_SIZE_Y);
-	sshsNodePutShort(sourceInfoNode, "frameSizeX", DAVIS_FX3_ARRAY_SIZE_X);
-	sshsNodePutShort(sourceInfoNode, "frameSizeY", DAVIS_FX3_ARRAY_SIZE_Y);
-	sshsNodePutShort(sourceInfoNode, "frameOriginalDepth", DAVIS_FX3_ADC_DEPTH);
-	sshsNodePutShort(sourceInfoNode, "frameOriginalChannels", DAVIS_FX3_COLOR_CHANNELS);
+	sshsNodePutShort(sourceInfoNode, "dvsSizeX", DAVIS_ARRAY_SIZE_X);
+	sshsNodePutShort(sourceInfoNode, "dvsSizeY", DAVIS_ARRAY_SIZE_Y);
+	sshsNodePutShort(sourceInfoNode, "frameSizeX", DAVIS_ARRAY_SIZE_X);
+	sshsNodePutShort(sourceInfoNode, "frameSizeY", DAVIS_ARRAY_SIZE_Y);
+	sshsNodePutShort(sourceInfoNode, "frameOriginalDepth", DAVIS_ADC_DEPTH);
+	sshsNodePutShort(sourceInfoNode, "frameOriginalChannels", DAVIS_COLOR_CHANNELS);
 
 	// Initialize state fields.
 	state->maxPolarityPacketSize = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxSize");
@@ -357,7 +351,7 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 	state->currentPolarityPacketPosition = 0;
 
 	state->currentFramePacket = caerFrameEventPacketAllocate(state->maxFramePacketSize, state->sourceID,
-	DAVIS_FX3_ARRAY_SIZE_Y, DAVIS_FX3_ARRAY_SIZE_X, DAVIS_FX3_COLOR_CHANNELS);
+	DAVIS_ARRAY_SIZE_Y, DAVIS_ARRAY_SIZE_X, DAVIS_COLOR_CHANNELS);
 	state->currentFramePacketPosition = 0;
 
 	state->currentIMU6Packet = caerIMU6EventPacketAllocate(state->maxIMU6PacketSize, state->sourceID);
@@ -379,7 +373,7 @@ static bool caerInputDAViSFX3Init(caerModuleData moduleData) {
 		state->apsCountX[i] = 0;
 		state->apsCountY[i] = 0;
 	}
-	memset(state->apsCurrentResetFrame, 0, DAVIS_FX3_ARRAY_SIZE_X * DAVIS_FX3_ARRAY_SIZE_Y);
+	memset(state->apsCurrentResetFrame, 0, DAVIS_ARRAY_SIZE_X * DAVIS_ARRAY_SIZE_Y);
 
 	// Store reference to parent mainloop, so that we can correctly notify
 	// the availability or not of data to consume.
@@ -928,9 +922,9 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 							caerFrameEventSetTSStartOfFrame(currentFrameEvent, state->currentTimestamp);
 
 							// Setup frame.
-							caerFrameEventSetChannelNumber(currentFrameEvent, DAVIS_FX3_COLOR_CHANNELS);
+							caerFrameEventSetChannelNumber(currentFrameEvent, DAVIS_COLOR_CHANNELS);
 							caerFrameEventSetLengthXY(currentFrameEvent, state->currentFramePacket,
-								DAVIS_FX3_ARRAY_SIZE_X, DAVIS_FX3_ARRAY_SIZE_Y);
+								DAVIS_ARRAY_SIZE_X, DAVIS_ARRAY_SIZE_Y);
 
 							break;
 						}
@@ -942,7 +936,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 							for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
 								caerLog(LOG_DEBUG, "APS Frame End: CountX[%zu] is %d.", j, state->apsCountX[j]);
 
-								if (state->apsCountX[j] < DAVIS_FX3_ARRAY_SIZE_X) {
+								if (state->apsCountX[j] < DAVIS_ARRAY_SIZE_X) {
 									caerLog(LOG_ERROR, "APS Frame End: incomplete frame [%zu] detected.", j);
 									validFrame = false;
 								}
@@ -998,7 +992,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 						case 12: { // APS Column End
 							caerLog(LOG_DEBUG, "APS Column End");
 
-							if (state->apsCountY[state->apsCurrentReadoutType] < DAVIS_FX3_ARRAY_SIZE_Y) {
+							if (state->apsCountY[state->apsCurrentReadoutType] < DAVIS_ARRAY_SIZE_Y) {
 								caerLog(LOG_ERROR, "APS Column End: incomplete column [%d] detected.", state->apsCurrentReadoutType);
 							}
 
@@ -1009,7 +1003,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 							// The last Reset Column Read End is also the start
 							// of the exposure for the GS.
 							if (state->apsGlobalShutter
-								&& state->apsCountX[APS_READOUT_RESET] == DAVIS_FX3_ARRAY_SIZE_X) {
+								&& state->apsCountX[APS_READOUT_RESET] == DAVIS_ARRAY_SIZE_X) {
 								caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
 										state->currentFramePacketPosition);
 								caerFrameEventSetTSStartOfExposure(currentFrameEvent, state->currentTimestamp);
@@ -1049,9 +1043,9 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 
 				case 1: // Y address
 					// Check range conformity.
-					if (data >= DAVIS_FX3_ARRAY_SIZE_Y) {
+					if (data >= DAVIS_ARRAY_SIZE_Y) {
 						caerLog(LOG_ALERT, "Y address out of range (0-%d): %" PRIu16 ".",
-						DAVIS_FX3_ARRAY_SIZE_Y - 1, data);
+						DAVIS_ARRAY_SIZE_Y - 1, data);
 						continue; // Skip invalid Y address (don't update lastY).
 					}
 
@@ -1076,9 +1070,9 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 				case 2: // X address, Polarity OFF
 				case 3: { // X address, Polarity ON
 					// Check range conformity.
-					if (data >= DAVIS_FX3_ARRAY_SIZE_X) {
+					if (data >= DAVIS_ARRAY_SIZE_X) {
 						caerLog(LOG_ALERT, "X address out of range (0-%d): %" PRIu16 ".",
-						DAVIS_FX3_ARRAY_SIZE_X - 1, data);
+						DAVIS_ARRAY_SIZE_X - 1, data);
 						continue; // Skip invalid event.
 					}
 
@@ -1097,7 +1091,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 
 				case 4: {
 					// First, let's normalize the ADC value to 16bit generic depth.
-					data = U16T(data << (16 - DAVIS_FX3_ADC_DEPTH));
+					data = U16T(data << (16 - DAVIS_ADC_DEPTH));
 
 					// If reset read, we store the values in a local array. If signal read, we
 					// store the final pixel value directly in the output frame event. We already
@@ -1229,7 +1223,7 @@ static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSen
 
 			// Allocate new packet for next iteration.
 			state->currentFramePacket = caerFrameEventPacketAllocate(state->maxFramePacketSize,
-				state->sourceID, DAVIS_FX3_ARRAY_SIZE_X, DAVIS_FX3_ARRAY_SIZE_Y, DAVIS_FX3_COLOR_CHANNELS);
+				state->sourceID, DAVIS_ARRAY_SIZE_X, DAVIS_ARRAY_SIZE_Y, DAVIS_COLOR_CHANNELS);
 			state->currentFramePacketPosition = 0;
 		}
 	}

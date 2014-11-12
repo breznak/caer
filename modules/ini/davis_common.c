@@ -1,11 +1,4 @@
-/*
- * davisFX3.c
- *
- *  Created on: Nov 26, 2013
- *      Author: chtekk
- */
-
-#include "davis_fx3.h"
+#include "davis_common.h"
 #include "base/mainloop.h"
 #include "base/module.h"
 #include "ext/ringbuffer/ringbuffer.h"
@@ -13,12 +6,7 @@
 #include <libusb.h>
 #include <unistd.h>
 
-struct davisFX3_state {
-	// Data Acquisition Thread -> Mainloop Exchange
-	pthread_t dataAcquisitionThread;
-	RingBuffer dataExchangeBuffer;
-	caerMainloopData mainloopNotify;
-	uint16_t sourceID;
+struct davisCommon_state {
 	// USB Device State
 	libusb_context *deviceContext;
 	libusb_device_handle *deviceHandle;
@@ -38,7 +26,7 @@ struct davisFX3_state {
 	uint16_t apsCurrentReadoutType;
 	uint16_t apsCountX[APS_READOUT_TYPES_NUM];
 	uint16_t apsCountY[APS_READOUT_TYPES_NUM];
-	uint16_t apsCurrentResetFrame[DAVIS_FX3_ARRAY_SIZE_X * DAVIS_FX3_ARRAY_SIZE_Y];
+	uint16_t apsCurrentResetFrame[DAVIS_ARRAY_SIZE_X * DAVIS_ARRAY_SIZE_Y * DAVIS_COLOR_CHANNELS];
 	// Polarity Packet State
 	caerPolarityEventPacket currentPolarityPacket;
 	uint32_t currentPolarityPacketPosition;
@@ -61,67 +49,14 @@ struct davisFX3_state {
 	uint32_t maxSpecialPacketInterval;
 };
 
-typedef struct davisFX3_state *davisFX3State;
-
-static bool caerInputDAViSFX3Init(caerModuleData moduleData);
-static void caerInputDAViSFX3Run(caerModuleData moduleData, size_t argsNumber, va_list args);
-// CONFIG: Nothing to do here in the main thread!
-// Biases are configured asynchronously, and buffer sizes in the data
-// acquisition thread itself. Resetting the main config_refresh flag
-// will also happen there.
-static void caerInputDAViSFX3Exit(caerModuleData moduleData);
-
-static struct caer_module_functions caerInputDAViSFX3Functions = { .moduleInit = &caerInputDAViSFX3Init, .moduleRun =
-	&caerInputDAViSFX3Run, .moduleConfig = NULL, .moduleExit = &caerInputDAViSFX3Exit };
-
-void caerInputDAViSFX3(uint16_t moduleID, caerPolarityEventPacket *polarity, caerFrameEventPacket *frame,
-	caerIMU6EventPacket *imu6, caerSpecialEventPacket *special) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "DAViSFX3");
-
-	// IMPORTANT: THE CONTENT OF OUTPUT ARGUMENTS MUST BE SET TO NULL!
-	if (polarity != NULL) {
-		*polarity = NULL;
-	}
-	if (frame != NULL) {
-		*frame = NULL;
-	}
-	if (imu6 != NULL) {
-		*imu6 = NULL;
-	}
-	if (special != NULL) {
-		*special = NULL;
-	}
-
-	caerModuleSM(&caerInputDAViSFX3Functions, moduleData, sizeof(struct davisFX3_state), 4, polarity, frame, imu6,
-		special);
-}
-
-static void *dataAcquisitionThread(void *inPtr);
-static void dataAcquisitionThreadConfig(caerModuleData data);
-static void allocateDataTransfers(davisFX3State state, uint32_t bufferNum, uint32_t bufferSize);
-static void deallocateDataTransfers(davisFX3State state);
-static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer);
-static void dataTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent);
-static void allocateDebugTransfers(davisFX3State state);
-static void deallocateDebugTransfers(davisFX3State state);
-static void LIBUSB_CALL libUsbDebugCallback(struct libusb_transfer *transfer);
-static void debugTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent);
-static void sendBiases(sshsNode biasNode, libusb_device_handle *devHandle);
-static void sendChipSR(sshsNode chipNode, libusb_device_handle *devHandle);
-static void sendSpiConfigCommand(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr, uint32_t param);
-static libusb_device_handle *deviceOpen(libusb_context *devContext, uint8_t busNumber, uint8_t devAddress);
-static void deviceClose(libusb_device_handle *devHandle);
-static void caerInputDAViSFX3ConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
-	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
-
-static inline void freeAllPackets(davisFX3State state) {
+void freeAllPackets(davisCommonState state) {
 	free(state->currentPolarityPacket);
 	free(state->currentFramePacket);
 	free(state->currentIMU6Packet);
 	free(state->currentSpecialPacket);
 }
 
-static inline void createAddressedCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type,
+void createAddressedCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type,
 	const char *sex, uint8_t coarseValue, uint8_t fineValue, bool enabled) {
 	// Add trailing slash to node name (required!).
 	size_t biasNameLength = strlen(biasName);
@@ -142,7 +77,7 @@ static inline void createAddressedCoarseFineBiasSetting(sshsNode biasNode, const
 	sshsNodePutStringIfAbsent(biasConfigNode, "currentLevel", "Normal");
 }
 
-static inline void sendAddressedCoarseFineBias(sshsNode biasNode, libusb_device_handle *devHandle, uint16_t biasAddress,
+void sendAddressedCoarseFineBias(sshsNode biasNode, libusb_device_handle *devHandle, uint16_t biasAddress,
 	const char *biasName) {
 	// Add trailing slash to node name (required!).
 	size_t biasNameLength = strlen(biasName);
