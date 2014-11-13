@@ -14,7 +14,7 @@
 #define VR_CHIP_BIAS 0xC0
 #define VR_CHIP_DIAG 0xC1
 
-void caerInputDAViSFX2(uint16_t moduleID, caerPolarityEventPacket *polarity, caerFrameEventPacket *frame,
+void caerInputDAVISFX2(uint16_t moduleID, caerPolarityEventPacket *polarity, caerFrameEventPacket *frame,
 	caerIMU6EventPacket *imu6, caerSpecialEventPacket *special);
 
 #endif /* DAVIS_FX2_H_ */

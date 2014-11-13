@@ -15,7 +15,7 @@
 #define DEBUG_TRANSFER_NUM 4
 #define DEBUG_TRANSFER_SIZE 64
 
-void caerInputDAViSFX3(uint16_t moduleID, caerPolarityEventPacket *polarity, caerFrameEventPacket *frame,
+void caerInputDAVISFX3(uint16_t moduleID, caerPolarityEventPacket *polarity, caerFrameEventPacket *frame,
 	caerIMU6EventPacket *imu6, caerSpecialEventPacket *special);
 
 #endif /* DAVIS_FX3_H_ */

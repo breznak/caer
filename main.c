@@ -10,7 +10,7 @@
 #include "base/config_server.h"
 #include "base/mainloop.h"
 #include "base/misc.h"
-#include "modules/ini/davis_fx3.h"
+#include "modules/ini/davis_fx2.h"
 #include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
 #include "modules/statistics/statistics.h"
 #include "modules/visualizer/visualizer.h"
@@ -19,23 +19,25 @@ static bool mainloop_1(void);
 
 static bool mainloop_1(void) {
 	// Typed EventPackets contain events of a certain type.
-	caerPolarityEventPacket davisfx3_polarity;
-	caerFrameEventPacket davisfx3_frame;
+	caerPolarityEventPacket davis_polarity;
+	caerFrameEventPacket davis_frame;
 
 	// Input modules grab data from outside sources (like devices, files, ...)
 	// and put events into an event packet.
-	caerInputDAViSFX3(1, &davisfx3_polarity, &davisfx3_frame, NULL, NULL);
+	caerInputDAVISFX2(1, &davis_polarity, &davis_frame, NULL, NULL);
 
 	// Filters process event packets: for example to suppress certain events,
 	// like with the Background Activity Filter, which suppresses events that
 	// look to be uncorrelated with real scene changes (noise reduction).
-	caerBackgroundActivityFilter(2, davisfx3_polarity);
+	caerBackgroundActivityFilter(2, davis_polarity);
 
 	// Filters can also extract information from event packets: for example
 	// to show statistics about the current event-rate.
-	caerStatistics(3, (caerEventPacketHeader) davisfx3_polarity);
+	caerStatistics(3, (caerEventPacketHeader) davis_polarity);
+	caerStatistics(4, (caerEventPacketHeader) davis_frame);
 
-	caerVisualizer(4, davisfx3_polarity, davisfx3_frame);
+	// A small OpenGL visualizer exists to show what the output looks like.
+	caerVisualizer(5, davis_polarity, davis_frame);
 
 	return (true); // If false is returned, processing of this loop stops.
 }
