@@ -84,7 +84,7 @@ void deallocateDataTransfers(davisCommonState state);
 libusb_device_handle *deviceOpen(libusb_context *devContext, uint16_t devVID, uint16_t devPID,
 		uint8_t devType, uint8_t busNumber, uint8_t devAddress);
 void deviceClose(libusb_device_handle *devHandle);
-void caerInputDAVISFX3ConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+void caerInputDAVISCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
 #endif /* DAVIS_COMMON_H_ */

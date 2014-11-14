@@ -877,7 +877,7 @@ void deviceClose(libusb_device_handle *devHandle) {
 	libusb_close(devHandle);
 }
 
-void caerInputDAVISFX3ConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+void caerInputDAVISCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
 	UNUSED_ARGUMENT(changeValue);
 

@@ -121,15 +121,16 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "dataExchangeBufferSize", 64);
 
 	// Install default listener to signal configuration updates asynchronously.
-	sshsNodeAddAttrListener(biasNode, moduleData, &caerInputDAVISFX3ConfigListener);
-	sshsNodeAddAttrListener(chipNode, moduleData, &caerInputDAVISFX3ConfigListener);
-	sshsNodeAddAttrListener(fpgaNode, moduleData, &caerInputDAVISFX3ConfigListener);
-	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerInputDAVISFX3ConfigListener);
+	sshsNodeAddAttrListener(biasNode, moduleData, &caerInputDAVISCommonConfigListener);
+	sshsNodeAddAttrListener(chipNode, moduleData, &caerInputDAVISCommonConfigListener);
+	sshsNodeAddAttrListener(fpgaNode, moduleData, &caerInputDAVISCommonConfigListener);
+	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerInputDAVISCommonConfigListener);
 
 	davisFX3State state = moduleData->moduleState;
+	davisCommonState cstate = &state->cstate;
 
 	// Data source is the same as the module ID (but accessible in state-space).
-	state->sourceID = moduleData->moduleID;
+	cstate->sourceID = moduleData->moduleID;
 
 	// Put global source information into SSHS.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
@@ -141,54 +142,54 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 	sshsNodePutShort(sourceInfoNode, "frameOriginalChannels", DAVIS_COLOR_CHANNELS);
 
 	// Initialize state fields.
-	state->maxPolarityPacketSize = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxSize");
-	state->maxPolarityPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxInterval");
+	cstate->maxPolarityPacketSize = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxSize");
+	cstate->maxPolarityPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxInterval");
 
-	state->maxFramePacketSize = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxSize");
-	state->maxFramePacketInterval = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxInterval");
+	cstate->maxFramePacketSize = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxSize");
+	cstate->maxFramePacketInterval = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxInterval");
 
-	state->maxIMU6PacketSize = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxSize");
-	state->maxIMU6PacketInterval = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxInterval");
+	cstate->maxIMU6PacketSize = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxSize");
+	cstate->maxIMU6PacketInterval = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxInterval");
 
-	state->maxSpecialPacketSize = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxSize");
-	state->maxSpecialPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxInterval");
+	cstate->maxSpecialPacketSize = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxSize");
+	cstate->maxSpecialPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxInterval");
 
-	state->currentPolarityPacket = caerPolarityEventPacketAllocate(state->maxPolarityPacketSize, state->sourceID);
-	state->currentPolarityPacketPosition = 0;
+	cstate->currentPolarityPacket = caerPolarityEventPacketAllocate(cstate->maxPolarityPacketSize, cstate->sourceID);
+	cstate->currentPolarityPacketPosition = 0;
 
-	state->currentFramePacket = caerFrameEventPacketAllocate(state->maxFramePacketSize, state->sourceID,
+	cstate->currentFramePacket = caerFrameEventPacketAllocate(cstate->maxFramePacketSize, cstate->sourceID,
 	DAVIS_ARRAY_SIZE_Y, DAVIS_ARRAY_SIZE_X, DAVIS_COLOR_CHANNELS);
-	state->currentFramePacketPosition = 0;
+	cstate->currentFramePacketPosition = 0;
 
-	state->currentIMU6Packet = caerIMU6EventPacketAllocate(state->maxIMU6PacketSize, state->sourceID);
-	state->currentIMU6PacketPosition = 0;
+	cstate->currentIMU6Packet = caerIMU6EventPacketAllocate(cstate->maxIMU6PacketSize, cstate->sourceID);
+	cstate->currentIMU6PacketPosition = 0;
 
-	state->currentSpecialPacket = caerSpecialEventPacketAllocate(state->maxSpecialPacketSize, state->sourceID);
-	state->currentSpecialPacketPosition = 0;
+	cstate->currentSpecialPacket = caerSpecialEventPacketAllocate(cstate->maxSpecialPacketSize, cstate->sourceID);
+	cstate->currentSpecialPacketPosition = 0;
 
-	state->wrapAdd = 0;
-	state->lastTimestamp = 0;
-	state->currentTimestamp = 0;
-	state->dvsTimestamp = 0;
-	state->imuTimestamp = 0;
-	state->lastY = 0;
-	state->gotY = false;
-	state->apsGlobalShutter = true; // TODO: external control.
-	state->apsCurrentReadoutType = APS_READOUT_RESET;
+	cstate->wrapAdd = 0;
+	cstate->lastTimestamp = 0;
+	cstate->currentTimestamp = 0;
+	cstate->dvsTimestamp = 0;
+	cstate->imuTimestamp = 0;
+	cstate->lastY = 0;
+	cstate->gotY = false;
+	cstate->apsGlobalShutter = true; // TODO: external control.
+	cstate->apsCurrentReadoutType = APS_READOUT_RESET;
 	for (size_t i = 0; i < APS_READOUT_TYPES_NUM; i++) {
-		state->apsCountX[i] = 0;
-		state->apsCountY[i] = 0;
+		cstate->apsCountX[i] = 0;
+		cstate->apsCountY[i] = 0;
 	}
-	memset(state->apsCurrentResetFrame, 0, DAVIS_ARRAY_SIZE_X * DAVIS_ARRAY_SIZE_Y);
+	memset(cstate->apsCurrentResetFrame, 0, DAVIS_ARRAY_SIZE_X * DAVIS_ARRAY_SIZE_Y * DAVIS_COLOR_CHANNELS);
 
 	// Store reference to parent mainloop, so that we can correctly notify
 	// the availability or not of data to consume.
-	state->mainloopNotify = caerMainloopGetReference();
+	cstate->mainloopNotify = caerMainloopGetReference();
 
 	// Create data exchange buffers.
-	state->dataExchangeBuffer = ringBufferInit(sshsNodeGetInt(moduleData->moduleNode, "dataExchangeBufferSize"));
-	if (state->dataExchangeBuffer == NULL) {
-		freeAllPackets(state);
+	cstate->dataExchangeBuffer = ringBufferInit(sshsNodeGetInt(moduleData->moduleNode, "dataExchangeBufferSize"));
+	if (cstate->dataExchangeBuffer == NULL) {
+		freeAllPackets(cstate);
 
 		caerLog(LOG_CRITICAL, "Failed to initialize data exchange buffer.");
 		return (false);
@@ -196,21 +197,21 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 
 	// Initialize libusb using a separate context for each device.
 	// This is to correctly support one thread per device.
-	if ((errno = libusb_init(&state->deviceContext)) != LIBUSB_SUCCESS) {
-		freeAllPackets(state);
-		ringBufferFree(state->dataExchangeBuffer);
+	if ((errno = libusb_init(&cstate->deviceContext)) != LIBUSB_SUCCESS) {
+		freeAllPackets(cstate);
+		ringBufferFree(cstate->dataExchangeBuffer);
 
 		caerLog(LOG_CRITICAL, "Failed to initialize libusb context. Error: %s (%d).", libusb_strerror(errno), errno);
 		return (false);
 	}
 
 	// Try to open a DAVISFX3 device on a specific USB port.
-	state->deviceHandle = deviceOpen(state->deviceContext, sshsNodeGetByte(moduleData->moduleNode, "usbBusNumber"),
-		sshsNodeGetByte(moduleData->moduleNode, "usbDevAddress"));
-	if (state->deviceHandle == NULL) {
-		freeAllPackets(state);
-		ringBufferFree(state->dataExchangeBuffer);
-		libusb_exit(state->deviceContext);
+	cstate->deviceHandle = deviceOpen(cstate->deviceContext, DAVIS_FX3_VID, DAVIS_FX3_PID, DAVIS_FX3_DID_TYPE,
+		sshsNodeGetByte(moduleData->moduleNode, "usbBusNumber"), sshsNodeGetByte(moduleData->moduleNode, "usbDevAddress"));
+	if (cstate->deviceHandle == NULL) {
+		freeAllPackets(cstate);
+		ringBufferFree(cstate->dataExchangeBuffer);
+		libusb_exit(cstate->deviceContext);
 
 		caerLog(LOG_CRITICAL, "Failed to open DAVISFX3 device.");
 		return (false);
@@ -218,10 +219,10 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 
 	// Start data acquisition thread.
 	if ((errno = pthread_create(&state->dataAcquisitionThread, NULL, &dataAcquisitionThread, moduleData)) != 0) {
-		freeAllPackets(state);
-		ringBufferFree(state->dataExchangeBuffer);
-		deviceClose(state->deviceHandle);
-		libusb_exit(state->deviceContext);
+		freeAllPackets(cstate);
+		ringBufferFree(cstate->dataExchangeBuffer);
+		deviceClose(cstate->deviceHandle);
+		libusb_exit(cstate->deviceContext);
 
 		caerLog(LOG_CRITICAL, "Failed to start data acquisition thread. Error: %s (%d).", caerLogStrerror(errno),
 		errno);
@@ -229,8 +230,8 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 	}
 
 	caerLog(LOG_DEBUG, "Initialized DAVISFX3 module successfully with device Bus=%" PRIu8 ":Addr=%" PRIu8 ".",
-		libusb_get_bus_number(libusb_get_device(state->deviceHandle)),
-		libusb_get_device_address(libusb_get_device(state->deviceHandle)));
+		libusb_get_bus_number(libusb_get_device(cstate->deviceHandle)),
+		libusb_get_device_address(libusb_get_device(cstate->deviceHandle)));
 	return (true);
 }
 
@@ -238,6 +239,7 @@ static void caerInputDAVISFX3Exit(caerModuleData moduleData) {
 	caerLog(LOG_DEBUG, "Shutting down DAVISFX3 module ...");
 
 	davisFX3State state = moduleData->moduleState;
+	davisCommonState cstate = &state->cstate;
 
 	// Wait for data acquisition thread to terminate...
 	if ((errno = pthread_join(state->dataAcquisitionThread, NULL)) != 0) {
@@ -247,23 +249,23 @@ static void caerInputDAVISFX3Exit(caerModuleData moduleData) {
 	}
 
 	// Finally, close the device fully.
-	deviceClose(state->deviceHandle);
+	deviceClose(cstate->deviceHandle);
 
 	// Destroy libusb context.
-	libusb_exit(state->deviceContext);
+	libusb_exit(cstate->deviceContext);
 
 	// Empty ringbuffer.
 	void *packet;
-	while ((packet = ringBufferGet(state->dataExchangeBuffer)) != NULL) {
-		caerMainloopDataAvailableDecrease(state->mainloopNotify);
+	while ((packet = ringBufferGet(cstate->dataExchangeBuffer)) != NULL) {
+		caerMainloopDataAvailableDecrease(cstate->mainloopNotify);
 		free(packet);
 	}
 
 	// And destroy it.
-	ringBufferFree(state->dataExchangeBuffer);
+	ringBufferFree(cstate->dataExchangeBuffer);
 
 	// Free remaining incomplete packets.
-	freeAllPackets(state);
+	freeAllPackets(cstate);
 
 	caerLog(LOG_DEBUG, "Shutdown DAVISFX3 module successfully.");
 }
@@ -274,29 +276,24 @@ static void *dataAcquisitionThread(void *inPtr) {
 	// inPtr is a pointer to module data.
 	caerModuleData data = inPtr;
 	davisFX3State state = data->moduleState;
+	davisCommonState cstate = &state->cstate;
 
 	// Send default start-up biases and config values to device before enabling it.
-	sendBiases(sshsGetRelativeNode(data->moduleNode, "bias/"), state->deviceHandle);
-	sendChipSR(sshsGetRelativeNode(data->moduleNode, "chip/"), state->deviceHandle);
-	// TODO: fpga config here.
 
 	// Create buffers as specified in config file.
 	allocateDebugTransfers(state);
-	allocateDataTransfers(state, sshsNodeGetInt(data->moduleNode, "bufferNumber"),
+	allocateDataTransfers(cstate, sshsNodeGetInt(data->moduleNode, "bufferNumber"),
 		sshsNodeGetInt(data->moduleNode, "bufferSize"));
 
 	// Enable AER data transfer on USB end-point.
-	sendSpiConfigCommand(state->deviceHandle, 0x00, 0x00, 0x01);
-	sendSpiConfigCommand(state->deviceHandle, 0x00, 0x01, 0x01);
-	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x00, 0x00);
-	sendSpiConfigCommand(state->deviceHandle, 0x03, 0x00, 0x00);
+	sendSpiConfigCommand(cstate->deviceHandle, 0x00, 0x00, 0x01);
+	sendSpiConfigCommand(cstate->deviceHandle, 0x00, 0x01, 0x01);
+	sendSpiConfigCommand(cstate->deviceHandle, 0x01, 0x00, 0x01);
+	sendSpiConfigCommand(cstate->deviceHandle, 0x03, 0x00, 0x01);
 
 	// APS tests.
-	sendSpiConfigCommand(state->deviceHandle, 0x02, 7, 30000 * 1); // Exposure control.
-	sendSpiConfigCommand(state->deviceHandle, 0x02, 8, 30000); // Wait 1ms between frames.
-	sendSpiConfigCommand(state->deviceHandle, 0x02, 14, 1); // Wait on transfer stall.
-	sendSpiConfigCommand(state->deviceHandle, 0x02, 2, 1); // Global shutter.
-	sendSpiConfigCommand(state->deviceHandle, 0x02, 0, 1); // Run APS.
+	sendSpiConfigCommand(cstate->deviceHandle, 0x02, 14, 1); // Wait on transfer stall.
+	sendSpiConfigCommand(cstate->deviceHandle, 0x02, 0, 1); // Run APS.
 
 	// Handle USB events (1 second timeout).
 	struct timeval te = { .tv_sec = 0, .tv_usec = 1000000 };
@@ -304,25 +301,26 @@ static void *dataAcquisitionThread(void *inPtr) {
 	caerLog(LOG_DEBUG, "DAVISFX3: data acquisition thread ready to process events.");
 
 	while (atomic_ops_uint_load(&data->running, ATOMIC_OPS_FENCE_NONE) != 0
-		&& atomic_ops_uint_load(&state->dataTransfersLength, ATOMIC_OPS_FENCE_NONE) > 0) {
+		&& atomic_ops_uint_load(&cstate->dataTransfersLength, ATOMIC_OPS_FENCE_NONE) > 0) {
 		// Check config refresh, in this case to adjust buffer sizes.
 		if (atomic_ops_uint_load(&data->configUpdate, ATOMIC_OPS_FENCE_NONE) != 0) {
 			dataAcquisitionThreadConfig(data);
 		}
 
-		libusb_handle_events_timeout(state->deviceContext, &te);
+		libusb_handle_events_timeout(cstate->deviceContext, &te);
 	}
 
 	caerLog(LOG_DEBUG, "DAVISFX3: shutting down data acquisition thread ...");
 
 	// Disable AER data transfer on USB end-point (reverse order than enabling).
-	sendSpiConfigCommand(state->deviceHandle, 0x03, 0x00, 0x00);
-	sendSpiConfigCommand(state->deviceHandle, 0x01, 0x00, 0x00);
-	sendSpiConfigCommand(state->deviceHandle, 0x00, 0x01, 0x00);
-	sendSpiConfigCommand(state->deviceHandle, 0x00, 0x00, 0x00);
+	sendSpiConfigCommand(cstate->deviceHandle, 0x03, 0x00, 0x00);
+	sendSpiConfigCommand(cstate->deviceHandle, 0x02, 0x00, 0x00);
+	sendSpiConfigCommand(cstate->deviceHandle, 0x01, 0x00, 0x00);
+	sendSpiConfigCommand(cstate->deviceHandle, 0x00, 0x01, 0x00);
+	sendSpiConfigCommand(cstate->deviceHandle, 0x00, 0x00, 0x00);
 
 	// Cancel all transfers and handle them.
-	deallocateDataTransfers(state);
+	deallocateDataTransfers(cstate);
 	deallocateDebugTransfers(state);
 
 	// Ensure parent also shuts down (on disconnected device for example).
@@ -335,6 +333,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 
 static void dataAcquisitionThreadConfig(caerModuleData moduleData) {
 	davisFX3State state = moduleData->moduleState;
+	davisCommonState cstate = &state->cstate;
 
 	// Get the current value to examine by atomic exchange, since we don't
 	// want there to be any possible store between a load/store pair.
@@ -342,12 +341,10 @@ static void dataAcquisitionThreadConfig(caerModuleData moduleData) {
 
 	if (configUpdate & (0x01 << 0)) {
 		// Bias update required.
-		sendBiases(sshsGetRelativeNode(moduleData->moduleNode, "bias/"), state->deviceHandle);
 	}
 
 	if (configUpdate & (0x01 << 1)) {
 		// Chip config update required.
-		sendChipSR(sshsGetRelativeNode(moduleData->moduleNode, "chip/"), state->deviceHandle);
 	}
 
 	if (configUpdate & (0x01 << 2)) {
@@ -357,24 +354,24 @@ static void dataAcquisitionThreadConfig(caerModuleData moduleData) {
 
 	if (configUpdate & (0x01 << 3)) {
 		// Do buffer size change: cancel all and recreate them.
-		deallocateDataTransfers(state);
-		allocateDataTransfers(state, sshsNodeGetInt(moduleData->moduleNode, "bufferNumber"),
+		deallocateDataTransfers(cstate);
+		allocateDataTransfers(cstate, sshsNodeGetInt(moduleData->moduleNode, "bufferNumber"),
 			sshsNodeGetInt(moduleData->moduleNode, "bufferSize"));
 	}
 
 	if (configUpdate & (0x01 << 4)) {
 		// Update maximum size and interval settings for packets.
-		state->maxPolarityPacketSize = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxSize");
-		state->maxPolarityPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxInterval");
+		cstate->maxPolarityPacketSize = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxSize");
+		cstate->maxPolarityPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxInterval");
 
-		state->maxFramePacketSize = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxSize");
-		state->maxFramePacketInterval = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxInterval");
+		cstate->maxFramePacketSize = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxSize");
+		cstate->maxFramePacketInterval = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxInterval");
 
-		state->maxIMU6PacketSize = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxSize");
-		state->maxIMU6PacketInterval = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxInterval");
+		cstate->maxIMU6PacketSize = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxSize");
+		cstate->maxIMU6PacketInterval = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxInterval");
 
-		state->maxSpecialPacketSize = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxSize");
-		state->maxSpecialPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxInterval");
+		cstate->maxSpecialPacketSize = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxSize");
+		cstate->maxSpecialPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxInterval");
 	}
 }
 
@@ -413,7 +410,7 @@ static void allocateDebugTransfers(davisFX3State state) {
 		}
 
 		// Initialize Transfer.
-		state->debugTransfers[i]->dev_handle = state->cstate->deviceHandle;
+		state->debugTransfers[i]->dev_handle = state->cstate.deviceHandle;
 		state->debugTransfers[i]->endpoint = DEBUG_ENDPOINT;
 		state->debugTransfers[i]->type = LIBUSB_TRANSFER_TYPE_INTERRUPT;
 		state->debugTransfers[i]->callback = &libUsbDebugCallback;
@@ -456,7 +453,7 @@ static void deallocateDebugTransfers(davisFX3State state) {
 	struct timeval te = { .tv_sec = 0, .tv_usec = 100000 };
 
 	while (atomic_ops_uint_load(&state->debugTransfersLength, ATOMIC_OPS_FENCE_NONE) > 0) {
-		libusb_handle_events_timeout(state->cstate->deviceContext, &te);
+		libusb_handle_events_timeout(state->cstate.deviceContext, &te);
 	}
 
 	// The buffers and transfers have been deallocated in the callback.
