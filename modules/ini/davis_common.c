@@ -595,7 +595,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							}
 							else {
 								caerFrameEventGetPixelArrayUnsafe(currentFrameEvent)[pixelPosition] =
-										htole16(U16T(0xFFFF - state->apsCurrentResetFrame[pixelPosition]));
+									htole16(U16T(state->apsCurrentResetFrame[pixelPosition] - 0xFFFF));
 							}
 
 							caerLog(LOG_INFO, "APS ADC Overflow");
