@@ -283,7 +283,6 @@ static void *dataAcquisitionThread(void *inPtr) {
 	// TODO: fpga config here.
 
 	// Create buffers as specified in config file.
-	//allocateDebugTransfers(state);
 	allocateDataTransfers(cstate, sshsNodeGetInt(data->moduleNode, "bufferNumber"),
 		sshsNodeGetInt(data->moduleNode, "bufferSize"));
 
@@ -324,7 +323,6 @@ static void *dataAcquisitionThread(void *inPtr) {
 
 	// Cancel all transfers and handle them.
 	deallocateDataTransfers(cstate);
-	//deallocateDebugTransfers(state);
 
 	// Ensure parent also shuts down (on disconnected device for example).
 	sshsNodePutBool(data->moduleNode, "shutdown", true);
