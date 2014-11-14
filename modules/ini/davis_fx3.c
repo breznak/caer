@@ -158,7 +158,7 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 	cstate->currentPolarityPacketPosition = 0;
 
 	cstate->currentFramePacket = caerFrameEventPacketAllocate(cstate->maxFramePacketSize, cstate->sourceID,
-	DAVIS_ARRAY_SIZE_Y, DAVIS_ARRAY_SIZE_X, DAVIS_COLOR_CHANNELS);
+	DAVIS_ARRAY_SIZE_X, DAVIS_ARRAY_SIZE_Y, DAVIS_COLOR_CHANNELS);
 	cstate->currentFramePacketPosition = 0;
 
 	cstate->currentIMU6Packet = caerIMU6EventPacketAllocate(cstate->maxIMU6PacketSize, cstate->sourceID);
