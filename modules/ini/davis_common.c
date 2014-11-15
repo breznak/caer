@@ -481,6 +481,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 						case 8: { // APS Frame Start
 							caerLog(LOG_DEBUG, "APS Frame Start");
+
+							state->apsCurrentReadoutType = APS_READOUT_RESET;
 							for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
 								state->apsCountX[j] = 0;
 								state->apsCountY[j] = 0;
@@ -501,6 +503,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 						case 9: { // APS Frame End
 							caerLog(LOG_DEBUG, "APS Frame End");
+
 							bool validFrame = true;
 
 							for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
@@ -529,6 +532,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 						case 10: { // APS Reset Column Start
 							caerLog(LOG_DEBUG, "APS Reset Column Start");
+
 							state->apsCurrentReadoutType = APS_READOUT_RESET;
 							state->apsCountY[state->apsCurrentReadoutType] = 0;
 
@@ -546,6 +550,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 						case 11: { // APS Signal Column Start
 							caerLog(LOG_DEBUG, "APS Signal Column Start");
+
 							state->apsCurrentReadoutType = APS_READOUT_SIGNAL;
 							state->apsCountY[state->apsCurrentReadoutType] = 0;
 
@@ -570,11 +575,12 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 							caerLog(LOG_DEBUG, "APS Column End: CountX[%d] is %d.", state->apsCurrentReadoutType, state->apsCountX[state->apsCurrentReadoutType]);
 							caerLog(LOG_DEBUG, "APS Column End: CountY[%d] is %d.", state->apsCurrentReadoutType, state->apsCountY[state->apsCurrentReadoutType]);
+
 							state->apsCountX[state->apsCurrentReadoutType]++;
 
 							// The last Reset Column Read End is also the start
 							// of the exposure for the GS.
-							if (state->apsGlobalShutter
+							if (state->apsGlobalShutter && state->apsCurrentReadoutType == APS_READOUT_RESET
 								&& state->apsCountX[APS_READOUT_RESET] == DAVIS_ARRAY_SIZE_X) {
 								caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
 										state->currentFramePacketPosition);
@@ -602,6 +608,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 							caerLog(LOG_INFO, "APS ADC Overflow");
 							caerLog(LOG_DEBUG, "APS ADC Overflow: row is %d.", state->apsCountY[state->apsCurrentReadoutType]);
+
 							state->apsCountY[state->apsCurrentReadoutType]++;
 
 							break;
@@ -687,6 +694,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 					caerLog(LOG_DEBUG, "APS ADC Sample");
 					caerLog(LOG_DEBUG, "APS ADC Sample: row is %d.", state->apsCountY[state->apsCurrentReadoutType]);
+
 					state->apsCountY[state->apsCurrentReadoutType]++;
 
 					break;
