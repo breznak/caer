@@ -506,8 +506,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
 								caerLog(LOG_DEBUG, "APS Frame End: CountX[%zu] is %d.", j, state->apsCountX[j]);
 
-								if (state->apsCountX[j] < DAVIS_ARRAY_SIZE_X) {
-									caerLog(LOG_ERROR, "APS Frame End: incomplete frame [%zu] detected.", j);
+								if (state->apsCountX[j] != DAVIS_ARRAY_SIZE_X) {
+									caerLog(LOG_ERROR, "APS Frame End: wrong column count [%zu - %d] detected.",
+										j, state->apsCountX[j]);
 									validFrame = false;
 								}
 							}
@@ -562,8 +563,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						case 12: { // APS Column End
 							caerLog(LOG_DEBUG, "APS Column End");
 
-							if (state->apsCountY[state->apsCurrentReadoutType] < DAVIS_ARRAY_SIZE_Y) {
-								caerLog(LOG_ERROR, "APS Column End: incomplete column [%d] detected.", state->apsCurrentReadoutType);
+							if (state->apsCountY[state->apsCurrentReadoutType] != DAVIS_ARRAY_SIZE_Y) {
+								caerLog(LOG_ERROR, "APS Column End: wrong row count [%d - %d] detected.",
+									state->apsCurrentReadoutType, state->apsCountY[state->apsCurrentReadoutType]);
 							}
 
 							caerLog(LOG_DEBUG, "APS Column End: CountX[%d] is %d.", state->apsCurrentReadoutType, state->apsCountX[state->apsCurrentReadoutType]);
