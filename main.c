@@ -33,7 +33,7 @@ static bool mainloop_1(void) {
 
 	// Filters can also extract information from event packets: for example
 	// to show statistics about the current event-rate.
-	caerStatistics(3, (caerEventPacketHeader) davis_polarity);
+	caerStatistics(3, (caerEventPacketHeader) davis_frame);
 
 	// A small OpenGL visualizer exists to show what the output looks like.
 	caerVisualizer(4, davis_polarity, davis_frame);

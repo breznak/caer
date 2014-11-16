@@ -7,6 +7,7 @@ struct statistics_state {
 	struct timespec lastTime;
 	uint64_t totalEventsCounter;
 	uint64_t validEventsCounter;
+	uint16_t packetType;
 };
 
 typedef struct statistics_state *statisticsState;
@@ -41,6 +42,7 @@ static void caerStatisticsRun(caerModuleData moduleData, size_t argsNumber,
 				packetHeader);
 		state->validEventsCounter += caerEventPacketHeaderGetEventValid(
 				packetHeader);
+		state->packetType = caerEventPacketHeaderGetEventType(packetHeader);
 	}
 
 	// Print up-to-date statistic roughly every second, taking into account possible deviations.
@@ -53,15 +55,29 @@ static void caerStatisticsRun(caerModuleData moduleData, size_t argsNumber,
 
 	// DiffNanoTime is the difference in nanoseconds; we want to trigger roughly every second.
 	if (diffNanoTime >= 1000000000) {
-		// Print current values.
-		uint64_t totalEventsPerTime = (state->totalEventsCounter * 1000000)
+		if (state->packetType == FRAME_EVENT) {
+			// Print current values.
+			uint64_t totalEventsPerTime = (state->totalEventsCounter * 1000000000)
 				/ diffNanoTime;
-		uint64_t validEventsPerTime = (state->validEventsCounter * 1000000)
+			uint64_t validEventsPerTime = (state->validEventsCounter * 1000000000)
 				/ diffNanoTime;
 
-		fprintf(stdout,
+			fprintf(stdout,
+				"\rTotal frames/second: %10" PRIu64 " - Valid frames/second: %10" PRIu64,
+				totalEventsPerTime, validEventsPerTime);
+		}
+		else {
+			// Print current values.
+			uint64_t totalEventsPerTime = (state->totalEventsCounter * 1000000)
+				/ diffNanoTime;
+			uint64_t validEventsPerTime = (state->validEventsCounter * 1000000)
+				/ diffNanoTime;
+
+			fprintf(stdout,
 				"\rTotal Kevents/second: %10" PRIu64 " - Valid Kevents/second: %10" PRIu64,
 				totalEventsPerTime, validEventsPerTime);
+		}
+
 		fflush(stdout);
 
 		// Reset for next update.
