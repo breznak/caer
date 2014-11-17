@@ -29,9 +29,16 @@ void caerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity,
 static bool caerVisualizerInit(caerModuleData moduleData) {
 	visualizerState state = moduleData->moduleState;
 
-	glfwInit();
+	if (glfwInit() == GL_FALSE) {
+		caerLog(LOG_ERROR, "Failed to initialize GLFW.");
+		return (false);
+	}
 
 	state->window = glfwCreateWindow(VISUALIZER_SCREEN_WIDTH, VISUALIZER_SCREEN_HEIGHT, "cAER Visualizer", NULL, NULL);
+	if (state->window == NULL) {
+		caerLog(LOG_ERROR, "Failed to create GLFW window.");
+		return (false);
+	}
 
 	glfwMakeContextCurrent(state->window);
 
