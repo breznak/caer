@@ -82,7 +82,7 @@ void caerLogDisableConsole(void) {
 	caerLog(LOG_DEBUG, "Logging to console disabled.");
 }
 
-void caerLog(uint8_t logLevel, const char *format, ...) {
+void caerLog(uint8_t logLevel, caerModuleData modData, const char *format, ...) {
 	// Only log messages above the specified level.
 	if (logLevel <= atomic_ops_uint_load(&caerLogLevel, ATOMIC_OPS_FENCE_NONE)) {
 		// First prepend the time.
@@ -139,16 +139,21 @@ void caerLog(uint8_t logLevel, const char *format, ...) {
 
 		// Now fuse with original format by prepending.
 		size_t logLevelStringLength = strlen(logLevelString);
+		size_t moduleFullLogStringLength = 0;
+		if (modData != NULL && modData->moduleFullLogString != NULL) {
+			moduleFullLogStringLength = strlen(modData->moduleFullLogString);
+		}
 		size_t formatLength = strlen(format);
-		char newFormat[currentTimeStringLength + logLevelStringLength + formatLength + 2];
+		char newFormat[currentTimeStringLength + logLevelStringLength + moduleFullLogStringLength + formatLength + 2];
 		// + 2, 1 for mandatory new-line at end of line and 1 for terminating NUL byte.
 
 		// Copy all strings into one and ensure NUL termination.
 		strncpy(newFormat, currentTimeString, currentTimeStringLength);
 		strncpy(newFormat + currentTimeStringLength, logLevelString, logLevelStringLength);
-		strncpy(newFormat + currentTimeStringLength + logLevelStringLength, format, formatLength);
-		newFormat[currentTimeStringLength + logLevelStringLength + formatLength] = '\n';
-		newFormat[currentTimeStringLength + logLevelStringLength + formatLength + 1] = '\0';
+		strncpy(newFormat + currentTimeStringLength + logLevelStringLength, modData->moduleFullLogString, moduleFullLogStringLength);
+		strncpy(newFormat + currentTimeStringLength + logLevelStringLength + moduleFullLogStringLength, format, formatLength);
+		newFormat[currentTimeStringLength + logLevelStringLength + moduleFullLogStringLength + formatLength] = '\n';
+		newFormat[currentTimeStringLength + logLevelStringLength + moduleFullLogStringLength + formatLength + 1] = '\0';
 
 		va_list argptr;
 

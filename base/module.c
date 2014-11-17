@@ -93,12 +93,28 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	sshsNodePutBool(moduleData->moduleNode, "shutdown", false); // Always reset to false.
 	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerModuleShutdownListener);
 
+	// Setup default full log string name.
+	size_t fullLogLength = (size_t) snprintf(NULL, 0, "%" PRIu16 "-%s: ", moduleID, moduleShortName);
+
+	moduleData->moduleFullLogString = malloc(fullLogLength + 1);
+	if (moduleData->moduleFullLogString == NULL) {
+		caerLog(LOG_CRITICAL, "Failed to allocate full log string for module '%s'.", modString);
+		pthread_exit(NULL);
+	}
+
+	snprintf(moduleData->moduleFullLogString, fullLogLength + 1, "%" PRIu16 "-%s: ", moduleID, moduleShortName);
+
 	return (moduleData);
 }
 
 void caerModuleDestroy(caerModuleData moduleData) {
 	// Deallocate module memory. Module state has already been destroyed.
+	free(moduleData->moduleFullLogString);
 	free(moduleData);
+}
+
+void caerModuleSetFullLogString(caerModuleData moduleData, const char *fullLogString) {
+	// Allocate new memory for new string
 }
 
 void caerModuleConfigDefaultListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,

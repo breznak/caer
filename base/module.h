@@ -25,6 +25,7 @@ struct caer_module_data {
 	atomic_ops_uint running;
 	atomic_ops_uint configUpdate;
 	void *moduleState;
+	char *moduleFullLogString;
 };
 
 typedef struct caer_module_data *caerModuleData;
