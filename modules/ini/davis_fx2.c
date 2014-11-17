@@ -173,6 +173,7 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 	cstate->imuTimestamp = 0;
 	cstate->lastY = 0;
 	cstate->gotY = false;
+	cstate->translateRowOnlyEvents = false;
 	cstate->apsGlobalShutter = sshsNodeGetBool(chipNode, "globalShutter");
 	cstate->apsCurrentReadoutType = APS_READOUT_RESET;
 	for (size_t i = 0; i < APS_READOUT_TYPES_NUM; i++) {

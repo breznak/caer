@@ -41,6 +41,7 @@ struct davisCommon_state {
 	uint32_t imuTimestamp;
 	uint16_t lastY;
 	bool gotY;
+	bool translateRowOnlyEvents;
 	bool apsGlobalShutter;
 	uint16_t apsCurrentReadoutType;
 	uint16_t apsCountX[APS_READOUT_TYPES_NUM];

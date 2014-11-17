@@ -595,8 +595,10 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
 								state->currentFramePacketPosition);
 
-							size_t pixelPosition = (size_t) (state->apsCountY[state->apsCurrentReadoutType] *
-								caerFrameEventGetLengthX(currentFrameEvent)) + state->apsCountX[state->apsCurrentReadoutType];
+							uint16_t xPos = U16T(DAVIS_ARRAY_SIZE_X - 1 - state->apsCountX[state->apsCurrentReadoutType]);
+							uint16_t yPos =U16T( DAVIS_ARRAY_SIZE_Y - 1 - state->apsCountY[state->apsCurrentReadoutType]);
+
+							size_t pixelPosition = (size_t) (yPos * caerFrameEventGetLengthX(currentFrameEvent)) + xPos;
 
 							if (state->apsCurrentReadoutType == APS_READOUT_RESET) {
 								state->apsCurrentResetFrame[pixelPosition] = 0xFFFF;
@@ -628,7 +630,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						continue; // Skip invalid Y address (don't update lastY).
 					}
 
-					if (state->gotY) {
+					if (state->translateRowOnlyEvents && state->gotY) {
 						caerSpecialEvent currentRowOnlyEvent = caerSpecialEventPacketGetEvent(
 							state->currentSpecialPacket, state->currentSpecialPacketPosition++);
 						// Use the previous timestamp here, since this refers to the previous Y.
@@ -681,8 +683,10 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
 						state->currentFramePacketPosition);
 
-					size_t pixelPosition = (size_t) (state->apsCountY[state->apsCurrentReadoutType] *
-						caerFrameEventGetLengthX(currentFrameEvent)) + state->apsCountX[state->apsCurrentReadoutType];
+					uint16_t xPos = U16T(DAVIS_ARRAY_SIZE_X - 1 - state->apsCountX[state->apsCurrentReadoutType]);
+					uint16_t yPos = U16T(DAVIS_ARRAY_SIZE_Y - 1 - state->apsCountY[state->apsCurrentReadoutType]);
+
+					size_t pixelPosition = (size_t) (yPos * caerFrameEventGetLengthX(currentFrameEvent)) + xPos;
 
 					if (state->apsCurrentReadoutType == APS_READOUT_RESET) {
 						state->apsCurrentResetFrame[pixelPosition] = data;
