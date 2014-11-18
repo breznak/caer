@@ -43,7 +43,7 @@ static inline caerEarEventPacket caerEarEventPacketAllocate(uint32_t eventCapaci
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_CRITICAL,
+		caerLog(LOG_CRITICAL, NULL,
 #endif
 			"Failed to allocate %zu bytes of memory for Ear Event Packet of capacity %"
 			PRIu32 " from source %" PRIu16 ". Error: %s (%d).", eventPacketSize, eventCapacity, eventSource,
@@ -74,7 +74,7 @@ static inline caerEarEvent caerEarEventPacketGetEvent(caerEarEventPacket packet,
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR,
+		caerLog(LOG_ERROR, NULL,
 #endif
 			"Called caerEarEventPacketGetEvent() with invalid event offset %" PRIu32 ", while maximum allowed value is %" PRIu32 ".",
 			n, caerEventPacketHeaderGetEventCapacity(&packet->packetHeader));
@@ -114,7 +114,7 @@ static inline void caerEarEventValidate(caerEarEvent event, caerEarEventPacket p
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR,
+		caerLog(LOG_ERROR, NULL,
 #endif
 			"Called caerEarEventValidate() on already valid event.");
 #endif
@@ -135,7 +135,7 @@ static inline void caerEarEventInvalidate(caerEarEvent event, caerEarEventPacket
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR,
+		caerLog(LOG_ERROR, NULL,
 #endif
 			"Called caerEarEventInvalidate() on already invalid event.");
 #endif

@@ -100,7 +100,7 @@ static inline void *caerGenericEventGetEvent(void *headerPtr, uint32_t n) {
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR,
+		caerLog(LOG_ERROR, NULL,
 #endif
 			"Called caerGenericEventGetEvent() with invalid event offset %" PRIu32 ", while maximum allowed value is %" PRIu32 ".",
 			n, caerEventPacketHeaderGetEventCapacity(headerPtr));

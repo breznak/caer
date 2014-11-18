@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
 
 	// Finally run the main event processing loops.
 	struct caer_mainloop_definition mainLoops[2] = { { 1, &mainloop_1 }, { 2, &mainloop_2 } };
-	caerMainloopRun(&mainLoops, 2);
+	caerMainloopRun(&mainLoops, 1);
 
 	// After shutting down the mainloops, also shutdown the config server
 	// thread if needed.

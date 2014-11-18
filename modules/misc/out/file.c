@@ -34,20 +34,20 @@ void caerOutputFile(uint16_t moduleID, size_t outputTypesNumber, ...) {
 	va_end(args);
 }
 
-static char *getUserHomeDirectory(void);
-static char *getFullFilePath(const char *directory, const char *prefix);
+static char *getUserHomeDirectory(caerModuleData moduleData);
+static char *getFullFilePath(caerModuleData moduleData, const char *directory, const char *prefix);
 static void caerOutputFileConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
 // Remember to free strings returned by this.
-static char *getUserHomeDirectory(void) {
+static char *getUserHomeDirectory(caerModuleData moduleData) {
 	// First check the environment for $HOME.
 	char *homeVar = getenv("HOME");
 
 	if (homeVar != NULL) {
 		char *retVar = strdup(homeVar);
 		if (retVar == NULL) {
-			caerLog(LOG_CRITICAL, "Unable to allocate memory for user home directory path.");
+			caerLog(LOG_CRITICAL, moduleData, "Unable to allocate memory for user home directory path.");
 			return (NULL);
 		}
 
@@ -63,7 +63,7 @@ static char *getUserHomeDirectory(void) {
 		// Success!
 		char *retVar = strdup(userPasswd.pw_dir);
 		if (retVar == NULL) {
-			caerLog(LOG_CRITICAL, "Unable to allocate memory for user home directory path.");
+			caerLog(LOG_CRITICAL, moduleData, "Unable to allocate memory for user home directory path.");
 			return (NULL);
 		}
 
@@ -73,14 +73,14 @@ static char *getUserHomeDirectory(void) {
 	// Else just return /tmp as a place to write to.
 	char *retVar = strdup("/tmp");
 	if (retVar == NULL) {
-		caerLog(LOG_CRITICAL, "Unable to allocate memory for user home directory path.");
+		caerLog(LOG_CRITICAL, moduleData, "Unable to allocate memory for user home directory path.");
 		return (NULL);
 	}
 
 	return (retVar);
 }
 
-static char *getFullFilePath(const char *directory, const char *prefix) {
+static char *getFullFilePath(caerModuleData moduleData, const char *directory, const char *prefix) {
 	// First get time suffix string.
 	time_t currentTimeEpoch = time(NULL);
 
@@ -105,7 +105,7 @@ static char *getFullFilePath(const char *directory, const char *prefix) {
 
 	char *filePath = malloc(filePathLength);
 	if (filePath == NULL) {
-		caerLog(LOG_CRITICAL, "Unable to allocate memory for full file path.");
+		caerLog(LOG_CRITICAL, moduleData, "Unable to allocate memory for full file path.");
 		return (NULL);
 	}
 
@@ -141,14 +141,14 @@ static bool caerOutputFileInit(caerModuleData moduleData) {
 
 	state->fileDescriptor = open(filePath, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP);
 	if (state->fileDescriptor < 0) {
-		caerLog(LOG_CRITICAL, "Could not create or open output file '%s' for writing. Error: %s (%d).", filePath,
-			caerLogStrerror(errno), errno);
+		caerLog(LOG_CRITICAL, moduleData, "Could not create or open output file '%s' for writing. Error: %s (%d).",
+			filePath, caerLogStrerror(errno), errno);
 		free(filePath);
 
 		return (false);
 	}
 
-	caerLog(LOG_DEBUG, "Opened output file '%s' successfully for writing.", filePath);
+	caerLog(LOG_DEBUG, moduleData, "Opened output file '%s' successfully for writing.", filePath);
 	free(filePath);
 
 	// Set valid events flag, and allocate memory for scatter/gather IO for it.
@@ -159,10 +159,10 @@ static bool caerOutputFileInit(caerModuleData moduleData) {
 	if (state->validOnly) {
 		state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
 		if (state->sgioMemory == NULL) {
-			caerLog(LOG_ALERT, "Impossible to allocate memory for scatter/gather IO, using memory copy method.");
+			caerLog(LOG_ALERT, moduleData, "Impossible to allocate memory for scatter/gather IO, using memory copy method.");
 		}
 		else {
-			caerLog(LOG_INFO, "Using scatter/gather IO for outputting valid events only.");
+			caerLog(LOG_INFO, moduleData, "Using scatter/gather IO for outputting valid events only.");
 		}
 	}
 	else {
@@ -211,11 +211,11 @@ static void caerOutputFileConfig(caerModuleData moduleData) {
 
 				state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
 				if (state->sgioMemory == NULL) {
-					caerLog(LOG_ALERT,
+					caerLog(LOG_ALERT, moduleData,
 						"Impossible to allocate memory for scatter/gather IO, using memory copy method.");
 				}
 				else {
-					caerLog(LOG_INFO, "Using scatter/gather IO for outputting valid events only.");
+					caerLog(LOG_INFO, moduleData, "Using scatter/gather IO for outputting valid events only.");
 				}
 			}
 			else {
@@ -244,14 +244,14 @@ static void caerOutputFileConfig(caerModuleData moduleData) {
 
 		int newFileDescriptor = open(filePath, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP);
 		if (newFileDescriptor < 0) {
-			caerLog(LOG_CRITICAL, "Could not create or open output file '%s' for writing. Error: %s (%d).", filePath,
-				caerLogStrerror(errno), errno);
+			caerLog(LOG_CRITICAL, moduleData, "Could not create or open output file '%s' for writing. Error: %s (%d).",
+				filePath, caerLogStrerror(errno), errno);
 			free(filePath);
 
 			return;
 		}
 
-		caerLog(LOG_DEBUG, "Opened output file '%s' successfully for writing.", filePath);
+		caerLog(LOG_DEBUG, moduleData, "Opened output file '%s' successfully for writing.", filePath);
 		free(filePath);
 
 		// New fd ready and opened, close old and set new.

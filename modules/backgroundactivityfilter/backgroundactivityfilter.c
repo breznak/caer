@@ -67,7 +67,7 @@ static void caerBackgroundActivityFilterRun(caerModuleData moduleData, size_t ar
 	if (state->timestampMap == NULL) {
 		if (!allocateTimestampMap(state, caerEventPacketHeaderGetEventSource(&polarity->packetHeader))) {
 			// Failed to allocate memory, nothing to do.
-			caerLog(LOG_ERROR, "Failed to allocate memory for BAFilter timestampMap.");
+			caerLog(LOG_ERROR, moduleData, "Failed to allocate memory for timestampMap.");
 			return;
 		}
 	}

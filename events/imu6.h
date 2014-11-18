@@ -41,7 +41,7 @@ static inline caerIMU6EventPacket caerIMU6EventPacketAllocate(uint32_t eventCapa
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_CRITICAL,
+		caerLog(LOG_CRITICAL, NULL,
 #endif
 			"Failed to allocate %zu bytes of memory for IMU6 Event Packet of capacity %"
 			PRIu32 " from source %" PRIu16 ". Error: %s (%d).", eventPacketSize, eventCapacity, eventSource,
@@ -72,7 +72,7 @@ static inline caerIMU6Event caerIMU6EventPacketGetEvent(caerIMU6EventPacket pack
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR,
+		caerLog(LOG_ERROR, NULL,
 #endif
 			"Called caerIMU6EventPacketGetEvent() with invalid event offset %" PRIu32 ", while maximum allowed value is %" PRIu32 ".",
 			n, caerEventPacketHeaderGetEventCapacity(&packet->packetHeader));
@@ -112,7 +112,7 @@ static inline void caerIMU6EventValidate(caerIMU6Event event, caerIMU6EventPacke
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR,
+		caerLog(LOG_ERROR, NULL,
 #endif
 			"Called caerIMU6EventValidate() on already valid event.");
 #endif
@@ -133,7 +133,7 @@ static inline void caerIMU6EventInvalidate(caerIMU6Event event, caerIMU6EventPac
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR,
+		caerLog(LOG_ERROR, NULL,
 #endif
 			"Called caerIMU6EventInvalidate() on already invalid event.");
 #endif

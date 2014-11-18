@@ -63,11 +63,16 @@ void caerModuleSMv(caerModuleFunctions moduleFunctions, caerModuleData moduleDat
 }
 
 caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortName, sshsNode mainloopNode) {
+	// Generate short module name with ID, reused in all error messages and later code.
+	size_t nameLength = (size_t) snprintf(NULL, 0, "%" PRIu16 "-%s", moduleID, moduleShortName);
+	char nameString[nameLength + 1];
+	snprintf(nameString, nameLength + 1, "%" PRIu16 "-%s", moduleID, moduleShortName);
+
 	// Allocate memory for the module.
 	caerModuleData moduleData = calloc(1, sizeof(struct caer_module_data));
 	if (moduleData == NULL) {
-		caerLog(LOG_CRITICAL, "Failed to allocate memory for module %" PRIu16 "-%s. Error: %s (%d).", moduleID,
-			moduleShortName, caerLogStrerror(errno), errno);
+		caerLog(LOG_CRITICAL, NULL, "%s: Failed to allocate memory for module. Error: %s (%d).",
+			nameString, caerLogStrerror(errno), errno);
 		pthread_exit(NULL);
 	}
 
@@ -79,14 +84,15 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	atomic_ops_uint_store(&moduleData->running, 1, ATOMIC_OPS_FENCE_FULL);
 
 	// Determine SSHS module node. Use short name for better human recognition.
-	size_t printLength = (size_t) snprintf(NULL, 0, "%" PRIu16 "-%s/", moduleID, moduleShortName);
-	char modString[printLength + 1];
-	snprintf(modString, printLength + 1, "%" PRIu16 "-%s/", moduleID, moduleShortName);
+	char sshsString[nameLength + 2];
+	strncpy(sshsString, nameString, nameLength);
+	sshsString[nameLength] = '/';
+	sshsString[nameLength + 1] = '\0';
 
 	// Initialize configuration, shutdown hooks.
-	moduleData->moduleNode = sshsGetRelativeNode(mainloopNode, modString);
+	moduleData->moduleNode = sshsGetRelativeNode(mainloopNode, sshsString);
 	if (moduleData->moduleNode == NULL) {
-		caerLog(LOG_CRITICAL, "Failed to allocate configuration node for module '%s'.", modString);
+		caerLog(LOG_CRITICAL, NULL, "%s: Failed to allocate configuration node for module.", nameString);
 		pthread_exit(NULL);
 	}
 
@@ -94,15 +100,16 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerModuleShutdownListener);
 
 	// Setup default full log string name.
-	size_t fullLogLength = (size_t) snprintf(NULL, 0, "%" PRIu16 "-%s: ", moduleID, moduleShortName);
-
-	moduleData->moduleFullLogString = malloc(fullLogLength + 1);
+	moduleData->moduleFullLogString = malloc(nameLength + 3);
 	if (moduleData->moduleFullLogString == NULL) {
-		caerLog(LOG_CRITICAL, "Failed to allocate full log string for module '%s'.", modString);
+		caerLog(LOG_CRITICAL, NULL, "%s: Failed to allocate full log string for module.", nameString);
 		pthread_exit(NULL);
 	}
 
-	snprintf(moduleData->moduleFullLogString, fullLogLength + 1, "%" PRIu16 "-%s: ", moduleID, moduleShortName);
+	strncpy(moduleData->moduleFullLogString, nameString, nameLength);
+	moduleData->moduleFullLogString[nameLength] = ':';
+	moduleData->moduleFullLogString[nameLength + 1] = ' ';
+	moduleData->moduleFullLogString[nameLength + 2] = '\0';
 
 	return (moduleData);
 }
@@ -113,8 +120,9 @@ void caerModuleDestroy(caerModuleData moduleData) {
 	free(moduleData);
 }
 
-void caerModuleSetFullLogString(caerModuleData moduleData, const char *fullLogString) {
-	// Allocate new memory for new string
+bool caerModuleSetFullLogString(caerModuleData moduleData, const char *fullLogString) {
+	// Allocate new memory for new string.
+	return (true);
 }
 
 void caerModuleConfigDefaultListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,

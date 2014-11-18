@@ -83,7 +83,7 @@ static inline void freeAllPackets(dvs128State state) {
 }
 
 static bool caerInputDVS128Init(caerModuleData moduleData) {
-	caerLog(LOG_DEBUG, "Initializing DVS128 module ...");
+	caerLog(LOG_DEBUG, moduleData, "Initializing module ...");
 
 	// First, always create all needed setting nodes, set their default values
 	// and add their listeners.
@@ -159,7 +159,7 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 		free(state->currentPolarityPacket);
 		free(state->currentSpecialPacket);
 
-		caerLog(LOG_CRITICAL, "Failed to initialize data exchange buffer.");
+		caerLog(LOG_CRITICAL, moduleData, "Failed to initialize data exchange buffer.");
 		return (false);
 	}
 
@@ -169,7 +169,7 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 		freeAllPackets(state);
 		ringBufferFree(state->dataExchangeBuffer);
 
-		caerLog(LOG_CRITICAL, "Failed to initialize libusb context. Error: %s (%d).", libusb_strerror(errno), errno);
+		caerLog(LOG_CRITICAL, moduleData, "Failed to initialize libusb context. Error: %s (%d).", libusb_strerror(errno), errno);
 		return (false);
 	}
 
@@ -181,7 +181,7 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 		ringBufferFree(state->dataExchangeBuffer);
 		libusb_exit(state->deviceContext);
 
-		caerLog(LOG_CRITICAL, "Failed to open DVS128 device.");
+		caerLog(LOG_CRITICAL, moduleData, "Failed to open DVS128 device.");
 		return (false);
 	}
 
@@ -192,27 +192,27 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 		dvs128Close(state->deviceHandle);
 		libusb_exit(state->deviceContext);
 
-		caerLog(LOG_CRITICAL, "Failed to start data acquisition thread. Error: %s (%d).", caerLogStrerror(errno),
+		caerLog(LOG_CRITICAL, moduleData, "Failed to start data acquisition thread. Error: %s (%d).", caerLogStrerror(errno),
 		errno);
 		return (false);
 	}
 
-	caerLog(LOG_DEBUG, "Initialized DVS128 module successfully with device Bus=%" PRIu8 ":Addr=%" PRIu8 ".",
+	caerLog(LOG_DEBUG, moduleData, "Initialized module successfully with device Bus=%" PRIu8 ":Addr=%" PRIu8 ".",
 		libusb_get_bus_number(libusb_get_device(state->deviceHandle)),
 		libusb_get_device_address(libusb_get_device(state->deviceHandle)));
 	return (true);
 }
 
 static void caerInputDVS128Exit(caerModuleData moduleData) {
-	caerLog(LOG_DEBUG, "Shutting down DVS128 module ...");
+	caerLog(LOG_DEBUG, moduleData, "Shutting down ...");
 
 	dvs128State state = moduleData->moduleState;
 
 	// Wait for data acquisition thread to terminate...
 	if ((errno = pthread_join(state->dataAcquisitionThread, NULL)) != 0) {
 		// This should never happen!
-		caerLog(LOG_CRITICAL, "Failed to join data acquisition thread. Error: %s (%d).", caerLogStrerror(errno),
-		errno);
+		caerLog(LOG_CRITICAL, moduleData, "Failed to join data acquisition thread. Error: %s (%d).",
+			caerLogStrerror(errno), errno);
 	}
 
 	// Finally, close the device fully.
@@ -234,7 +234,7 @@ static void caerInputDVS128Exit(caerModuleData moduleData) {
 	// Free remaining incomplete packets.
 	freeAllPackets(state);
 
-	caerLog(LOG_DEBUG, "Shutdown DVS128 module successfully.");
+	caerLog(LOG_DEBUG, moduleData, "Shutdown successful.");
 }
 
 static void caerInputDVS128Run(caerModuleData moduleData, size_t argsNumber, va_list args) {
@@ -322,11 +322,11 @@ static void caerInputDVS128Run(caerModuleData moduleData, size_t argsNumber, va_
 }
 
 static void *dvs128DataAcquisitionThread(void *inPtr) {
-	caerLog(LOG_DEBUG, "DVS128: initializing data acquisition thread ...");
-
 	// inPtr is a pointer to module data.
 	caerModuleData data = inPtr;
 	dvs128State state = data->moduleState;
+
+	caerLog(LOG_DEBUG, data, "initializing data acquisition thread ...");
 
 	// Send default start-up biases to device before enabling it.
 	dvs128SendBiases(sshsGetRelativeNode(data->moduleNode, "bias/"), state->deviceHandle);
@@ -343,7 +343,7 @@ static void *dvs128DataAcquisitionThread(void *inPtr) {
 	// Handle USB events (1 second timeout).
 	struct timeval te = { .tv_sec = 0, .tv_usec = 1000000 };
 
-	caerLog(LOG_DEBUG, "DVS128: data acquisition thread ready to process events.");
+	caerLog(LOG_DEBUG, data, "data acquisition thread ready to process events.");
 
 	while (atomic_ops_uint_load(&data->running, ATOMIC_OPS_FENCE_NONE) != 0
 		&& atomic_ops_uint_load(&state->transfersLength, ATOMIC_OPS_FENCE_NONE) > 0) {
@@ -355,7 +355,7 @@ static void *dvs128DataAcquisitionThread(void *inPtr) {
 		libusb_handle_events_timeout(state->deviceContext, &te);
 	}
 
-	caerLog(LOG_DEBUG, "DVS128: shutting down data acquisition thread ...");
+	caerLog(LOG_DEBUG, data, "shutting down data acquisition thread ...");
 
 	// Disable AER data transfer on USB end-point 6.
 	libusb_control_transfer(state->deviceHandle,
@@ -368,7 +368,7 @@ static void *dvs128DataAcquisitionThread(void *inPtr) {
 	// Ensure parent also shuts down (on disconnected device for example).
 	sshsNodePutBool(data->moduleNode, "shutdown", true);
 
-	caerLog(LOG_DEBUG, "DVS128: data acquisition thread shut down.");
+	caerLog(LOG_DEBUG, data, "data acquisition thread shut down.");
 
 	return (NULL);
 }

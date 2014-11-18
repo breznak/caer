@@ -18,7 +18,7 @@ void caerDaemonize(void) {
 
 	// Handle errors first.
 	if (result == -1) {
-		caerLog(LOG_CRITICAL, "Failed the first fork.");
+		caerLog(LOG_CRITICAL, NULL, "Daemonize: Failed the first fork.");
 		exit(EXIT_FAILURE);
 	}
 
@@ -37,7 +37,7 @@ void caerDaemonize(void) {
 
 	// Handle errors first.
 	if (result == -1) {
-		caerLog(LOG_CRITICAL, "Failed the second fork.");
+		caerLog(LOG_CRITICAL, NULL, "Daemonize: Failed the second fork.");
 		exit(EXIT_FAILURE);
 	}
 
@@ -50,7 +50,7 @@ void caerDaemonize(void) {
 	// So we must be the child here (result == 0).
 	// Ensure we don't keep directories busy.
 	if (chdir("/") != 0) {
-		caerLog(LOG_CRITICAL, "Failed to change directory to '/'.");
+		caerLog(LOG_CRITICAL, NULL, "Daemonize: Failed to change directory to '/'.");
 		exit(EXIT_FAILURE);
 	}
 
@@ -63,15 +63,15 @@ void caerDaemonize(void) {
 
 	// Redirect stdin to /dev/null and stdout/stderr to the log-file, just to be sure.
 	if (open("/dev/null", O_RDONLY) != 0) {
-		caerLog(LOG_CRITICAL, "Failed to redirect stdin to log file.");
+		caerLog(LOG_CRITICAL, NULL, "Daemonize: Failed to redirect stdin to log file.");
 		exit(EXIT_FAILURE);
 	}
 	if (dup2(3, 1) != 1) {
-		caerLog(LOG_CRITICAL, "Failed to redirect stdout to log file.");
+		caerLog(LOG_CRITICAL, NULL, "Daemonize: Failed to redirect stdout to log file.");
 		exit(EXIT_FAILURE);
 	}
 	if (dup2(3, 2) != 2) {
-		caerLog(LOG_CRITICAL, "Failed to redirect stderr to log file.");
+		caerLog(LOG_CRITICAL, NULL, "Daemonize: Failed to redirect stderr to log file.");
 		exit(EXIT_FAILURE);
 	}
 
