@@ -34,7 +34,7 @@ caerMainloopData caerMainloopGetReference(void) {
 void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numLoops) {
 	if (numLoops == 0) {
 		// Nothing to start, exit right away.
-		caerLog(LOG_CRITICAL, NULL, "Mainloop: The number of Mainloops to start is specified at zero: nothing to start!");
+		caerLog(LOG_CRITICAL, "Mainloop", "The number of Mainloops to start is specified at zero: nothing to start!");
 		return;
 	}
 
@@ -49,13 +49,13 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 	sigaddset(&shutdown.sa_mask, SIGINT);
 
 	if (sigaction(SIGTERM, &shutdown, NULL) == -1) {
-		caerLog(LOG_CRITICAL, NULL, "Mainloop: Failed to set signal handler for SIGTERM. Error: %s (%d).",
+		caerLog(LOG_CRITICAL, "Mainloop", "Failed to set signal handler for SIGTERM. Error: %s (%d).",
 			caerLogStrerror(errno), errno);
 		exit(EXIT_FAILURE);
 	}
 
 	if (sigaction(SIGINT, &shutdown, NULL) == -1) {
-		caerLog(LOG_CRITICAL, NULL, "Mainloop: Failed to set signal handler for SIGINT. Error: %s (%d).",
+		caerLog(LOG_CRITICAL, "Mainloop", "Failed to set signal handler for SIGINT. Error: %s (%d).",
 			caerLogStrerror(errno), errno);
 		exit(EXIT_FAILURE);
 	}
@@ -73,7 +73,7 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 	mainloopThreads.loopThreadsLength = numLoops;
 	mainloopThreads.loopThreads = calloc(mainloopThreads.loopThreadsLength, sizeof(struct caer_mainloop_data));
 	if (mainloopThreads.loopThreads == NULL) {
-		caerLog(LOG_CRITICAL, NULL, "Mainloop: Failed to allocate memory for main-loops. Error: %s (%d).",
+		caerLog(LOG_CRITICAL, "Mainloop", "Failed to allocate memory for main-loops. Error: %s (%d).",
 			caerLogStrerror(errno), errno);
 		exit(EXIT_FAILURE);
 	}
@@ -100,7 +100,8 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 
 		if ((errno = pthread_create(&mainloopThreads.loopThreads[i].mainloop, NULL, &caerMainloopRunner,
 			&mainloopThreads.loopThreads[i])) != 0) {
-			caerLog(LOG_CRITICAL, NULL, "Mainloop: Failed to create main-loop %" PRIu16 " thread. Error: %s (%d).",
+			caerLog(LOG_CRITICAL, sshsNodeGetName(mainloopThreads.loopThreads[i].mainloopNode),
+				"Failed to create main-loop %" PRIu16 " thread. Error: %s (%d).",
 				mainloopThreads.loopThreads[i].mainloopID, caerLogStrerror(errno), errno);
 			// TODO: better cleanup on failure?
 			exit(EXIT_FAILURE);
@@ -121,7 +122,8 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 	// ... and then wait for their clean shutdown.
 	for (size_t i = 0; i < mainloopThreads.loopThreadsLength; i++) {
 		if ((errno = pthread_join(mainloopThreads.loopThreads[i].mainloop, NULL) != 0)) {
-			caerLog(LOG_CRITICAL, NULL, "Mainloop: Failed to join main-loop %" PRIu16 " thread. Error: %s (%d).",
+			caerLog(LOG_CRITICAL, sshsNodeGetName(mainloopThreads.loopThreads[i].mainloopNode),
+				"Failed to join main-loop %" PRIu16 " thread. Error: %s (%d).",
 				mainloopThreads.loopThreads[i].mainloopID, caerLogStrerror(errno), errno);
 			// TODO: better cleanup on failure?
 			exit(EXIT_FAILURE);
@@ -245,7 +247,8 @@ sshsNode caerMainloopGetSourceInfo(uint16_t source) {
 	if (moduleData == NULL) {
 		// This is impossible if used correctly, you can't have a packet with
 		// an event source X and that event source doesn't exist ...
-		caerLog(LOG_CRITICAL, NULL, "Mainloop: Impossible to get module data for source ID %" PRIu16 ".", source);
+		caerLog(LOG_CRITICAL, sshsNodeGetName(mainloopData->mainloopNode),
+			"Impossible to get module data for source ID %" PRIu16 ".", source);
 		pthread_exit(NULL);
 	}
 

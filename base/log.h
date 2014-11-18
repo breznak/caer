@@ -9,7 +9,6 @@
 #define LOG_H_
 
 #include "main.h"
-#include "module.h"
 #include <stdarg.h>
 
 // Debug severity levels
@@ -24,7 +23,7 @@
 
 void caerLogInit(void);
 void caerLogDisableConsole(void);
-void caerLog(uint8_t logLevel, caerModuleData modData, const char *format, ...) __attribute__ ((format (printf, 3, 4)));
-const char *caerLogStrerror(int errnum);
+void caerLog(uint8_t logLevel, const char *subSystem, const char *format, ...) __attribute__ ((format (printf, 3, 4)));
+const char *caerLogStrerror(int errNum);
 
 #endif /* LOG_H_ */

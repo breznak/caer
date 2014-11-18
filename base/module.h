@@ -25,7 +25,7 @@ struct caer_module_data {
 	atomic_ops_uint running;
 	atomic_ops_uint configUpdate;
 	void *moduleState;
-	char *moduleFullLogString;
+	char *moduleSubSystemString;
 };
 
 typedef struct caer_module_data *caerModuleData;
@@ -48,7 +48,7 @@ void caerModuleSM(caerModuleFunctions moduleFunctions, caerModuleData moduleData
 void caerModuleSMv(caerModuleFunctions moduleFunctions, caerModuleData moduleData, size_t memSize, size_t argsNumber,
 	va_list args);
 caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortName, sshsNode mainloopNode);
-bool caerModuleSetFullLogString(caerModuleData moduleData, const char *fullLogString);
+bool caerModuleSetSubSystemString(caerModuleData moduleData, const char *subSystemString);
 void caerModuleDestroy(caerModuleData moduleData);
 void caerModuleConfigDefaultListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);

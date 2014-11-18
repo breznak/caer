@@ -41,7 +41,7 @@ static inline caerPolarityEventPacket caerPolarityEventPacketAllocate(uint32_t e
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_CRITICAL, NULL,
+		caerLog(LOG_CRITICAL, "caerPolarityEventPacketAllocate()",
 #endif
 			"Failed to allocate %zu bytes of memory for Polarity Event Packet of capacity %"
 			PRIu32 " from source %" PRIu16 ". Error: %s (%d).", eventPacketSize, eventCapacity, eventSource,
@@ -72,7 +72,7 @@ static inline caerPolarityEvent caerPolarityEventPacketGetEvent(caerPolarityEven
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerPolarityEventPacketGetEvent()",
 #endif
 			"Called caerPolarityEventPacketGetEvent() with invalid event offset %" PRIu32 ", while maximum allowed value is %" PRIu32 ".",
 			n, caerEventPacketHeaderGetEventCapacity(&packet->packetHeader));
@@ -112,7 +112,7 @@ static inline void caerPolarityEventValidate(caerPolarityEvent event, caerPolari
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerPolarityEventValidate()",
 #endif
 			"Called caerPolarityEventValidate() on already valid event.");
 #endif
@@ -133,7 +133,7 @@ static inline void caerPolarityEventInvalidate(caerPolarityEvent event, caerPola
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerPolarityEventInvalidate()",
 #endif
 			"Called caerPolarityEventInvalidate() on already invalid event.");
 #endif

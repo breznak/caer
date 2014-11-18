@@ -43,7 +43,7 @@ static inline caerSpecialEventPacket caerSpecialEventPacketAllocate(uint32_t eve
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_CRITICAL, NULL,
+		caerLog(LOG_CRITICAL, "caerSpecialEventPacketAllocate()",
 #endif
 			"Failed to allocate %zu bytes of memory for Special Event Packet of capacity %"
 			PRIu32 " from source %" PRIu16 ". Error: %s (%d).", eventPacketSize, eventCapacity, eventSource,
@@ -74,7 +74,7 @@ static inline caerSpecialEvent caerSpecialEventPacketGetEvent(caerSpecialEventPa
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerSpecialEventPacketGetEvent()",
 #endif
 			"Called caerSpecialEventPacketGetEvent() with invalid event offset %" PRIu32 ", while maximum allowed value is %" PRIu32 ".",
 			n, caerEventPacketHeaderGetEventCapacity(&packet->packetHeader));
@@ -114,7 +114,7 @@ static inline void caerSpecialEventValidate(caerSpecialEvent event, caerSpecialE
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerSpecialEventValidate()",
 #endif
 			"Called caerSpecialEventValidate() on already valid event.");
 #endif
@@ -135,7 +135,7 @@ static inline void caerSpecialEventInvalidate(caerSpecialEvent event, caerSpecia
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerSpecialEventInvalidate()",
 #endif
 			"Called caerSpecialEventInvalidate() on already invalid event.");
 #endif

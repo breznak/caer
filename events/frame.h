@@ -51,7 +51,7 @@ static inline caerFrameEventPacket caerFrameEventPacketAllocate(uint32_t eventCa
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_CRITICAL, NULL,
+		caerLog(LOG_CRITICAL, "caerFrameEventPacketAllocate()",
 #endif
 			"Failed to allocate %zu bytes of memory for Frame Event Packet of capacity %"
 			PRIu32 " from source %" PRIu16 ". Error: %s (%d).", eventPacketSize, eventCapacity, eventSource,
@@ -82,7 +82,7 @@ static inline caerFrameEvent caerFrameEventPacketGetEvent(caerFrameEventPacket p
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerFrameEventPacketGetEvent()",
 #endif
 			"Called caerFrameEventPacketGetEvent() with invalid event offset %" PRIu32 ", while maximum allowed value is %" PRIu32 ".",
 			n, caerEventPacketHeaderGetEventCapacity(&packet->packetHeader));
@@ -147,7 +147,7 @@ static inline void caerFrameEventValidate(caerFrameEvent event, caerFrameEventPa
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerFrameEventValidate()",
 #endif
 			"Called caerFrameEventValidate() on already valid event.");
 #endif
@@ -168,7 +168,7 @@ static inline void caerFrameEventInvalidate(caerFrameEvent event, caerFrameEvent
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerFrameEventInvalidate()",
 #endif
 			"Called caerFrameEventInvalidate() on already invalid event.");
 #endif
@@ -205,7 +205,7 @@ static inline void caerFrameEventSetLengthXY(caerFrameEvent event, caerFrameEven
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerFrameEventSetLengthXY()",
 #endif
 			"Called caerFrameEventSetLengthXY() with lengthX=%" PRIu16 " and lengthY=%" PRIu16 ", needing %" PRIu32 " bytes, while storage is possible only for up to %" PRIu32 " bytes.",
 			lengthX, lengthY, neededBytes, maxBytes);
@@ -224,7 +224,7 @@ static inline uint16_t caerFrameEventGetPixel(caerFrameEvent event, uint16_t xAd
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerFrameEventGetPixel()",
 #endif
 			"Called caerFrameEventGetPixel() with invalid Y address of %" PRIu16 ", should be between 0 and %" PRIu16 ".",
 			yAddress, caerFrameEventGetLengthY(event) - 1);
@@ -239,7 +239,7 @@ static inline uint16_t caerFrameEventGetPixel(caerFrameEvent event, uint16_t xAd
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerFrameEventGetPixel()",
 #endif
 			"Called caerFrameEventGetPixel() with invalid X address of %" PRIu16 ", should be between 0 and %" PRIu16 ".",
 			xAddress, xLength - 1);
@@ -259,7 +259,7 @@ static inline void caerFrameEventSetPixel(caerFrameEvent event, uint16_t xAddres
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerFrameEventSetPixel()",
 #endif
 			"Called caerFrameEventSetPixel() with invalid Y address of %" PRIu16 ", should be between 0 and %" PRIu16 ".",
 			yAddress, caerFrameEventGetLengthY(event) - 1);
@@ -274,7 +274,7 @@ static inline void caerFrameEventSetPixel(caerFrameEvent event, uint16_t xAddres
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerFrameEventSetPixel()",
 #endif
 			"Called caerFrameEventSetPixel() with invalid X address of %" PRIu16 ", should be between 0 and %" PRIu16 ".",
 			xAddress, xLength - 1);
@@ -294,7 +294,7 @@ static inline uint16_t caerFrameEventGetPixelForChannel(caerFrameEvent event, ui
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerFrameEventGetPixelForChannel()",
 #endif
 			"Called caerFrameEventGetPixelForChannel() with invalid Y address of %" PRIu16 ", should be between 0 and %" PRIu16 ".",
 			yAddress, caerFrameEventGetLengthY(event) - 1);
@@ -309,7 +309,7 @@ static inline uint16_t caerFrameEventGetPixelForChannel(caerFrameEvent event, ui
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerFrameEventGetPixelForChannel()",
 #endif
 			"Called caerFrameEventGetPixelForChannel() with invalid X address of %" PRIu16 ", should be between 0 and %" PRIu16 ".",
 			xAddress, xLength - 1);
@@ -324,7 +324,7 @@ static inline uint16_t caerFrameEventGetPixelForChannel(caerFrameEvent event, ui
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerFrameEventGetPixelForChannel()",
 #endif
 			"Called caerFrameEventGetPixelForChannel() with invalid channel number of %" PRIu16 ", should be between 0 and %" PRIu16 ".",
 			channel, channelNumber - 1);
@@ -344,7 +344,7 @@ static inline void caerFrameEventSetPixelForChannel(caerFrameEvent event, uint16
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerFrameEventSetPixelForChannel()",
 #endif
 			"Called caerFrameEventSetPixelForChannel() with invalid Y address of %" PRIu16 ", should be between 0 and %" PRIu16 ".",
 			yAddress, caerFrameEventGetLengthY(event) - 1);
@@ -359,7 +359,7 @@ static inline void caerFrameEventSetPixelForChannel(caerFrameEvent event, uint16
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerFrameEventSetPixelForChannel()",
 #endif
 			"Called caerFrameEventSetPixelForChannel() with invalid X address of %" PRIu16 ", should be between 0 and %" PRIu16 ".",
 			xAddress, xLength - 1);
@@ -374,7 +374,7 @@ static inline void caerFrameEventSetPixelForChannel(caerFrameEvent event, uint16
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerFrameEventSetPixelForChannel()",
 #endif
 			"Called caerFrameEventSetPixelForChannel() with invalid channel number of %" PRIu16 ", should be between 0 and %" PRIu16 ".",
 			channel, channelNumber - 1);

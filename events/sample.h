@@ -39,7 +39,7 @@ static inline caerSampleEventPacket caerSampleEventPacketAllocate(uint32_t event
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_CRITICAL, NULL,
+		caerLog(LOG_CRITICAL, "caerSampleEventPacketAllocate()",
 #endif
 			"Failed to allocate %zu bytes of memory for Sample Event Packet of capacity %"
 			PRIu32 " from source %" PRIu16 ". Error: %s (%d).", eventPacketSize, eventCapacity, eventSource,
@@ -70,7 +70,7 @@ static inline caerSampleEvent caerSampleEventPacketGetEvent(caerSampleEventPacke
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerSampleEventPacketGetEvent()",
 #endif
 			"Called caerSampleEventPacketGetEvent() with invalid event offset %" PRIu32 ", while maximum allowed value is %" PRIu32 ".",
 			n, caerEventPacketHeaderGetEventCapacity(&packet->packetHeader));
@@ -110,7 +110,7 @@ static inline void caerSampleEventValidate(caerSampleEvent event, caerSampleEven
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerSampleEventValidate()",
 #endif
 			"Called caerSampleEventValidate() on already valid event.");
 #endif
@@ -131,7 +131,7 @@ static inline void caerSampleEventInvalidate(caerSampleEvent event, caerSampleEv
 #if defined(PRINTF_LOG)
 		fprintf(stderr,
 #else
-		caerLog(LOG_ERROR, NULL,
+		caerLog(LOG_ERROR, "caerSampleEventInvalidate()",
 #endif
 			"Called caerSampleEventInvalidate() on already invalid event.");
 #endif

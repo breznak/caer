@@ -4,7 +4,7 @@
 
 #define CHECK_MONOTONIC_TIMESTAMP(CURR_TS, LAST_TS) \
 	if (CURR_TS <= LAST_TS) { \
-		caerLog(LOG_ALERT, \
+		caerLog(LOG_ALERT, state->sourceSubSystemString, \
 			"DAVISFX3: non-monotonic time-stamp detected: lastTimestamp=%" PRIu32 ", currentTimestamp=%" PRIu32 ", difference=%" PRIu32 ".", \
 			LAST_TS, CURR_TS, (LAST_TS - CURR_TS)); \
 	}
@@ -305,7 +305,7 @@ void allocateDataTransfers(davisCommonState state, uint32_t bufferNum, uint32_t 
 	// Set number of transfers and allocate memory for the main transfer array.
 	state->dataTransfers = calloc(bufferNum, sizeof(struct libusb_transfer *));
 	if (state->dataTransfers == NULL) {
-		caerLog(LOG_CRITICAL,
+		caerLog(LOG_CRITICAL, state->sourceSubSystemString,
 			"Failed to allocate memory for %" PRIu32 " libusb transfers (data channel). Error: %s (%d).", bufferNum,
 			caerLogStrerror(errno), errno);
 		return;
@@ -315,8 +315,8 @@ void allocateDataTransfers(davisCommonState state, uint32_t bufferNum, uint32_t 
 	for (size_t i = 0; i < bufferNum; i++) {
 		state->dataTransfers[i] = libusb_alloc_transfer(0);
 		if (state->dataTransfers[i] == NULL) {
-			caerLog(LOG_CRITICAL, "Unable to allocate further libusb transfers (data channel, %zu of %" PRIu32 ").", i,
-				bufferNum);
+			caerLog(LOG_CRITICAL, state->sourceSubSystemString, "Unable to allocate further libusb transfers (data channel, %zu of %" PRIu32 ").",
+				i, bufferNum);
 			return;
 		}
 
@@ -324,7 +324,7 @@ void allocateDataTransfers(davisCommonState state, uint32_t bufferNum, uint32_t 
 		state->dataTransfers[i]->length = (int) bufferSize;
 		state->dataTransfers[i]->buffer = malloc(bufferSize);
 		if (state->dataTransfers[i]->buffer == NULL) {
-			caerLog(LOG_CRITICAL, "Unable to allocate buffer for libusb transfer %zu (data channel). Error: %s (%d).",
+			caerLog(LOG_CRITICAL, state->sourceSubSystemString, "Unable to allocate buffer for libusb transfer %zu (data channel). Error: %s (%d).",
 				i, caerLogStrerror(errno), errno);
 
 			libusb_free_transfer(state->dataTransfers[i]);
@@ -346,7 +346,7 @@ void allocateDataTransfers(davisCommonState state, uint32_t bufferNum, uint32_t 
 			atomic_ops_uint_inc(&state->dataTransfersLength, ATOMIC_OPS_FENCE_NONE);
 		}
 		else {
-			caerLog(LOG_CRITICAL, "Unable to submit libusb transfer %zu (data channel). Error: %s (%d).", i,
+			caerLog(LOG_CRITICAL, state->sourceSubSystemString, "Unable to submit libusb transfer %zu (data channel). Error: %s (%d).", i,
 				libusb_strerror(errno), errno);
 
 			// The transfer buffer is freed automatically here thanks to
@@ -367,8 +367,8 @@ void deallocateDataTransfers(davisCommonState state) {
 	for (size_t i = 0; i < transfersNum; i++) {
 		errno = libusb_cancel_transfer(state->dataTransfers[i]);
 		if (errno != LIBUSB_SUCCESS && errno != LIBUSB_ERROR_NOT_FOUND) {
-			caerLog(LOG_CRITICAL, "Unable to cancel libusb transfer %zu (data channel). Error: %s (%d).", i,
-				libusb_strerror(errno), errno);
+			caerLog(LOG_CRITICAL, state->sourceSubSystemString, "Unable to cancel libusb transfer %zu (data channel). Error: %s (%d).",
+				i, libusb_strerror(errno), errno);
 			// Proceed with canceling all transfers regardless of errors.
 		}
 	}
@@ -409,7 +409,7 @@ static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer) {
 static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytesSent) {
 	// Truncate off any extra partial event.
 	if ((bytesSent & 0x01) != 0) {
-		caerLog(LOG_ALERT, "%zu bytes sent via USB, which is not a multiple of two.", bytesSent);
+		caerLog(LOG_ALERT, state->sourceSubSystemString, "%zu bytes sent via USB, which is not a multiple of two.", bytesSent);
 		bytesSent &= (size_t) ~0x01;
 	}
 
@@ -436,7 +436,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 				case 0: // Special event
 					switch (data) {
 						case 0: // Ignore this, but log it.
-							caerLog(LOG_ERROR, "Caught special reserved event!");
+							caerLog(LOG_ERROR, state->sourceSubSystemString, "Caught special reserved event!");
 							break;
 
 						case 1: { // Timetamp reset
@@ -446,7 +446,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							state->dvsTimestamp = 0;
 							state->imuTimestamp = 0;
 
-							caerLog(LOG_DEBUG, "Timestamp reset event received.");
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "Timestamp reset event received.");
 
 							// Create timestamp reset event.
 							caerSpecialEvent currentResetEvent = caerSpecialEventPacketGetEvent(
@@ -480,7 +480,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							break;
 
 						case 8: { // APS Frame Start
-							caerLog(LOG_DEBUG, "APS Frame Start");
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Frame Start");
 
 							state->apsCurrentReadoutType = APS_READOUT_RESET;
 							for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
@@ -502,15 +502,15 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						}
 
 						case 9: { // APS Frame End
-							caerLog(LOG_DEBUG, "APS Frame End");
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Frame End");
 
 							bool validFrame = true;
 
 							for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
-								caerLog(LOG_DEBUG, "APS Frame End: CountX[%zu] is %d.", j, state->apsCountX[j]);
+								caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Frame End: CountX[%zu] is %d.", j, state->apsCountX[j]);
 
 								if (state->apsCountX[j] != DAVIS_ARRAY_SIZE_X) {
-									caerLog(LOG_ERROR, "APS Frame End: wrong column count [%zu - %d] detected.",
+									caerLog(LOG_ERROR, state->sourceSubSystemString, "APS Frame End: wrong column count [%zu - %d] detected.",
 										j, state->apsCountX[j]);
 									validFrame = false;
 								}
@@ -531,7 +531,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						}
 
 						case 10: { // APS Reset Column Start
-							caerLog(LOG_DEBUG, "APS Reset Column Start");
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Reset Column Start");
 
 							state->apsCurrentReadoutType = APS_READOUT_RESET;
 							state->apsCountY[state->apsCurrentReadoutType] = 0;
@@ -549,7 +549,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						}
 
 						case 11: { // APS Signal Column Start
-							caerLog(LOG_DEBUG, "APS Signal Column Start");
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Signal Column Start");
 
 							state->apsCurrentReadoutType = APS_READOUT_SIGNAL;
 							state->apsCountY[state->apsCurrentReadoutType] = 0;
@@ -566,15 +566,15 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						}
 
 						case 12: { // APS Column End
-							caerLog(LOG_DEBUG, "APS Column End");
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End");
 
 							if (state->apsCountY[state->apsCurrentReadoutType] != DAVIS_ARRAY_SIZE_Y) {
-								caerLog(LOG_ERROR, "APS Column End: wrong row count [%d - %d] detected.",
+								caerLog(LOG_ERROR, state->sourceSubSystemString, "APS Column End: wrong row count [%d - %d] detected.",
 									state->apsCurrentReadoutType, state->apsCountY[state->apsCurrentReadoutType]);
 							}
 
-							caerLog(LOG_DEBUG, "APS Column End: CountX[%d] is %d.", state->apsCurrentReadoutType, state->apsCountX[state->apsCurrentReadoutType]);
-							caerLog(LOG_DEBUG, "APS Column End: CountY[%d] is %d.", state->apsCurrentReadoutType, state->apsCountY[state->apsCurrentReadoutType]);
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End: CountX[%d] is %d.", state->apsCurrentReadoutType, state->apsCountX[state->apsCurrentReadoutType]);
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End: CountY[%d] is %d.", state->apsCurrentReadoutType, state->apsCountY[state->apsCurrentReadoutType]);
 
 							state->apsCountX[state->apsCurrentReadoutType]++;
 
@@ -608,8 +608,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 									htole16(U16T(state->apsCurrentResetFrame[pixelPosition] - 0xFFFF));
 							}
 
-							caerLog(LOG_INFO, "APS ADC Overflow");
-							caerLog(LOG_DEBUG, "APS ADC Overflow: row is %d.", state->apsCountY[state->apsCurrentReadoutType]);
+							caerLog(LOG_WARNING, state->sourceSubSystemString, "APS ADC Overflow");
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS ADC Overflow: row is %d.", state->apsCountY[state->apsCurrentReadoutType]);
 
 							state->apsCountY[state->apsCurrentReadoutType]++;
 
@@ -617,7 +617,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						}
 
 						default:
-							caerLog(LOG_ERROR, "Caught special event that can't be handled.");
+							caerLog(LOG_ERROR, state->sourceSubSystemString, "Caught special event that can't be handled.");
 							break;
 					}
 					break;
@@ -625,7 +625,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 				case 1: // Y address
 					// Check range conformity.
 					if (data >= DAVIS_ARRAY_SIZE_Y) {
-						caerLog(LOG_ALERT, "Y address out of range (0-%d): %" PRIu16 ".",
+						caerLog(LOG_ALERT, state->sourceSubSystemString, "Y address out of range (0-%d): %" PRIu16 ".",
 						DAVIS_ARRAY_SIZE_Y - 1, data);
 						continue; // Skip invalid Y address (don't update lastY).
 					}
@@ -639,7 +639,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						caerSpecialEventSetData(currentRowOnlyEvent, state->lastY);
 						caerSpecialEventValidate(currentRowOnlyEvent, state->currentSpecialPacket);
 
-						caerLog(LOG_DEBUG, "Row-only event at address Y=%" PRIu16 ".", state->lastY);
+						caerLog(LOG_DEBUG, state->sourceSubSystemString, "Row-only event at address Y=%" PRIu16 ".", state->lastY);
 					}
 
 					state->lastY = data;
@@ -652,7 +652,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 				case 3: { // X address, Polarity ON
 					// Check range conformity.
 					if (data >= DAVIS_ARRAY_SIZE_X) {
-						caerLog(LOG_ALERT, "X address out of range (0-%d): %" PRIu16 ".",
+						caerLog(LOG_ALERT, state->sourceSubSystemString, "X address out of range (0-%d): %" PRIu16 ".",
 						DAVIS_ARRAY_SIZE_X - 1, data);
 						continue; // Skip invalid event.
 					}
@@ -696,8 +696,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							htole16(U16T(state->apsCurrentResetFrame[pixelPosition] - data));
 					}
 
-					caerLog(LOG_DEBUG, "APS ADC Sample");
-					caerLog(LOG_DEBUG, "APS ADC Sample: row is %d.", state->apsCountY[state->apsCurrentReadoutType]);
+					caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS ADC Sample: row is %d.", state->apsCountY[state->apsCurrentReadoutType]);
 
 					state->apsCountY[state->apsCurrentReadoutType]++;
 
@@ -721,11 +720,11 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					// Check monotonicity of timestamps.
 					CHECK_MONOTONIC_TIMESTAMP(state->currentTimestamp, state->lastTimestamp);
 
-					caerLog(LOG_DEBUG, "Timestamp wrap event received with multiplier of %" PRIu16 ".", data);
+					caerLog(LOG_DEBUG, state->sourceSubSystemString, "Timestamp wrap event received with multiplier of %" PRIu16 ".", data);
 					break;
 
 				default:
-					caerLog(LOG_ERROR, "Caught event that can't be handled.");
+					caerLog(LOG_ERROR, state->sourceSubSystemString, "Caught event that can't be handled.");
 					break;
 			}
 		}
@@ -744,7 +743,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 			if (!ringBufferPut(state->dataExchangeBuffer, state->currentPolarityPacket)) {
 				// Failed to forward packet, drop it.
 				free(state->currentPolarityPacket);
-				caerLog(LOG_INFO, "Dropped Polarity Event Packet because ring-buffer full!");
+				caerLog(LOG_INFO, state->sourceSubSystemString, "Dropped Polarity Event Packet because ring-buffer full!");
 			}
 			else {
 				caerMainloopDataAvailableIncrease(state->mainloopNotify);
@@ -775,7 +774,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 				else {
 					// Failed to forward packet, drop it.
 					free(state->currentSpecialPacket);
-					caerLog(LOG_INFO, "Dropped Special Event Packet because ring-buffer full!");
+					caerLog(LOG_INFO, state->sourceSubSystemString, "Dropped Special Event Packet because ring-buffer full!");
 				}
 			}
 			else {
@@ -799,7 +798,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 			if (!ringBufferPut(state->dataExchangeBuffer, state->currentFramePacket)) {
 				// Failed to forward packet, drop it.
 				free(state->currentFramePacket);
-				caerLog(LOG_INFO, "Dropped Frame Event Packet because ring-buffer full!");
+				caerLog(LOG_INFO, state->sourceSubSystemString, "Dropped Frame Event Packet because ring-buffer full!");
 			}
 			else {
 				caerMainloopDataAvailableIncrease(state->mainloopNotify);

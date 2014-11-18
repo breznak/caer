@@ -60,7 +60,7 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	// Open a TCP server socket for others to connect to.
 	state->serverDescriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (state->serverDescriptor < 0) {
-		caerLog(LOG_CRITICAL, moduleData, "Could not create TCP server socket. Error: %s (%d).", caerLogStrerror(errno), errno);
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create TCP server socket. Error: %s (%d).", caerLogStrerror(errno), errno);
 		return (false);
 	}
 
@@ -69,7 +69,7 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 
 	// Set server socket, on which accept() is called, to non-blocking mode.
 	if (!socketBlockingMode(state->serverDescriptor, false)) {
-		caerLog(LOG_CRITICAL, moduleData, "Could not set TCP server socket to non-blocking mode.");
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not set TCP server socket to non-blocking mode.");
 		close(state->serverDescriptor);
 		return (false);
 	}
@@ -85,7 +85,7 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 
 	// Bind socket to above address.
 	if (bind(state->serverDescriptor, (struct sockaddr *) &tcpServer, sizeof(struct sockaddr_in)) < 0) {
-		caerLog(LOG_CRITICAL, moduleData, "Could not bind TCP server socket. Error: %s (%d).",
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not bind TCP server socket. Error: %s (%d).",
 			caerLogStrerror(errno), errno);
 		close(state->serverDescriptor);
 		return (false);
@@ -93,7 +93,7 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 
 	// Listen to new connections on the socket.
 	if (listen(state->serverDescriptor, sshsNodeGetShort(moduleData->moduleNode, "backlogSize")) < 0) {
-		caerLog(LOG_CRITICAL, moduleData, "Could not listen on TCP server socket. Error: %s (%d).",
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not listen on TCP server socket. Error: %s (%d).",
 			caerLogStrerror(errno), errno);
 		close(state->serverDescriptor);
 		return (false);
@@ -103,7 +103,7 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	state->clientDescriptorsLength = sshsNodeGetShort(moduleData->moduleNode, "concurrentConnections");
 	state->clientDescriptors = malloc(state->clientDescriptorsLength * sizeof(*(state->clientDescriptors)));
 	if (state->clientDescriptors == NULL) {
-		caerLog(LOG_CRITICAL, moduleData, "Could not allocate memory for TCP client descriptors. Error: %s (%d).",
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not allocate memory for TCP client descriptors. Error: %s (%d).",
 			caerLogStrerror(errno), errno);
 		close(state->serverDescriptor);
 		return (false);
@@ -124,17 +124,17 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	if (state->validOnly) {
 		state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
 		if (state->sgioMemory == NULL) {
-			caerLog(LOG_ALERT, moduleData, "Impossible to allocate memory for scatter/gather IO, using memory copy method.");
+			caerLog(LOG_ALERT, moduleData->moduleSubSystemString, "Impossible to allocate memory for scatter/gather IO, using memory copy method.");
 		}
 		else {
-			caerLog(LOG_INFO, moduleData, "Using scatter/gather IO for outputting valid events only.");
+			caerLog(LOG_INFO, moduleData->moduleSubSystemString, "Using scatter/gather IO for outputting valid events only.");
 		}
 	}
 	else {
 		state->sgioMemory = NULL;
 	}
 
-	caerLog(LOG_INFO, moduleData, "TCP server socket connected to %s:%" PRIu16 ".", inet_ntoa(tcpServer.sin_addr),
+	caerLog(LOG_INFO, moduleData->moduleSubSystemString, "TCP server socket connected to %s:%" PRIu16 ".", inet_ntoa(tcpServer.sin_addr),
 		ntohs(tcpServer.sin_port));
 
 	return (true);
@@ -148,7 +148,7 @@ static void caerOutputNetTCPServerConnectionHandler(caerModuleData moduleData) {
 	int pollResult = poll(state->clientDescriptors, state->clientDescriptorsLength, 0);
 	if (pollResult < 0) {
 		// Poll failure. Log and then continue.
-		caerLog(LOG_ERROR, moduleData, "TCP server poll() failed. Error: %s (%d).", caerLogStrerror(errno), errno);
+		caerLog(LOG_ERROR, moduleData->moduleSubSystemString, "TCP server poll() failed. Error: %s (%d).", caerLogStrerror(errno), errno);
 	}
 
 	// Handle clients that have inbound data (close() calls).
@@ -163,12 +163,12 @@ static void caerOutputNetTCPServerConnectionHandler(caerModuleData moduleData) {
 				if (recvResult <= 0) {
 					// Recv failure or closed connection.
 					close(state->clientDescriptors[c].fd);
-					caerLog(LOG_DEBUG, moduleData, "Disconnected TCP client on recv (fd %d).", state->clientDescriptors[c].fd);
+					caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Disconnected TCP client on recv (fd %d).", state->clientDescriptors[c].fd);
 					state->clientDescriptors[c].fd = -1;
 				}
 				else {
 					// Incoming data: what?
-					caerLog(LOG_ERROR, moduleData, "Incoming data from client on TCP server. Clients should never send data!");
+					caerLog(LOG_ERROR, moduleData->moduleSubSystemString, "Incoming data from client on TCP server. Clients should never send data!");
 				}
 			}
 		}
@@ -179,7 +179,7 @@ static void caerOutputNetTCPServerConnectionHandler(caerModuleData moduleData) {
 	int acceptResult = accept(state->serverDescriptor, NULL, NULL);
 	if (acceptResult < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
 		// Accept failure (but not would-block error). Log and then continue.
-		caerLog(LOG_ERROR, moduleData, "TCP server accept() failed. Error: %s (%d).", caerLogStrerror(errno), errno);
+		caerLog(LOG_ERROR, moduleData->moduleSubSystemString, "TCP server accept() failed. Error: %s (%d).", caerLogStrerror(errno), errno);
 	}
 
 	// New connection present!
@@ -199,10 +199,10 @@ static void caerOutputNetTCPServerConnectionHandler(caerModuleData moduleData) {
 		// No space for new connection, just close it (client will exit).
 		if (!putInFDList) {
 			close(acceptResult);
-			caerLog(LOG_DEBUG, moduleData, "Rejected TCP client (fd %d), queue full.", acceptResult);
+			caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Rejected TCP client (fd %d), queue full.", acceptResult);
 		}
 		else {
-			caerLog(LOG_DEBUG, moduleData, "Accepted new TCP connection from client (fd %d).", acceptResult);
+			caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Accepted new TCP connection from client (fd %d).", acceptResult);
 		}
 	}
 }
@@ -226,7 +226,8 @@ static void caerOutputNetTCPServerRun(caerModuleData moduleData, size_t argsNumb
 				// Send to each connected client.
 				for (size_t c = 0; c < state->clientDescriptorsLength; c++) {
 					if (state->clientDescriptors[c].fd >= 0) {
-						caerOutputCommonSend(packetHeader, state->clientDescriptors[c].fd, state->sgioMemory,
+						caerOutputCommonSend(moduleData->moduleSubSystemString, packetHeader,
+							state->clientDescriptors[c].fd, state->sgioMemory,
 							state->validOnly, state->excludeHeader, state->maxBytesPerPacket);
 					}
 				}
@@ -254,11 +255,11 @@ static void caerOutputNetTCPServerConfig(caerModuleData moduleData) {
 
 				state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
 				if (state->sgioMemory == NULL) {
-					caerLog(LOG_ALERT, moduleData,
+					caerLog(LOG_ALERT, moduleData->moduleSubSystemString,
 						"Impossible to allocate memory for scatter/gather IO, using memory copy method.");
 				}
 				else {
-					caerLog(LOG_INFO, moduleData, "Using scatter/gather IO for outputting valid events only.");
+					caerLog(LOG_INFO, moduleData->moduleSubSystemString, "Using scatter/gather IO for outputting valid events only.");
 				}
 			}
 			else {
@@ -285,7 +286,7 @@ static void caerOutputNetTCPServerConfig(caerModuleData moduleData) {
 		// Open a TCP socket on which to listen for connections.
 		int newServerDescriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (newServerDescriptor < 0) {
-			caerLog(LOG_CRITICAL, moduleData, "Could not create TCP socket. Error: %s (%d).", caerLogStrerror(errno), errno);
+			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create TCP socket. Error: %s (%d).", caerLogStrerror(errno), errno);
 			goto configUpdate_2;
 		}
 
@@ -294,7 +295,7 @@ static void caerOutputNetTCPServerConfig(caerModuleData moduleData) {
 
 		// Set server socket, on which accept() is called, to non-blocking mode.
 		if (!socketBlockingMode(newServerDescriptor, false)) {
-			caerLog(LOG_CRITICAL, moduleData, "Could not set TCP server socket to non-blocking mode.");
+			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not set TCP server socket to non-blocking mode.");
 			close(newServerDescriptor);
 			goto configUpdate_2;
 		}
@@ -310,14 +311,14 @@ static void caerOutputNetTCPServerConfig(caerModuleData moduleData) {
 
 		// Bind socket to above address.
 		if (bind(newServerDescriptor, (struct sockaddr *) &tcpServer, sizeof(struct sockaddr_in)) < 0) {
-			caerLog(LOG_CRITICAL, moduleData, "Could not bind TCP server socket. Error: %s (%d).", caerLogStrerror(errno), errno);
+			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not bind TCP server socket. Error: %s (%d).", caerLogStrerror(errno), errno);
 			close(newServerDescriptor);
 			goto configUpdate_2;
 		}
 
 		// Listen to new connections on the socket.
 		if (listen(newServerDescriptor, sshsNodeGetShort(moduleData->moduleNode, "backlogSize")) < 0) {
-			caerLog(LOG_CRITICAL, moduleData, "Could not listen on TCP server socket. Error: %s (%d).", caerLogStrerror(errno),
+			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not listen on TCP server socket. Error: %s (%d).", caerLogStrerror(errno),
 			errno);
 			close(newServerDescriptor);
 			goto configUpdate_2;
@@ -335,7 +336,7 @@ static void caerOutputNetTCPServerConfig(caerModuleData moduleData) {
 		// Prepare memory to hold connected clients fds.
 		struct pollfd *newConnectionsArray = malloc(newConnectionsLimit * sizeof(*newConnectionsArray));
 		if (newConnectionsArray == NULL) {
-			caerLog(LOG_CRITICAL, moduleData, "Could not allocate memory for TCP client descriptors. Error: %s (%d).",
+			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not allocate memory for TCP client descriptors. Error: %s (%d).",
 				caerLogStrerror(errno), errno);
 			return;
 		}

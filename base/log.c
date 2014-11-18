@@ -43,7 +43,7 @@ void caerLogInit(void) {
 
 	if (caerLogFile == NULL) {
 		// Must be able to open log file! _REQUIRED_
-		fprintf(stderr, "Failed to open log file '%s'. Error: %s (%d).\n", logFile, caerLogStrerror(errno), errno);
+		fprintf(stderr, "Logger: Failed to open log file '%s'. Error: %s (%d).\n", logFile, caerLogStrerror(errno), errno);
 		free(logFile);
 
 		exit(EXIT_FAILURE);
@@ -74,15 +74,21 @@ void caerLogInit(void) {
 	sshsSetGlobalErrorLogCallback(&caerLogSSHSLogger);
 
 	// Log sub-system initialized fully and correctly, log this.
-	caerLog(LOG_NOTICE, "Logger initialized successfully with log-level %" PRIu8 ".", logLevel);
+	caerLog(LOG_NOTICE, "Logger", "Initialization successful with log-level %" PRIu8 ".", logLevel);
 }
 
 void caerLogDisableConsole(void) {
 	caerLogConsole = NULL;
-	caerLog(LOG_DEBUG, "Logging to console disabled.");
+	caerLog(LOG_DEBUG, "Logger", "Console logging disabled.");
 }
 
-void caerLog(uint8_t logLevel, caerModuleData modData, const char *format, ...) {
+void caerLog(uint8_t logLevel, const char *subSystem, const char *format, ...) {
+	// Check that subSystem and format are defined correctly.
+	if (subSystem == NULL || format == NULL) {
+		caerLog(LOG_ERROR, "Logger", "Missing subSystem or format strings. Neither can be NULL.");
+		return;
+	}
+
 	// Only log messages above the specified level.
 	if (logLevel <= atomic_ops_uint_load(&caerLogLevel, ATOMIC_OPS_FENCE_NONE)) {
 		// First prepend the time.
@@ -101,89 +107,76 @@ void caerLog(uint8_t logLevel, caerModuleData modData, const char *format, ...) 
 		const char *logLevelString;
 		switch (logLevel) {
 			case LOG_EMERGENCY:
-				logLevelString = " EMERGENCY: ";
+				logLevelString = "EMERGENCY";
 				break;
 
 			case LOG_ALERT:
-				logLevelString = " ALERT: ";
+				logLevelString = "ALERT";
 				break;
 
 			case LOG_CRITICAL:
-				logLevelString = " CRITICAL: ";
+				logLevelString = "CRITICAL";
 				break;
 
 			case LOG_ERROR:
-				logLevelString = " ERROR: ";
+				logLevelString = "ERROR";
 				break;
 
 			case LOG_WARNING:
-				logLevelString = " WARNING: ";
+				logLevelString = "WARNING";
 				break;
 
 			case LOG_NOTICE:
-				logLevelString = " NOTICE: ";
+				logLevelString = "NOTICE";
 				break;
 
 			case LOG_INFO:
-				logLevelString = " INFO: ";
+				logLevelString = "INFO";
 				break;
 
 			case LOG_DEBUG:
-				logLevelString = " DEBUG: ";
+				logLevelString = "DEBUG";
 				break;
 
 			default:
-				logLevelString = " UNKNOWN: ";
+				logLevelString = "UNKNOWN";
 				break;
 		}
 
-		// Now fuse with original format by prepending.
-		size_t logLevelStringLength = strlen(logLevelString);
-		size_t moduleFullLogStringLength = 0;
-		if (modData != NULL && modData->moduleFullLogString != NULL) {
-			moduleFullLogStringLength = strlen(modData->moduleFullLogString);
-		}
-		size_t formatLength = strlen(format);
-		char newFormat[currentTimeStringLength + logLevelStringLength + moduleFullLogStringLength + formatLength + 2];
-		// + 2, 1 for mandatory new-line at end of line and 1 for terminating NUL byte.
-
 		// Copy all strings into one and ensure NUL termination.
-		strncpy(newFormat, currentTimeString, currentTimeStringLength);
-		strncpy(newFormat + currentTimeStringLength, logLevelString, logLevelStringLength);
-		strncpy(newFormat + currentTimeStringLength + logLevelStringLength, modData->moduleFullLogString, moduleFullLogStringLength);
-		strncpy(newFormat + currentTimeStringLength + logLevelStringLength + moduleFullLogStringLength, format, formatLength);
-		newFormat[currentTimeStringLength + logLevelStringLength + moduleFullLogStringLength + formatLength] = '\n';
-		newFormat[currentTimeStringLength + logLevelStringLength + moduleFullLogStringLength + formatLength + 1] = '\0';
+		size_t logLength = (size_t) snprintf(NULL, 0, "%s: %s: %s: %s\n", currentTimeString, logLevelString, subSystem, format);
+		char logString[logLength + 1];
+		snprintf(logString, logLength + 1, "%s: %s: %s: %s\n", currentTimeString, logLevelString, subSystem, format);
 
 		va_list argptr;
 
 		if (caerLogConsole != NULL) {
 			va_start(argptr, format);
-			vfprintf(caerLogConsole, newFormat, argptr);
+			vfprintf(caerLogConsole, logString, argptr);
 			va_end(argptr);
 		}
 
 		if (caerLogFile != NULL) {
 			va_start(argptr, format);
-			vfprintf(caerLogFile, newFormat, argptr);
+			vfprintf(caerLogFile, logString, argptr);
 			va_end(argptr);
 		}
 	}
 }
 
 // Guaranteed thread-safe strerror(), with no need to free the returned read-only string.
-const char *caerLogStrerror(int errnum) {
-	if (errnum < 0 || errnum >= sys_nerr || sys_errlist[errnum] == NULL) {
+const char *caerLogStrerror(int errNum) {
+	if (errNum < 0 || errNum >= sys_nerr || sys_errlist[errNum] == NULL) {
 		return ("Unknown error");
 	}
 	else {
-		return (sys_errlist[errnum]);
+		return (sys_errlist[errNum]);
 	}
 }
 
 static void caerLogShutDownWriteBack(void) {
 	if (caerLogFile != NULL) {
-		caerLog(LOG_DEBUG, "Shutting down logger now ...");
+		caerLog(LOG_DEBUG, "Logger", "Shutting down ...");
 
 		// Ensure proper flushing and closing of the log file at shutdown.
 		fflush(caerLogFile);
@@ -192,7 +185,7 @@ static void caerLogShutDownWriteBack(void) {
 }
 
 static void caerLogSSHSLogger(const char *msg) {
-	caerLog(LOG_CRITICAL, "%s", msg);
+	caerLog(LOG_CRITICAL, "SSHS", "%s", msg);
 	// SSHS will exit automatically on critical errors.
 }
 
@@ -204,6 +197,6 @@ static void caerLogLevelListener(sshsNode node, void *userData, enum sshs_node_a
 	if (event == ATTRIBUTE_MODIFIED && changeType == BYTE && strcmp(changeKey, "logLevel") == 0) {
 		// Update the global log level asynchronously.
 		atomic_ops_uint_store(&caerLogLevel, changeValue.ubyte, ATOMIC_OPS_FENCE_RELEASE);
-		caerLog(LOG_DEBUG, "Log-level set to %" PRIu8 ".", changeValue.ubyte);
+		caerLog(LOG_DEBUG, "Logger", "Log-level set to %" PRIu8 ".", changeValue.ubyte);
 	}
 }

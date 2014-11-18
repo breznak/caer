@@ -57,7 +57,7 @@ static void LIBUSB_CALL libUsbDebugCallback(struct libusb_transfer *transfer);
 static void debugTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent);
 
 static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
-	caerLog(LOG_DEBUG, "Initializing DAVISFX3 module ...");
+	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Initializing module ...");
 
 	// First, always create all needed setting nodes, set their default values
 	// and add their listeners.
@@ -131,6 +131,7 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 
 	// Data source is the same as the module ID (but accessible in state-space).
 	cstate->sourceID = moduleData->moduleID;
+	cstate->sourceSubSystemString = moduleData->moduleSubSystemString;
 
 	// Put global source information into SSHS.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
@@ -192,7 +193,7 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 	if (cstate->dataExchangeBuffer == NULL) {
 		freeAllPackets(cstate);
 
-		caerLog(LOG_CRITICAL, "Failed to initialize data exchange buffer.");
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to initialize data exchange buffer.");
 		return (false);
 	}
 
@@ -202,7 +203,7 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 		freeAllPackets(cstate);
 		ringBufferFree(cstate->dataExchangeBuffer);
 
-		caerLog(LOG_CRITICAL, "Failed to initialize libusb context. Error: %s (%d).", libusb_strerror(errno), errno);
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to initialize libusb context. Error: %s (%d).", libusb_strerror(errno), errno);
 		return (false);
 	}
 
@@ -214,7 +215,7 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 		ringBufferFree(cstate->dataExchangeBuffer);
 		libusb_exit(cstate->deviceContext);
 
-		caerLog(LOG_CRITICAL, "Failed to open DAVISFX3 device.");
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to open DAVISFX3 device.");
 		return (false);
 	}
 
@@ -225,19 +226,19 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 		deviceClose(cstate->deviceHandle);
 		libusb_exit(cstate->deviceContext);
 
-		caerLog(LOG_CRITICAL, "Failed to start data acquisition thread. Error: %s (%d).", caerLogStrerror(errno),
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to start data acquisition thread. Error: %s (%d).", caerLogStrerror(errno),
 		errno);
 		return (false);
 	}
 
-	caerLog(LOG_DEBUG, "Initialized DAVISFX3 module successfully with device Bus=%" PRIu8 ":Addr=%" PRIu8 ".",
+	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Initialized DAVISFX3 module successfully with device Bus=%" PRIu8 ":Addr=%" PRIu8 ".",
 		libusb_get_bus_number(libusb_get_device(cstate->deviceHandle)),
 		libusb_get_device_address(libusb_get_device(cstate->deviceHandle)));
 	return (true);
 }
 
 static void caerInputDAVISFX3Exit(caerModuleData moduleData) {
-	caerLog(LOG_DEBUG, "Shutting down DAVISFX3 module ...");
+	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Shutting down ...");
 
 	davisFX3State state = moduleData->moduleState;
 	davisCommonState cstate = &state->cstate;
@@ -245,8 +246,8 @@ static void caerInputDAVISFX3Exit(caerModuleData moduleData) {
 	// Wait for data acquisition thread to terminate...
 	if ((errno = pthread_join(state->dataAcquisitionThread, NULL)) != 0) {
 		// This should never happen!
-		caerLog(LOG_CRITICAL, "Failed to join data acquisition thread. Error: %s (%d).", caerLogStrerror(errno),
-		errno);
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to join data acquisition thread. Error: %s (%d).",
+			caerLogStrerror(errno), errno);
 	}
 
 	// Finally, close the device fully.
@@ -268,16 +269,16 @@ static void caerInputDAVISFX3Exit(caerModuleData moduleData) {
 	// Free remaining incomplete packets.
 	freeAllPackets(cstate);
 
-	caerLog(LOG_DEBUG, "Shutdown DAVISFX3 module successfully.");
+	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Shutdown successful.");
 }
 
 static void *dataAcquisitionThread(void *inPtr) {
-	caerLog(LOG_DEBUG, "DAVISFX3: initializing data acquisition thread ...");
-
 	// inPtr is a pointer to module data.
 	caerModuleData data = inPtr;
 	davisFX3State state = data->moduleState;
 	davisCommonState cstate = &state->cstate;
+
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "Initializing data acquisition thread ...");
 
 	// Send default start-up biases and config values to device before enabling it.
 
@@ -300,7 +301,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 	// Handle USB events (1 second timeout).
 	struct timeval te = { .tv_sec = 0, .tv_usec = 1000000 };
 
-	caerLog(LOG_DEBUG, "DAVISFX3: data acquisition thread ready to process events.");
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "data acquisition thread ready to process events.");
 
 	while (atomic_ops_uint_load(&data->running, ATOMIC_OPS_FENCE_NONE) != 0
 		&& atomic_ops_uint_load(&cstate->dataTransfersLength, ATOMIC_OPS_FENCE_NONE) > 0) {
@@ -312,7 +313,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 		libusb_handle_events_timeout(cstate->deviceContext, &te);
 	}
 
-	caerLog(LOG_DEBUG, "DAVISFX3: shutting down data acquisition thread ...");
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "shutting down data acquisition thread ...");
 
 	// Disable AER data transfer on USB end-point (reverse order than enabling).
 	sendSpiConfigCommand(cstate->deviceHandle, 0x03, 0x00, 0x00);
@@ -328,7 +329,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 	// Ensure parent also shuts down (on disconnected device for example).
 	sshsNodePutBool(data->moduleNode, "shutdown", true);
 
-	caerLog(LOG_DEBUG, "DAVISFX3: data acquisition thread shut down.");
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "data acquisition thread shut down.");
 
 	return (NULL);
 }
@@ -383,7 +384,7 @@ static void allocateDebugTransfers(davisFX3State state) {
 	// Set number of transfers and allocate memory for the main transfer array.
 	state->debugTransfers = calloc(DEBUG_TRANSFER_NUM, sizeof(struct libusb_transfer *));
 	if (state->debugTransfers == NULL) {
-		caerLog(LOG_CRITICAL,
+		caerLog(LOG_CRITICAL, state->cstate.sourceSubSystemString,
 			"Failed to allocate memory for %" PRIu32 " libusb transfers (debug channel). Error: %s (%d).",
 			DEBUG_TRANSFER_NUM, caerLogStrerror(errno), errno);
 		return;
@@ -393,8 +394,8 @@ static void allocateDebugTransfers(davisFX3State state) {
 	for (size_t i = 0; i < DEBUG_TRANSFER_NUM; i++) {
 		state->debugTransfers[i] = libusb_alloc_transfer(0);
 		if (state->debugTransfers[i] == NULL) {
-			caerLog(LOG_CRITICAL, "Unable to allocate further libusb transfers (debug channel, %zu of %" PRIu32 ").", i,
-			DEBUG_TRANSFER_NUM);
+			caerLog(LOG_CRITICAL,  state->cstate.sourceSubSystemString,"Unable to allocate further libusb transfers (debug channel, %zu of %" PRIu32 ").",
+				i, DEBUG_TRANSFER_NUM);
 			return;
 		}
 
@@ -402,7 +403,7 @@ static void allocateDebugTransfers(davisFX3State state) {
 		state->debugTransfers[i]->length = DEBUG_TRANSFER_SIZE;
 		state->debugTransfers[i]->buffer = malloc(DEBUG_TRANSFER_SIZE);
 		if (state->debugTransfers[i]->buffer == NULL) {
-			caerLog(LOG_CRITICAL, "Unable to allocate buffer for libusb transfer %zu (debug channel). Error: %s (%d).",
+			caerLog(LOG_CRITICAL,  state->cstate.sourceSubSystemString,"Unable to allocate buffer for libusb transfer %zu (debug channel). Error: %s (%d).",
 				i, caerLogStrerror(errno), errno);
 
 			libusb_free_transfer(state->debugTransfers[i]);
@@ -424,8 +425,8 @@ static void allocateDebugTransfers(davisFX3State state) {
 			atomic_ops_uint_inc(&state->debugTransfersLength, ATOMIC_OPS_FENCE_NONE);
 		}
 		else {
-			caerLog(LOG_CRITICAL, "Unable to submit libusb transfer %zu (debug channel). Error: %s (%d).", i,
-				libusb_strerror(errno), errno);
+			caerLog(LOG_CRITICAL,  state->cstate.sourceSubSystemString,"Unable to submit libusb transfer %zu (debug channel). Error: %s (%d).",
+				i, libusb_strerror(errno), errno);
 
 			// The transfer buffer is freed automatically here thanks to
 			// the LIBUSB_TRANSFER_FREE_BUFFER flag set above.
@@ -445,8 +446,8 @@ static void deallocateDebugTransfers(davisFX3State state) {
 	for (size_t i = 0; i < transfersNum; i++) {
 		errno = libusb_cancel_transfer(state->debugTransfers[i]);
 		if (errno != LIBUSB_SUCCESS && errno != LIBUSB_ERROR_NOT_FOUND) {
-			caerLog(LOG_CRITICAL, "Unable to cancel libusb transfer %zu (debug channel). Error: %s (%d).", i,
-				libusb_strerror(errno), errno);
+			caerLog(LOG_CRITICAL,  state->cstate.sourceSubSystemString,"Unable to cancel libusb transfer %zu (debug channel). Error: %s (%d).",
+				i, libusb_strerror(errno), errno);
 			// Proceed with canceling all transfers regardless of errors.
 		}
 	}
@@ -490,11 +491,11 @@ static void debugTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSe
 	// Check if this is a debug message (length 7-64 bytes).
 	if (bytesSent >= 7 && buffer[0] == 0x00) {
 		// Debug message, log this.
-		caerLog(LOG_ERROR, "Error message from DAVISFX3: '%s' (code %u at time %u).", &buffer[6], buffer[1],
+		caerLog(LOG_ERROR, state->cstate.sourceSubSystemString, "Error message: '%s' (code %u at time %u).", &buffer[6], buffer[1],
 			*((uint32_t *) &buffer[2]));
 	}
 	else {
 		// Unknown/invalid debug message, log this.
-		caerLog(LOG_WARNING, "Unknown/invalid debug message from DAVISFX3.");
+		caerLog(LOG_WARNING, state->cstate.sourceSubSystemString, "Unknown/invalid debug message.");
 	}
 }

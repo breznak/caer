@@ -71,8 +71,8 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	// Allocate memory for the module.
 	caerModuleData moduleData = calloc(1, sizeof(struct caer_module_data));
 	if (moduleData == NULL) {
-		caerLog(LOG_CRITICAL, NULL, "%s: Failed to allocate memory for module. Error: %s (%d).",
-			nameString, caerLogStrerror(errno), errno);
+		caerLog(LOG_CRITICAL, nameString, "Failed to allocate memory for module. Error: %s (%d).",
+			caerLogStrerror(errno), errno);
 		pthread_exit(NULL);
 	}
 
@@ -92,7 +92,7 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	// Initialize configuration, shutdown hooks.
 	moduleData->moduleNode = sshsGetRelativeNode(mainloopNode, sshsString);
 	if (moduleData->moduleNode == NULL) {
-		caerLog(LOG_CRITICAL, NULL, "%s: Failed to allocate configuration node for module.", nameString);
+		caerLog(LOG_CRITICAL, nameString, "Failed to allocate configuration node for module.");
 		pthread_exit(NULL);
 	}
 
@@ -100,28 +100,43 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerModuleShutdownListener);
 
 	// Setup default full log string name.
-	moduleData->moduleFullLogString = malloc(nameLength + 3);
-	if (moduleData->moduleFullLogString == NULL) {
-		caerLog(LOG_CRITICAL, NULL, "%s: Failed to allocate full log string for module.", nameString);
+	moduleData->moduleSubSystemString = malloc(nameLength + 1);
+	if (moduleData->moduleSubSystemString == NULL) {
+		caerLog(LOG_CRITICAL, nameString, "Failed to allocate subsystem string for module.");
 		pthread_exit(NULL);
 	}
 
-	strncpy(moduleData->moduleFullLogString, nameString, nameLength);
-	moduleData->moduleFullLogString[nameLength] = ':';
-	moduleData->moduleFullLogString[nameLength + 1] = ' ';
-	moduleData->moduleFullLogString[nameLength + 2] = '\0';
+	strncpy(moduleData->moduleSubSystemString, nameString, nameLength);
+	moduleData->moduleSubSystemString[nameLength] = '\0';
 
 	return (moduleData);
 }
 
 void caerModuleDestroy(caerModuleData moduleData) {
 	// Deallocate module memory. Module state has already been destroyed.
-	free(moduleData->moduleFullLogString);
+	free(moduleData->moduleSubSystemString);
 	free(moduleData);
 }
 
-bool caerModuleSetFullLogString(caerModuleData moduleData, const char *fullLogString) {
+bool caerModuleSetSubSystemString(caerModuleData moduleData, const char *subSystemString) {
 	// Allocate new memory for new string.
+	size_t subSystemStringLenght = strlen(subSystemString);
+
+	char *newSubSystemString = malloc(subSystemStringLenght + 1);
+	if (newSubSystemString == NULL) {
+		// Failed to allocate memory. Log this and don't use the new string.
+		caerLog(LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate new subsystem string for module.");
+		return (false);
+	}
+
+	// Copy new string into allocated memory.
+	strncpy(newSubSystemString, subSystemString, subSystemStringLenght);
+	newSubSystemString[subSystemStringLenght] = '\0';
+
+	// Switch new string with old string and free old memory.
+	free(moduleData->moduleSubSystemString);
+	moduleData->moduleSubSystemString = newSubSystemString;
+
 	return (true);
 }
 

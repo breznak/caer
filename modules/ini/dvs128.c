@@ -18,6 +18,7 @@ struct dvs128_state {
 	RingBuffer dataExchangeBuffer;
 	caerMainloopData mainloopNotify;
 	uint16_t sourceID;
+	char *sourceSubSystemString;
 	// USB Device State
 	libusb_context *deviceContext;
 	libusb_device_handle *deviceHandle;
@@ -83,7 +84,7 @@ static inline void freeAllPackets(dvs128State state) {
 }
 
 static bool caerInputDVS128Init(caerModuleData moduleData) {
-	caerLog(LOG_DEBUG, moduleData, "Initializing module ...");
+	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Initializing module ...");
 
 	// First, always create all needed setting nodes, set their default values
 	// and add their listeners.
@@ -127,6 +128,7 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 
 	// Data source is the same as the module ID (but accessible in state-space).
 	state->sourceID = moduleData->moduleID;
+	state->sourceSubSystemString = moduleData->moduleSubSystemString;
 
 	// Put global source information into SSHS.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
@@ -159,7 +161,7 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 		free(state->currentPolarityPacket);
 		free(state->currentSpecialPacket);
 
-		caerLog(LOG_CRITICAL, moduleData, "Failed to initialize data exchange buffer.");
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to initialize data exchange buffer.");
 		return (false);
 	}
 
@@ -169,7 +171,7 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 		freeAllPackets(state);
 		ringBufferFree(state->dataExchangeBuffer);
 
-		caerLog(LOG_CRITICAL, moduleData, "Failed to initialize libusb context. Error: %s (%d).", libusb_strerror(errno), errno);
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to initialize libusb context. Error: %s (%d).", libusb_strerror(errno), errno);
 		return (false);
 	}
 
@@ -181,7 +183,7 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 		ringBufferFree(state->dataExchangeBuffer);
 		libusb_exit(state->deviceContext);
 
-		caerLog(LOG_CRITICAL, moduleData, "Failed to open DVS128 device.");
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to open DVS128 device.");
 		return (false);
 	}
 
@@ -192,26 +194,26 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 		dvs128Close(state->deviceHandle);
 		libusb_exit(state->deviceContext);
 
-		caerLog(LOG_CRITICAL, moduleData, "Failed to start data acquisition thread. Error: %s (%d).", caerLogStrerror(errno),
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to start data acquisition thread. Error: %s (%d).", caerLogStrerror(errno),
 		errno);
 		return (false);
 	}
 
-	caerLog(LOG_DEBUG, moduleData, "Initialized module successfully with device Bus=%" PRIu8 ":Addr=%" PRIu8 ".",
+	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Initialized module successfully with device Bus=%" PRIu8 ":Addr=%" PRIu8 ".",
 		libusb_get_bus_number(libusb_get_device(state->deviceHandle)),
 		libusb_get_device_address(libusb_get_device(state->deviceHandle)));
 	return (true);
 }
 
 static void caerInputDVS128Exit(caerModuleData moduleData) {
-	caerLog(LOG_DEBUG, moduleData, "Shutting down ...");
+	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Shutting down ...");
 
 	dvs128State state = moduleData->moduleState;
 
 	// Wait for data acquisition thread to terminate...
 	if ((errno = pthread_join(state->dataAcquisitionThread, NULL)) != 0) {
 		// This should never happen!
-		caerLog(LOG_CRITICAL, moduleData, "Failed to join data acquisition thread. Error: %s (%d).",
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to join data acquisition thread. Error: %s (%d).",
 			caerLogStrerror(errno), errno);
 	}
 
@@ -234,7 +236,7 @@ static void caerInputDVS128Exit(caerModuleData moduleData) {
 	// Free remaining incomplete packets.
 	freeAllPackets(state);
 
-	caerLog(LOG_DEBUG, moduleData, "Shutdown successful.");
+	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Shutdown successful.");
 }
 
 static void caerInputDVS128Run(caerModuleData moduleData, size_t argsNumber, va_list args) {
@@ -326,7 +328,7 @@ static void *dvs128DataAcquisitionThread(void *inPtr) {
 	caerModuleData data = inPtr;
 	dvs128State state = data->moduleState;
 
-	caerLog(LOG_DEBUG, data, "initializing data acquisition thread ...");
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "Initializing data acquisition thread ...");
 
 	// Send default start-up biases to device before enabling it.
 	dvs128SendBiases(sshsGetRelativeNode(data->moduleNode, "bias/"), state->deviceHandle);
@@ -343,7 +345,7 @@ static void *dvs128DataAcquisitionThread(void *inPtr) {
 	// Handle USB events (1 second timeout).
 	struct timeval te = { .tv_sec = 0, .tv_usec = 1000000 };
 
-	caerLog(LOG_DEBUG, data, "data acquisition thread ready to process events.");
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "data acquisition thread ready to process events.");
 
 	while (atomic_ops_uint_load(&data->running, ATOMIC_OPS_FENCE_NONE) != 0
 		&& atomic_ops_uint_load(&state->transfersLength, ATOMIC_OPS_FENCE_NONE) > 0) {
@@ -355,7 +357,7 @@ static void *dvs128DataAcquisitionThread(void *inPtr) {
 		libusb_handle_events_timeout(state->deviceContext, &te);
 	}
 
-	caerLog(LOG_DEBUG, data, "shutting down data acquisition thread ...");
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "shutting down data acquisition thread ...");
 
 	// Disable AER data transfer on USB end-point 6.
 	libusb_control_transfer(state->deviceHandle,
@@ -368,7 +370,7 @@ static void *dvs128DataAcquisitionThread(void *inPtr) {
 	// Ensure parent also shuts down (on disconnected device for example).
 	sshsNodePutBool(data->moduleNode, "shutdown", true);
 
-	caerLog(LOG_DEBUG, data, "data acquisition thread shut down.");
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "data acquisition thread shut down.");
 
 	return (NULL);
 }
@@ -408,8 +410,8 @@ static void dvs128AllocateTransfers(dvs128State state, uint32_t bufferNum, uint3
 	// Set number of transfers and allocate memory for the main transfer array.
 	state->transfers = calloc(bufferNum, sizeof(struct libusb_transfer *));
 	if (state->transfers == NULL) {
-		caerLog(LOG_CRITICAL, "Failed to allocate memory for %" PRIu32 " libusb transfers. Error: %s (%d).", bufferNum,
-			caerLogStrerror(errno), errno);
+		caerLog(LOG_CRITICAL, state->sourceSubSystemString, "Failed to allocate memory for %" PRIu32 " libusb transfers. Error: %s (%d).",
+			bufferNum, caerLogStrerror(errno), errno);
 		return;
 	}
 
@@ -417,7 +419,8 @@ static void dvs128AllocateTransfers(dvs128State state, uint32_t bufferNum, uint3
 	for (size_t i = 0; i < bufferNum; i++) {
 		state->transfers[i] = libusb_alloc_transfer(0);
 		if (state->transfers[i] == NULL) {
-			caerLog(LOG_CRITICAL, "Unable to allocate further libusb transfers (%zu of %" PRIu32 ").", i, bufferNum);
+			caerLog(LOG_CRITICAL, state->sourceSubSystemString, "Unable to allocate further libusb transfers (%zu of %" PRIu32 ").",
+				i, bufferNum);
 			return;
 		}
 
@@ -425,8 +428,8 @@ static void dvs128AllocateTransfers(dvs128State state, uint32_t bufferNum, uint3
 		state->transfers[i]->length = (int) bufferSize;
 		state->transfers[i]->buffer = malloc(bufferSize);
 		if (state->transfers[i]->buffer == NULL) {
-			caerLog(LOG_CRITICAL, "Unable to allocate buffer for libusb transfer %zu. Error: %s (%d).", i,
-				caerLogStrerror(errno), errno);
+			caerLog(LOG_CRITICAL, state->sourceSubSystemString, "Unable to allocate buffer for libusb transfer %zu. Error: %s (%d).",
+				i, caerLogStrerror(errno), errno);
 
 			libusb_free_transfer(state->transfers[i]);
 			state->transfers[i] = NULL;
@@ -447,8 +450,8 @@ static void dvs128AllocateTransfers(dvs128State state, uint32_t bufferNum, uint3
 			atomic_ops_uint_inc(&state->transfersLength, ATOMIC_OPS_FENCE_NONE);
 		}
 		else {
-			caerLog(LOG_CRITICAL, "Unable to submit libusb transfer %zu. Error: %s (%d).", i, libusb_strerror(errno),
-			errno);
+			caerLog(LOG_CRITICAL, state->sourceSubSystemString, "Unable to submit libusb transfer %zu. Error: %s (%d).",
+				i, libusb_strerror(errno), errno);
 
 			// The transfer buffer is freed automatically here thanks to
 			// the LIBUSB_TRANSFER_FREE_BUFFER flag set above.
@@ -468,8 +471,8 @@ static void dvs128DeallocateTransfers(dvs128State state) {
 	for (size_t i = 0; i < transfersNum; i++) {
 		errno = libusb_cancel_transfer(state->transfers[i]);
 		if (errno != LIBUSB_SUCCESS && errno != LIBUSB_ERROR_NOT_FOUND) {
-			caerLog(LOG_CRITICAL, "Unable to cancel libusb transfer %zu. Error: %s (%d).", i, libusb_strerror(errno),
-			errno);
+			caerLog(LOG_CRITICAL, state->sourceSubSystemString, "Unable to cancel libusb transfer %zu. Error: %s (%d).",
+				i, libusb_strerror(errno), errno);
 			// Proceed with canceling all transfers regardless of errors.
 		}
 	}
@@ -518,7 +521,7 @@ static void LIBUSB_CALL dvs128LibUsbCallback(struct libusb_transfer *transfer) {
 static void dvs128EventTranslator(dvs128State state, uint8_t *buffer, size_t bytesSent) {
 	// Truncate off any extra partial event.
 	if ((bytesSent & 0x03) != 0) {
-		caerLog(LOG_ALERT, "%zu bytes sent via USB, which is not a multiple of four.", bytesSent);
+		caerLog(LOG_ALERT, state->sourceSubSystemString, "%zu bytes sent via USB, which is not a multiple of four.", bytesSent);
 		bytesSent &= (size_t) ~0x03;
 	}
 
@@ -575,8 +578,8 @@ static void dvs128EventTranslator(dvs128State state, uint8_t *buffer, size_t byt
 
 			// Check monotonicity of timestamps.
 			if (timestamp < state->lastTimestamp) {
-				caerLog(LOG_ALERT,
-					"DVS128: non-monotonic time-stamp detected: lastTimestamp=%" PRIu32 ", timestamp=%" PRIu32 ".",
+				caerLog(LOG_ALERT, state->sourceSubSystemString,
+					"non-monotonic time-stamp detected: lastTimestamp=%" PRIu32 ", timestamp=%" PRIu32 ".",
 					state->lastTimestamp, timestamp);
 			}
 
@@ -598,11 +601,11 @@ static void dvs128EventTranslator(dvs128State state, uint8_t *buffer, size_t byt
 
 				// Check range conformity.
 				if (x >= DVS128_ARRAY_SIZE_X) {
-					caerLog(LOG_ALERT, "X address out of range (0-%d): %" PRIu16 ".", DVS128_ARRAY_SIZE_X - 1, x);
+					caerLog(LOG_ALERT, state->sourceSubSystemString, "X address out of range (0-%d): %" PRIu16 ".", DVS128_ARRAY_SIZE_X - 1, x);
 					continue; // Skip invalid event.
 				}
 				if (y >= DVS128_ARRAY_SIZE_Y) {
-					caerLog(LOG_ALERT, "Y address out of range (0-%d): %" PRIu16 ".", DVS128_ARRAY_SIZE_Y - 1, y);
+					caerLog(LOG_ALERT, state->sourceSubSystemString, "Y address out of range (0-%d): %" PRIu16 ".", DVS128_ARRAY_SIZE_Y - 1, y);
 					continue; // Skip invalid event.
 				}
 
@@ -630,7 +633,7 @@ static void dvs128EventTranslator(dvs128State state, uint8_t *buffer, size_t byt
 			if (!ringBufferPut(state->dataExchangeBuffer, state->currentPolarityPacket)) {
 				// Failed to forward packet, drop it.
 				free(state->currentPolarityPacket);
-				caerLog(LOG_INFO, "Dropped Polarity Event Packet because ring-buffer full!");
+				caerLog(LOG_INFO, state->sourceSubSystemString, "Dropped Polarity Event Packet because ring-buffer full!");
 			}
 			else {
 				caerMainloopDataAvailableIncrease(state->mainloopNotify);
@@ -661,7 +664,7 @@ static void dvs128EventTranslator(dvs128State state, uint8_t *buffer, size_t byt
 				else {
 					// Failed to forward packet, drop it.
 					free(state->currentSpecialPacket);
-					caerLog(LOG_INFO, "Dropped Special Event Packet because ring-buffer full!");
+					caerLog(LOG_INFO, state->sourceSubSystemString, "Dropped Special Event Packet because ring-buffer full!");
 				}
 			}
 			else {

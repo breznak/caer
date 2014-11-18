@@ -56,7 +56,7 @@ static void sendBiases(sshsNode biasNode, libusb_device_handle *devHandle);
 static void sendChipSR(sshsNode chipNode, libusb_device_handle *devHandle);
 
 static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
-	caerLog(LOG_DEBUG, "Initializing DAVISFX2 module ...");
+	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Initializing module ...");
 
 	// First, always create all needed setting nodes, set their default values
 	// and add their listeners.
@@ -130,6 +130,7 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 
 	// Data source is the same as the module ID (but accessible in state-space).
 	cstate->sourceID = moduleData->moduleID;
+	cstate->sourceSubSystemString = moduleData->moduleSubSystemString;
 
 	// Put global source information into SSHS.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
@@ -191,7 +192,7 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 	if (cstate->dataExchangeBuffer == NULL) {
 		freeAllPackets(cstate);
 
-		caerLog(LOG_CRITICAL, "Failed to initialize data exchange buffer.");
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to initialize data exchange buffer.");
 		return (false);
 	}
 
@@ -201,7 +202,7 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 		freeAllPackets(cstate);
 		ringBufferFree(cstate->dataExchangeBuffer);
 
-		caerLog(LOG_CRITICAL, "Failed to initialize libusb context. Error: %s (%d).", libusb_strerror(errno), errno);
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to initialize libusb context. Error: %s (%d).", libusb_strerror(errno), errno);
 		return (false);
 	}
 
@@ -213,7 +214,7 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 		ringBufferFree(cstate->dataExchangeBuffer);
 		libusb_exit(cstate->deviceContext);
 
-		caerLog(LOG_CRITICAL, "Failed to open DAVISFX2 device.");
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to open DAVISFX2 device.");
 		return (false);
 	}
 
@@ -224,19 +225,19 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 		deviceClose(cstate->deviceHandle);
 		libusb_exit(cstate->deviceContext);
 
-		caerLog(LOG_CRITICAL, "Failed to start data acquisition thread. Error: %s (%d).", caerLogStrerror(errno),
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to start data acquisition thread. Error: %s (%d).", caerLogStrerror(errno),
 		errno);
 		return (false);
 	}
 
-	caerLog(LOG_DEBUG, "Initialized DAVISFX2 module successfully with device Bus=%" PRIu8 ":Addr=%" PRIu8 ".",
+	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Initialized DAVISFX2 module successfully with device Bus=%" PRIu8 ":Addr=%" PRIu8 ".",
 		libusb_get_bus_number(libusb_get_device(cstate->deviceHandle)),
 		libusb_get_device_address(libusb_get_device(cstate->deviceHandle)));
 	return (true);
 }
 
 static void caerInputDAVISFX2Exit(caerModuleData moduleData) {
-	caerLog(LOG_DEBUG, "Shutting down DAVISFX2 module ...");
+	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Shutting down ...");
 
 	davisFX2State state = moduleData->moduleState;
 	davisCommonState cstate = &state->cstate;
@@ -244,8 +245,8 @@ static void caerInputDAVISFX2Exit(caerModuleData moduleData) {
 	// Wait for data acquisition thread to terminate...
 	if ((errno = pthread_join(state->dataAcquisitionThread, NULL)) != 0) {
 		// This should never happen!
-		caerLog(LOG_CRITICAL, "Failed to join data acquisition thread. Error: %s (%d).", caerLogStrerror(errno),
-		errno);
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to join data acquisition thread. Error: %s (%d).",
+			caerLogStrerror(errno), errno);
 	}
 
 	// Finally, close the device fully.
@@ -267,16 +268,16 @@ static void caerInputDAVISFX2Exit(caerModuleData moduleData) {
 	// Free remaining incomplete packets.
 	freeAllPackets(cstate);
 
-	caerLog(LOG_DEBUG, "Shutdown DAVISFX2 module successfully.");
+	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Shutdown successful.");
 }
 
 static void *dataAcquisitionThread(void *inPtr) {
-	caerLog(LOG_DEBUG, "DAVISFX2: initializing data acquisition thread ...");
-
 	// inPtr is a pointer to module data.
 	caerModuleData data = inPtr;
 	davisFX2State state = data->moduleState;
 	davisCommonState cstate = &state->cstate;
+
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "Initializing data acquisition thread ...");
 
 	// Send default start-up biases and config values to device before enabling it.
 	sendBiases(sshsGetRelativeNode(data->moduleNode, "bias/"), cstate->deviceHandle);
@@ -301,7 +302,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 	// Handle USB events (1 second timeout).
 	struct timeval te = { .tv_sec = 0, .tv_usec = 1000000 };
 
-	caerLog(LOG_DEBUG, "DAVISFX2: data acquisition thread ready to process events.");
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "data acquisition thread ready to process events.");
 
 	while (atomic_ops_uint_load(&data->running, ATOMIC_OPS_FENCE_NONE) != 0
 		&& atomic_ops_uint_load(&cstate->dataTransfersLength, ATOMIC_OPS_FENCE_NONE) > 0) {
@@ -313,7 +314,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 		libusb_handle_events_timeout(cstate->deviceContext, &te);
 	}
 
-	caerLog(LOG_DEBUG, "DAVISFX2: shutting down data acquisition thread ...");
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "shutting down data acquisition thread ...");
 
 	// Disable AER data transfer on USB end-point (reverse order than enabling).
 	sendSpiConfigCommand(cstate->deviceHandle, 0x03, 0x00, 0x00);
@@ -328,7 +329,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 	// Ensure parent also shuts down (on disconnected device for example).
 	sshsNodePutBool(data->moduleNode, "shutdown", true);
 
-	caerLog(LOG_DEBUG, "DAVISFX2: data acquisition thread shut down.");
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "data acquisition thread shut down.");
 
 	return (NULL);
 }

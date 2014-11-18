@@ -67,7 +67,7 @@ static void caerBackgroundActivityFilterRun(caerModuleData moduleData, size_t ar
 	if (state->timestampMap == NULL) {
 		if (!allocateTimestampMap(state, caerEventPacketHeaderGetEventSource(&polarity->packetHeader))) {
 			// Failed to allocate memory, nothing to do.
-			caerLog(LOG_ERROR, moduleData, "Failed to allocate memory for timestampMap.");
+			caerLog(LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for timestampMap.");
 			return;
 		}
 	}
@@ -87,8 +87,8 @@ static void caerBackgroundActivityFilterRun(caerModuleData moduleData, size_t ar
 			uint16_t y = caerPolarityEventGetY(currEvent);
 
 			// Apply sub-sampling.
-			x >>= state->subSampleBy;
-			y >>= state->subSampleBy;
+			x = U16T(x >> state->subSampleBy);
+			y = U16T(y >> state->subSampleBy);
 
 			// Get value from map.
 			uint32_t lastTS = state->timestampMap[x][y];

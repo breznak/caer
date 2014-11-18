@@ -52,7 +52,7 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 	// Open a TCP socket to the remote client, to which we'll send data packets.
 	state->netTCPDescriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (state->netTCPDescriptor < 0) {
-		caerLog(LOG_CRITICAL, moduleData, "Could not create TCP socket. Error: %s (%d).", caerLogStrerror(errno), errno);
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create TCP socket. Error: %s (%d).", caerLogStrerror(errno), errno);
 		return (false);
 	}
 
@@ -66,7 +66,7 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 	free(ipAddress);
 
 	if (connect(state->netTCPDescriptor, (struct sockaddr *) &tcpClient, sizeof(struct sockaddr_in)) != 0) {
-		caerLog(LOG_CRITICAL, moduleData, "Could not connect to remote TCP client %s:%" PRIu16 ". Error: %s (%d).",
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not connect to remote TCP client %s:%" PRIu16 ". Error: %s (%d).",
 			inet_ntoa(tcpClient.sin_addr), ntohs(tcpClient.sin_port), caerLogStrerror(errno), errno);
 		close(state->netTCPDescriptor);
 		return (false);
@@ -80,17 +80,17 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 	if (state->validOnly) {
 		state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
 		if (state->sgioMemory == NULL) {
-			caerLog(LOG_ALERT, moduleData, "Impossible to allocate memory for scatter/gather IO, using memory copy method.");
+			caerLog(LOG_ALERT, moduleData->moduleSubSystemString, "Impossible to allocate memory for scatter/gather IO, using memory copy method.");
 		}
 		else {
-			caerLog(LOG_INFO, moduleData, "Using scatter/gather IO for outputting valid events only.");
+			caerLog(LOG_INFO, moduleData->moduleSubSystemString, "Using scatter/gather IO for outputting valid events only.");
 		}
 	}
 	else {
 		state->sgioMemory = NULL;
 	}
 
-	caerLog(LOG_INFO, moduleData, "TCP socket connected to %s:%" PRIu16 ".", inet_ntoa(tcpClient.sin_addr),
+	caerLog(LOG_INFO, moduleData->moduleSubSystemString, "TCP socket connected to %s:%" PRIu16 ".", inet_ntoa(tcpClient.sin_addr),
 		ntohs(tcpClient.sin_port));
 
 	return (true);
@@ -109,8 +109,8 @@ static void caerOutputNetTCPRun(caerModuleData moduleData, size_t argsNumber, va
 		if (packetHeader != NULL) {
 			if ((state->validOnly && caerEventPacketHeaderGetEventValid(packetHeader) > 0)
 				|| (!state->validOnly && caerEventPacketHeaderGetEventNumber(packetHeader) > 0)) {
-				caerOutputCommonSend(packetHeader, state->netTCPDescriptor, state->sgioMemory, state->validOnly,
-					state->excludeHeader, state->maxBytesPerPacket);
+				caerOutputCommonSend(moduleData->moduleSubSystemString, packetHeader, state->netTCPDescriptor,
+					state->sgioMemory, state->validOnly, state->excludeHeader, state->maxBytesPerPacket);
 			}
 		}
 	}
@@ -135,11 +135,11 @@ static void caerOutputNetTCPConfig(caerModuleData moduleData) {
 
 				state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
 				if (state->sgioMemory == NULL) {
-					caerLog(LOG_ALERT, moduleData,
+					caerLog(LOG_ALERT, moduleData->moduleSubSystemString,
 						"Impossible to allocate memory for scatter/gather IO, using memory copy method.");
 				}
 				else {
-					caerLog(LOG_INFO, moduleData, "Using scatter/gather IO for outputting valid events only.");
+					caerLog(LOG_INFO, moduleData->moduleSubSystemString, "Using scatter/gather IO for outputting valid events only.");
 				}
 			}
 			else {
@@ -162,7 +162,7 @@ static void caerOutputNetTCPConfig(caerModuleData moduleData) {
 		// Open a TCP socket to the new remote client, to which we'll send data packets.
 		int newNetTCPDescriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (newNetTCPDescriptor < 0) {
-			caerLog(LOG_CRITICAL, moduleData, "Could not create TCP socket. Error: %s (%d).", caerLogStrerror(errno), errno);
+			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create TCP socket. Error: %s (%d).", caerLogStrerror(errno), errno);
 			return;
 		}
 
@@ -176,7 +176,7 @@ static void caerOutputNetTCPConfig(caerModuleData moduleData) {
 		free(ipAddress);
 
 		if (connect(newNetTCPDescriptor, (struct sockaddr *) &tcpClient, sizeof(struct sockaddr_in)) != 0) {
-			caerLog(LOG_CRITICAL, moduleData, "Could not connect to remote TCP client %s:%" PRIu16 ". Error: %s (%d).",
+			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not connect to remote TCP client %s:%" PRIu16 ". Error: %s (%d).",
 				inet_ntoa(tcpClient.sin_addr), ntohs(tcpClient.sin_port), caerLogStrerror(errno), errno);
 			close(newNetTCPDescriptor);
 			return;

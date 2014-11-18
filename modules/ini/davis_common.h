@@ -26,6 +26,7 @@
 struct davisCommon_state {
 	// Data Acquisition Thread -> Mainloop Exchange
 	uint16_t sourceID;
+	char *sourceSubSystemString;
 	RingBuffer dataExchangeBuffer;
 	caerMainloopData mainloopNotify;
 	// USB Device State

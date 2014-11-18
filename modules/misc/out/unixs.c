@@ -50,7 +50,7 @@ static bool caerOutputUnixSInit(caerModuleData moduleData) {
 	// Open a Unix local socket on a known path, to be accessed by other processes.
 	state->unixSocketDescriptor = socket(AF_UNIX, SOCK_DGRAM, 0);
 	if (state->unixSocketDescriptor < 0) {
-		caerLog(LOG_CRITICAL, moduleData, "Could not create local Unix socket. Error: %s (%d).", caerLogStrerror(errno), errno);
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create local Unix socket. Error: %s (%d).", caerLogStrerror(errno), errno);
 		return (false);
 	}
 
@@ -64,7 +64,7 @@ static bool caerOutputUnixSInit(caerModuleData moduleData) {
 
 	// Connect socket to above address.
 	if (connect(state->unixSocketDescriptor, (struct sockaddr *) &unixSocketAddr, sizeof(struct sockaddr_un)) < 0) {
-		caerLog(LOG_CRITICAL, moduleData, "Could not connect to local Unix socket. Error: %s (%d).", caerLogStrerror(errno), errno);
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not connect to local Unix socket. Error: %s (%d).", caerLogStrerror(errno), errno);
 		close(state->unixSocketDescriptor);
 		return (false);
 	}
@@ -77,17 +77,17 @@ static bool caerOutputUnixSInit(caerModuleData moduleData) {
 	if (state->validOnly) {
 		state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
 		if (state->sgioMemory == NULL) {
-			caerLog(LOG_ALERT, moduleData, "Impossible to allocate memory for scatter/gather IO, using memory copy method.");
+			caerLog(LOG_ALERT, moduleData->moduleSubSystemString, "Impossible to allocate memory for scatter/gather IO, using memory copy method.");
 		}
 		else {
-			caerLog(LOG_INFO, moduleData, "Using scatter/gather IO for outputting valid events only.");
+			caerLog(LOG_INFO, moduleData->moduleSubSystemString, "Using scatter/gather IO for outputting valid events only.");
 		}
 	}
 	else {
 		state->sgioMemory = NULL;
 	}
 
-	caerLog(LOG_INFO, moduleData, "Local Unix socket ready at %s.", unixSocketAddr.sun_path);
+	caerLog(LOG_INFO, moduleData->moduleSubSystemString, "Local Unix socket ready at %s.", unixSocketAddr.sun_path);
 
 	return (true);
 }
@@ -105,8 +105,8 @@ static void caerOutputUnixSRun(caerModuleData moduleData, size_t argsNumber, va_
 		if (packetHeader != NULL) {
 			if ((state->validOnly && caerEventPacketHeaderGetEventValid(packetHeader) > 0)
 				|| (!state->validOnly && caerEventPacketHeaderGetEventNumber(packetHeader) > 0)) {
-				caerOutputCommonSend(packetHeader, state->unixSocketDescriptor, state->sgioMemory, state->validOnly,
-					state->excludeHeader, state->maxBytesPerPacket);
+				caerOutputCommonSend(moduleData->moduleSubSystemString, packetHeader, state->unixSocketDescriptor,
+					state->sgioMemory, state->validOnly, state->excludeHeader, state->maxBytesPerPacket);
 			}
 		}
 	}
@@ -131,11 +131,11 @@ static void caerOutputUnixSConfig(caerModuleData moduleData) {
 
 				state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
 				if (state->sgioMemory == NULL) {
-					caerLog(LOG_ALERT, moduleData,
+					caerLog(LOG_ALERT, moduleData->moduleSubSystemString,
 						"Impossible to allocate memory for scatter/gather IO, using memory copy method.");
 				}
 				else {
-					caerLog(LOG_INFO, moduleData, "Using scatter/gather IO for outputting valid events only.");
+					caerLog(LOG_INFO, moduleData->moduleSubSystemString, "Using scatter/gather IO for outputting valid events only.");
 				}
 			}
 			else {
@@ -158,7 +158,7 @@ static void caerOutputUnixSConfig(caerModuleData moduleData) {
 		// Open a local Unix socket on the new supplied path.
 		int newUnixSocketDescriptor = socket(AF_UNIX, SOCK_DGRAM, 0);
 		if (newUnixSocketDescriptor < 0) {
-			caerLog(LOG_CRITICAL, moduleData, "Could not create local Unix socket. Error: %s (%d).", caerLogStrerror(errno), errno);
+			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create local Unix socket. Error: %s (%d).", caerLogStrerror(errno), errno);
 			return;
 		}
 
@@ -172,7 +172,7 @@ static void caerOutputUnixSConfig(caerModuleData moduleData) {
 
 		// Connect socket to above address.
 		if (connect(newUnixSocketDescriptor, (struct sockaddr *) &unixSocketAddr, sizeof(struct sockaddr_un)) < 0) {
-			caerLog(LOG_CRITICAL, moduleData, "Could not connect to local Unix socket. Error: %s (%d).", caerLogStrerror(errno),
+			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not connect to local Unix socket. Error: %s (%d).", caerLogStrerror(errno),
 			errno);
 			close(newUnixSocketDescriptor);
 			return;

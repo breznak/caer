@@ -70,7 +70,7 @@ bool excludeHeader, size_t maxBytesPerPacket) {
 	}
 }
 
-static inline void caerOutputCommonSend(caerModuleData moduleData, caerEventPacketHeader packetHeader,
+static inline void caerOutputCommonSend(const char *subSystemString, caerEventPacketHeader packetHeader,
 	int fileDescriptor, struct iovec *sgioMemory, bool validOnly, bool excludeHeader, size_t maxBytesPerPacket) {
 	// If validOnly is not specified, we can just send the whole packet
 	// in one go directly.
@@ -148,7 +148,7 @@ static inline void caerOutputCommonSend(caerModuleData moduleData, caerEventPack
 
 			if (tmpValidEvents == NULL) {
 				// Failure to allocate memory, just don't send packet and log this.
-				caerLog(LOG_ALERT, moduleData, "Output: failed to allocate memory for valid event copy.");
+				caerLog(LOG_ALERT, subSystemString, "Failed to allocate memory for valid event copy.");
 			}
 			else {
 				// Go through all valid events and copy them.

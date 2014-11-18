@@ -40,13 +40,13 @@ void caerConfigInit(const char *configFile, int argc, char *argv[]) {
 			atexit(&caerConfigShutDownWriteBack);
 		}
 		else {
-			fprintf(stderr, "Could not create and/or read from the configuration file '%s'. Error: %s (%d).\n",
+			fprintf(stderr, "Config: Could not create and/or read from the configuration file '%s'. Error: %s (%d).\n",
 				configFile, caerLogStrerror(errno), errno);
 			exit(EXIT_FAILURE);
 		}
 	}
 	else {
-		fprintf(stderr, "No configuration file defined, using default values for everything.\n");
+		fprintf(stderr, "Config: No configuration file defined, using default values for everything.\n");
 	}
 
 	// Override with command line arguments if requested.
@@ -56,13 +56,13 @@ void caerConfigInit(const char *configFile, int argc, char *argv[]) {
 			if ((i + 4) < (size_t) argc && strcmp(argv[i], "-o") == 0) {
 				sshsNode node = sshsGetNode(sshsGetGlobal(), argv[i + 1]);
 				if (node == NULL) {
-					fprintf(stderr, "Node %s doesn't exist.\n", argv[i + 1]);
+					fprintf(stderr, "Config: SSHS Node %s doesn't exist.\n", argv[i + 1]);
 					continue;
 				}
 
 				if (!sshsNodeStringToNodeConverter(node, argv[i + 2], argv[i + 3], argv[i + 4])) {
-					fprintf(stderr, "Failed to convert attribute %s of type %s with value %s.\n", argv[i + 2],
-						argv[i + 3], argv[i + 4]);
+					fprintf(stderr, "Config: Failed to convert attribute %s of type %s with value %s.\n",
+						argv[i + 2], argv[i + 3], argv[i + 4]);
 				}
 			}
 		}
@@ -79,8 +79,8 @@ static void caerConfigShutDownWriteBack(void) {
 			close(configFileFd);
 		}
 		else {
-			fprintf(stderr, "Could not write to the configuration file '%s'. Error: %s (%d).\n", caerConfigFilePath,
-				caerLogStrerror(errno), errno);
+			fprintf(stderr, "Config: Could not write to the configuration file '%s'. Error: %s (%d).\n",
+				caerConfigFilePath, caerLogStrerror(errno), errno);
 		}
 
 		// realpath() allocated memory for this above.
