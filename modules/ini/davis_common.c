@@ -446,7 +446,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							state->dvsTimestamp = 0;
 							state->imuTimestamp = 0;
 
-							caerLog(LOG_DEBUG, state->sourceSubSystemString, "Timestamp reset event received.");
+							caerLog(LOG_INFO, state->sourceSubSystemString, "Timestamp reset event received.");
 
 							// Create timestamp reset event.
 							caerSpecialEvent currentResetEvent = caerSpecialEventPacketGetEvent(
@@ -608,7 +608,6 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 									htole16(U16T(state->apsCurrentResetFrame[pixelPosition] - 0xFFFF));
 							}
 
-							caerLog(LOG_WARNING, state->sourceSubSystemString, "APS ADC Overflow");
 							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS ADC Overflow: row is %d.", state->apsCountY[state->apsCurrentReadoutType]);
 
 							state->apsCountY[state->apsCurrentReadoutType]++;

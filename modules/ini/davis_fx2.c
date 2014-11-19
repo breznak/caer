@@ -130,7 +130,6 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 
 	// Data source is the same as the module ID (but accessible in state-space).
 	cstate->sourceID = moduleData->moduleID;
-	cstate->sourceSubSystemString = moduleData->moduleSubSystemString;
 
 	// Put global source information into SSHS.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
@@ -218,6 +217,24 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 		return (false);
 	}
 
+	// At this point we can get some more precise data on the device and update
+	// the logging string to reflect that and be more informative.
+	unsigned char serialNumber[8 + 1];
+	libusb_get_string_descriptor_ascii(cstate->deviceHandle, 3, serialNumber, 8 + 1);
+	serialNumber[8] = '\0'; // Ensure NUL termination.
+
+	uint8_t busNumber = libusb_get_bus_number(libusb_get_device(cstate->deviceHandle));
+	uint8_t devAddress = libusb_get_device_address(libusb_get_device(cstate->deviceHandle));
+
+	size_t fullLogStringLength = (size_t) snprintf(NULL, 0, "%s SN-%s [%" PRIu8 ":%" PRIu8 "]", moduleData->moduleSubSystemString,
+		serialNumber, busNumber, devAddress);
+	char fullLogString[fullLogStringLength + 1];
+	snprintf(fullLogString, fullLogStringLength + 1, "%s SN-%s [%" PRIu8 ":%" PRIu8 "]", moduleData->moduleSubSystemString,
+		serialNumber, busNumber, devAddress);
+
+	caerModuleSetSubSystemString(moduleData, fullLogString);
+	cstate->sourceSubSystemString = moduleData->moduleSubSystemString;
+
 	// Start data acquisition thread.
 	if ((errno = pthread_create(&state->dataAcquisitionThread, NULL, &dataAcquisitionThread, moduleData)) != 0) {
 		freeAllPackets(cstate);
@@ -231,8 +248,7 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 	}
 
 	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Initialized DAVISFX2 module successfully with device Bus=%" PRIu8 ":Addr=%" PRIu8 ".",
-		libusb_get_bus_number(libusb_get_device(cstate->deviceHandle)),
-		libusb_get_device_address(libusb_get_device(cstate->deviceHandle)));
+		busNumber, devAddress);
 	return (true);
 }
 
