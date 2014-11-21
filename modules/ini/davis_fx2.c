@@ -61,69 +61,7 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 	// First, always create all needed setting nodes, set their default values
 	// and add their listeners.
 	// Set default biases, from SBRet20s_gs.xml settings.
-	sshsNode biasNode = sshsGetRelativeNode(moduleData->moduleNode, "bias/");
-	createAddressedCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 3, 72, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 2, 112, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 3, 6, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "ApsCasEpc", "Cascode", "N", 2, 144, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "DiffCasBnc", "Cascode", "N", 2, 115, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 1, 188, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "LocalBufBn", "Normal", "N", 2, 164, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 1, 129, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "P", 6, 255, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 5, 2, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "P", 3, 19, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 0, 140, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 6, 132, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "P", 1, 80, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "P", 1, 152, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 2, 255, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "IFRefrBn", "Normal", "N", 2, 255, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 0, 211, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "apsOverflowLevel", "Normal", "N", 0, 36, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "biasBuffer", "Normal", "N", 1, 251, true);
-
-	createShiftedSourceBiasSetting(biasNode, "SSP", 33, 1, "TiedToRail", "SplitGate");
-	createShiftedSourceBiasSetting(biasNode, "SSN", 33, 2, "ShiftedSource", "SplitGate");
-
-	sshsNode chipNode = sshsGetRelativeNode(moduleData->moduleNode, "chip/");
-	sshsNodePutBoolIfAbsent(chipNode, "globalShutter", true);
-	sshsNodePutBoolIfAbsent(chipNode, "useAout", false);
-	sshsNodePutBoolIfAbsent(chipNode, "nArow", false);
-	sshsNodePutBoolIfAbsent(chipNode, "hotPixelSuppression", false);
-	sshsNodePutBoolIfAbsent(chipNode, "resetTestpixel", true);
-	sshsNodePutBoolIfAbsent(chipNode, "typeNCalib", false);
-	sshsNodePutBoolIfAbsent(chipNode, "resetCalib", true);
-
-	sshsNode fpgaNode = sshsGetRelativeNode(moduleData->moduleNode, "fpga/");
-	// TODO: sshsNodePutShortIfAbsent(fpgaNode, "TODO", 0);
-
-	// USB port settings/restrictions.
-	sshsNodePutByteIfAbsent(moduleData->moduleNode, "usbBusNumber", 0);
-	sshsNodePutByteIfAbsent(moduleData->moduleNode, "usbDevAddress", 0);
-
-	// USB buffer settings.
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferNumber", 8);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferSize", 8192);
-
-	// Packet settings (size (in events) and time interval (in µs)).
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "polarityPacketMaxSize", 4096);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "polarityPacketMaxInterval", 5000);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "framePacketMaxSize", 4);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "framePacketMaxInterval", 20000);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "imu6PacketMaxSize", 32);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "imu6PacketMaxInterval", 4000);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "specialPacketMaxSize", 128);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "specialPacketMaxInterval", 1000);
-
-	// Ring-buffer setting (only changes value on module init/shutdown cycles).
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "dataExchangeBufferSize", 64);
-
-	// Install default listener to signal configuration updates asynchronously.
-	sshsNodeAddAttrListener(biasNode, moduleData, &caerInputDAVISCommonConfigListener);
-	sshsNodeAddAttrListener(chipNode, moduleData, &caerInputDAVISCommonConfigListener);
-	sshsNodeAddAttrListener(fpgaNode, moduleData, &caerInputDAVISCommonConfigListener);
-	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerInputDAVISCommonConfigListener);
+	createCommonConfiguration(moduleData);
 
 	davisFX2State state = moduleData->moduleState;
 	davisCommonState cstate = &state->cstate;
@@ -138,7 +76,8 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 	sshsNodePutShort(sourceInfoNode, "frameSizeX", DAVIS_ARRAY_SIZE_X);
 	sshsNodePutShort(sourceInfoNode, "frameSizeY", DAVIS_ARRAY_SIZE_Y);
 	sshsNodePutShort(sourceInfoNode, "frameOriginalDepth", DAVIS_ADC_DEPTH);
-	sshsNodePutShort(sourceInfoNode, "frameOriginalChannels", DAVIS_COLOR_CHANNELS);
+	sshsNodePutShort(sourceInfoNode, "frameOriginalChannels",
+	DAVIS_COLOR_CHANNELS);
 
 	// Initialize state fields.
 	cstate->maxPolarityPacketSize = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxSize");
@@ -170,17 +109,17 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 	cstate->lastTimestamp = 0;
 	cstate->currentTimestamp = 0;
 	cstate->dvsTimestamp = 0;
-	cstate->imuTimestamp = 0;
 	cstate->lastY = 0;
 	cstate->gotY = false;
 	cstate->translateRowOnlyEvents = false;
-	cstate->apsGlobalShutter = sshsNodeGetBool(chipNode, "globalShutter");
+	cstate->apsGlobalShutter = true;
 	cstate->apsCurrentReadoutType = APS_READOUT_RESET;
 	for (size_t i = 0; i < APS_READOUT_TYPES_NUM; i++) {
 		cstate->apsCountX[i] = 0;
 		cstate->apsCountY[i] = 0;
 	}
-	memset(cstate->apsCurrentResetFrame, 0, DAVIS_ARRAY_SIZE_X * DAVIS_ARRAY_SIZE_Y * DAVIS_COLOR_CHANNELS);
+	memset(cstate->apsCurrentResetFrame, 0,
+	DAVIS_ARRAY_SIZE_X * DAVIS_ARRAY_SIZE_Y * DAVIS_COLOR_CHANNELS);
 
 	// Store reference to parent mainloop, so that we can correctly notify
 	// the availability or not of data to consume.
@@ -201,13 +140,15 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 		freeAllPackets(cstate);
 		ringBufferFree(cstate->dataExchangeBuffer);
 
-		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to initialize libusb context. Error: %s (%d).", libusb_strerror(errno), errno);
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to initialize libusb context. Error: %s (%d).",
+			libusb_strerror(errno), errno);
 		return (false);
 	}
 
 	// Try to open a DAVISFX2 device on a specific USB port.
-	cstate->deviceHandle = deviceOpen(cstate->deviceContext, DAVIS_FX2_VID, DAVIS_FX2_PID, DAVIS_FX2_DID_TYPE,
-		sshsNodeGetByte(moduleData->moduleNode, "usbBusNumber"), sshsNodeGetByte(moduleData->moduleNode, "usbDevAddress"));
+	cstate->deviceHandle = deviceOpen(cstate->deviceContext, DAVIS_FX2_VID,
+	DAVIS_FX2_PID, DAVIS_FX2_DID_TYPE, sshsNodeGetByte(moduleData->moduleNode, "usbBusNumber"),
+		sshsNodeGetByte(moduleData->moduleNode, "usbDevAddress"));
 	if (cstate->deviceHandle == NULL) {
 		freeAllPackets(cstate);
 		ringBufferFree(cstate->dataExchangeBuffer);
@@ -226,11 +167,11 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 	uint8_t busNumber = libusb_get_bus_number(libusb_get_device(cstate->deviceHandle));
 	uint8_t devAddress = libusb_get_device_address(libusb_get_device(cstate->deviceHandle));
 
-	size_t fullLogStringLength = (size_t) snprintf(NULL, 0, "%s SN-%s [%" PRIu8 ":%" PRIu8 "]", moduleData->moduleSubSystemString,
-		serialNumber, busNumber, devAddress);
+	size_t fullLogStringLength = (size_t) snprintf(NULL, 0, "%s SN-%s [%" PRIu8 ":%" PRIu8 "]",
+		moduleData->moduleSubSystemString, serialNumber, busNumber, devAddress);
 	char fullLogString[fullLogStringLength + 1];
-	snprintf(fullLogString, fullLogStringLength + 1, "%s SN-%s [%" PRIu8 ":%" PRIu8 "]", moduleData->moduleSubSystemString,
-		serialNumber, busNumber, devAddress);
+	snprintf(fullLogString, fullLogStringLength + 1, "%s SN-%s [%" PRIu8 ":%" PRIu8 "]",
+		moduleData->moduleSubSystemString, serialNumber, busNumber, devAddress);
 
 	caerModuleSetSubSystemString(moduleData, fullLogString);
 	cstate->sourceSubSystemString = moduleData->moduleSubSystemString;
@@ -242,13 +183,14 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 		deviceClose(cstate->deviceHandle);
 		libusb_exit(cstate->deviceContext);
 
-		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to start data acquisition thread. Error: %s (%d).", caerLogStrerror(errno),
-		errno);
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString,
+			"Failed to start data acquisition thread. Error: %s (%d).", caerLogStrerror(errno),
+			errno);
 		return (false);
 	}
 
-	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Initialized DAVISFX2 module successfully with device Bus=%" PRIu8 ":Addr=%" PRIu8 ".",
-		busNumber, devAddress);
+	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString,
+		"Initialized DAVISFX2 module successfully with device Bus=%" PRIu8 ":Addr=%" PRIu8 ".", busNumber, devAddress);
 	return (true);
 }
 
@@ -261,8 +203,8 @@ static void caerInputDAVISFX2Exit(caerModuleData moduleData) {
 	// Wait for data acquisition thread to terminate...
 	if ((errno = pthread_join(state->dataAcquisitionThread, NULL)) != 0) {
 		// This should never happen!
-		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to join data acquisition thread. Error: %s (%d).",
-			caerLogStrerror(errno), errno);
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString,
+			"Failed to join data acquisition thread. Error: %s (%d).", caerLogStrerror(errno), errno);
 	}
 
 	// Finally, close the device fully.
@@ -312,7 +254,8 @@ static void *dataAcquisitionThread(void *inPtr) {
 
 	// APS tests.
 	sendSpiConfigCommand(cstate->deviceHandle, 0x02, 14, 1); // Wait on transfer stall.
-	sendSpiConfigCommand(cstate->deviceHandle, 0x02, 2, sshsNodeGetBool(sshsGetRelativeNode(data->moduleNode, "chip/"), "globalShutter")); // GS/RS support.
+	sendSpiConfigCommand(cstate->deviceHandle, 0x02, 2,
+		sshsNodeGetBool(sshsGetRelativeNode(data->moduleNode, "chip/"), "globalShutter")); // GS/RS support.
 	sendSpiConfigCommand(cstate->deviceHandle, 0x02, 0, 1); // Run APS.
 
 	// Handle USB events (1 second timeout).
@@ -415,7 +358,7 @@ static void sendAddressedCoarseFineBias(sshsNode biasNode, libusb_device_handle 
 static void sendShiftedSourceBias(sshsNode biasNode, libusb_device_handle *devHandle, uint16_t biasAddress,
 	const char *biasName) {
 	// Get integer bias value.
-		uint16_t biasValue = generateShiftedSourceBias(biasNode, biasName);
+	uint16_t biasValue = generateShiftedSourceBias(biasNode, biasName);
 
 	// All biases are two byte quantities.
 	uint8_t bias[2];

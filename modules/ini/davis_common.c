@@ -19,8 +19,8 @@ void freeAllPackets(davisCommonState state) {
 	free(state->currentSpecialPacket);
 }
 
-void createAddressedCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type,
-	const char *sex, uint8_t coarseValue, uint8_t fineValue, bool enabled) {
+void createAddressedCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type, const char *sex,
+	uint8_t coarseValue, uint8_t fineValue, bool enabled) {
 	// Add trailing slash to node name (required!).
 	size_t biasNameLength = strlen(biasName);
 	char biasNameFull[biasNameLength + 2];
@@ -83,8 +83,8 @@ uint16_t generateAddressedCoarseFineBias(sshsNode biasNode, const char *biasName
 	return (biasValue);
 }
 
-void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasName, uint8_t regValue,
-	uint8_t refValue, const char *operatingMode, const char *voltageLevel) {
+void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasName, uint8_t regValue, uint8_t refValue,
+	const char *operatingMode, const char *voltageLevel) {
 	// Add trailing slash to node name (required!).
 	size_t biasNameLength = strlen(biasName);
 	char biasNameFull[biasNameLength + 2];
@@ -144,9 +144,149 @@ void sendSpiConfigCommand(libusb_device_handle *devHandle, uint8_t moduleAddr, u
 	spiConfig[2] = U8T(param >> 8);
 	spiConfig[3] = U8T(param >> 0);
 
-	libusb_control_transfer(devHandle,
-		LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE, VR_FPGA_CONFIG, moduleAddr, paramAddr,
-		spiConfig, sizeof(spiConfig), 0);
+	libusb_control_transfer(devHandle, LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
+		VR_FPGA_CONFIG, moduleAddr, paramAddr, spiConfig, sizeof(spiConfig), 0);
+}
+
+void createCommonConfiguration(caerModuleData moduleData) {
+	sshsNode biasNode = sshsGetRelativeNode(moduleData->moduleNode, "bias/");
+
+	createAddressedCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 3, 72, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 2, 112, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 3, 6,
+	true);
+	createAddressedCoarseFineBiasSetting(biasNode, "ApsCasEpc", "Cascode", "N", 2, 144, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "DiffCasBnc", "Cascode", "N", 2, 115, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 1, 188, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "LocalBufBn", "Normal", "N", 2, 164, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 1, 129, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "P", 6, 255, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 5, 2, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "P", 3, 19, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 0, 140, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 6, 132, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "P", 1, 80, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "P", 1, 152, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 2, 255, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "IFRefrBn", "Normal", "N", 2, 255, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 0, 211, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "apsOverflowLevel", "Normal", "N", 0, 36, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "biasBuffer", "Normal", "N", 1, 251, true);
+
+	createShiftedSourceBiasSetting(biasNode, "SSP", 33, 1, "TiedToRail", "SplitGate");
+	createShiftedSourceBiasSetting(biasNode, "SSN", 33, 2, "ShiftedSource", "SplitGate");
+
+	sshsNode chipNode = sshsGetRelativeNode(moduleData->moduleNode, "chip/");
+
+	sshsNodePutBoolIfAbsent(chipNode, "useAout", false);
+	sshsNodePutBoolIfAbsent(chipNode, "nArow", false);
+	sshsNodePutBoolIfAbsent(chipNode, "hotPixelSuppression", false);
+	sshsNodePutBoolIfAbsent(chipNode, "resetTestpixel", true);
+	sshsNodePutBoolIfAbsent(chipNode, "typeNCalib", false);
+	sshsNodePutBoolIfAbsent(chipNode, "resetCalib", true);
+
+	sshsNode logicNode = sshsGetRelativeNode(moduleData->moduleNode, "logic/");
+
+	// Subsystem 0: Multiplexer
+	sshsNode muxNode = sshsGetRelativeNode(logicNode, "Multiplexer/");
+
+	sshsNodePutBoolIfAbsent(muxNode, "Run", 0);
+	sshsNodePutBoolIfAbsent(muxNode, "TimestampRun", 0);
+	sshsNodePutBoolIfAbsent(muxNode, "TimestampReset", 0);
+	sshsNodePutBoolIfAbsent(muxNode, "ForceChipBiasEnable", 0);
+	sshsNodePutBoolIfAbsent(muxNode, "DropDVSOnTransferStall", 1);
+	sshsNodePutBoolIfAbsent(muxNode, "DropAPSOnTransferStall", 0);
+	sshsNodePutBoolIfAbsent(muxNode, "DropIMUOnTransferStall", 1);
+	sshsNodePutBoolIfAbsent(muxNode, "DropExtInputOnTransferStall", 1);
+
+	// Subsystem 1: DVS AER
+	sshsNode dvsNode = sshsGetRelativeNode(logicNode, "DVSaer/");
+
+	sshsNodePutBoolIfAbsent(dvsNode, "Run", 0);
+	sshsNodePutByteIfAbsent(dvsNode, "AckDelay", 8);
+	sshsNodePutByteIfAbsent(dvsNode, "AckExtension", 2);
+	sshsNodePutBoolIfAbsent(dvsNode, "WaitOnTransferStall", 0);
+
+	// Subsystem 2: APS ADC
+	sshsNode apsNode = sshsGetRelativeNode(logicNode, "APSadc/");
+
+	sshsNodePutBoolIfAbsent(apsNode, "Run", 0);
+	sshsNodePutBoolIfAbsent(apsNode, "ForceADCRunning", 0);
+	sshsNodePutBoolIfAbsent(apsNode, "GlobalShutter", 1);
+	sshsNodePutShortIfAbsent(apsNode, "StartColumn", 0);
+	sshsNodePutShortIfAbsent(apsNode, "StartRow", 0);
+	sshsNodePutShortIfAbsent(apsNode, "EndColumn", DAVIS_ARRAY_SIZE_X - 1);
+	sshsNodePutShortIfAbsent(apsNode, "EndRow", DAVIS_ARRAY_SIZE_Y - 1);
+	sshsNodePutIntIfAbsent(apsNode, "Exposure", 2000);
+	sshsNodePutIntIfAbsent(apsNode, "FrameDelay", 200);
+	sshsNodePutShortIfAbsent(apsNode, "ResetSettle", 10);
+	sshsNodePutByteIfAbsent(apsNode, "ColumnSettle", 10);
+	sshsNodePutByteIfAbsent(apsNode, "RowSettle", 10);
+	sshsNodePutBoolIfAbsent(apsNode, "GSTXGateOpenReset_S", 1);
+	sshsNodePutBoolIfAbsent(apsNode, "ResetRead", 1);
+	sshsNodePutBoolIfAbsent(apsNode, "WaitOnTransferStall", 0);
+	sshsNodePutBoolIfAbsent(apsNode, "ReportADCOverflow", 1);
+
+	// Subsystem 3: IMU
+	sshsNode imuNode = sshsGetRelativeNode(logicNode, "IMU/");
+
+	sshsNodePutBoolIfAbsent(imuNode, "Run", 0);
+	sshsNodePutBoolIfAbsent(imuNode, "TempStandby", 0);
+	sshsNodePutBoolIfAbsent(imuNode, "AccelXStandby", 0);
+	sshsNodePutBoolIfAbsent(imuNode, "AccelYStandby", 0);
+	sshsNodePutBoolIfAbsent(imuNode, "AccelZStandby", 0);
+	sshsNodePutBoolIfAbsent(imuNode, "GyroXStandby", 0);
+	sshsNodePutBoolIfAbsent(imuNode, "GyroYStandby", 0);
+	sshsNodePutBoolIfAbsent(imuNode, "GyroZStandby", 0);
+	sshsNodePutBoolIfAbsent(imuNode, "LowPowerCycle", 0);
+	sshsNodePutByteIfAbsent(imuNode, "LowPowerWakeupFrequency", 1);
+	sshsNodePutByteIfAbsent(imuNode, "SampleRateDivider", 0);
+	sshsNodePutByteIfAbsent(imuNode, "DigitalLowPassFilter", 1);
+	sshsNodePutByteIfAbsent(imuNode, "AccelFullScale", 1);
+	sshsNodePutByteIfAbsent(imuNode, "GyroFullScale", 1);
+
+	// Subsystem 4: External Input
+	sshsNode extNode = sshsGetRelativeNode(logicNode, "ExternalInput/");
+
+	sshsNodePutBoolIfAbsent(extNode, "RunDetector", 0);
+	sshsNodePutBoolIfAbsent(extNode, "DetectRisingEdges", 0);
+	sshsNodePutBoolIfAbsent(extNode, "DetectFallingEdges", 0);
+	sshsNodePutBoolIfAbsent(extNode, "DetectPulses", 1);
+	sshsNodePutBoolIfAbsent(extNode, "DetectPulsePolarity", 1);
+	sshsNodePutIntIfAbsent(extNode, "DetectPulseLength", 10);
+
+	// Subsystem 9: FX2/3 USB Configuration
+	sshsNode fx2Node = sshsGetRelativeNode(logicNode, "USB/");
+
+	sshsNodePutBoolIfAbsent(fx2Node, "Run", 1);
+	sshsNodePutShortIfAbsent(fx2Node, "EarlyPacketDelay", 8);
+
+	// USB port settings/restrictions.
+	sshsNodePutByteIfAbsent(moduleData->moduleNode, "usbBusNumber", 0);
+	sshsNodePutByteIfAbsent(moduleData->moduleNode, "usbDevAddress", 0);
+
+	// USB buffer settings.
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferNumber", 8);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferSize", 8192);
+
+	// Packet settings (size (in events) and time interval (in µs)).
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "polarityPacketMaxSize", 4096);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "polarityPacketMaxInterval", 5000);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "framePacketMaxSize", 4);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "framePacketMaxInterval", 20000);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "imu6PacketMaxSize", 32);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "imu6PacketMaxInterval", 4000);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "specialPacketMaxSize", 128);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "specialPacketMaxInterval", 1000);
+
+	// Ring-buffer setting (only changes value on module init/shutdown cycles).
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "dataExchangeBufferSize", 64);
+
+	// Install default listener to signal configuration updates asynchronously.
+	sshsNodeAddAttrListener(biasNode, moduleData, &caerInputDAVISCommonConfigListener);
+	sshsNodeAddAttrListener(chipNode, moduleData, &caerInputDAVISCommonConfigListener);
+	sshsNodeAddAttrListener(logicNode, moduleData, &caerInputDAVISCommonConfigListener);
+	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerInputDAVISCommonConfigListener);
 }
 
 void caerInputDAVISCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
@@ -315,8 +455,8 @@ void allocateDataTransfers(davisCommonState state, uint32_t bufferNum, uint32_t 
 	for (size_t i = 0; i < bufferNum; i++) {
 		state->dataTransfers[i] = libusb_alloc_transfer(0);
 		if (state->dataTransfers[i] == NULL) {
-			caerLog(LOG_CRITICAL, state->sourceSubSystemString, "Unable to allocate further libusb transfers (data channel, %zu of %" PRIu32 ").",
-				i, bufferNum);
+			caerLog(LOG_CRITICAL, state->sourceSubSystemString,
+				"Unable to allocate further libusb transfers (data channel, %zu of %" PRIu32 ").", i, bufferNum);
 			return;
 		}
 
@@ -324,8 +464,9 @@ void allocateDataTransfers(davisCommonState state, uint32_t bufferNum, uint32_t 
 		state->dataTransfers[i]->length = (int) bufferSize;
 		state->dataTransfers[i]->buffer = malloc(bufferSize);
 		if (state->dataTransfers[i]->buffer == NULL) {
-			caerLog(LOG_CRITICAL, state->sourceSubSystemString, "Unable to allocate buffer for libusb transfer %zu (data channel). Error: %s (%d).",
-				i, caerLogStrerror(errno), errno);
+			caerLog(LOG_CRITICAL, state->sourceSubSystemString,
+				"Unable to allocate buffer for libusb transfer %zu (data channel). Error: %s (%d).", i,
+				caerLogStrerror(errno), errno);
 
 			libusb_free_transfer(state->dataTransfers[i]);
 			state->dataTransfers[i] = NULL;
@@ -346,8 +487,9 @@ void allocateDataTransfers(davisCommonState state, uint32_t bufferNum, uint32_t 
 			atomic_ops_uint_inc(&state->dataTransfersLength, ATOMIC_OPS_FENCE_NONE);
 		}
 		else {
-			caerLog(LOG_CRITICAL, state->sourceSubSystemString, "Unable to submit libusb transfer %zu (data channel). Error: %s (%d).", i,
-				libusb_strerror(errno), errno);
+			caerLog(LOG_CRITICAL, state->sourceSubSystemString,
+				"Unable to submit libusb transfer %zu (data channel). Error: %s (%d).", i, libusb_strerror(errno),
+				errno);
 
 			// The transfer buffer is freed automatically here thanks to
 			// the LIBUSB_TRANSFER_FREE_BUFFER flag set above.
@@ -367,8 +509,9 @@ void deallocateDataTransfers(davisCommonState state) {
 	for (size_t i = 0; i < transfersNum; i++) {
 		errno = libusb_cancel_transfer(state->dataTransfers[i]);
 		if (errno != LIBUSB_SUCCESS && errno != LIBUSB_ERROR_NOT_FOUND) {
-			caerLog(LOG_CRITICAL, state->sourceSubSystemString, "Unable to cancel libusb transfer %zu (data channel). Error: %s (%d).",
-				i, libusb_strerror(errno), errno);
+			caerLog(LOG_CRITICAL, state->sourceSubSystemString,
+				"Unable to cancel libusb transfer %zu (data channel). Error: %s (%d).", i, libusb_strerror(errno),
+				errno);
 			// Proceed with canceling all transfers regardless of errors.
 		}
 	}
@@ -409,7 +552,8 @@ static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer) {
 static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytesSent) {
 	// Truncate off any extra partial event.
 	if ((bytesSent & 0x01) != 0) {
-		caerLog(LOG_ALERT, state->sourceSubSystemString, "%zu bytes sent via USB, which is not a multiple of two.", bytesSent);
+		caerLog(LOG_ALERT, state->sourceSubSystemString, "%zu bytes sent via USB, which is not a multiple of two.",
+			bytesSent);
 		bytesSent &= (size_t) ~0x01;
 	}
 
@@ -444,7 +588,6 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							state->lastTimestamp = 0;
 							state->currentTimestamp = 0;
 							state->dvsTimestamp = 0;
-							state->imuTimestamp = 0;
 
 							caerLog(LOG_INFO, state->sourceSubSystemString, "Timestamp reset event received.");
 
@@ -472,9 +615,12 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							break;
 						}
 
-						case 5: // IMU Start (6 axes)
-							state->imuTimestamp = state->currentTimestamp;
+						case 5: { // IMU Start (6 axes)
+							caerIMU6Event currentIMUEvent = caerIMU6EventPacketGetEvent(state->currentIMU6Packet,
+								state->currentIMU6PacketPosition);
+							caerIMU6EventSetTimestamp(currentIMUEvent, state->currentTimestamp);
 							break;
+						}
 
 						case 7: // IMU End
 							break;
@@ -490,13 +636,13 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 							// Write out start of frame timestamp.
 							caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
-									state->currentFramePacketPosition);
+								state->currentFramePacketPosition);
 							caerFrameEventSetTSStartOfFrame(currentFrameEvent, state->currentTimestamp);
 
 							// Setup frame.
 							caerFrameEventSetChannelNumber(currentFrameEvent, DAVIS_COLOR_CHANNELS);
 							caerFrameEventSetLengthXY(currentFrameEvent, state->currentFramePacket,
-								DAVIS_ARRAY_SIZE_X, DAVIS_ARRAY_SIZE_Y);
+							DAVIS_ARRAY_SIZE_X, DAVIS_ARRAY_SIZE_Y);
 
 							break;
 						}
@@ -507,11 +653,13 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							bool validFrame = true;
 
 							for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
-								caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Frame End: CountX[%zu] is %d.", j, state->apsCountX[j]);
+								caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Frame End: CountX[%zu] is %d.", j,
+									state->apsCountX[j]);
 
 								if (state->apsCountX[j] != DAVIS_ARRAY_SIZE_X) {
-									caerLog(LOG_ERROR, state->sourceSubSystemString, "APS Frame End: wrong column count [%zu - %d] detected.",
-										j, state->apsCountX[j]);
+									caerLog(LOG_ERROR, state->sourceSubSystemString,
+										"APS Frame End: wrong column count [%zu - %d] detected.", j,
+										state->apsCountX[j]);
 									validFrame = false;
 								}
 							}
@@ -538,10 +686,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 							// The first Reset Column Read Start is also the start
 							// of the exposure for the RS.
-							if (!state->apsGlobalShutter
-								&& state->apsCountX[APS_READOUT_RESET] == 0) {
-								caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
-									state->currentFramePacketPosition);
+							if (!state->apsGlobalShutter && state->apsCountX[APS_READOUT_RESET] == 0) {
+								caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(
+									state->currentFramePacket, state->currentFramePacketPosition);
 								caerFrameEventSetTSStartOfExposure(currentFrameEvent, state->currentTimestamp);
 							}
 
@@ -557,8 +704,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							// The first Signal Column Read Start is also always the end
 							// of the exposure time, for both RS and GS.
 							if (state->apsCountX[APS_READOUT_SIGNAL] == 0) {
-								caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
-									state->currentFramePacketPosition);
+								caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(
+									state->currentFramePacket, state->currentFramePacketPosition);
 								caerFrameEventSetTSEndOfExposure(currentFrameEvent, state->currentTimestamp);
 							}
 
@@ -569,12 +716,15 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End");
 
 							if (state->apsCountY[state->apsCurrentReadoutType] != DAVIS_ARRAY_SIZE_Y) {
-								caerLog(LOG_ERROR, state->sourceSubSystemString, "APS Column End: wrong row count [%d - %d] detected.",
-									state->apsCurrentReadoutType, state->apsCountY[state->apsCurrentReadoutType]);
+								caerLog(LOG_ERROR, state->sourceSubSystemString,
+									"APS Column End: wrong row count [%d - %d] detected.", state->apsCurrentReadoutType,
+									state->apsCountY[state->apsCurrentReadoutType]);
 							}
 
-							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End: CountX[%d] is %d.", state->apsCurrentReadoutType, state->apsCountX[state->apsCurrentReadoutType]);
-							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End: CountY[%d] is %d.", state->apsCurrentReadoutType, state->apsCountY[state->apsCurrentReadoutType]);
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End: CountX[%d] is %d.",
+								state->apsCurrentReadoutType, state->apsCountX[state->apsCurrentReadoutType]);
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End: CountY[%d] is %d.",
+								state->apsCurrentReadoutType, state->apsCountY[state->apsCurrentReadoutType]);
 
 							state->apsCountX[state->apsCurrentReadoutType]++;
 
@@ -582,8 +732,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							// of the exposure for the GS.
 							if (state->apsGlobalShutter && state->apsCurrentReadoutType == APS_READOUT_RESET
 								&& state->apsCountX[APS_READOUT_RESET] == DAVIS_ARRAY_SIZE_X) {
-								caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
-										state->currentFramePacketPosition);
+								caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(
+									state->currentFramePacket, state->currentFramePacketPosition);
 								caerFrameEventSetTSStartOfExposure(currentFrameEvent, state->currentTimestamp);
 							}
 
@@ -595,8 +745,10 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
 								state->currentFramePacketPosition);
 
-							uint16_t xPos = U16T(DAVIS_ARRAY_SIZE_X - 1 - state->apsCountX[state->apsCurrentReadoutType]);
-							uint16_t yPos =U16T( DAVIS_ARRAY_SIZE_Y - 1 - state->apsCountY[state->apsCurrentReadoutType]);
+							uint16_t xPos = U16T(
+								DAVIS_ARRAY_SIZE_X - 1 - state->apsCountX[state->apsCurrentReadoutType]);
+							uint16_t yPos = U16T(
+								DAVIS_ARRAY_SIZE_Y - 1 - state->apsCountY[state->apsCurrentReadoutType]);
 
 							size_t pixelPosition = (size_t) (yPos * caerFrameEventGetLengthX(currentFrameEvent)) + xPos;
 
@@ -604,11 +756,12 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 								state->apsCurrentResetFrame[pixelPosition] = 0xFFFF;
 							}
 							else {
-								caerFrameEventGetPixelArrayUnsafe(currentFrameEvent)[pixelPosition] =
-									htole16(U16T(state->apsCurrentResetFrame[pixelPosition] - 0xFFFF));
+								caerFrameEventGetPixelArrayUnsafe(currentFrameEvent)[pixelPosition] = htole16(
+									U16T(state->apsCurrentResetFrame[pixelPosition] - 0xFFFF));
 							}
 
-							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS ADC Overflow: row is %d.", state->apsCountY[state->apsCurrentReadoutType]);
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS ADC Overflow: row is %d.",
+								state->apsCountY[state->apsCurrentReadoutType]);
 
 							state->apsCountY[state->apsCurrentReadoutType]++;
 
@@ -616,7 +769,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						}
 
 						default:
-							caerLog(LOG_ERROR, state->sourceSubSystemString, "Caught special event that can't be handled.");
+							caerLog(LOG_ERROR, state->sourceSubSystemString,
+								"Caught special event that can't be handled.");
 							break;
 					}
 					break;
@@ -638,7 +792,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						caerSpecialEventSetData(currentRowOnlyEvent, state->lastY);
 						caerSpecialEventValidate(currentRowOnlyEvent, state->currentSpecialPacket);
 
-						caerLog(LOG_DEBUG, state->sourceSubSystemString, "Row-only event at address Y=%" PRIu16 ".", state->lastY);
+						caerLog(LOG_DEBUG, state->sourceSubSystemString, "Row-only event at address Y=%" PRIu16 ".",
+							state->lastY);
 					}
 
 					state->lastY = data;
@@ -691,11 +846,12 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						state->apsCurrentResetFrame[pixelPosition] = data;
 					}
 					else {
-						caerFrameEventGetPixelArrayUnsafe(currentFrameEvent)[pixelPosition] =
-							htole16(U16T(state->apsCurrentResetFrame[pixelPosition] - data));
+						caerFrameEventGetPixelArrayUnsafe(currentFrameEvent)[pixelPosition] = htole16(
+							U16T(state->apsCurrentResetFrame[pixelPosition] - data));
 					}
 
-					caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS ADC Sample: row is %d.", state->apsCountY[state->apsCurrentReadoutType]);
+					caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS ADC Sample: row is %d.",
+						state->apsCountY[state->apsCurrentReadoutType]);
 
 					state->apsCountY[state->apsCurrentReadoutType]++;
 
@@ -717,9 +873,11 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					state->currentTimestamp = state->wrapAdd;
 
 					// Check monotonicity of timestamps.
-					CHECK_MONOTONIC_TIMESTAMP(state->currentTimestamp, state->lastTimestamp);
+					CHECK_MONOTONIC_TIMESTAMP(state->currentTimestamp, state->lastTimestamp)
+					;
 
-					caerLog(LOG_DEBUG, state->sourceSubSystemString, "Timestamp wrap event received with multiplier of %" PRIu16 ".", data);
+					caerLog(LOG_DEBUG, state->sourceSubSystemString,
+						"Timestamp wrap event received with multiplier of %" PRIu16 ".", data);
 					break;
 
 				default:
@@ -742,7 +900,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 			if (!ringBufferPut(state->dataExchangeBuffer, state->currentPolarityPacket)) {
 				// Failed to forward packet, drop it.
 				free(state->currentPolarityPacket);
-				caerLog(LOG_INFO, state->sourceSubSystemString, "Dropped Polarity Event Packet because ring-buffer full!");
+				caerLog(LOG_INFO, state->sourceSubSystemString,
+					"Dropped Polarity Event Packet because ring-buffer full!");
 			}
 			else {
 				caerMainloopDataAvailableIncrease(state->mainloopNotify);
@@ -773,7 +932,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 				else {
 					// Failed to forward packet, drop it.
 					free(state->currentSpecialPacket);
-					caerLog(LOG_INFO, state->sourceSubSystemString, "Dropped Special Event Packet because ring-buffer full!");
+					caerLog(LOG_INFO, state->sourceSubSystemString,
+						"Dropped Special Event Packet because ring-buffer full!");
 				}
 			}
 			else {
@@ -790,8 +950,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 				>= caerEventPacketHeaderGetEventCapacity(&state->currentFramePacket->packetHeader))
 			|| ((state->currentFramePacketPosition > 1)
 				&& (caerFrameEventGetTSStartOfExposure(
-					caerFrameEventPacketGetEvent(state->currentFramePacket,
-						state->currentFramePacketPosition - 1))
+					caerFrameEventPacketGetEvent(state->currentFramePacket, state->currentFramePacketPosition - 1))
 					- caerFrameEventGetTSStartOfExposure(caerFrameEventPacketGetEvent(state->currentFramePacket, 0))
 					>= state->maxFramePacketInterval))) {
 			if (!ringBufferPut(state->dataExchangeBuffer, state->currentFramePacket)) {
@@ -804,15 +963,15 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 			}
 
 			// Allocate new packet for next iteration.
-			state->currentFramePacket = caerFrameEventPacketAllocate(state->maxFramePacketSize,
-				state->sourceID, DAVIS_ARRAY_SIZE_X, DAVIS_ARRAY_SIZE_Y, DAVIS_COLOR_CHANNELS);
+			state->currentFramePacket = caerFrameEventPacketAllocate(state->maxFramePacketSize, state->sourceID,
+				DAVIS_ARRAY_SIZE_X, DAVIS_ARRAY_SIZE_Y, DAVIS_COLOR_CHANNELS);
 			state->currentFramePacketPosition = 0;
 		}
 	}
 }
 
-libusb_device_handle *deviceOpen(libusb_context *devContext, uint16_t devVID, uint16_t devPID,
-	uint8_t devType, uint8_t busNumber, uint8_t devAddress) {
+libusb_device_handle *deviceOpen(libusb_context *devContext, uint16_t devVID, uint16_t devPID, uint8_t devType,
+	uint8_t busNumber, uint8_t devAddress) {
 	libusb_device_handle *devHandle = NULL;
 	libusb_device **devicesList;
 

@@ -39,15 +39,18 @@ struct davisCommon_state {
 	uint32_t lastTimestamp;
 	uint32_t currentTimestamp;
 	uint32_t dvsTimestamp;
-	uint32_t imuTimestamp;
 	uint16_t lastY;
 	bool gotY;
 	bool translateRowOnlyEvents;
+	uint16_t sizeX;
+	uint16_t sizeY;
 	bool apsGlobalShutter;
 	uint16_t apsCurrentReadoutType;
 	uint16_t apsCountX[APS_READOUT_TYPES_NUM];
 	uint16_t apsCountY[APS_READOUT_TYPES_NUM];
-	uint16_t apsCurrentResetFrame[DAVIS_ARRAY_SIZE_X * DAVIS_ARRAY_SIZE_Y * DAVIS_COLOR_CHANNELS];
+	uint16_t *apsCurrentResetFrame;
+	uint16_t apsSizeX;
+	uint16_t apsSizeY;
 	// Polarity Packet State
 	caerPolarityEventPacket currentPolarityPacket;
 	uint32_t currentPolarityPacketPosition;
@@ -73,18 +76,19 @@ struct davisCommon_state {
 typedef struct davisCommon_state *davisCommonState;
 
 void freeAllPackets(davisCommonState state);
-void createAddressedCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type,
-	const char *sex, uint8_t coarseValue, uint8_t fineValue, bool enabled);
+void createAddressedCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type, const char *sex,
+	uint8_t coarseValue, uint8_t fineValue, bool enabled);
 uint16_t generateAddressedCoarseFineBias(sshsNode biasNode, const char *biasName);
-void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasName, uint8_t regValue,
-	uint8_t refValue, const char *operatingMode, const char *voltageLevel);
+void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasName, uint8_t regValue, uint8_t refValue,
+	const char *operatingMode, const char *voltageLevel);
 uint16_t generateShiftedSourceBias(sshsNode biasNode, const char *biasName);
 void sendSpiConfigCommand(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr, uint32_t param);
+void createCommonConfiguration(caerModuleData moduleData);
 void caerInputDAVISCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 void allocateDataTransfers(davisCommonState state, uint32_t bufferNum, uint32_t bufferSize);
 void deallocateDataTransfers(davisCommonState state);
-libusb_device_handle *deviceOpen(libusb_context *devContext, uint16_t devVID, uint16_t devPID,
-		uint8_t devType, uint8_t busNumber, uint8_t devAddress);
+libusb_device_handle *deviceOpen(libusb_context *devContext, uint16_t devVID, uint16_t devPID, uint8_t devType,
+	uint8_t busNumber, uint8_t devAddress);
 void deviceClose(libusb_device_handle *devHandle);
 void caerInputDAVISCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
