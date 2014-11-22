@@ -38,19 +38,21 @@ struct davisCommon_state {
 	uint32_t wrapAdd;
 	uint32_t lastTimestamp;
 	uint32_t currentTimestamp;
+	// DVS specific fields
 	uint32_t dvsTimestamp;
-	uint16_t lastY;
-	bool gotY;
-	bool translateRowOnlyEvents;
-	uint16_t sizeX;
-	uint16_t sizeY;
+	uint16_t dvsSizeX;
+	uint16_t dvsSizeY;
+	uint16_t dvsLastY;
+	bool dvsGotY;
+	bool dvsTranslateRowOnlyEvents;
+	// APS specific fields
+	uint16_t apsSizeX;
+	uint16_t apsSizeY;
 	bool apsGlobalShutter;
 	uint16_t apsCurrentReadoutType;
 	uint16_t apsCountX[APS_READOUT_TYPES_NUM];
 	uint16_t apsCountY[APS_READOUT_TYPES_NUM];
-	uint16_t *apsCurrentResetFrame;
-	uint16_t apsSizeX;
-	uint16_t apsSizeY;
+	uint16_t apsCurrentResetFrame[DAVIS_ARRAY_SIZE_X * DAVIS_ARRAY_SIZE_Y * DAVIS_COLOR_CHANNELS];
 	// Polarity Packet State
 	caerPolarityEventPacket currentPolarityPacket;
 	uint32_t currentPolarityPacketPosition;

@@ -145,7 +145,7 @@ void sendSpiConfigCommand(libusb_device_handle *devHandle, uint8_t moduleAddr, u
 	spiConfig[3] = U8T(param >> 0);
 
 	libusb_control_transfer(devHandle, LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
-		VR_FPGA_CONFIG, moduleAddr, paramAddr, spiConfig, sizeof(spiConfig), 0);
+	VR_FPGA_CONFIG, moduleAddr, paramAddr, spiConfig, sizeof(spiConfig), 0);
 }
 
 void createCommonConfiguration(caerModuleData moduleData) {
@@ -200,7 +200,7 @@ void createCommonConfiguration(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(muxNode, "DropExtInputOnTransferStall", 1);
 
 	// Subsystem 1: DVS AER
-	sshsNode dvsNode = sshsGetRelativeNode(logicNode, "DVSaer/");
+	sshsNode dvsNode = sshsGetRelativeNode(logicNode, "DVS/");
 
 	sshsNodePutBoolIfAbsent(dvsNode, "Run", 0);
 	sshsNodePutByteIfAbsent(dvsNode, "AckDelay", 8);
@@ -208,7 +208,7 @@ void createCommonConfiguration(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(dvsNode, "WaitOnTransferStall", 0);
 
 	// Subsystem 2: APS ADC
-	sshsNode apsNode = sshsGetRelativeNode(logicNode, "APSadc/");
+	sshsNode apsNode = sshsGetRelativeNode(logicNode, "APS/");
 
 	sshsNodePutBoolIfAbsent(apsNode, "Run", 0);
 	sshsNodePutBoolIfAbsent(apsNode, "ForceADCRunning", 0);
@@ -217,11 +217,11 @@ void createCommonConfiguration(caerModuleData moduleData) {
 	sshsNodePutShortIfAbsent(apsNode, "StartRow", 0);
 	sshsNodePutShortIfAbsent(apsNode, "EndColumn", DAVIS_ARRAY_SIZE_X - 1);
 	sshsNodePutShortIfAbsent(apsNode, "EndRow", DAVIS_ARRAY_SIZE_Y - 1);
-	sshsNodePutIntIfAbsent(apsNode, "Exposure", 2000);
-	sshsNodePutIntIfAbsent(apsNode, "FrameDelay", 200);
-	sshsNodePutShortIfAbsent(apsNode, "ResetSettle", 10);
-	sshsNodePutByteIfAbsent(apsNode, "ColumnSettle", 10);
-	sshsNodePutByteIfAbsent(apsNode, "RowSettle", 10);
+	sshsNodePutIntIfAbsent(apsNode, "Exposure", 2000); // in µs, converted to cycles later
+	sshsNodePutIntIfAbsent(apsNode, "FrameDelay", 200); // in µs, converted to cycles later
+	sshsNodePutShortIfAbsent(apsNode, "ResetSettle", 10); // in cycles
+	sshsNodePutByteIfAbsent(apsNode, "ColumnSettle", 10); // in cycles
+	sshsNodePutByteIfAbsent(apsNode, "RowSettle", 10); // in cycles
 	sshsNodePutBoolIfAbsent(apsNode, "GSTXGateOpenReset_S", 1);
 	sshsNodePutBoolIfAbsent(apsNode, "ResetRead", 1);
 	sshsNodePutBoolIfAbsent(apsNode, "WaitOnTransferStall", 0);
@@ -756,8 +756,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 								state->apsCurrentResetFrame[pixelPosition] = 0xFFFF;
 							}
 							else {
+								int32_t pixelValue = state->apsCurrentResetFrame[pixelPosition] - 0xFFFF;
 								caerFrameEventGetPixelArrayUnsafe(currentFrameEvent)[pixelPosition] = htole16(
-									U16T(state->apsCurrentResetFrame[pixelPosition] - 0xFFFF));
+									U16T((pixelValue < 0) ? (0) : (pixelValue)));
 							}
 
 							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS ADC Overflow: row is %d.",
@@ -783,21 +784,21 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						continue; // Skip invalid Y address (don't update lastY).
 					}
 
-					if (state->translateRowOnlyEvents && state->gotY) {
+					if (state->dvsTranslateRowOnlyEvents && state->dvsGotY) {
 						caerSpecialEvent currentRowOnlyEvent = caerSpecialEventPacketGetEvent(
 							state->currentSpecialPacket, state->currentSpecialPacketPosition++);
 						// Use the previous timestamp here, since this refers to the previous Y.
 						caerSpecialEventSetTimestamp(currentRowOnlyEvent, state->dvsTimestamp);
 						caerSpecialEventSetType(currentRowOnlyEvent, ROW_ONLY);
-						caerSpecialEventSetData(currentRowOnlyEvent, state->lastY);
+						caerSpecialEventSetData(currentRowOnlyEvent, state->dvsLastY);
 						caerSpecialEventValidate(currentRowOnlyEvent, state->currentSpecialPacket);
 
 						caerLog(LOG_DEBUG, state->sourceSubSystemString, "Row-only event at address Y=%" PRIu16 ".",
-							state->lastY);
+							state->dvsLastY);
 					}
 
-					state->lastY = data;
-					state->gotY = true;
+					state->dvsLastY = data;
+					state->dvsGotY = true;
 					state->dvsTimestamp = state->currentTimestamp;
 
 					break;
@@ -815,11 +816,11 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						state->currentPolarityPacket, state->currentPolarityPacketPosition++);
 					caerPolarityEventSetTimestamp(currentPolarityEvent, state->dvsTimestamp);
 					caerPolarityEventSetPolarity(currentPolarityEvent, (code & 0x01));
-					caerPolarityEventSetY(currentPolarityEvent, state->lastY);
+					caerPolarityEventSetY(currentPolarityEvent, state->dvsLastY);
 					caerPolarityEventSetX(currentPolarityEvent, data);
 					caerPolarityEventValidate(currentPolarityEvent, state->currentPolarityPacket);
 
-					state->gotY = false;
+					state->dvsGotY = false;
 
 					break;
 				}
@@ -832,7 +833,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					// store the final pixel value directly in the output frame event. We already
 					// do the subtraction between reset and signal here, to avoid carrying that
 					// around all the time and consuming memory. This way we can also only take
-					// sporadic reset reads and re-use them for multiple frames, which can heavily
+					// infrequent reset reads and re-use them for multiple frames, which can heavily
 					// reduce traffic, and should not impact image quality heavily, at least in GS.
 					caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
 						state->currentFramePacketPosition);
@@ -846,8 +847,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						state->apsCurrentResetFrame[pixelPosition] = data;
 					}
 					else {
+						int32_t pixelValue = state->apsCurrentResetFrame[pixelPosition] - data;
 						caerFrameEventGetPixelArrayUnsafe(currentFrameEvent)[pixelPosition] = htole16(
-							U16T(state->apsCurrentResetFrame[pixelPosition] - data));
+							U16T((pixelValue < 0) ? (0) : (pixelValue)));
 					}
 
 					caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS ADC Sample: row is %d.",
@@ -964,7 +966,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 			// Allocate new packet for next iteration.
 			state->currentFramePacket = caerFrameEventPacketAllocate(state->maxFramePacketSize, state->sourceID,
-				DAVIS_ARRAY_SIZE_X, DAVIS_ARRAY_SIZE_Y, DAVIS_COLOR_CHANNELS);
+			DAVIS_ARRAY_SIZE_X, DAVIS_ARRAY_SIZE_Y, DAVIS_COLOR_CHANNELS);
 			state->currentFramePacketPosition = 0;
 		}
 	}

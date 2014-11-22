@@ -118,10 +118,11 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 	cstate->lastTimestamp = 0;
 	cstate->currentTimestamp = 0;
 	cstate->dvsTimestamp = 0;
-	cstate->lastY = 0;
-	cstate->gotY = false;
-	cstate->translateRowOnlyEvents = false;
-	cstate->apsGlobalShutter = true;
+	cstate->dvsLastY = 0;
+	cstate->dvsGotY = false;
+	cstate->dvsTranslateRowOnlyEvents = false;
+	cstate->apsGlobalShutter = sshsNodeGetBool(sshsGetRelativeNode(moduleData->moduleNode, "logic/APS/"),
+		"GlobalShutter");
 	cstate->apsCurrentReadoutType = APS_READOUT_RESET;
 	for (size_t i = 0; i < APS_READOUT_TYPES_NUM; i++) {
 		cstate->apsCountX[i] = 0;
@@ -261,7 +262,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 	// APS tests.
 	sendSpiConfigCommand(cstate->deviceHandle, 0x02, 14, 1); // Wait on transfer stall.
 	sendSpiConfigCommand(cstate->deviceHandle, 0x02, 2,
-		sshsNodeGetBool(sshsGetRelativeNode(data->moduleNode, "chip/"), "globalShutter")); // GS/RS support.
+		sshsNodeGetBool(sshsGetRelativeNode(data->moduleNode, "logic/APS/"), "GlobalShutter")); // GS/RS support.
 	sendSpiConfigCommand(cstate->deviceHandle, 0x02, 0, 1); // Run APS.
 
 	// Handle USB events (1 second timeout).

@@ -109,10 +109,11 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 	cstate->lastTimestamp = 0;
 	cstate->currentTimestamp = 0;
 	cstate->dvsTimestamp = 0;
-	cstate->lastY = 0;
-	cstate->gotY = false;
-	cstate->translateRowOnlyEvents = false;
-	cstate->apsGlobalShutter = true;
+	cstate->dvsLastY = 0;
+	cstate->dvsGotY = false;
+	cstate->dvsTranslateRowOnlyEvents = false;
+	cstate->apsGlobalShutter = sshsNodeGetBool(sshsGetRelativeNode(moduleData->moduleNode, "logic/APS/"),
+		"GlobalShutter");
 	cstate->apsCurrentReadoutType = APS_READOUT_RESET;
 	for (size_t i = 0; i < APS_READOUT_TYPES_NUM; i++) {
 		cstate->apsCountX[i] = 0;
@@ -239,7 +240,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 
 	// Send default start-up biases and config values to device before enabling it.
 	sendBiases(sshsGetRelativeNode(data->moduleNode, "bias/"), cstate->deviceHandle);
-	sendChipSR(sshsGetRelativeNode(data->moduleNode, "chip/"), cstate->deviceHandle);
+	sendChipSR(data->moduleNode, cstate->deviceHandle);
 	// TODO: fpga config here.
 
 	// Create buffers as specified in config file.
@@ -255,7 +256,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 	// APS tests.
 	sendSpiConfigCommand(cstate->deviceHandle, 0x02, 14, 1); // Wait on transfer stall.
 	sendSpiConfigCommand(cstate->deviceHandle, 0x02, 2,
-		sshsNodeGetBool(sshsGetRelativeNode(data->moduleNode, "chip/"), "globalShutter")); // GS/RS support.
+		sshsNodeGetBool(sshsGetRelativeNode(data->moduleNode, "logic/APS/"), "GlobalShutter")); // GS/RS support.
 	sendSpiConfigCommand(cstate->deviceHandle, 0x02, 0, 1); // Run APS.
 
 	// Handle USB events (1 second timeout).
@@ -308,7 +309,7 @@ static void dataAcquisitionThreadConfig(caerModuleData moduleData) {
 
 	if (configUpdate & (0x01 << 1)) {
 		// Chip config update required.
-		sendChipSR(sshsGetRelativeNode(moduleData->moduleNode, "chip/"), cstate->deviceHandle);
+		sendChipSR(moduleData->moduleNode, cstate->deviceHandle);
 	}
 
 	if (configUpdate & (0x01 << 2)) {
@@ -397,18 +398,20 @@ static void sendBiases(sshsNode biasNode, libusb_device_handle *devHandle) {
 	sendShiftedSourceBias(biasNode, devHandle, 21, "SSN");
 }
 
-static void sendChipSR(sshsNode chipNode, libusb_device_handle *devHandle) {
+static void sendChipSR(sshsNode moduleNode, libusb_device_handle *devHandle) {
 	// A total of 56 bits (7 bytes) of configuration
 	uint8_t chipSR[7] = { 0 };
 
 	// Muxes are all kept at zero for now (no control). (TODO)
 
 	// Bytes 2-4 contain the actual 24 configuration bits. 17 are unused.
-	bool globalShutter = sshsNodeGetBool(chipNode, "globalShutter");
+	bool globalShutter = sshsNodeGetBool(sshsGetRelativeNode(moduleNode, "logic/APS/"), "GlobalShutter");
 	if (globalShutter) {
 		// Flip bit on if enabled.
 		chipSR[4] |= (1 << 6);
 	}
+
+	sshsNode chipNode = sshsGetRelativeNode(moduleNode, "chip/");
 
 	bool useAout = sshsNodeGetBool(chipNode, "useAout");
 	if (useAout) {
