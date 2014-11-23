@@ -225,7 +225,6 @@ void createCommonConfiguration(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(apsNode, "GSTXGateOpenReset_S", 1);
 	sshsNodePutBoolIfAbsent(apsNode, "ResetRead", 1);
 	sshsNodePutBoolIfAbsent(apsNode, "WaitOnTransferStall", 0);
-	sshsNodePutBoolIfAbsent(apsNode, "ReportADCOverflow", 1);
 
 	// Subsystem 3: IMU
 	sshsNode imuNode = sshsGetRelativeNode(logicNode, "IMU/");
@@ -736,35 +735,6 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 									state->currentFramePacket, state->currentFramePacketPosition);
 								caerFrameEventSetTSStartOfExposure(currentFrameEvent, state->currentTimestamp);
 							}
-
-							break;
-						}
-
-						case 13: { // APS ADC Overflow
-							// Detect overflow, log it and put an all-ones pixel in its place.
-							caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
-								state->currentFramePacketPosition);
-
-							uint16_t xPos = U16T(
-								DAVIS_ARRAY_SIZE_X - 1 - state->apsCountX[state->apsCurrentReadoutType]);
-							uint16_t yPos = U16T(
-								DAVIS_ARRAY_SIZE_Y - 1 - state->apsCountY[state->apsCurrentReadoutType]);
-
-							size_t pixelPosition = (size_t) (yPos * caerFrameEventGetLengthX(currentFrameEvent)) + xPos;
-
-							if (state->apsCurrentReadoutType == APS_READOUT_RESET) {
-								state->apsCurrentResetFrame[pixelPosition] = 0xFFFF;
-							}
-							else {
-								int32_t pixelValue = state->apsCurrentResetFrame[pixelPosition] - 0xFFFF;
-								caerFrameEventGetPixelArrayUnsafe(currentFrameEvent)[pixelPosition] = htole16(
-									U16T((pixelValue < 0) ? (0) : (pixelValue)));
-							}
-
-							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS ADC Overflow: row is %d.",
-								state->apsCountY[state->apsCurrentReadoutType]);
-
-							state->apsCountY[state->apsCurrentReadoutType]++;
 
 							break;
 						}
