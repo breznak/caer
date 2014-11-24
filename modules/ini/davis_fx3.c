@@ -7,8 +7,6 @@
 struct davisFX3_state {
 	// State for data management, common to all DAVISes.
 	struct davisCommon_state cstate;
-	// Data Acquisition Thread
-	pthread_t dataAcquisitionThread;
 	// Debug transfer support (FX3 only).
 	struct libusb_transfer **debugTransfers;
 	atomic_ops_uint debugTransfersLength;
@@ -186,7 +184,7 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 	cstate->sourceSubSystemString = moduleData->moduleSubSystemString;
 
 	// Start data acquisition thread.
-	if ((errno = pthread_create(&state->dataAcquisitionThread, NULL, &dataAcquisitionThread, moduleData)) != 0) {
+	if ((errno = pthread_create(&state->cstate.dataAcquisitionThread, NULL, &dataAcquisitionThread, moduleData)) != 0) {
 		freeAllPackets(cstate);
 		ringBufferFree(cstate->dataExchangeBuffer);
 		deviceClose(cstate->deviceHandle);
@@ -210,7 +208,7 @@ static void caerInputDAVISFX3Exit(caerModuleData moduleData) {
 	davisCommonState cstate = &state->cstate;
 
 	// Wait for data acquisition thread to terminate...
-	if ((errno = pthread_join(state->dataAcquisitionThread, NULL)) != 0) {
+	if ((errno = pthread_join(state->cstate.dataAcquisitionThread, NULL)) != 0) {
 		// This should never happen!
 		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString,
 			"Failed to join data acquisition thread. Error: %s (%d).", caerLogStrerror(errno), errno);
