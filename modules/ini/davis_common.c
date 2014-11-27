@@ -136,7 +136,7 @@ uint16_t generateShiftedSourceBias(sshsNode biasNode, const char *biasName) {
 	return (biasValue);
 }
 
-void sendSpiConfigCommand(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr, uint32_t param) {
+void spiConfigSend(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr, uint32_t param) {
 	uint8_t spiConfig[4] = { 0 };
 
 	spiConfig[0] = U8T(param >> 24);
@@ -146,6 +146,99 @@ void sendSpiConfigCommand(libusb_device_handle *devHandle, uint8_t moduleAddr, u
 
 	libusb_control_transfer(devHandle, LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 	VR_FPGA_CONFIG, moduleAddr, paramAddr, spiConfig, sizeof(spiConfig), 0);
+}
+
+uint32_t spiConfigReceive(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr) {
+	uint32_t returnedParam = 0;
+	uint8_t spiConfig[4] = { 0 };
+
+	libusb_control_transfer(devHandle, LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
+	VR_FPGA_CONFIG, moduleAddr, paramAddr, spiConfig, sizeof(spiConfig), 0);
+
+	returnedParam |= U32T(spiConfig[0] << 24);
+	returnedParam |= U32T(spiConfig[1] << 16);
+	returnedParam |= U32T(spiConfig[2] << 8);
+	returnedParam |= U32T(spiConfig[3] << 0);
+
+	return (returnedParam);
+}
+
+bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t VID, uint16_t PID, uint8_t DID_TYPE) {
+	// USB port/bus/SN settings/restrictions.
+	// These can be used to force connection to one specific device.
+	sshsNodePutByteIfAbsent(moduleData->moduleNode, "usbBusNumber", 0);
+	sshsNodePutByteIfAbsent(moduleData->moduleNode, "usbDevAddress", 0);
+	sshsNodePutStringIfAbsent(moduleData->moduleNode, "usbSerialNumber", "");
+
+	// Initialize libusb using a separate context for each device.
+	// This is to correctly support one thread per device.
+	if ((errno = libusb_init(&cstate->deviceContext)) != LIBUSB_SUCCESS) {
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to initialize libusb context. Error: %s (%d).",
+			libusb_strerror(errno), errno);
+		return (false);
+	}
+
+	// Try to open a DAVIS device on a specific USB port.
+	cstate->deviceHandle = deviceOpen(cstate->deviceContext, VID, PID, DID_TYPE,
+		sshsNodeGetByte(moduleData->moduleNode, "usbBusNumber"),
+		sshsNodeGetByte(moduleData->moduleNode, "usbDevAddress"));
+	if (cstate->deviceHandle == NULL) {
+		libusb_exit(cstate->deviceContext);
+
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to open device.");
+		return (false);
+	}
+
+	// At this point we can get some more precise data on the device and update
+	// the logging string to reflect that and be more informative.
+	uint8_t busNumber = libusb_get_bus_number(libusb_get_device(cstate->deviceHandle));
+	uint8_t devAddress = libusb_get_device_address(libusb_get_device(cstate->deviceHandle));
+
+	char serialNumber[8 + 1];
+	libusb_get_string_descriptor_ascii(cstate->deviceHandle, 3, (unsigned char *) serialNumber, 8 + 1);
+	serialNumber[8] = '\0'; // Ensure NUL termination.
+
+	size_t fullLogStringLength = (size_t) snprintf(NULL, 0, "%s SN-%s [%" PRIu8 ":%" PRIu8 "]",
+		moduleData->moduleSubSystemString, serialNumber, busNumber, devAddress);
+	char fullLogString[fullLogStringLength + 1];
+	snprintf(fullLogString, fullLogStringLength + 1, "%s SN-%s [%" PRIu8 ":%" PRIu8 "]",
+		moduleData->moduleSubSystemString, serialNumber, busNumber, devAddress);
+
+	// Update module log string, make it accessible in cstate space.
+	caerModuleSetSubSystemString(moduleData, fullLogString);
+	cstate->sourceSubSystemString = moduleData->moduleSubSystemString;
+
+	// Now check if the Serial Number matches.
+	char *configSerialNumber = sshsNodeGetString(moduleData->moduleNode, "usbSerialNumber");
+
+	if (!str_equals(configSerialNumber, "") && !str_equals(configSerialNumber, serialNumber)) {
+		libusb_close(cstate->deviceHandle);
+		libusb_exit(cstate->deviceContext);
+
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Device Serial Number doesn't match.");
+		return (false);
+	}
+
+	free(configSerialNumber);
+
+	// So now we have a working connection to the device we want. Let's get some data!
+	cstate->chipID = U16T(spiConfigReceive(cstate->deviceHandle, 6, 1));
+	cstate->apsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, 6, 2));
+	cstate->apsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, 6, 3));
+	cstate->dvsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, 6, 4));
+	cstate->dvsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, 6, 5));
+	cstate->apsGlobalShutter = spiConfigReceive(cstate->deviceHandle, 6, 6);
+
+	// Put global source information into SSHS, so it's globally available.
+	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
+	sshsNodePutShort(sourceInfoNode, "dvsSizeX", cstate->dvsSizeX);
+	sshsNodePutShort(sourceInfoNode, "dvsSizeY", cstate->dvsSizeY);
+	sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeX);
+	sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->apsSizeY);
+	//sshsNodePutShort(sourceInfoNode, "apsOriginalDepth", DAVIS_ADC_DEPTH);
+	//sshsNodePutShort(sourceInfoNode, "apsOriginalChannels", DAVIS_COLOR_CHANNELS);
+
+	return (true);
 }
 
 void createCommonConfiguration(caerModuleData moduleData) {
@@ -180,10 +273,20 @@ void createCommonConfiguration(caerModuleData moduleData) {
 
 	sshsNodePutBoolIfAbsent(chipNode, "useAout", false);
 	sshsNodePutBoolIfAbsent(chipNode, "nArow", false);
-	sshsNodePutBoolIfAbsent(chipNode, "hotPixelSuppression", false);
 	sshsNodePutBoolIfAbsent(chipNode, "resetTestpixel", true);
 	sshsNodePutBoolIfAbsent(chipNode, "typeNCalib", false);
 	sshsNodePutBoolIfAbsent(chipNode, "resetCalib", true);
+
+	sshsNodePutBoolIfAbsent(chipNode, "hotPixelSuppression", false);
+
+	sshsNodePutByteIfAbsent(chipNode, "AnalogMux0", 0);
+	sshsNodePutByteIfAbsent(chipNode, "AnalogMux1", 0);
+	sshsNodePutByteIfAbsent(chipNode, "AnalogMux2", 0);
+	sshsNodePutByteIfAbsent(chipNode, "BiasMux", 0);
+	sshsNodePutByteIfAbsent(chipNode, "DigitalMux0", 0);
+	sshsNodePutByteIfAbsent(chipNode, "DigitalMux1", 0);
+	sshsNodePutByteIfAbsent(chipNode, "DigitalMux2", 0);
+	sshsNodePutByteIfAbsent(chipNode, "DigitalMux3", 0);
 
 	sshsNode logicNode = sshsGetRelativeNode(moduleData->moduleNode, "logic/");
 
@@ -255,14 +358,10 @@ void createCommonConfiguration(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(extNode, "DetectPulseLength", 10);
 
 	// Subsystem 9: FX2/3 USB Configuration
-	sshsNode fx2Node = sshsGetRelativeNode(logicNode, "USB/");
+	sshsNode fxNode = sshsGetRelativeNode(logicNode, "USB/");
 
-	sshsNodePutBoolIfAbsent(fx2Node, "Run", 1);
-	sshsNodePutShortIfAbsent(fx2Node, "EarlyPacketDelay", 8);
-
-	// USB port settings/restrictions.
-	sshsNodePutByteIfAbsent(moduleData->moduleNode, "usbBusNumber", 0);
-	sshsNodePutByteIfAbsent(moduleData->moduleNode, "usbDevAddress", 0);
+	sshsNodePutBoolIfAbsent(fxNode, "Run", 1);
+	sshsNodePutShortIfAbsent(fxNode, "EarlyPacketDelay", 8);
 
 	// USB buffer settings.
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferNumber", 8);
@@ -284,8 +383,86 @@ void createCommonConfiguration(caerModuleData moduleData) {
 	// Install default listener to signal configuration updates asynchronously.
 	sshsNodeAddAttrListener(biasNode, moduleData, &caerInputDAVISCommonConfigListener);
 	sshsNodeAddAttrListener(chipNode, moduleData, &caerInputDAVISCommonConfigListener);
-	sshsNodeAddAttrListener(logicNode, moduleData, &caerInputDAVISCommonConfigListener);
+	sshsNodeAddAttrListener(muxNode, moduleData, &caerInputDAVISCommonConfigListener);
+	sshsNodeAddAttrListener(dvsNode, moduleData, &caerInputDAVISCommonConfigListener);
+	sshsNodeAddAttrListener(apsNode, moduleData, &caerInputDAVISCommonConfigListener);
+	sshsNodeAddAttrListener(imuNode, moduleData, &caerInputDAVISCommonConfigListener);
+	sshsNodeAddAttrListener(extNode, moduleData, &caerInputDAVISCommonConfigListener);
+	sshsNodeAddAttrListener(fxNode, moduleData, &caerInputDAVISCommonConfigListener);
 	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerInputDAVISCommonConfigListener);
+}
+
+bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState cstate,
+	void *dataAcquisitionThread(void *inPtr)) {
+	// Initialize state fields.
+	cstate->maxPolarityPacketSize = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxSize");
+	cstate->maxPolarityPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxInterval");
+
+	cstate->maxFramePacketSize = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxSize");
+	cstate->maxFramePacketInterval = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxInterval");
+
+	cstate->maxIMU6PacketSize = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxSize");
+	cstate->maxIMU6PacketInterval = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxInterval");
+
+	cstate->maxSpecialPacketSize = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxSize");
+	cstate->maxSpecialPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxInterval");
+
+	cstate->currentPolarityPacket = caerPolarityEventPacketAllocate(cstate->maxPolarityPacketSize, cstate->sourceID);
+	cstate->currentPolarityPacketPosition = 0;
+
+	cstate->currentFramePacket = caerFrameEventPacketAllocate(cstate->maxFramePacketSize, cstate->sourceID,
+	DAVIS_ARRAY_SIZE_X, DAVIS_ARRAY_SIZE_Y, DAVIS_COLOR_CHANNELS);
+	cstate->currentFramePacketPosition = 0;
+
+	cstate->currentIMU6Packet = caerIMU6EventPacketAllocate(cstate->maxIMU6PacketSize, cstate->sourceID);
+	cstate->currentIMU6PacketPosition = 0;
+
+	cstate->currentSpecialPacket = caerSpecialEventPacketAllocate(cstate->maxSpecialPacketSize, cstate->sourceID);
+	cstate->currentSpecialPacketPosition = 0;
+
+	cstate->wrapAdd = 0;
+	cstate->lastTimestamp = 0;
+	cstate->currentTimestamp = 0;
+	cstate->dvsTimestamp = 0;
+	cstate->dvsLastY = 0;
+	cstate->dvsGotY = false;
+	cstate->dvsTranslateRowOnlyEvents = false;
+	cstate->apsGlobalShutter = sshsNodeGetBool(sshsGetRelativeNode(moduleData->moduleNode, "logic/APS/"),
+		"GlobalShutter");
+	cstate->apsCurrentReadoutType = APS_READOUT_RESET;
+	for (size_t i = 0; i < APS_READOUT_TYPES_NUM; i++) {
+		cstate->apsCountX[i] = 0;
+		cstate->apsCountY[i] = 0;
+	}
+	memset(cstate->apsCurrentResetFrame, 0, DAVIS_ARRAY_SIZE_X * DAVIS_ARRAY_SIZE_Y * DAVIS_COLOR_CHANNELS);
+
+	// Store reference to parent mainloop, so that we can correctly notify
+	// the availability or not of data to consume.
+	cstate->mainloopNotify = caerMainloopGetReference();
+
+	// Create data exchange buffers.
+	cstate->dataExchangeBuffer = ringBufferInit(sshsNodeGetInt(moduleData->moduleNode, "dataExchangeBufferSize"));
+	if (cstate->dataExchangeBuffer == NULL) {
+		freeAllPackets(cstate);
+
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to initialize data exchange buffer.");
+		return (false);
+	}
+
+	// Start data acquisition thread.
+	if ((errno = pthread_create(&cstate->dataAcquisitionThread, NULL, dataAcquisitionThread, moduleData)) != 0) {
+		freeAllPackets(cstate);
+		ringBufferFree(cstate->dataExchangeBuffer);
+		deviceClose(cstate->deviceHandle);
+		libusb_exit(cstate->deviceContext);
+
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString,
+			"Failed to start data acquisition thread. Error: %s (%d).", caerLogStrerror(errno),
+			errno);
+		return (false);
+	}
+
+	return (true);
 }
 
 void caerInputDAVISCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
@@ -1030,23 +1207,43 @@ void caerInputDAVISCommonConfigListener(sshsNode node, void *userData, enum sshs
 	// using configUpdate like a bit-field.
 	if (event == ATTRIBUTE_MODIFIED) {
 		// Changes to the bias node.
-		if (str_equals(sshsNodeGetName(node), "bias") && changeType == SHORT) {
+		if (str_equals(sshsNodeGetName(node), "bias")) {
 			atomic_ops_uint_or(&data->configUpdate, (0x01 << 0), ATOMIC_OPS_FENCE_NONE);
 		}
 
 		// Changes to the chip config node.
-		if (str_equals(sshsNodeGetName(node), "chip") && changeType == BOOL) {
+		if (str_equals(sshsNodeGetName(node), "chip")) {
 			atomic_ops_uint_or(&data->configUpdate, (0x01 << 1), ATOMIC_OPS_FENCE_NONE);
 		}
 
-		// Changes to the FPGA config node.
-		if (str_equals(sshsNodeGetName(node), "fpga") && changeType == SHORT) {
+		// Changes to the FPGA config nodes.
+		if (str_equals(sshsNodeGetName(node), "Multiplexer")) {
 			atomic_ops_uint_or(&data->configUpdate, (0x01 << 2), ATOMIC_OPS_FENCE_NONE);
+		}
+
+		if (str_equals(sshsNodeGetName(node), "DVS")) {
+			atomic_ops_uint_or(&data->configUpdate, (0x01 << 3), ATOMIC_OPS_FENCE_NONE);
+		}
+
+		if (str_equals(sshsNodeGetName(node), "APS")) {
+			atomic_ops_uint_or(&data->configUpdate, (0x01 << 4), ATOMIC_OPS_FENCE_NONE);
+		}
+
+		if (str_equals(sshsNodeGetName(node), "IMU")) {
+			atomic_ops_uint_or(&data->configUpdate, (0x01 << 5), ATOMIC_OPS_FENCE_NONE);
+		}
+
+		if (str_equals(sshsNodeGetName(node), "ExternalInput")) {
+			atomic_ops_uint_or(&data->configUpdate, (0x01 << 6), ATOMIC_OPS_FENCE_NONE);
+		}
+
+		if (str_equals(sshsNodeGetName(node), "USB")) {
+			atomic_ops_uint_or(&data->configUpdate, (0x01 << 7), ATOMIC_OPS_FENCE_NONE);
 		}
 
 		// Changes to the USB transfer settings (requires reallocation).
 		if (changeType == INT && (str_equals(changeKey, "bufferNumber") || str_equals(changeKey, "bufferSize"))) {
-			atomic_ops_uint_or(&data->configUpdate, (0x01 << 3), ATOMIC_OPS_FENCE_NONE);
+			atomic_ops_uint_or(&data->configUpdate, (0x01 << 8), ATOMIC_OPS_FENCE_NONE);
 		}
 
 		// Changes to packet size and interval.
@@ -1055,7 +1252,7 @@ void caerInputDAVISCommonConfigListener(sshsNode node, void *userData, enum sshs
 				|| str_equals(changeKey, "framePacketMaxSize") || str_equals(changeKey, "framePacketMaxInterval")
 				|| str_equals(changeKey, "imu6PacketMaxSize") || str_equals(changeKey, "imu6PacketMaxInterval")
 				|| str_equals(changeKey, "specialPacketMaxSize") || str_equals(changeKey, "specialPacketMaxInterval"))) {
-			atomic_ops_uint_or(&data->configUpdate, (0x01 << 4), ATOMIC_OPS_FENCE_NONE);
+			atomic_ops_uint_or(&data->configUpdate, (0x01 << 9), ATOMIC_OPS_FENCE_NONE);
 		}
 	}
 }

@@ -39,6 +39,7 @@ struct davisCommon_state {
 	uint32_t wrapAdd;
 	uint32_t lastTimestamp;
 	uint32_t currentTimestamp;
+	uint16_t chipID;
 	// DVS specific fields
 	uint32_t dvsTimestamp;
 	uint16_t dvsSizeX;
@@ -85,8 +86,11 @@ uint16_t generateAddressedCoarseFineBias(sshsNode biasNode, const char *biasName
 void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasName, uint8_t regValue, uint8_t refValue,
 	const char *operatingMode, const char *voltageLevel);
 uint16_t generateShiftedSourceBias(sshsNode biasNode, const char *biasName);
-void sendSpiConfigCommand(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr, uint32_t param);
+void spiConfigSend(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr, uint32_t param);
+uint32_t spiConfigReceive(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr);
+bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t VID, uint16_t PID, uint8_t DID_TYPE);
 void createCommonConfiguration(caerModuleData moduleData);
+bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState cstate, void *dataAcquisitionThread(void *inPtr));
 void caerInputDAVISCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 void allocateDataTransfers(davisCommonState state, uint32_t bufferNum, uint32_t bufferSize);
 void deallocateDataTransfers(davisCommonState state);
