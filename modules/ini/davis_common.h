@@ -14,8 +14,6 @@
 #define APS_READOUT_RESET 0
 #define APS_READOUT_SIGNAL 1
 
-#define DAVIS_ARRAY_SIZE_X 240
-#define DAVIS_ARRAY_SIZE_Y 180
 #define DAVIS_ADC_DEPTH 10
 #define DAVIS_COLOR_CHANNELS 1
 
@@ -54,7 +52,7 @@ struct davisCommon_state {
 	uint16_t apsCurrentReadoutType;
 	uint16_t apsCountX[APS_READOUT_TYPES_NUM];
 	uint16_t apsCountY[APS_READOUT_TYPES_NUM];
-	uint16_t apsCurrentResetFrame[DAVIS_ARRAY_SIZE_X * DAVIS_ARRAY_SIZE_Y * DAVIS_COLOR_CHANNELS];
+	uint16_t *apsCurrentResetFrame;
 	// Polarity Packet State
 	caerPolarityEventPacket currentPolarityPacket;
 	uint32_t currentPolarityPacketPosition;
@@ -79,7 +77,7 @@ struct davisCommon_state {
 
 typedef struct davisCommon_state *davisCommonState;
 
-void freeAllPackets(davisCommonState state);
+void freeAllMemory(davisCommonState state);
 void createAddressedCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type, const char *sex,
 	uint8_t coarseValue, uint8_t fineValue, bool enabled);
 uint16_t generateAddressedCoarseFineBias(sshsNode biasNode, const char *biasName);
@@ -89,7 +87,7 @@ uint16_t generateShiftedSourceBias(sshsNode biasNode, const char *biasName);
 void spiConfigSend(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr, uint32_t param);
 uint32_t spiConfigReceive(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr);
 bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t VID, uint16_t PID, uint8_t DID_TYPE);
-void createCommonConfiguration(caerModuleData moduleData);
+void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstate);
 bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState cstate, void *dataAcquisitionThread(void *inPtr));
 void caerInputDAVISCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 void allocateDataTransfers(davisCommonState state, uint32_t bufferNum, uint32_t bufferSize);

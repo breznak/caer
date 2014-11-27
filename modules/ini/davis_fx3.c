@@ -74,7 +74,7 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 	// First, always create all needed setting nodes, set their default values
 	// and add their listeners.
 	// Set default biases, from SBRet20s_gs.xml settings.
-	createCommonConfiguration(moduleData);
+	createCommonConfiguration(moduleData, cstate);
 
 	// Subsystem 4: External Input
 	sshsNode extNode = sshsGetRelativeNode(moduleData->moduleNode, "logic/ExternalInput/");
@@ -117,11 +117,8 @@ static void caerInputDAVISFX3Exit(caerModuleData moduleData) {
 		free(packet);
 	}
 
-	// And destroy it.
-	ringBufferFree(cstate->dataExchangeBuffer);
-
 	// Free remaining incomplete packets.
-	freeAllPackets(cstate);
+	freeAllMemory(cstate);
 
 	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Shutdown successful.");
 }

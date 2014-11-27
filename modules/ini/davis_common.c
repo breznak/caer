@@ -12,11 +12,36 @@
 static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer);
 static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytesSent);
 
-void freeAllPackets(davisCommonState state) {
-	free(state->currentPolarityPacket);
-	free(state->currentFramePacket);
-	free(state->currentIMU6Packet);
-	free(state->currentSpecialPacket);
+void freeAllMemory(davisCommonState state) {
+	if (state->currentPolarityPacket != NULL) {
+		free(state->currentPolarityPacket);
+		state->currentPolarityPacket = NULL;
+	}
+
+	if (state->currentFramePacket != NULL) {
+		free(state->currentFramePacket);
+		state->currentFramePacket = NULL;
+	}
+
+	if (state->currentIMU6Packet != NULL) {
+		free(state->currentIMU6Packet);
+		state->currentIMU6Packet = NULL;
+	}
+
+	if (state->currentSpecialPacket != NULL) {
+		free(state->currentSpecialPacket);
+		state->currentSpecialPacket = NULL;
+	}
+
+	if (state->apsCurrentResetFrame != NULL) {
+		free(state->apsCurrentResetFrame);
+		state->apsCurrentResetFrame = NULL;
+	}
+
+	if (state->dataExchangeBuffer != NULL) {
+		ringBufferFree(state->dataExchangeBuffer);
+		state->dataExchangeBuffer = NULL;
+	}
 }
 
 void createAddressedCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type, const char *sex,
@@ -241,7 +266,7 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 	return (true);
 }
 
-void createCommonConfiguration(caerModuleData moduleData) {
+void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstate) {
 	sshsNode biasNode = sshsGetRelativeNode(moduleData->moduleNode, "bias/");
 
 	createAddressedCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 3, 72, true);
@@ -318,8 +343,8 @@ void createCommonConfiguration(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(apsNode, "GlobalShutter", 1);
 	sshsNodePutShortIfAbsent(apsNode, "StartColumn", 0);
 	sshsNodePutShortIfAbsent(apsNode, "StartRow", 0);
-	sshsNodePutShortIfAbsent(apsNode, "EndColumn", DAVIS_ARRAY_SIZE_X - 1);
-	sshsNodePutShortIfAbsent(apsNode, "EndRow", DAVIS_ARRAY_SIZE_Y - 1);
+	sshsNodePutShortIfAbsent(apsNode, "EndColumn", U16T(cstate->apsSizeX - 1));
+	sshsNodePutShortIfAbsent(apsNode, "EndRow", U16T(cstate->apsSizeY - 1));
 	sshsNodePutIntIfAbsent(apsNode, "Exposure", 2000); // in µs, converted to cycles later
 	sshsNodePutIntIfAbsent(apsNode, "FrameDelay", 200); // in µs, converted to cycles later
 	sshsNodePutShortIfAbsent(apsNode, "ResetSettle", 10); // in cycles
@@ -411,7 +436,7 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 	cstate->currentPolarityPacketPosition = 0;
 
 	cstate->currentFramePacket = caerFrameEventPacketAllocate(cstate->maxFramePacketSize, cstate->sourceID,
-	DAVIS_ARRAY_SIZE_X, DAVIS_ARRAY_SIZE_Y, DAVIS_COLOR_CHANNELS);
+		cstate->apsSizeX, cstate->apsSizeY, DAVIS_COLOR_CHANNELS);
 	cstate->currentFramePacketPosition = 0;
 
 	cstate->currentIMU6Packet = caerIMU6EventPacketAllocate(cstate->maxIMU6PacketSize, cstate->sourceID);
@@ -434,7 +459,13 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 		cstate->apsCountX[i] = 0;
 		cstate->apsCountY[i] = 0;
 	}
-	memset(cstate->apsCurrentResetFrame, 0, DAVIS_ARRAY_SIZE_X * DAVIS_ARRAY_SIZE_Y * DAVIS_COLOR_CHANNELS);
+	cstate->apsCurrentResetFrame = calloc((size_t) cstate->apsSizeX * cstate->apsSizeY, DAVIS_COLOR_CHANNELS);
+	if (cstate->apsCurrentResetFrame == NULL) {
+		freeAllMemory(cstate);
+
+		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to allocate reset frame array.");
+		return (false);
+	}
 
 	// Store reference to parent mainloop, so that we can correctly notify
 	// the availability or not of data to consume.
@@ -443,7 +474,7 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 	// Create data exchange buffers.
 	cstate->dataExchangeBuffer = ringBufferInit(sshsNodeGetInt(moduleData->moduleNode, "dataExchangeBufferSize"));
 	if (cstate->dataExchangeBuffer == NULL) {
-		freeAllPackets(cstate);
+		freeAllMemory(cstate);
 
 		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to initialize data exchange buffer.");
 		return (false);
@@ -451,10 +482,7 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 
 	// Start data acquisition thread.
 	if ((errno = pthread_create(&cstate->dataAcquisitionThread, NULL, dataAcquisitionThread, moduleData)) != 0) {
-		freeAllPackets(cstate);
-		ringBufferFree(cstate->dataExchangeBuffer);
-		deviceClose(cstate->deviceHandle);
-		libusb_exit(cstate->deviceContext);
+		freeAllMemory(cstate);
 
 		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString,
 			"Failed to start data acquisition thread. Error: %s (%d).", caerLogStrerror(errno),
@@ -817,8 +845,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 							// Setup frame.
 							caerFrameEventSetChannelNumber(currentFrameEvent, DAVIS_COLOR_CHANNELS);
-							caerFrameEventSetLengthXY(currentFrameEvent, state->currentFramePacket,
-							DAVIS_ARRAY_SIZE_X, DAVIS_ARRAY_SIZE_Y);
+							caerFrameEventSetLengthXY(currentFrameEvent, state->currentFramePacket, state->apsSizeX,
+								state->apsSizeY);
 
 							break;
 						}
@@ -832,7 +860,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 								caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Frame End: CountX[%zu] is %d.", j,
 									state->apsCountX[j]);
 
-								if (state->apsCountX[j] != DAVIS_ARRAY_SIZE_X) {
+								if (state->apsCountX[j] != state->apsSizeX) {
 									caerLog(LOG_ERROR, state->sourceSubSystemString,
 										"APS Frame End: wrong column count [%zu - %d] detected.", j,
 										state->apsCountX[j]);
@@ -891,7 +919,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						case 12: { // APS Column End
 							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End");
 
-							if (state->apsCountY[state->apsCurrentReadoutType] != DAVIS_ARRAY_SIZE_Y) {
+							if (state->apsCountY[state->apsCurrentReadoutType] != state->apsSizeY) {
 								caerLog(LOG_ERROR, state->sourceSubSystemString,
 									"APS Column End: wrong row count [%d - %d] detected.", state->apsCurrentReadoutType,
 									state->apsCountY[state->apsCurrentReadoutType]);
@@ -907,7 +935,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							// The last Reset Column Read End is also the start
 							// of the exposure for the GS.
 							if (state->apsGlobalShutter && state->apsCurrentReadoutType == APS_READOUT_RESET
-								&& state->apsCountX[APS_READOUT_RESET] == DAVIS_ARRAY_SIZE_X) {
+								&& state->apsCountX[APS_READOUT_RESET] == state->apsSizeX) {
 								caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(
 									state->currentFramePacket, state->currentFramePacketPosition);
 								caerFrameEventSetTSStartOfExposure(currentFrameEvent, state->currentTimestamp);
@@ -925,9 +953,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 				case 1: // Y address
 					// Check range conformity.
-					if (data >= DAVIS_ARRAY_SIZE_Y) {
+					if (data >= state->dvsSizeY) {
 						caerLog(LOG_ALERT, state->sourceSubSystemString, "Y address out of range (0-%d): %" PRIu16 ".",
-						DAVIS_ARRAY_SIZE_Y - 1, data);
+							state->dvsSizeY - 1, data);
 						continue; // Skip invalid Y address (don't update lastY).
 					}
 
@@ -953,9 +981,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 				case 2: // X address, Polarity OFF
 				case 3: { // X address, Polarity ON
 					// Check range conformity.
-					if (data >= DAVIS_ARRAY_SIZE_X) {
+					if (data >= state->dvsSizeX) {
 						caerLog(LOG_ALERT, state->sourceSubSystemString, "X address out of range (0-%d): %" PRIu16 ".",
-						DAVIS_ARRAY_SIZE_X - 1, data);
+							state->dvsSizeX - 1, data);
 						continue; // Skip invalid event.
 					}
 
@@ -985,8 +1013,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
 						state->currentFramePacketPosition);
 
-					uint16_t xPos = U16T(DAVIS_ARRAY_SIZE_X - 1 - state->apsCountX[state->apsCurrentReadoutType]);
-					uint16_t yPos = U16T(DAVIS_ARRAY_SIZE_Y - 1 - state->apsCountY[state->apsCurrentReadoutType]);
+					uint16_t xPos = U16T(state->apsSizeX - 1 - state->apsCountX[state->apsCurrentReadoutType]);
+					uint16_t yPos = U16T(state->apsSizeY - 1 - state->apsCountY[state->apsCurrentReadoutType]);
 
 					size_t pixelPosition = (size_t) (yPos * caerFrameEventGetLengthX(currentFrameEvent)) + xPos;
 
@@ -1113,7 +1141,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 			// Allocate new packet for next iteration.
 			state->currentFramePacket = caerFrameEventPacketAllocate(state->maxFramePacketSize, state->sourceID,
-			DAVIS_ARRAY_SIZE_X, DAVIS_ARRAY_SIZE_Y, DAVIS_COLOR_CHANNELS);
+				state->apsSizeX, state->apsSizeY, DAVIS_COLOR_CHANNELS);
 			state->currentFramePacketPosition = 0;
 		}
 	}
