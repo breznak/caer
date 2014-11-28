@@ -21,6 +21,15 @@
 
 #define VR_FPGA_CONFIG 0xBF
 
+#define CHIP_DAVIS240A 0
+#define CHIP_DAVIS240B 1
+#define CHIP_DAVIS240C 2
+#define CHIP_DAVIS128  3
+#define CHIP_DAVIS346A 4
+#define CHIP_DAVIS346B 5
+#define CHIP_DAVIS640  6
+#define CHIP_DAVISRGB  7
+
 struct davisCommon_state {
 	// Data Acquisition Thread -> Mainloop Exchange
 	uint16_t sourceID;

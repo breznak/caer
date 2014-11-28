@@ -262,8 +262,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 
 	createAddressedCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 4, 72, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 5, 112, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 4, 6,
-	true);
+	createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 4, 6, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "ApsCasEpc", "Cascode", "N", 5, 144, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "DiffCasBnc", "Cascode", "N", 5, 115, true);
 	createAddressedCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 6, 188, true);
@@ -287,14 +286,6 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 
 	sshsNode chipNode = sshsGetRelativeNode(moduleData->moduleNode, "chip/");
 
-	sshsNodePutBoolIfAbsent(chipNode, "useAout", false);
-	sshsNodePutBoolIfAbsent(chipNode, "nArow", false);
-	sshsNodePutBoolIfAbsent(chipNode, "resetTestpixel", true);
-	sshsNodePutBoolIfAbsent(chipNode, "typeNCalib", false);
-	sshsNodePutBoolIfAbsent(chipNode, "resetCalib", true);
-
-	sshsNodePutBoolIfAbsent(chipNode, "hotPixelSuppression", false);
-
 	sshsNodePutByteIfAbsent(chipNode, "AnalogMux0", 0);
 	sshsNodePutByteIfAbsent(chipNode, "AnalogMux1", 0);
 	sshsNodePutByteIfAbsent(chipNode, "AnalogMux2", 0);
@@ -303,6 +294,37 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutByteIfAbsent(chipNode, "DigitalMux1", 0);
 	sshsNodePutByteIfAbsent(chipNode, "DigitalMux2", 0);
 	sshsNodePutByteIfAbsent(chipNode, "DigitalMux3", 0);
+
+	sshsNodePutBoolIfAbsent(chipNode, "useAout", true);
+	sshsNodePutBoolIfAbsent(chipNode, "nArow", false);
+	sshsNodePutBoolIfAbsent(chipNode, "resetTestpixel", true);
+	sshsNodePutBoolIfAbsent(chipNode, "typeNCalib", false);
+	sshsNodePutBoolIfAbsent(chipNode, "resetCalib", true);
+
+	if (cstate->chipID == CHIP_DAVIS128) {
+		sshsNodePutBoolIfAbsent(chipNode, "hotPixelSuppression", false);
+		sshsNodePutBoolIfAbsent(chipNode, "globalShutter", true);
+		sshsNodePutBoolIfAbsent(chipNode, "selectGrayCounter", false);
+	}
+
+	if (cstate->chipID == CHIP_DAVIS240A || cstate->chipID == CHIP_DAVIS240B || cstate->chipID == CHIP_DAVIS240C) {
+		sshsNodePutBoolIfAbsent(chipNode, "hotPixelSuppression", false);
+		sshsNodePutBoolIfAbsent(chipNode, "globalShutter", true);
+	}
+
+	if (cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B || cstate->chipID == CHIP_DAVIS640) {
+		sshsNodePutBoolIfAbsent(chipNode, "globalShutter", true);
+		sshsNodePutBoolIfAbsent(chipNode, "selectGrayCounter", false);
+		sshsNodePutBoolIfAbsent(chipNode, "testADC", false);
+	}
+
+	if (cstate->chipID == CHIP_DAVISRGB) {
+		sshsNodePutBoolIfAbsent(chipNode, "selectGrayCounter", false);
+		sshsNodePutBoolIfAbsent(chipNode, "testADC", false);
+		sshsNodePutBoolIfAbsent(chipNode, "adjOVG1Lo", false);
+		sshsNodePutBoolIfAbsent(chipNode, "adjOVG2Lo", false);
+		sshsNodePutBoolIfAbsent(chipNode, "adjTX2OVG2Hi", false);
+	}
 
 	sshsNode logicNode = sshsGetRelativeNode(moduleData->moduleNode, "logic/");
 
