@@ -459,7 +459,7 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 		cstate->apsCountX[i] = 0;
 		cstate->apsCountY[i] = 0;
 	}
-	cstate->apsCurrentResetFrame = calloc((size_t) cstate->apsSizeX * cstate->apsSizeY, DAVIS_COLOR_CHANNELS);
+	cstate->apsCurrentResetFrame = calloc((size_t) cstate->apsSizeX * cstate->apsSizeY * DAVIS_COLOR_CHANNELS, sizeof(uint16_t));
 	if (cstate->apsCurrentResetFrame == NULL) {
 		freeAllMemory(cstate);
 
