@@ -85,7 +85,9 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(extNode, "GeneratePulseInterval", 10);
 	sshsNodePutIntIfAbsent(extNode, "GeneratePulseLength", 5);
 
-	initializeCommonConfiguration(moduleData, cstate, &dataAcquisitionThread);
+	if (!initializeCommonConfiguration(moduleData, cstate, &dataAcquisitionThread)) {
+		return (false);
+	}
 
 	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Initialized DAVISFX3 module successfully.");
 	return (true);

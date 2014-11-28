@@ -66,7 +66,7 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 
 	// First, we need to connect to the device and ask it what chip it's got,
 	// and retain that information for later stages.
-	if (!deviceOpenInfo(moduleData, cstate, DAVIS_FX2_VID, 0x841A, DAVIS_FX2_DID_TYPE)) {
+	if (!deviceOpenInfo(moduleData, cstate, DAVIS_FX2_VID, DAVIS_FX2_PID, DAVIS_FX2_DID_TYPE)) {
 		return (false);
 	}
 
@@ -75,9 +75,11 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 	// Set default biases, from SBRet20s_gs.xml settings.
 	createCommonConfiguration(moduleData, cstate);
 
-	initializeCommonConfiguration(moduleData, cstate, &dataAcquisitionThread);
+	if (!initializeCommonConfiguration(moduleData, cstate, &dataAcquisitionThread)) {
+		return (false);
+	}
 
-	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Initialized DAVISFX3 module successfully.");
+	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Initialized DAVISFX2 module successfully.");
 	return (true);
 }
 
