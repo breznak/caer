@@ -94,16 +94,7 @@ uint16_t generateAddressedCoarseFineBias(sshsNode biasNode, const char *biasName
 
 	biasValue |= (uint16_t) ((sshsNodeGetByte(biasConfigNode, "fineValue") & 0xFF) << 4);
 
-	// Reverse coarse part. TODO: remove for revision 2 boards!
-	uint8_t coarseValue = (sshsNodeGetByte(biasConfigNode, "coarseValue") & 0x07);
-	uint8_t reversedCoarseValue = (uint8_t) (((coarseValue * 0x0802LU & 0x22110LU)
-		| (coarseValue * 0x8020LU & 0x88440LU)) * 0x10101LU >> 16);
-
-	// Reversing the byte produces a fully reversed byte, so the lower three
-	// bits end up reversed, but as the highest three bits! That means shifting
-	// them right by 5, and then shifting them left by 12 to put them in their
-	// final position. This can be expressed by just a left shift of 7 (12 - 5).
-	biasValue |= (uint16_t) (reversedCoarseValue << 7);
+	biasValue |= (uint16_t) ((sshsNodeGetByte(biasConfigNode, "coarseValue") & 0x07) << 12);
 
 	return (biasValue);
 }
@@ -269,27 +260,27 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstate) {
 	sshsNode biasNode = sshsGetRelativeNode(moduleData->moduleNode, "bias/");
 
-	createAddressedCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 3, 72, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 2, 112, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 3, 6,
+	createAddressedCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 4, 72, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 5, 112, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 4, 6,
 	true);
-	createAddressedCoarseFineBiasSetting(biasNode, "ApsCasEpc", "Cascode", "N", 2, 144, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "DiffCasBnc", "Cascode", "N", 2, 115, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 1, 188, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "LocalBufBn", "Normal", "N", 2, 164, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 1, 129, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "P", 6, 255, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 5, 2, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "P", 3, 19, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 0, 140, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 6, 132, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "P", 1, 80, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "P", 1, 152, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 2, 255, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "IFRefrBn", "Normal", "N", 2, 255, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 0, 211, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "apsOverflowLevel", "Normal", "N", 0, 36, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "biasBuffer", "Normal", "N", 1, 251, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "ApsCasEpc", "Cascode", "N", 5, 144, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "DiffCasBnc", "Cascode", "N", 5, 115, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 6, 188, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "LocalBufBn", "Normal", "N", 5, 164, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 6, 129, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "P", 1, 255, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 2, 2, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "P", 4, 19, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 7, 140, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 1, 132, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "P", 6, 80, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "P", 6, 152, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 5, 255, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "IFRefrBn", "Normal", "N", 5, 255, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 7, 211, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "apsOverflowLevel", "Normal", "N", 7, 36, true);
+	createAddressedCoarseFineBiasSetting(biasNode, "biasBuffer", "Normal", "N", 6, 251, true);
 
 	createShiftedSourceBiasSetting(biasNode, "SSP", 33, 1, "TiedToRail", "SplitGate");
 	createShiftedSourceBiasSetting(biasNode, "SSN", 33, 2, "ShiftedSource", "SplitGate");
@@ -459,7 +450,8 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 		cstate->apsCountX[i] = 0;
 		cstate->apsCountY[i] = 0;
 	}
-	cstate->apsCurrentResetFrame = calloc((size_t) cstate->apsSizeX * cstate->apsSizeY * DAVIS_COLOR_CHANNELS, sizeof(uint16_t));
+	cstate->apsCurrentResetFrame = calloc((size_t) cstate->apsSizeX * cstate->apsSizeY * DAVIS_COLOR_CHANNELS,
+		sizeof(uint16_t));
 	if (cstate->apsCurrentResetFrame == NULL) {
 		freeAllMemory(cstate);
 

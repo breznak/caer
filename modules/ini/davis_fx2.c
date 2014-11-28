@@ -237,6 +237,10 @@ static void sendAddressedCoarseFineBias(sshsNode biasNode, libusb_device_handle 
 	bias[0] = U8T(biasValue >> 8);
 	bias[1] = U8T(biasValue >> 0);
 
+	// Reverse coarse part.
+	bias[0] = bias[0] ^ 0x70;
+	bias[0] = U8T((bias[0] & ~0x50) | ((bias[0] & 0x40) >> 2) | ((bias[0] & 0x10) << 2));
+
 	libusb_control_transfer(devHandle, LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 	VR_CHIP_BIAS, biasAddress, 0, bias, sizeof(bias), 0);
 }
