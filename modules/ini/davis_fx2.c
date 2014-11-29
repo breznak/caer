@@ -70,9 +70,6 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 		return (false);
 	}
 
-	// First, always create all needed setting nodes, set their default values
-	// and add their listeners.
-	// Set default biases, from SBRet20s_gs.xml settings.
 	createCommonConfiguration(moduleData, cstate);
 
 	if (!initializeCommonConfiguration(moduleData, cstate, &dataAcquisitionThread)) {
@@ -281,8 +278,8 @@ static void sendBiases(sshsNode biasNode, libusb_device_handle *devHandle) {
 	sendAddressedCoarseFineBias(biasNode, devHandle, 15, "IFThrBn");
 	sendAddressedCoarseFineBias(biasNode, devHandle, 16, "IFRefrBn");
 	sendAddressedCoarseFineBias(biasNode, devHandle, 17, "PadFollBn");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 18, "apsOverflowLevel");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 19, "biasBuffer");
+	sendAddressedCoarseFineBias(biasNode, devHandle, 18, "ApsOverflowLevel");
+	sendAddressedCoarseFineBias(biasNode, devHandle, 19, "BiasBuffer");
 	sendShiftedSourceBias(biasNode, devHandle, 20, "SSP");
 	sendShiftedSourceBias(biasNode, devHandle, 21, "SSN");
 }

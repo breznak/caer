@@ -44,6 +44,36 @@ void freeAllMemory(davisCommonState state) {
 	}
 }
 
+void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8_t voltageValue) {
+	// Add trailing slash to node name (required!).
+	size_t biasNameLength = strlen(biasName);
+	char biasNameFull[biasNameLength + 2];
+	memcpy(biasNameFull, biasName, biasNameLength);
+	biasNameFull[biasNameLength] = '/';
+	biasNameFull[biasNameLength + 1] = '\0';
+
+	// Create configuration node for this particular bias.
+	sshsNode biasConfigNode = sshsGetRelativeNode(biasNode, biasNameFull);
+
+	// Add bias settings.
+	sshsNodePutByteIfAbsent(biasConfigNode, "voltageValue", voltageValue);
+}
+
+uint8_t generateVDACBias(sshsNode biasNode, const char *biasName) {
+	// Add trailing slash to node name (required!).
+	size_t biasNameLength = strlen(biasName);
+	char biasNameFull[biasNameLength + 2];
+	memcpy(biasNameFull, biasName, biasNameLength);
+	biasNameFull[biasNameLength] = '/';
+	biasNameFull[biasNameLength + 1] = '\0';
+
+	// Get bias configuration node.
+	sshsNode biasConfigNode = sshsGetRelativeNode(biasNode, biasNameFull);
+
+	// Return bias value, made up by the one voltage component.
+	return (sshsNodeGetByte(biasConfigNode, "voltageValue") & 0x3F);
+}
+
 void createAddressedCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type, const char *sex,
 	uint8_t coarseValue, uint8_t fineValue, bool enabled) {
 	// Add trailing slash to node name (required!).
@@ -215,10 +245,10 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 	serialNumber[8] = '\0'; // Ensure NUL termination.
 
 	size_t fullLogStringLength = (size_t) snprintf(NULL, 0, "%s SN-%s [%" PRIu8 ":%" PRIu8 "]",
-		moduleData->moduleSubSystemString, serialNumber, busNumber, devAddress);
+		sshsNodeGetName(moduleData->moduleNode), serialNumber, busNumber, devAddress);
 	char fullLogString[fullLogStringLength + 1];
 	snprintf(fullLogString, fullLogStringLength + 1, "%s SN-%s [%" PRIu8 ":%" PRIu8 "]",
-		moduleData->moduleSubSystemString, serialNumber, busNumber, devAddress);
+		sshsNodeGetName(moduleData->moduleNode), serialNumber, busNumber, devAddress);
 
 	// Update module log string, make it accessible in cstate space.
 	caerModuleSetSubSystemString(moduleData, fullLogString);
@@ -243,7 +273,6 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 	cstate->apsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, 6, 3));
 	cstate->dvsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, 6, 4));
 	cstate->dvsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, 6, 5));
-	cstate->apsGlobalShutter = spiConfigReceive(cstate->deviceHandle, 6, 6);
 
 	// Put global source information into SSHS, so it's globally available.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
@@ -251,38 +280,125 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 	sshsNodePutShort(sourceInfoNode, "dvsSizeY", cstate->dvsSizeY);
 	sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeX);
 	sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->apsSizeY);
-	//sshsNodePutShort(sourceInfoNode, "apsOriginalDepth", DAVIS_ADC_DEPTH);
-	//sshsNodePutShort(sourceInfoNode, "apsOriginalChannels", DAVIS_COLOR_CHANNELS);
+	sshsNodePutShort(sourceInfoNode, "apsOriginalDepth", DAVIS_ADC_DEPTH);
+	sshsNodePutShort(sourceInfoNode, "apsOriginalChannels", DAVIS_COLOR_CHANNELS);
+	sshsNodePutBool(sourceInfoNode, "apsHasGlobalShutter", spiConfigReceive(cstate->deviceHandle, 6, 6));
+	sshsNodePutBool(sourceInfoNode, "apsHasIntegratedADC", spiConfigReceive(cstate->deviceHandle, 6, 7));
 
 	return (true);
 }
 
 void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstate) {
+	// First, always create all needed setting nodes, set their default values
+	// and add their listeners.
+
 	sshsNode biasNode = sshsGetRelativeNode(moduleData->moduleNode, "bias/");
 
-	createAddressedCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 4, 72, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 5, 112, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 4, 6, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "ApsCasEpc", "Cascode", "N", 5, 144, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "DiffCasBnc", "Cascode", "N", 5, 115, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 6, 188, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "LocalBufBn", "Normal", "N", 5, 164, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 6, 129, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "P", 1, 255, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 2, 2, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "P", 4, 19, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 7, 140, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 1, 132, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "P", 6, 80, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "P", 6, 152, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 5, 255, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "IFRefrBn", "Normal", "N", 5, 255, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 7, 211, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "apsOverflowLevel", "Normal", "N", 7, 36, true);
-	createAddressedCoarseFineBiasSetting(biasNode, "biasBuffer", "Normal", "N", 6, 251, true);
+	if (cstate->chipID == CHIP_DAVIS240A || cstate->chipID == CHIP_DAVIS240B || cstate->chipID == CHIP_DAVIS240C) {
+		// Set default biases, from SBRet20s_gs.xml settings.
+		createAddressedCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 4, 72, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 5, 112, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 4, 6, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "ApsCasEpc", "Cascode", "N", 5, 144, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "DiffCasBnc", "Cascode", "N", 5, 115, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 6, 188, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "LocalBufBn", "Normal", "N", 5, 164, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 6, 129, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "P", 1, 255, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 2, 2, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "P", 4, 19, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 7, 140, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 1, 132, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "P", 6, 80, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "P", 6, 152, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 5, 255, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "IFRefrBn", "Normal", "N", 5, 255, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 7, 211, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "ApsOverflowLevel", "Normal", "N", 7, 36, true);
 
-	createShiftedSourceBiasSetting(biasNode, "SSP", 33, 1, "TiedToRail", "SplitGate");
-	createShiftedSourceBiasSetting(biasNode, "SSN", 33, 2, "ShiftedSource", "SplitGate");
+		createAddressedCoarseFineBiasSetting(biasNode, "BiasBuffer", "Normal", "N", 6, 251, true);
+
+		createShiftedSourceBiasSetting(biasNode, "SSP", 33, 1, "TiedToRail", "SplitGate");
+		createShiftedSourceBiasSetting(biasNode, "SSN", 33, 2, "ShiftedSource", "SplitGate");
+	}
+
+	if (cstate->chipID == CHIP_DAVIS128 || cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B
+		|| cstate->chipID == CHIP_DAVIS640) {
+		createVDACBiasSetting(biasNode, "ApsOverflowLevel", 0);
+		createVDACBiasSetting(biasNode, "ApsCas", 0);
+		createVDACBiasSetting(biasNode, "AdcRefHigh", 0);
+		createVDACBiasSetting(biasNode, "AdcRefLow", 0);
+		createVDACBiasSetting(biasNode, "AdcTestVoltage", 0);
+
+		createAddressedCoarseFineBiasSetting(biasNode, "LocalBufBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "ReadoutBufBp", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "AdcCompBp", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "ColSelLowBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "DACBufBp", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "IFRefrBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 0, 0, true);
+
+		createAddressedCoarseFineBiasSetting(biasNode, "BiasBuffer", "Normal", "N", 6, 251, true);
+
+		createShiftedSourceBiasSetting(biasNode, "SSP", 33, 1, "TiedToRail", "SplitGate");
+		createShiftedSourceBiasSetting(biasNode, "SSN", 33, 2, "ShiftedSource", "SplitGate");
+	}
+
+	if (cstate->chipID == CHIP_DAVISRGB) {
+		createVDACBiasSetting(biasNode, "ApsCasBpc", 0);
+		createVDACBiasSetting(biasNode, "OVG1Lo", 0);
+		createVDACBiasSetting(biasNode, "OVG2Lo", 0);
+		createVDACBiasSetting(biasNode, "TX2OVG2Hi", 0);
+		createVDACBiasSetting(biasNode, "Gnd07", 0);
+		createVDACBiasSetting(biasNode, "vADCTest", 0);
+		createVDACBiasSetting(biasNode, "AdcRefHigh", 0);
+		createVDACBiasSetting(biasNode, "AdcRefLow", 0);
+
+		createAddressedCoarseFineBiasSetting(biasNode, "IFRefrBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "LocalBufBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "Blk1N", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "ArrayBiasBufferBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "Blk1P", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "ArrayLogicBufferBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "FalltimeBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "RisetimeBp", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "ReadoutBufBp", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "AdcCompBp", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "DACBufBp", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "Blk2P", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "N", 0, 0, true);
+
+		createAddressedCoarseFineBiasSetting(biasNode, "BiasBuffer", "Normal", "N", 6, 251, true);
+
+		createShiftedSourceBiasSetting(biasNode, "SSP", 33, 1, "TiedToRail", "SplitGate");
+		createShiftedSourceBiasSetting(biasNode, "SSN", 33, 2, "ShiftedSource", "SplitGate");
+	}
 
 	sshsNode chipNode = sshsGetRelativeNode(moduleData->moduleNode, "chip/");
 
@@ -301,19 +417,22 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutBoolIfAbsent(chipNode, "typeNCalib", false);
 	sshsNodePutBoolIfAbsent(chipNode, "resetCalib", true);
 
+	bool globalShutterSupported = sshsNodeGetBool(sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"),
+		"apsHasGlobalShutter");
+
 	if (cstate->chipID == CHIP_DAVIS128) {
 		sshsNodePutBoolIfAbsent(chipNode, "hotPixelSuppression", false);
-		sshsNodePutBoolIfAbsent(chipNode, "globalShutter", true);
+		sshsNodePutBoolIfAbsent(chipNode, "globalShutter", globalShutterSupported);
 		sshsNodePutBoolIfAbsent(chipNode, "selectGrayCounter", false);
 	}
 
 	if (cstate->chipID == CHIP_DAVIS240A || cstate->chipID == CHIP_DAVIS240B || cstate->chipID == CHIP_DAVIS240C) {
 		sshsNodePutBoolIfAbsent(chipNode, "hotPixelSuppression", false);
-		sshsNodePutBoolIfAbsent(chipNode, "globalShutter", true);
+		sshsNodePutBoolIfAbsent(chipNode, "globalShutter", globalShutterSupported);
 	}
 
 	if (cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B || cstate->chipID == CHIP_DAVIS640) {
-		sshsNodePutBoolIfAbsent(chipNode, "globalShutter", true);
+		sshsNodePutBoolIfAbsent(chipNode, "globalShutter", globalShutterSupported);
 		sshsNodePutBoolIfAbsent(chipNode, "selectGrayCounter", false);
 		sshsNodePutBoolIfAbsent(chipNode, "testADC", false);
 	}
@@ -353,7 +472,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 
 	sshsNodePutBoolIfAbsent(apsNode, "Run", 0);
 	sshsNodePutBoolIfAbsent(apsNode, "ForceADCRunning", 0);
-	sshsNodePutBoolIfAbsent(apsNode, "GlobalShutter", 1);
+	sshsNodePutBoolIfAbsent(apsNode, "GlobalShutter", globalShutterSupported);
 	sshsNodePutShortIfAbsent(apsNode, "StartColumn", 0);
 	sshsNodePutShortIfAbsent(apsNode, "StartRow", 0);
 	sshsNodePutShortIfAbsent(apsNode, "EndColumn", U16T(cstate->apsSizeX - 1));
@@ -363,7 +482,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutShortIfAbsent(apsNode, "ResetSettle", 10); // in cycles
 	sshsNodePutByteIfAbsent(apsNode, "ColumnSettle", 10); // in cycles
 	sshsNodePutByteIfAbsent(apsNode, "RowSettle", 10); // in cycles
-	sshsNodePutBoolIfAbsent(apsNode, "GSTXGateOpenReset_S", 1);
+	sshsNodePutBoolIfAbsent(apsNode, "GSTXGateOpenReset", 1);
 	sshsNodePutBoolIfAbsent(apsNode, "ResetRead", 1);
 	sshsNodePutBoolIfAbsent(apsNode, "WaitOnTransferStall", 0);
 
@@ -399,7 +518,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNode fxNode = sshsGetRelativeNode(logicNode, "USB/");
 
 	sshsNodePutBoolIfAbsent(fxNode, "Run", 1);
-	sshsNodePutShortIfAbsent(fxNode, "EarlyPacketDelay", 8);
+	sshsNodePutShortIfAbsent(fxNode, "EarlyPacketDelay", 8); // 125µs time-slices, so 1ms
 
 	// USB buffer settings.
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferNumber", 8);

@@ -87,6 +87,8 @@ struct davisCommon_state {
 typedef struct davisCommon_state *davisCommonState;
 
 void freeAllMemory(davisCommonState state);
+void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8_t voltageValue);
+uint8_t generateVDACBias(sshsNode biasNode, const char *biasName);
 void createAddressedCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type, const char *sex,
 	uint8_t coarseValue, uint8_t fineValue, bool enabled);
 uint16_t generateAddressedCoarseFineBias(sshsNode biasNode, const char *biasName);

@@ -71,12 +71,9 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 		return (false);
 	}
 
-	// First, always create all needed setting nodes, set their default values
-	// and add their listeners.
-	// Set default biases, from SBRet20s_gs.xml settings.
 	createCommonConfiguration(moduleData, cstate);
 
-	// Subsystem 4: External Input
+	// Subsystem 4: External Input (Generator module present only in FX3)
 	sshsNode extNode = sshsGetRelativeNode(moduleData->moduleNode, "logic/ExternalInput/");
 
 	sshsNodePutBoolIfAbsent(extNode, "RunGenerator", 0);
