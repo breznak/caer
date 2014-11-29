@@ -524,6 +524,8 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferNumber", 8);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferSize", 8192);
 
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "translateRowOnlyEvents", false);
+
 	// Packet settings (size (in events) and time interval (in µs)).
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "polarityPacketMaxSize", 4096);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "polarityPacketMaxInterval", 5000);
@@ -583,7 +585,7 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 	cstate->dvsTimestamp = 0;
 	cstate->dvsLastY = 0;
 	cstate->dvsGotY = false;
-	cstate->dvsTranslateRowOnlyEvents = false;
+	cstate->dvsTranslateRowOnlyEvents = sshsNodeGetBool(moduleData->moduleNode, "translateRowOnlyEvents");
 	cstate->apsGlobalShutter = sshsNodeGetBool(sshsGetRelativeNode(moduleData->moduleNode, "logic/APS/"),
 		"GlobalShutter");
 	cstate->apsCurrentReadoutType = APS_READOUT_RESET;
