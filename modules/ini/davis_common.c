@@ -11,6 +11,12 @@
 
 static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer);
 static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytesSent);
+static void commonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
+static void chipGSSyncConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
+static void apsGSSyncConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
 void freeAllMemory(davisCommonState state) {
 	if (state->currentPolarityPacket != NULL) {
@@ -540,15 +546,19 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "dataExchangeBufferSize", 64);
 
 	// Install default listener to signal configuration updates asynchronously.
-	sshsNodeAddAttrListener(biasNode, moduleData, &caerInputDAVISCommonConfigListener);
-	sshsNodeAddAttrListener(chipNode, moduleData, &caerInputDAVISCommonConfigListener);
-	sshsNodeAddAttrListener(muxNode, moduleData, &caerInputDAVISCommonConfigListener);
-	sshsNodeAddAttrListener(dvsNode, moduleData, &caerInputDAVISCommonConfigListener);
-	sshsNodeAddAttrListener(apsNode, moduleData, &caerInputDAVISCommonConfigListener);
-	sshsNodeAddAttrListener(imuNode, moduleData, &caerInputDAVISCommonConfigListener);
-	sshsNodeAddAttrListener(extNode, moduleData, &caerInputDAVISCommonConfigListener);
-	sshsNodeAddAttrListener(fxNode, moduleData, &caerInputDAVISCommonConfigListener);
-	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerInputDAVISCommonConfigListener);
+	sshsNodeAddAttrListener(biasNode, moduleData, &commonConfigListener);
+	sshsNodeAddAttrListener(chipNode, moduleData, &commonConfigListener);
+	sshsNodeAddAttrListener(muxNode, moduleData, &commonConfigListener);
+	sshsNodeAddAttrListener(dvsNode, moduleData, &commonConfigListener);
+	sshsNodeAddAttrListener(apsNode, moduleData, &commonConfigListener);
+	sshsNodeAddAttrListener(imuNode, moduleData, &commonConfigListener);
+	sshsNodeAddAttrListener(extNode, moduleData, &commonConfigListener);
+	sshsNodeAddAttrListener(fxNode, moduleData, &commonConfigListener);
+	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &commonConfigListener);
+
+	// Keep global shutter related settings in sync.
+	sshsNodeAddAttrListener(chipNode, apsNode, &chipGSSyncConfigListener);
+	sshsNodeAddAttrListener(apsNode, chipNode, &apsGSSyncConfigListener);
 }
 
 bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState cstate,
@@ -1360,8 +1370,8 @@ void deviceClose(libusb_device_handle *devHandle) {
 	libusb_close(devHandle);
 }
 
-void caerInputDAVISCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
-	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
+void commonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event, const char *changeKey,
+	enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
 	UNUSED_ARGUMENT(changeValue);
 
 	caerModuleData data = userData;
@@ -1417,5 +1427,29 @@ void caerInputDAVISCommonConfigListener(sshsNode node, void *userData, enum sshs
 				|| str_equals(changeKey, "specialPacketMaxSize") || str_equals(changeKey, "specialPacketMaxInterval"))) {
 			atomic_ops_uint_or(&data->configUpdate, (0x01 << 9), ATOMIC_OPS_FENCE_NONE);
 		}
+	}
+}
+
+static void chipGSSyncConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
+	UNUSED_ARGUMENT(node);
+
+	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && str_equals(changeKey, "globalShutter")) {
+		sshsNode apsNode = userData;
+
+		// Update GlobalShutter setting in APS node to match.
+		sshsNodePutBool(apsNode, "GlobalShutter", changeValue.boolean);
+	}
+}
+
+static void apsGSSyncConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
+	UNUSED_ARGUMENT(node);
+
+	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && str_equals(changeKey, "GlobalShutter")) {
+		sshsNode chipNode = userData;
+
+		// Update globalShutter setting in Chip node to match.
+		sshsNodePutBool(chipNode, "globalShutter", changeValue.boolean);
 	}
 }
