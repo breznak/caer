@@ -43,4 +43,16 @@ static inline bool str_equals(const char *s1, const char *s2) {
 	return (false);
 }
 
+static inline bool str_equals_upto(const char *s1, const char *s2, size_t len) {
+	if (s1 == NULL || s2 == NULL || len == 0) {
+		return (false);
+	}
+
+	if (strncmp(s1, s2, len) == 0) {
+		return (true);
+	}
+
+	return (false);
+}
+
 #endif /* MAIN_H_ */
