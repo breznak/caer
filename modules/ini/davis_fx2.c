@@ -175,6 +175,13 @@ static void dataAcquisitionThreadConfig(caerModuleData moduleData) {
 
 	if (configUpdate & (0x01 << 2)) {
 		sendMultiplexerConfig(moduleData->moduleNode, cstate->deviceHandle);
+
+		// If timestamp reset was changed, we put it back to OFF, since
+		// it's just an instant pulse to the device.
+		sshsNode muxNode = sshsGetRelativeNode(moduleData->moduleNode, "multiplexer/");
+		if (sshsNodeGetBool(muxNode, "TimestampReset")) {
+			sshsNodePutBool(muxNode, "TimestampReset", 0);
+		}
 	}
 
 	if (configUpdate & (0x01 << 3)) {

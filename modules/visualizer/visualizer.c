@@ -5,25 +5,24 @@
 
 struct visualizer_state {
 	GLFWwindow* window;
+	uint32_t eventRenderer[240 * 180];
+	size_t slowDown;
 };
 
 typedef struct visualizer_state *visualizerState;
 
 static bool caerVisualizerInit(caerModuleData moduleData);
-static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber,
-		va_list args);
+static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerVisualizerExit(caerModuleData moduleData);
 
-static struct caer_module_functions caerVisualizerFunctions = { .moduleInit =
-		&caerVisualizerInit, .moduleRun = &caerVisualizerRun, .moduleConfig =
-		NULL, .moduleExit = &caerVisualizerExit };
+static struct caer_module_functions caerVisualizerFunctions = { .moduleInit = &caerVisualizerInit, .moduleRun =
+	&caerVisualizerRun, .moduleConfig =
+NULL, .moduleExit = &caerVisualizerExit };
 
-void caerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity,
-		caerFrameEventPacket frame) {
+void caerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "Visualizer");
 
-	caerModuleSM(&caerVisualizerFunctions, moduleData,
-			sizeof(struct visualizer_state), 2, polarity, frame);
+	caerModuleSM(&caerVisualizerFunctions, moduleData, sizeof(struct visualizer_state), 2, polarity, frame);
 }
 
 static bool caerVisualizerInit(caerModuleData moduleData) {
@@ -57,6 +56,10 @@ static bool caerVisualizerInit(caerModuleData moduleData) {
 	glDisable(GL_TEXTURE_1D);
 	glDisable(GL_TEXTURE_2D);
 
+	state->slowDown = 0;
+
+	memset(state->eventRenderer, 0, 240 * 180 * sizeof(uint32_t));
+
 	return (true);
 }
 
@@ -68,8 +71,7 @@ static void caerVisualizerExit(caerModuleData moduleData) {
 	glfwTerminate();
 }
 
-static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber,
-		va_list args) {
+static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
 	UNUSED_ARGUMENT(argsNumber);
 
 	visualizerState state = moduleData->moduleState;
@@ -80,7 +82,43 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber,
 	// Frames to render.
 	caerFrameEventPacket frame = va_arg(args, caerFrameEventPacket);
 
-	if (frame != NULL) {
+	if (polarity != NULL) {
+		caerPolarityEvent currPolarityEvent;
+
+		for (uint32_t i = 0; i < caerEventPacketHeaderGetEventNumber(&polarity->packetHeader); i++) {
+			currPolarityEvent = caerPolarityEventPacketGetEvent(polarity, i);
+
+			// Only operate on valid events!
+			if (caerPolarityEventIsValid(currPolarityEvent)) {
+				if (caerPolarityEventGetPolarity(currPolarityEvent)) {
+					// Green.
+					state->eventRenderer[(caerPolarityEventGetY(currPolarityEvent) * 240)
+						+ caerPolarityEventGetX(currPolarityEvent)] = be32toh(U32T(0xFF << 16));
+				}
+				else {
+					// Red.
+					state->eventRenderer[(caerPolarityEventGetY(currPolarityEvent) * 240)
+						+ caerPolarityEventGetX(currPolarityEvent)] = be32toh(U32T(0xFF << 24));
+				}
+			}
+		}
+
+		if (state->slowDown++ == 4) {
+			state->slowDown = 0;
+
+			glClear(GL_COLOR_BUFFER_BIT);
+
+			glDrawPixels(240, 180, GL_RGBA, GL_UNSIGNED_BYTE, state->eventRenderer);
+			glPixelZoom(4, 4);
+
+			glfwSwapBuffers(state->window);
+			glfwPollEvents();
+
+			memset(state->eventRenderer, 0, 240 * 180 * sizeof(uint32_t));
+		}
+	}
+
+	if (frame != NULL && false) {
 		// Render frames one by one.
 		caerFrameEvent currFrameEvent;
 
@@ -95,7 +133,7 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber,
 				//glPixelZoom(1.0f, -1.0f);
 
 				glDrawPixels(caerFrameEventGetLengthX(currFrameEvent), caerFrameEventGetLengthY(currFrameEvent),
-					GL_LUMINANCE, GL_UNSIGNED_SHORT, caerFrameEventGetPixelArrayUnsafe(currFrameEvent));
+				GL_LUMINANCE, GL_UNSIGNED_SHORT, caerFrameEventGetPixelArrayUnsafe(currFrameEvent));
 				glPixelZoom(4, 4);
 
 				glfwSwapBuffers(state->window);
