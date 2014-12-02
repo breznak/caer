@@ -1143,6 +1143,12 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					// First, let's normalize the ADC value to 16bit generic depth.
 					data = U16T(data << (16 - DAVIS_ADC_DEPTH));
 
+					// Let's check that apsCountY is not above the maximum. This could happen
+					// if start/end of column events are discarded (no wait on transfer stall).
+					if (state->apsCountY[state->apsCurrentReadoutType] >= state->apsSizeY) {
+						continue;
+					}
+
 					// If reset read, we store the values in a local array. If signal read, we
 					// store the final pixel value directly in the output frame event. We already
 					// do the subtraction between reset and signal here, to avoid carrying that
