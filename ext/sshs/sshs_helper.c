@@ -148,6 +148,17 @@ char *sshsHelperValueToStringConverter(enum sshs_node_attr_value_type type, unio
 bool sshsHelperStringToValueConverter(enum sshs_node_attr_value_type type, const char *valueString,
 	union sshs_node_attr_value *value) {
 	if (valueString == NULL || value == NULL) {
+		// It is possible for a string value to be NULL, namely when it is
+		// an empty string in the XML file. Handle this case here.
+		if (type == STRING && valueString == NULL && value != NULL) {
+			value->string = strdup("");
+			if (value->string == NULL) {
+				return (false); // MALLOC FAILURE.
+			}
+
+			return (true);
+		}
+
 		return (false); // NULL STRING.
 	}
 
