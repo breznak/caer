@@ -46,12 +46,9 @@ void caerInputDAVISFX2(uint16_t moduleID, caerPolarityEventPacket *polarity, cae
 
 static void *dataAcquisitionThread(void *inPtr);
 static void dataAcquisitionThreadConfig(caerModuleData data);
-static void sendAddressedCoarseFineBias(sshsNode biasNode, libusb_device_handle *devHandle, uint16_t biasAddress,
-	const char *biasName);
-static void sendShiftedSourceBias(sshsNode biasNode, libusb_device_handle *devHandle, uint16_t biasAddress,
-	const char *biasName);
-static void sendBiases(sshsNode biasNode, libusb_device_handle *devHandle);
-static void sendChipSR(sshsNode chipNode, libusb_device_handle *devHandle);
+static void sendBias(libusb_device_handle *devHandle, uint16_t biasAddress, uint16_t biasValue);
+static void sendBiases(sshsNode moduleNode, libusb_device_handle *devHandle);
+static void sendChipSR(sshsNode moduleNode, libusb_device_handle *devHandle);
 
 static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Initializing module ...");
@@ -120,31 +117,19 @@ static void *dataAcquisitionThread(void *inPtr) {
 
 	caerLog(LOG_DEBUG, data->moduleSubSystemString, "Initializing data acquisition thread ...");
 
-	// Send default start-up biases and config values to device before enabling it.
-	sendBiases(sshsGetRelativeNode(data->moduleNode, "bias/"), cstate->deviceHandle);
-	sendChipSR(data->moduleNode, cstate->deviceHandle);
-	// TODO: fpga config here.
-
 	// Create buffers as specified in config file.
-	allocateDataTransfers(cstate, sshsNodeGetInt(data->moduleNode, "bufferNumber"),
-		sshsNodeGetInt(data->moduleNode, "bufferSize"));
+	sshsNode usbNode = sshsGetRelativeNode(data->moduleNode, "usb/");
+	allocateDataTransfers(cstate, sshsNodeGetInt(usbNode, "BufferNumber"), sshsNodeGetInt(usbNode, "BufferSize"));
 
-	// Enable AER data transfer on USB end-point.
-	spiConfigSend(cstate->deviceHandle, 0x00, 0x00, 0x01);
-	spiConfigSend(cstate->deviceHandle, 0x00, 0x01, 0x01);
-	spiConfigSend(cstate->deviceHandle, 0x01, 0x00, 0x01);
-	spiConfigSend(cstate->deviceHandle, 0x03, 0x00, 0x01);
-
-	// APS tests.
-	spiConfigSend(cstate->deviceHandle, 0x02, 14, 1); // Wait on transfer stall.
-	spiConfigSend(cstate->deviceHandle, 0x02, 2,
-		sshsNodeGetBool(sshsGetRelativeNode(data->moduleNode, "logic/APS/"), "GlobalShutter")); // GS/RS support.
-	spiConfigSend(cstate->deviceHandle, 0x02, 0, 1); // Run APS.
+	// Send default start-up biases and config values to device before enabling it.
+	sendBiases(data->moduleNode, cstate->deviceHandle);
+	sendChipSR(data->moduleNode, cstate->deviceHandle);
+	sendEnableDataConfig(data->moduleNode, cstate->deviceHandle);
 
 	// Handle USB events (1 second timeout).
 	struct timeval te = { .tv_sec = 0, .tv_usec = 1000000 };
 
-	caerLog(LOG_DEBUG, data->moduleSubSystemString, "data acquisition thread ready to process events.");
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "Data acquisition thread ready to process events.");
 
 	while (atomic_ops_uint_load(&data->running, ATOMIC_OPS_FENCE_NONE) != 0
 		&& atomic_ops_uint_load(&cstate->dataTransfersLength, ATOMIC_OPS_FENCE_NONE) > 0) {
@@ -156,14 +141,10 @@ static void *dataAcquisitionThread(void *inPtr) {
 		libusb_handle_events_timeout(cstate->deviceContext, &te);
 	}
 
-	caerLog(LOG_DEBUG, data->moduleSubSystemString, "shutting down data acquisition thread ...");
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "Shutting down data acquisition thread ...");
 
-	// Disable AER data transfer on USB end-point (reverse order than enabling).
-	spiConfigSend(cstate->deviceHandle, 0x03, 0x00, 0x00);
-	spiConfigSend(cstate->deviceHandle, 0x02, 0x00, 0x00);
-	spiConfigSend(cstate->deviceHandle, 0x01, 0x00, 0x00);
-	spiConfigSend(cstate->deviceHandle, 0x00, 0x01, 0x00);
-	spiConfigSend(cstate->deviceHandle, 0x00, 0x00, 0x00);
+	// Disable all data transfer on USB end-point.
+	sendDisableDataConfig(cstate->deviceHandle);
 
 	// Cancel all transfers and handle them.
 	deallocateDataTransfers(cstate);
@@ -171,7 +152,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 	// Ensure parent also shuts down (on disconnected device for example).
 	sshsNodePutBool(data->moduleNode, "shutdown", true);
 
-	caerLog(LOG_DEBUG, data->moduleSubSystemString, "data acquisition thread shut down.");
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "Data acquisition thread shut down.");
 
 	return (NULL);
 }
@@ -185,68 +166,47 @@ static void dataAcquisitionThreadConfig(caerModuleData moduleData) {
 	uintptr_t configUpdate = atomic_ops_uint_swap(&moduleData->configUpdate, 0, ATOMIC_OPS_FENCE_NONE);
 
 	if (configUpdate & (0x01 << 0)) {
-		// Bias update required.
-		sendBiases(sshsGetRelativeNode(moduleData->moduleNode, "bias/"), cstate->deviceHandle);
+		sendBiases(moduleData->moduleNode, cstate->deviceHandle);
 	}
 
 	if (configUpdate & (0x01 << 1)) {
-		// Chip config update required.
 		sendChipSR(moduleData->moduleNode, cstate->deviceHandle);
 	}
 
 	if (configUpdate & (0x01 << 2)) {
-		// FPGA config update required.
-		// TODO: figure this out.
+		sendMultiplexerConfig(moduleData->moduleNode, cstate->deviceHandle);
 	}
 
 	if (configUpdate & (0x01 << 3)) {
-		// Do buffer size change: cancel all and recreate them.
-		deallocateDataTransfers(cstate);
-		allocateDataTransfers(cstate, sshsNodeGetInt(moduleData->moduleNode, "bufferNumber"),
-			sshsNodeGetInt(moduleData->moduleNode, "bufferSize"));
+		sendDVSConfig(moduleData->moduleNode, cstate->deviceHandle);
 	}
 
 	if (configUpdate & (0x01 << 4)) {
-		// Update maximum size and interval settings for packets.
-		cstate->maxPolarityPacketSize = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxSize");
-		cstate->maxPolarityPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxInterval");
+		sendAPSConfig(moduleData->moduleNode, cstate->deviceHandle);
+	}
 
-		cstate->maxFramePacketSize = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxSize");
-		cstate->maxFramePacketInterval = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxInterval");
+	if (configUpdate & (0x01 << 5)) {
+		sendIMUConfig(moduleData->moduleNode, cstate->deviceHandle);
+	}
 
-		cstate->maxIMU6PacketSize = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxSize");
-		cstate->maxIMU6PacketInterval = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxInterval");
+	if (configUpdate & (0x01 << 6)) {
+		sendExternalInputDetectorConfig(moduleData->moduleNode, cstate->deviceHandle);
+	}
 
-		cstate->maxSpecialPacketSize = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxSize");
-		cstate->maxSpecialPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxInterval");
+	if (configUpdate & (0x01 << 7)) {
+		sendUSBConfig(moduleData->moduleNode, cstate->deviceHandle);
+	}
+
+	if (configUpdate & (0x01 << 8)) {
+		reallocateUSBBuffers(moduleData->moduleNode, cstate);
+	}
+
+	if (configUpdate & (0x01 << 9)) {
+		updatePacketSizesIntervals(moduleData->moduleNode, cstate);
 	}
 }
 
-static void sendAddressedCoarseFineBias(sshsNode biasNode, libusb_device_handle *devHandle, uint16_t biasAddress,
-	const char *biasName) {
-	// Get integer bias value.
-	uint16_t biasValue = generateAddressedCoarseFineBias(biasNode, biasName);
-
-	// All biases are two byte quantities.
-	uint8_t bias[2];
-
-	// Put the value in.
-	bias[0] = U8T(biasValue >> 8);
-	bias[1] = U8T(biasValue >> 0);
-
-	// Reverse coarse part.
-	bias[0] = bias[0] ^ 0x70;
-	bias[0] = U8T((bias[0] & ~0x50) | ((bias[0] & 0x40) >> 2) | ((bias[0] & 0x10) << 2));
-
-	libusb_control_transfer(devHandle, LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
-	VR_CHIP_BIAS, biasAddress, 0, bias, sizeof(bias), 0);
-}
-
-static void sendShiftedSourceBias(sshsNode biasNode, libusb_device_handle *devHandle, uint16_t biasAddress,
-	const char *biasName) {
-	// Get integer bias value.
-	uint16_t biasValue = generateShiftedSourceBias(biasNode, biasName);
-
+static void sendBias(libusb_device_handle *devHandle, uint16_t biasAddress, uint16_t biasValue) {
 	// All biases are two byte quantities.
 	uint8_t bias[2];
 
@@ -258,48 +218,61 @@ static void sendShiftedSourceBias(sshsNode biasNode, libusb_device_handle *devHa
 	VR_CHIP_BIAS, biasAddress, 0, bias, sizeof(bias), 0);
 }
 
-static void sendBiases(sshsNode biasNode, libusb_device_handle *devHandle) {
+static void sendBiases(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	sshsNode biasNode = sshsGetRelativeNode(moduleNode, "bias/");
+
 	// Biases are addressable now!
-	sendAddressedCoarseFineBias(biasNode, devHandle, 0, "DiffBn");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 1, "OnBn");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 2, "OffBn");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 3, "ApsCasEpc");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 4, "DiffCasBnc");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 5, "ApsROSFBn");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 6, "LocalBufBn");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 7, "PixInvBn");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 8, "PrBp");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 9, "PrSFBp");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 10, "RefrBp");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 11, "AEPdBn");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 12, "LcolTimeoutBn");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 13, "AEPuXBp");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 14, "AEPuYBp");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 15, "IFThrBn");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 16, "IFRefrBn");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 17, "PadFollBn");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 18, "ApsOverflowLevel");
-	sendAddressedCoarseFineBias(biasNode, devHandle, 19, "BiasBuffer");
-	sendShiftedSourceBias(biasNode, devHandle, 20, "SSP");
-	sendShiftedSourceBias(biasNode, devHandle, 21, "SSN");
+	sendBias(devHandle, 0, generateAddressedCoarseFineBias(biasNode, "DiffBn"));
+	sendBias(devHandle, 1, generateAddressedCoarseFineBias(biasNode, "OnBn"));
+	sendBias(devHandle, 2, generateAddressedCoarseFineBias(biasNode, "OffBn"));
+	sendBias(devHandle, 3, generateAddressedCoarseFineBias(biasNode, "ApsCasEpc"));
+	sendBias(devHandle, 4, generateAddressedCoarseFineBias(biasNode, "DiffCasBnc"));
+	sendBias(devHandle, 5, generateAddressedCoarseFineBias(biasNode, "ApsROSFBn"));
+	sendBias(devHandle, 6, generateAddressedCoarseFineBias(biasNode, "LocalBufBn"));
+	sendBias(devHandle, 7, generateAddressedCoarseFineBias(biasNode, "PixInvBn"));
+	sendBias(devHandle, 8, generateAddressedCoarseFineBias(biasNode, "PrBp"));
+	sendBias(devHandle, 9, generateAddressedCoarseFineBias(biasNode, "PrSFBp"));
+	sendBias(devHandle, 10, generateAddressedCoarseFineBias(biasNode, "RefrBp"));
+	sendBias(devHandle, 11, generateAddressedCoarseFineBias(biasNode, "AEPdBn"));
+	sendBias(devHandle, 12, generateAddressedCoarseFineBias(biasNode, "LcolTimeoutBn"));
+	sendBias(devHandle, 13, generateAddressedCoarseFineBias(biasNode, "AEPuXBp"));
+	sendBias(devHandle, 14, generateAddressedCoarseFineBias(biasNode, "AEPuYBp"));
+	sendBias(devHandle, 15, generateAddressedCoarseFineBias(biasNode, "IFThrBn"));
+	sendBias(devHandle, 16, generateAddressedCoarseFineBias(biasNode, "IFRefrBn"));
+	sendBias(devHandle, 17, generateAddressedCoarseFineBias(biasNode, "PadFollBn"));
+	sendBias(devHandle, 18, generateAddressedCoarseFineBias(biasNode, "ApsOverflowLevel"));
+	sendBias(devHandle, 19, generateAddressedCoarseFineBias(biasNode, "BiasBuffer"));
+	sendBias(devHandle, 20, generateShiftedSourceBias(biasNode, "SSP"));
+	sendBias(devHandle, 21, generateShiftedSourceBias(biasNode, "SSN"));
 }
 
 static void sendChipSR(sshsNode moduleNode, libusb_device_handle *devHandle) {
-	// A total of 56 bits (7 bytes) of configuration
+	sshsNode chipNode = sshsGetRelativeNode(moduleNode, "chip/");
+	sshsNode apsNode = sshsGetRelativeNode(moduleNode, "aps/");
+
+	// A total of 56 bits (7 bytes) of configuration.
 	uint8_t chipSR[7] = { 0 };
 
-	// Muxes are all kept at zero for now (no control). (TODO)
+	// Debug muxes control.
+	chipSR[0] |= U8T((sshsNodeGetByte(chipNode, "DigitalMux3") & 0x0F) << 4);
+	chipSR[0] |= U8T((sshsNodeGetByte(chipNode, "DigitalMux2") & 0x0F) << 0);
+	chipSR[1] |= U8T((sshsNodeGetByte(chipNode, "DigitalMux1") & 0x0F) << 4);
+	chipSR[1] |= U8T((sshsNodeGetByte(chipNode, "DigitalMux0") & 0x0F) << 0);
+
+	chipSR[5] |= U8T((sshsNodeGetByte(chipNode, "AnalogMux2") & 0x0F) << 4);
+	chipSR[5] |= U8T((sshsNodeGetByte(chipNode, "AnalogMux1") & 0x0F) << 0);
+	chipSR[6] |= U8T((sshsNodeGetByte(chipNode, "AnalogMux0") & 0x0F) << 4);
+
+	chipSR[6] |= U8T((sshsNodeGetByte(chipNode, "BiasMux") & 0x0F) << 0);
 
 	// Bytes 2-4 contain the actual 24 configuration bits. 17 are unused.
-	bool globalShutter = sshsNodeGetBool(sshsGetRelativeNode(moduleNode, "logic/APS/"), "GlobalShutter");
+	bool globalShutter = sshsNodeGetBool(apsNode, "GlobalShutter");
 	if (globalShutter) {
 		// Flip bit on if enabled.
 		chipSR[4] |= (1 << 6);
 	}
 
-	sshsNode chipNode = sshsGetRelativeNode(moduleNode, "chip/");
-
-	bool useAout = sshsNodeGetBool(chipNode, "useAout");
+	bool useAout = sshsNodeGetBool(chipNode, "UseAout");
 	if (useAout) {
 		// Flip bit on if enabled.
 		chipSR[4] |= (1 << 5);
@@ -311,25 +284,25 @@ static void sendChipSR(sshsNode moduleNode, libusb_device_handle *devHandle) {
 		chipSR[4] |= (1 << 4);
 	}
 
-	bool hotPixelSuppression = sshsNodeGetBool(chipNode, "hotPixelSuppression");
+	bool hotPixelSuppression = sshsNodeGetBool(chipNode, "HotPixelSuppression");
 	if (hotPixelSuppression) {
 		// Flip bit on if enabled.
 		chipSR[4] |= (1 << 3);
 	}
 
-	bool resetTestpixel = sshsNodeGetBool(chipNode, "resetTestpixel");
+	bool resetTestpixel = sshsNodeGetBool(chipNode, "ResetTestPixel");
 	if (resetTestpixel) {
 		// Flip bit on if enabled.
 		chipSR[4] |= (1 << 2);
 	}
 
-	bool typeNCalib = sshsNodeGetBool(chipNode, "typeNCalib");
+	bool typeNCalib = sshsNodeGetBool(chipNode, "TypeNCalibNeuron");
 	if (typeNCalib) {
 		// Flip bit on if enabled.
 		chipSR[4] |= (1 << 1);
 	}
 
-	bool resetCalib = sshsNodeGetBool(chipNode, "resetCalib");
+	bool resetCalib = sshsNodeGetBool(chipNode, "ResetCalibNeuron");
 	if (resetCalib) {
 		// Flip bit on if enabled.
 		chipSR[4] |= (1 << 0);

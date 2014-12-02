@@ -53,6 +53,9 @@ static void allocateDebugTransfers(davisFX3State state);
 static void deallocateDebugTransfers(davisFX3State state);
 static void LIBUSB_CALL libUsbDebugCallback(struct libusb_transfer *transfer);
 static void debugTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent);
+static void sendBiases(sshsNode moduleNode, libusb_device_handle *devHandle);
+static void sendChipSR(sshsNode moduleNode, libusb_device_handle *devHandle);
+static void sendExternalInputGeneratorConfig(sshsNode moduleNode, libusb_device_handle *devHandle);
 
 static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Initializing module ...");
@@ -74,7 +77,7 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 	createCommonConfiguration(moduleData, cstate);
 
 	// Subsystem 4: External Input (Generator module present only in FX3)
-	sshsNode extNode = sshsGetRelativeNode(moduleData->moduleNode, "logic/ExternalInput/");
+	sshsNode extNode = sshsGetRelativeNode(moduleData->moduleNode, "externalInput/");
 
 	sshsNodePutBoolIfAbsent(extNode, "RunGenerator", 0);
 	sshsNodePutBoolIfAbsent(extNode, "GenerateUseCustomSignal", 0);
@@ -130,29 +133,21 @@ static void *dataAcquisitionThread(void *inPtr) {
 
 	caerLog(LOG_DEBUG, data->moduleSubSystemString, "Initializing data acquisition thread ...");
 
-	// Send default start-up biases and config values to device before enabling it.
-
 	// Create buffers as specified in config file.
+	sshsNode usbNode = sshsGetRelativeNode(data->moduleNode, "usb/");
 	allocateDebugTransfers(state);
-	allocateDataTransfers(cstate, sshsNodeGetInt(data->moduleNode, "bufferNumber"),
-		sshsNodeGetInt(data->moduleNode, "bufferSize"));
+	allocateDataTransfers(cstate, sshsNodeGetInt(usbNode, "BufferNumber"), sshsNodeGetInt(usbNode, "BufferSize"));
 
-	// Enable AER data transfer on USB end-point.
-	spiConfigSend(cstate->deviceHandle, 0x00, 0x00, 0x01);
-	spiConfigSend(cstate->deviceHandle, 0x00, 0x01, 0x01);
-	spiConfigSend(cstate->deviceHandle, 0x01, 0x00, 0x01);
-	spiConfigSend(cstate->deviceHandle, 0x03, 0x00, 0x01);
-
-	// APS tests.
-	spiConfigSend(cstate->deviceHandle, 0x02, 14, 1); // Wait on transfer stall.
-	spiConfigSend(cstate->deviceHandle, 0x02, 2,
-		sshsNodeGetBool(sshsGetRelativeNode(data->moduleNode, "logic/APS/"), "GlobalShutter")); // GS/RS support.
-	spiConfigSend(cstate->deviceHandle, 0x02, 0, 1); // Run APS.
+	// Send default start-up biases and config values to device before enabling it.
+	sendBiases(data->moduleNode, cstate->deviceHandle);
+	sendChipSR(data->moduleNode, cstate->deviceHandle);
+	sendEnableDataConfig(data->moduleNode, cstate->deviceHandle);
+	sendExternalInputGeneratorConfig(data->moduleNode, cstate->deviceHandle); // FX3 only.
 
 	// Handle USB events (1 second timeout).
 	struct timeval te = { .tv_sec = 0, .tv_usec = 1000000 };
 
-	caerLog(LOG_DEBUG, data->moduleSubSystemString, "data acquisition thread ready to process events.");
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "Data acquisition thread ready to process events.");
 
 	while (atomic_ops_uint_load(&data->running, ATOMIC_OPS_FENCE_NONE) != 0
 		&& atomic_ops_uint_load(&cstate->dataTransfersLength, ATOMIC_OPS_FENCE_NONE) > 0) {
@@ -164,14 +159,11 @@ static void *dataAcquisitionThread(void *inPtr) {
 		libusb_handle_events_timeout(cstate->deviceContext, &te);
 	}
 
-	caerLog(LOG_DEBUG, data->moduleSubSystemString, "shutting down data acquisition thread ...");
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "Shutting down data acquisition thread ...");
 
-	// Disable AER data transfer on USB end-point (reverse order than enabling).
-	spiConfigSend(cstate->deviceHandle, 0x03, 0x00, 0x00);
-	spiConfigSend(cstate->deviceHandle, 0x02, 0x00, 0x00);
-	spiConfigSend(cstate->deviceHandle, 0x01, 0x00, 0x00);
-	spiConfigSend(cstate->deviceHandle, 0x00, 0x01, 0x00);
-	spiConfigSend(cstate->deviceHandle, 0x00, 0x00, 0x00);
+	// Disable all data transfer on USB end-point.
+	spiConfigSend(cstate->deviceHandle, FPGA_EXTINPUT, 6, 0); // FX3 only.
+	sendDisableDataConfig(cstate->deviceHandle);
 
 	// Cancel all transfers and handle them.
 	deallocateDataTransfers(cstate);
@@ -180,7 +172,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 	// Ensure parent also shuts down (on disconnected device for example).
 	sshsNodePutBool(data->moduleNode, "shutdown", true);
 
-	caerLog(LOG_DEBUG, data->moduleSubSystemString, "data acquisition thread shut down.");
+	caerLog(LOG_DEBUG, data->moduleSubSystemString, "Data acquisition thread shut down.");
 
 	return (NULL);
 }
@@ -194,38 +186,44 @@ static void dataAcquisitionThreadConfig(caerModuleData moduleData) {
 	uintptr_t configUpdate = atomic_ops_uint_swap(&moduleData->configUpdate, 0, ATOMIC_OPS_FENCE_NONE);
 
 	if (configUpdate & (0x01 << 0)) {
-		// Bias update required.
+		sendBiases(moduleData->moduleNode, cstate->deviceHandle);
 	}
 
 	if (configUpdate & (0x01 << 1)) {
-		// Chip config update required.
+		sendChipSR(moduleData->moduleNode, cstate->deviceHandle);
 	}
 
 	if (configUpdate & (0x01 << 2)) {
-		// FPGA config update required.
-		// TODO: figure this out.
+		sendMultiplexerConfig(moduleData->moduleNode, cstate->deviceHandle);
 	}
 
 	if (configUpdate & (0x01 << 3)) {
-		// Do buffer size change: cancel all and recreate them.
-		deallocateDataTransfers(cstate);
-		allocateDataTransfers(cstate, sshsNodeGetInt(moduleData->moduleNode, "bufferNumber"),
-			sshsNodeGetInt(moduleData->moduleNode, "bufferSize"));
+		sendDVSConfig(moduleData->moduleNode, cstate->deviceHandle);
 	}
 
 	if (configUpdate & (0x01 << 4)) {
-		// Update maximum size and interval settings for packets.
-		cstate->maxPolarityPacketSize = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxSize");
-		cstate->maxPolarityPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxInterval");
+		sendAPSConfig(moduleData->moduleNode, cstate->deviceHandle);
+	}
 
-		cstate->maxFramePacketSize = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxSize");
-		cstate->maxFramePacketInterval = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxInterval");
+	if (configUpdate & (0x01 << 5)) {
+		sendIMUConfig(moduleData->moduleNode, cstate->deviceHandle);
+	}
 
-		cstate->maxIMU6PacketSize = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxSize");
-		cstate->maxIMU6PacketInterval = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxInterval");
+	if (configUpdate & (0x01 << 6)) {
+		sendExternalInputDetectorConfig(moduleData->moduleNode, cstate->deviceHandle);
+		sendExternalInputGeneratorConfig(moduleData->moduleNode, cstate->deviceHandle);
+	}
 
-		cstate->maxSpecialPacketSize = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxSize");
-		cstate->maxSpecialPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxInterval");
+	if (configUpdate & (0x01 << 7)) {
+		sendUSBConfig(moduleData->moduleNode, cstate->deviceHandle);
+	}
+
+	if (configUpdate & (0x01 << 8)) {
+		reallocateUSBBuffers(moduleData->moduleNode, cstate);
+	}
+
+	if (configUpdate & (0x01 << 9)) {
+		updatePacketSizesIntervals(moduleData->moduleNode, cstate);
 	}
 }
 
@@ -353,4 +351,22 @@ static void debugTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSe
 		// Unknown/invalid debug message, log this.
 		caerLog(LOG_WARNING, state->cstate.sourceSubSystemString, "Unknown/invalid debug message.");
 	}
+}
+
+static void sendBiases(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	// TODO: depends on used chip.
+}
+
+static void sendChipSR(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	// TODO: depends on used chip.
+}
+
+static void sendExternalInputGeneratorConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	sshsNode extNode = sshsGetRelativeNode(moduleNode, "externalInput/");
+
+	spiConfigSend(devHandle, FPGA_EXTINPUT, 6, sshsNodeGetBool(extNode, "RunGenerator"));
+	spiConfigSend(devHandle, FPGA_EXTINPUT, 7, sshsNodeGetBool(extNode, "GenerateUseCustomSignal"));
+	spiConfigSend(devHandle, FPGA_EXTINPUT, 8, sshsNodeGetBool(extNode, "GeneratePulsePolarity"));
+	spiConfigSend(devHandle, FPGA_EXTINPUT, 9, sshsNodeGetInt(extNode, "GeneratePulseInterval"));
+	spiConfigSend(devHandle, FPGA_EXTINPUT, 10, sshsNodeGetInt(extNode, "GeneratePulseLength"));
 }

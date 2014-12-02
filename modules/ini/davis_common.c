@@ -13,10 +13,6 @@ static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer);
 static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytesSent);
 static void commonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
-static void chipGSSyncConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
-	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
-static void apsGSSyncConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
-	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
 void freeAllMemory(davisCommonState state) {
 	if (state->currentPolarityPacket != NULL) {
@@ -50,7 +46,7 @@ void freeAllMemory(davisCommonState state) {
 	}
 }
 
-void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8_t voltageValue) {
+void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8_t coarseValue, uint8_t voltageValue) {
 	// Add trailing slash to node name (required!).
 	size_t biasNameLength = strlen(biasName);
 	char biasNameFull[biasNameLength + 2];
@@ -62,10 +58,11 @@ void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8_t volt
 	sshsNode biasConfigNode = sshsGetRelativeNode(biasNode, biasNameFull);
 
 	// Add bias settings.
+	sshsNodePutByteIfAbsent(biasConfigNode, "coarseValue", coarseValue);
 	sshsNodePutByteIfAbsent(biasConfigNode, "voltageValue", voltageValue);
 }
 
-uint8_t generateVDACBias(sshsNode biasNode, const char *biasName) {
+uint16_t generateVDACBias(sshsNode biasNode, const char *biasName) {
 	// Add trailing slash to node name (required!).
 	size_t biasNameLength = strlen(biasName);
 	char biasNameFull[biasNameLength + 2];
@@ -76,8 +73,14 @@ uint8_t generateVDACBias(sshsNode biasNode, const char *biasName) {
 	// Get bias configuration node.
 	sshsNode biasConfigNode = sshsGetRelativeNode(biasNode, biasNameFull);
 
-	// Return bias value, made up by the one voltage component.
-	return (sshsNodeGetByte(biasConfigNode, "voltageValue") & 0x3F);
+	uint16_t biasValue = 0;
+
+	// Build up bias value from all its components.
+	biasValue |= U16T((sshsNodeGetByte(biasConfigNode, "voltageValue") & 0x3F) << 0);
+
+	biasValue |= U16T((sshsNodeGetByte(biasConfigNode, "coarseValue") & 0x07) << 6);
+
+	return (biasValue);
 }
 
 void createAddressedCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type, const char *sex,
@@ -128,9 +131,9 @@ uint16_t generateAddressedCoarseFineBias(sshsNode biasNode, const char *biasName
 		biasValue |= 0x08;
 	}
 
-	biasValue |= (uint16_t) ((sshsNodeGetByte(biasConfigNode, "fineValue") & 0xFF) << 4);
+	biasValue |= U16T((sshsNodeGetByte(biasConfigNode, "fineValue") & 0xFF) << 4);
 
-	biasValue |= (uint16_t) ((sshsNodeGetByte(biasConfigNode, "coarseValue") & 0x07) << 12);
+	biasValue |= U16T((sshsNodeGetByte(biasConfigNode, "coarseValue") & 0x07) << 12);
 
 	return (biasValue);
 }
@@ -181,9 +184,9 @@ uint16_t generateShiftedSourceBias(sshsNode biasNode, const char *biasName) {
 		biasValue |= (0x02 << 2);
 	}
 
-	biasValue |= (uint16_t) ((sshsNodeGetByte(biasConfigNode, "refValue") & 0x3F) << 4);
+	biasValue |= U16T((sshsNodeGetByte(biasConfigNode, "refValue") & 0x3F) << 4);
 
-	biasValue |= (uint16_t) ((sshsNodeGetByte(biasConfigNode, "regValue") & 0x3F) << 10);
+	biasValue |= U16T((sshsNodeGetByte(biasConfigNode, "regValue") & 0x3F) << 10);
 
 	return (biasValue);
 }
@@ -218,9 +221,11 @@ uint32_t spiConfigReceive(libusb_device_handle *devHandle, uint8_t moduleAddr, u
 bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t VID, uint16_t PID, uint8_t DID_TYPE) {
 	// USB port/bus/SN settings/restrictions.
 	// These can be used to force connection to one specific device.
-	sshsNodePutByteIfAbsent(moduleData->moduleNode, "usbBusNumber", 0);
-	sshsNodePutByteIfAbsent(moduleData->moduleNode, "usbDevAddress", 0);
-	sshsNodePutStringIfAbsent(moduleData->moduleNode, "usbSerialNumber", "");
+	sshsNode selectorNode = sshsGetRelativeNode(moduleData->moduleNode, "deviceSelector/");
+
+	sshsNodePutByteIfAbsent(selectorNode, "usbBusNumber", 0);
+	sshsNodePutByteIfAbsent(selectorNode, "usbDevAddress", 0);
+	sshsNodePutStringIfAbsent(selectorNode, "usbSerialNumber", "");
 
 	// Initialize libusb using a separate context for each device.
 	// This is to correctly support one thread per device.
@@ -232,8 +237,7 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 
 	// Try to open a DAVIS device on a specific USB port.
 	cstate->deviceHandle = deviceOpen(cstate->deviceContext, VID, PID, DID_TYPE,
-		sshsNodeGetByte(moduleData->moduleNode, "usbBusNumber"),
-		sshsNodeGetByte(moduleData->moduleNode, "usbDevAddress"));
+		sshsNodeGetByte(selectorNode, "usbBusNumber"), sshsNodeGetByte(selectorNode, "usbDevAddress"));
 	if (cstate->deviceHandle == NULL) {
 		libusb_exit(cstate->deviceContext);
 
@@ -261,7 +265,7 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 	cstate->sourceSubSystemString = moduleData->moduleSubSystemString;
 
 	// Now check if the Serial Number matches.
-	char *configSerialNumber = sshsNodeGetString(moduleData->moduleNode, "usbSerialNumber");
+	char *configSerialNumber = sshsNodeGetString(selectorNode, "usbSerialNumber");
 
 	if (!str_equals(configSerialNumber, "") && !str_equals(configSerialNumber, serialNumber)) {
 		libusb_close(cstate->deviceHandle);
@@ -330,11 +334,11 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 
 	if (cstate->chipID == CHIP_DAVIS128 || cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B
 		|| cstate->chipID == CHIP_DAVIS640) {
-		createVDACBiasSetting(biasNode, "ApsOverflowLevel", 0);
-		createVDACBiasSetting(biasNode, "ApsCas", 0);
-		createVDACBiasSetting(biasNode, "AdcRefHigh", 0);
-		createVDACBiasSetting(biasNode, "AdcRefLow", 0);
-		createVDACBiasSetting(biasNode, "AdcTestVoltage", 0);
+		createVDACBiasSetting(biasNode, "ApsOverflowLevel", 0, 0);
+		createVDACBiasSetting(biasNode, "ApsCas", 0, 0);
+		createVDACBiasSetting(biasNode, "AdcRefHigh", 0, 0);
+		createVDACBiasSetting(biasNode, "AdcRefLow", 0, 0);
+		createVDACBiasSetting(biasNode, "AdcTestVoltage", 0, 0);
 
 		createAddressedCoarseFineBiasSetting(biasNode, "LocalBufBn", "Normal", "N", 0, 0, true);
 		createAddressedCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 0, 0, true);
@@ -364,14 +368,14 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	}
 
 	if (cstate->chipID == CHIP_DAVISRGB) {
-		createVDACBiasSetting(biasNode, "ApsCasBpc", 0);
-		createVDACBiasSetting(biasNode, "OVG1Lo", 0);
-		createVDACBiasSetting(biasNode, "OVG2Lo", 0);
-		createVDACBiasSetting(biasNode, "TX2OVG2Hi", 0);
-		createVDACBiasSetting(biasNode, "Gnd07", 0);
-		createVDACBiasSetting(biasNode, "vADCTest", 0);
-		createVDACBiasSetting(biasNode, "AdcRefHigh", 0);
-		createVDACBiasSetting(biasNode, "AdcRefLow", 0);
+		createVDACBiasSetting(biasNode, "ApsCasBpc", 0, 0);
+		createVDACBiasSetting(biasNode, "OVG1Lo", 0, 0);
+		createVDACBiasSetting(biasNode, "OVG2Lo", 0, 0);
+		createVDACBiasSetting(biasNode, "TX2OVG2Hi", 0, 0);
+		createVDACBiasSetting(biasNode, "Gnd07", 0, 0);
+		createVDACBiasSetting(biasNode, "vADCTest", 0, 0);
+		createVDACBiasSetting(biasNode, "AdcRefHigh", 0, 0);
+		createVDACBiasSetting(biasNode, "AdcRefLow", 0, 0);
 
 		createAddressedCoarseFineBiasSetting(biasNode, "IFRefrBn", "Normal", "N", 0, 0, true);
 		createAddressedCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 0, 0, true);
@@ -417,47 +421,39 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutByteIfAbsent(chipNode, "DigitalMux2", 0);
 	sshsNodePutByteIfAbsent(chipNode, "DigitalMux3", 0);
 
-	sshsNodePutBoolIfAbsent(chipNode, "useAout", true);
+	sshsNodePutBoolIfAbsent(chipNode, "UseAout", true);
 	sshsNodePutBoolIfAbsent(chipNode, "nArow", false);
-	sshsNodePutBoolIfAbsent(chipNode, "resetTestpixel", true);
-	sshsNodePutBoolIfAbsent(chipNode, "typeNCalib", false);
-	sshsNodePutBoolIfAbsent(chipNode, "resetCalib", true);
-
-	bool globalShutterSupported = sshsNodeGetBool(sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"),
-		"apsHasGlobalShutter");
+	sshsNodePutBoolIfAbsent(chipNode, "ResetTestPixel", true);
+	sshsNodePutBoolIfAbsent(chipNode, "TypeNCalibNeuron", false);
+	sshsNodePutBoolIfAbsent(chipNode, "ResetCalibNeuron", true);
 
 	if (cstate->chipID == CHIP_DAVIS128) {
-		sshsNodePutBoolIfAbsent(chipNode, "hotPixelSuppression", false);
-		sshsNodePutBoolIfAbsent(chipNode, "globalShutter", globalShutterSupported);
-		sshsNodePutBoolIfAbsent(chipNode, "selectGrayCounter", false);
+		sshsNodePutBoolIfAbsent(chipNode, "HotPixelSuppression", false);
+		sshsNodePutBoolIfAbsent(chipNode, "SelectGrayCounter", false);
 	}
 
 	if (cstate->chipID == CHIP_DAVIS240A || cstate->chipID == CHIP_DAVIS240B || cstate->chipID == CHIP_DAVIS240C) {
-		sshsNodePutBoolIfAbsent(chipNode, "hotPixelSuppression", false);
-		sshsNodePutBoolIfAbsent(chipNode, "globalShutter", globalShutterSupported);
+		sshsNodePutBoolIfAbsent(chipNode, "HotPixelSuppression", false);
 	}
 
 	if (cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B || cstate->chipID == CHIP_DAVIS640) {
-		sshsNodePutBoolIfAbsent(chipNode, "globalShutter", globalShutterSupported);
-		sshsNodePutBoolIfAbsent(chipNode, "selectGrayCounter", false);
-		sshsNodePutBoolIfAbsent(chipNode, "testADC", false);
+		sshsNodePutBoolIfAbsent(chipNode, "SelectGrayCounter", false);
+		sshsNodePutBoolIfAbsent(chipNode, "TestADC", false);
 	}
 
 	if (cstate->chipID == CHIP_DAVISRGB) {
-		sshsNodePutBoolIfAbsent(chipNode, "selectGrayCounter", false);
-		sshsNodePutBoolIfAbsent(chipNode, "testADC", false);
-		sshsNodePutBoolIfAbsent(chipNode, "adjOVG1Lo", false);
-		sshsNodePutBoolIfAbsent(chipNode, "adjOVG2Lo", false);
-		sshsNodePutBoolIfAbsent(chipNode, "adjTX2OVG2Hi", false);
+		sshsNodePutBoolIfAbsent(chipNode, "SelectGrayCounter", false);
+		sshsNodePutBoolIfAbsent(chipNode, "TestADC", false);
+		sshsNodePutBoolIfAbsent(chipNode, "AdjOVG1Lo", false);
+		sshsNodePutBoolIfAbsent(chipNode, "AdjOVG2Lo", false);
+		sshsNodePutBoolIfAbsent(chipNode, "AdjTX2OVG2Hi", false);
 	}
 
-	sshsNode logicNode = sshsGetRelativeNode(moduleData->moduleNode, "logic/");
-
 	// Subsystem 0: Multiplexer
-	sshsNode muxNode = sshsGetRelativeNode(logicNode, "Multiplexer/");
+	sshsNode muxNode = sshsGetRelativeNode(moduleData->moduleNode, "multiplexer/");
 
-	sshsNodePutBoolIfAbsent(muxNode, "Run", 0);
-	sshsNodePutBoolIfAbsent(muxNode, "TimestampRun", 0);
+	sshsNodePutBoolIfAbsent(muxNode, "Run", 1);
+	sshsNodePutBoolIfAbsent(muxNode, "TimestampRun", 1);
 	sshsNodePutBoolIfAbsent(muxNode, "TimestampReset", 0);
 	sshsNodePutBoolIfAbsent(muxNode, "ForceChipBiasEnable", 0);
 	sshsNodePutBoolIfAbsent(muxNode, "DropDVSOnTransferStall", 1);
@@ -466,17 +462,21 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutBoolIfAbsent(muxNode, "DropExtInputOnTransferStall", 1);
 
 	// Subsystem 1: DVS AER
-	sshsNode dvsNode = sshsGetRelativeNode(logicNode, "DVS/");
+	sshsNode dvsNode = sshsGetRelativeNode(moduleData->moduleNode, "dvs/");
 
-	sshsNodePutBoolIfAbsent(dvsNode, "Run", 0);
+	sshsNodePutBoolIfAbsent(dvsNode, "Run", 1);
 	sshsNodePutByteIfAbsent(dvsNode, "AckDelay", 8);
 	sshsNodePutByteIfAbsent(dvsNode, "AckExtension", 2);
 	sshsNodePutBoolIfAbsent(dvsNode, "WaitOnTransferStall", 0);
+	sshsNodePutBoolIfAbsent(dvsNode, "SendRowOnlyEvents", 0);
 
 	// Subsystem 2: APS ADC
-	sshsNode apsNode = sshsGetRelativeNode(logicNode, "APS/");
+	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
 
-	sshsNodePutBoolIfAbsent(apsNode, "Run", 0);
+	bool globalShutterSupported = sshsNodeGetBool(sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"),
+		"apsHasGlobalShutter");
+
+	sshsNodePutBoolIfAbsent(apsNode, "Run", 1);
 	sshsNodePutBoolIfAbsent(apsNode, "ForceADCRunning", 0);
 	sshsNodePutBoolIfAbsent(apsNode, "GlobalShutter", globalShutterSupported);
 	sshsNodePutShortIfAbsent(apsNode, "StartColumn", 0);
@@ -493,9 +493,9 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutBoolIfAbsent(apsNode, "WaitOnTransferStall", 0);
 
 	// Subsystem 3: IMU
-	sshsNode imuNode = sshsGetRelativeNode(logicNode, "IMU/");
+	sshsNode imuNode = sshsGetRelativeNode(moduleData->moduleNode, "imu/");
 
-	sshsNodePutBoolIfAbsent(imuNode, "Run", 0);
+	sshsNodePutBoolIfAbsent(imuNode, "Run", 1);
 	sshsNodePutBoolIfAbsent(imuNode, "TempStandby", 0);
 	sshsNodePutBoolIfAbsent(imuNode, "AccelXStandby", 0);
 	sshsNodePutBoolIfAbsent(imuNode, "AccelYStandby", 0);
@@ -511,7 +511,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutByteIfAbsent(imuNode, "GyroFullScale", 1);
 
 	// Subsystem 4: External Input
-	sshsNode extNode = sshsGetRelativeNode(logicNode, "ExternalInput/");
+	sshsNode extNode = sshsGetRelativeNode(moduleData->moduleNode, "externalInput/");
 
 	sshsNodePutBoolIfAbsent(extNode, "RunDetector", 0);
 	sshsNodePutBoolIfAbsent(extNode, "DetectRisingEdges", 0);
@@ -521,29 +521,28 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutIntIfAbsent(extNode, "DetectPulseLength", 10);
 
 	// Subsystem 9: FX2/3 USB Configuration
-	sshsNode fxNode = sshsGetRelativeNode(logicNode, "USB/");
+	sshsNode usbNode = sshsGetRelativeNode(moduleData->moduleNode, "usb/");
 
-	sshsNodePutBoolIfAbsent(fxNode, "Run", 1);
-	sshsNodePutShortIfAbsent(fxNode, "EarlyPacketDelay", 8); // 125µs time-slices, so 1ms
+	sshsNodePutBoolIfAbsent(usbNode, "Run", 1);
+	sshsNodePutShortIfAbsent(usbNode, "EarlyPacketDelay", 8); // 125µs time-slices, so 1ms
 
-	// USB buffer settings.
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferNumber", 8);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferSize", 8192);
+	sshsNodePutIntIfAbsent(usbNode, "BufferNumber", 8);
+	sshsNodePutIntIfAbsent(usbNode, "BufferSize", 8192);
 
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "translateRowOnlyEvents", false);
+	sshsNode sysNode = sshsGetRelativeNode(moduleData->moduleNode, "system/");
 
 	// Packet settings (size (in events) and time interval (in µs)).
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "polarityPacketMaxSize", 4096);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "polarityPacketMaxInterval", 5000);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "framePacketMaxSize", 4);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "framePacketMaxInterval", 20000);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "imu6PacketMaxSize", 32);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "imu6PacketMaxInterval", 4000);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "specialPacketMaxSize", 128);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "specialPacketMaxInterval", 1000);
+	sshsNodePutIntIfAbsent(sysNode, "PolarityPacketMaxSize", 4096);
+	sshsNodePutIntIfAbsent(sysNode, "PolarityPacketMaxInterval", 5000);
+	sshsNodePutIntIfAbsent(sysNode, "FramePacketMaxSize", 4);
+	sshsNodePutIntIfAbsent(sysNode, "FramePacketMaxInterval", 20000);
+	sshsNodePutIntIfAbsent(sysNode, "IMU6PacketMaxSize", 32);
+	sshsNodePutIntIfAbsent(sysNode, "IMU6PacketMaxInterval", 4000);
+	sshsNodePutIntIfAbsent(sysNode, "SpecialPacketMaxSize", 128);
+	sshsNodePutIntIfAbsent(sysNode, "SpecialPacketMaxInterval", 1000);
 
 	// Ring-buffer setting (only changes value on module init/shutdown cycles).
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "dataExchangeBufferSize", 64);
+	sshsNodePutIntIfAbsent(sysNode, "DataExchangeBufferSize", 64);
 
 	// Install default listener to signal configuration updates asynchronously.
 	sshsNodeAddAttrListener(biasNode, moduleData, &commonConfigListener);
@@ -553,28 +552,26 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodeAddAttrListener(apsNode, moduleData, &commonConfigListener);
 	sshsNodeAddAttrListener(imuNode, moduleData, &commonConfigListener);
 	sshsNodeAddAttrListener(extNode, moduleData, &commonConfigListener);
-	sshsNodeAddAttrListener(fxNode, moduleData, &commonConfigListener);
-	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &commonConfigListener);
-
-	// Keep global shutter related settings in sync.
-	sshsNodeAddAttrListener(chipNode, apsNode, &chipGSSyncConfigListener);
-	sshsNodeAddAttrListener(apsNode, chipNode, &apsGSSyncConfigListener);
+	sshsNodeAddAttrListener(usbNode, moduleData, &commonConfigListener);
+	sshsNodeAddAttrListener(sysNode, moduleData, &commonConfigListener);
 }
 
 bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState cstate,
 	void *dataAcquisitionThread(void *inPtr)) {
+	sshsNode sysNode = sshsGetRelativeNode(moduleData->moduleNode, "system/");
+
 	// Initialize state fields.
-	cstate->maxPolarityPacketSize = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxSize");
-	cstate->maxPolarityPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxInterval");
+	cstate->maxPolarityPacketSize = sshsNodeGetInt(sysNode, "PolarityPacketMaxSize");
+	cstate->maxPolarityPacketInterval = sshsNodeGetInt(sysNode, "PolarityPacketMaxInterval");
 
-	cstate->maxFramePacketSize = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxSize");
-	cstate->maxFramePacketInterval = sshsNodeGetInt(moduleData->moduleNode, "framePacketMaxInterval");
+	cstate->maxFramePacketSize = sshsNodeGetInt(sysNode, "FramePacketMaxSize");
+	cstate->maxFramePacketInterval = sshsNodeGetInt(sysNode, "FramePacketMaxInterval");
 
-	cstate->maxIMU6PacketSize = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxSize");
-	cstate->maxIMU6PacketInterval = sshsNodeGetInt(moduleData->moduleNode, "imu6PacketMaxInterval");
+	cstate->maxIMU6PacketSize = sshsNodeGetInt(sysNode, "IMU6PacketMaxSize");
+	cstate->maxIMU6PacketInterval = sshsNodeGetInt(sysNode, "IMU6PacketMaxInterval");
 
-	cstate->maxSpecialPacketSize = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxSize");
-	cstate->maxSpecialPacketInterval = sshsNodeGetInt(moduleData->moduleNode, "specialPacketMaxInterval");
+	cstate->maxSpecialPacketSize = sshsNodeGetInt(sysNode, "SpecialPacketMaxSize");
+	cstate->maxSpecialPacketInterval = sshsNodeGetInt(sysNode, "SpecialPacketMaxInterval");
 
 	cstate->currentPolarityPacket = caerPolarityEventPacketAllocate(cstate->maxPolarityPacketSize, cstate->sourceID);
 	cstate->currentPolarityPacketPosition = 0;
@@ -595,9 +592,7 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 	cstate->dvsTimestamp = 0;
 	cstate->dvsLastY = 0;
 	cstate->dvsGotY = false;
-	cstate->dvsTranslateRowOnlyEvents = sshsNodeGetBool(moduleData->moduleNode, "translateRowOnlyEvents");
-	cstate->apsGlobalShutter = sshsNodeGetBool(sshsGetRelativeNode(moduleData->moduleNode, "logic/APS/"),
-		"GlobalShutter");
+	cstate->apsGlobalShutter = sshsNodeGetBool(sshsGetRelativeNode(moduleData->moduleNode, "aps/"), "GlobalShutter");
 	cstate->apsCurrentReadoutType = APS_READOUT_RESET;
 	for (size_t i = 0; i < APS_READOUT_TYPES_NUM; i++) {
 		cstate->apsCountX[i] = 0;
@@ -617,7 +612,7 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 	cstate->mainloopNotify = caerMainloopGetReference();
 
 	// Create data exchange buffers.
-	cstate->dataExchangeBuffer = ringBufferInit(sshsNodeGetInt(moduleData->moduleNode, "dataExchangeBufferSize"));
+	cstate->dataExchangeBuffer = ringBufferInit(sshsNodeGetInt(sysNode, "DataExchangeBufferSize"));
 	if (cstate->dataExchangeBuffer == NULL) {
 		freeAllMemory(cstate);
 
@@ -630,8 +625,7 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 		freeAllMemory(cstate);
 
 		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"Failed to start data acquisition thread. Error: %s (%d).", caerLogStrerror(errno),
-			errno);
+			"Failed to start data acquisition thread. Error: %s (%d).", caerLogStrerror(errno), errno);
 		return (false);
 	}
 
@@ -1104,7 +1098,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						continue; // Skip invalid Y address (don't update lastY).
 					}
 
-					if (state->dvsTranslateRowOnlyEvents && state->dvsGotY) {
+					if (state->dvsGotY) {
 						caerSpecialEvent currentRowOnlyEvent = caerSpecialEventPacketGetEvent(
 							state->currentSpecialPacket, state->currentSpecialPacketPosition++);
 						// Use the previous timestamp here, since this refers to the previous Y.
@@ -1389,67 +1383,175 @@ void commonConfigListener(sshsNode node, void *userData, enum sshs_node_attribut
 			atomic_ops_uint_or(&data->configUpdate, (0x01 << 1), ATOMIC_OPS_FENCE_NONE);
 		}
 
-		// Changes to the FPGA config nodes.
-		if (str_equals(sshsNodeGetName(node), "Multiplexer")) {
+		// Changes to the logic config nodes.
+		if (str_equals(sshsNodeGetName(node), "multiplexer")) {
 			atomic_ops_uint_or(&data->configUpdate, (0x01 << 2), ATOMIC_OPS_FENCE_NONE);
 		}
 
-		if (str_equals(sshsNodeGetName(node), "DVS")) {
+		if (str_equals(sshsNodeGetName(node), "dvs")) {
 			atomic_ops_uint_or(&data->configUpdate, (0x01 << 3), ATOMIC_OPS_FENCE_NONE);
 		}
 
-		if (str_equals(sshsNodeGetName(node), "APS")) {
+		if (str_equals(sshsNodeGetName(node), "aps")) {
 			atomic_ops_uint_or(&data->configUpdate, (0x01 << 4), ATOMIC_OPS_FENCE_NONE);
 		}
 
-		if (str_equals(sshsNodeGetName(node), "IMU")) {
+		if (str_equals(sshsNodeGetName(node), "imu")) {
 			atomic_ops_uint_or(&data->configUpdate, (0x01 << 5), ATOMIC_OPS_FENCE_NONE);
 		}
 
-		if (str_equals(sshsNodeGetName(node), "ExternalInput")) {
+		if (str_equals(sshsNodeGetName(node), "externalInput")) {
 			atomic_ops_uint_or(&data->configUpdate, (0x01 << 6), ATOMIC_OPS_FENCE_NONE);
 		}
 
-		if (str_equals(sshsNodeGetName(node), "USB")) {
-			atomic_ops_uint_or(&data->configUpdate, (0x01 << 7), ATOMIC_OPS_FENCE_NONE);
+		if (str_equals(sshsNodeGetName(node), "usb")) {
+			// Changes to the USB transfer settings (requires reallocation).
+			if (changeType == INT && (str_equals(changeKey, "BufferNumber") || str_equals(changeKey, "BufferSize"))) {
+				atomic_ops_uint_or(&data->configUpdate, (0x01 << 8), ATOMIC_OPS_FENCE_NONE);
+			}
+			else {
+				atomic_ops_uint_or(&data->configUpdate, (0x01 << 7), ATOMIC_OPS_FENCE_NONE);
+			}
 		}
 
-		// Changes to the USB transfer settings (requires reallocation).
-		if (changeType == INT && (str_equals(changeKey, "bufferNumber") || str_equals(changeKey, "bufferSize"))) {
-			atomic_ops_uint_or(&data->configUpdate, (0x01 << 8), ATOMIC_OPS_FENCE_NONE);
-		}
-
-		// Changes to packet size and interval.
-		if (changeType == INT
-			&& (str_equals(changeKey, "polarityPacketMaxSize") || str_equals(changeKey, "polarityPacketMaxInterval")
-				|| str_equals(changeKey, "framePacketMaxSize") || str_equals(changeKey, "framePacketMaxInterval")
-				|| str_equals(changeKey, "imu6PacketMaxSize") || str_equals(changeKey, "imu6PacketMaxInterval")
-				|| str_equals(changeKey, "specialPacketMaxSize") || str_equals(changeKey, "specialPacketMaxInterval"))) {
-			atomic_ops_uint_or(&data->configUpdate, (0x01 << 9), ATOMIC_OPS_FENCE_NONE);
+		if (str_equals(sshsNodeGetName(node), "system")) {
+			// Changes to packet size and interval.
+			if (changeType == INT
+				&& (str_equals_upto(changeKey, "PolarityPacket", 14) || str_equals_upto(changeKey, "FramePacket", 11)
+					|| str_equals_upto(changeKey, "IMU6Packet", 10) || str_equals_upto(changeKey, "SpecialPacket", 13))) {
+				atomic_ops_uint_or(&data->configUpdate, (0x01 << 9), ATOMIC_OPS_FENCE_NONE);
+			}
 		}
 	}
 }
 
-static void chipGSSyncConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
-	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
-	UNUSED_ARGUMENT(node);
-
-	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && str_equals(changeKey, "globalShutter")) {
-		sshsNode apsNode = userData;
-
-		// Update GlobalShutter setting in APS node to match.
-		sshsNodePutBool(apsNode, "GlobalShutter", changeValue.boolean);
-	}
+void sendEnableDataConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	sendUSBConfig(moduleNode, devHandle);
+	sendMultiplexerConfig(moduleNode, devHandle);
+	sendDVSConfig(moduleNode, devHandle);
+	sendAPSConfig(moduleNode, devHandle);
+	sendIMUConfig(moduleNode, devHandle);
+	sendExternalInputDetectorConfig(moduleNode, devHandle);
 }
 
-static void apsGSSyncConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
-	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
-	UNUSED_ARGUMENT(node);
+void sendDisableDataConfig(libusb_device_handle *devHandle) {
+	spiConfigSend(devHandle, FPGA_EXTINPUT, 0, 0);
+	spiConfigSend(devHandle, FPGA_IMU, 0, 0);
+	spiConfigSend(devHandle, FPGA_APS, 1, 0); // Ensure ADC turns off.
+	spiConfigSend(devHandle, FPGA_APS, 0, 0);
+	spiConfigSend(devHandle, FPGA_DVS, 0, 0);
+	spiConfigSend(devHandle, FPGA_MUX, 3, 0); // Ensure chip turns off.
+	spiConfigSend(devHandle, FPGA_MUX, 1, 0); // Turn off timestamp too.
+	spiConfigSend(devHandle, FPGA_MUX, 0, 0);
+	spiConfigSend(devHandle, FPGA_USB, 0, 0);
+}
 
-	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && str_equals(changeKey, "GlobalShutter")) {
-		sshsNode chipNode = userData;
+void sendUSBConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	sshsNode usbNode = sshsGetRelativeNode(moduleNode, "usb/");
 
-		// Update globalShutter setting in Chip node to match.
-		sshsNodePutBool(chipNode, "globalShutter", changeValue.boolean);
-	}
+	spiConfigSend(devHandle, FPGA_USB, 0, sshsNodeGetBool(usbNode, "Run"));
+	spiConfigSend(devHandle, FPGA_USB, 1, sshsNodeGetShort(usbNode, "EarlyPacketDelay"));
+}
+
+void sendMultiplexerConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	sshsNode muxNode = sshsGetRelativeNode(moduleNode, "multiplexer/");
+
+	spiConfigSend(devHandle, FPGA_MUX, 0, sshsNodeGetBool(muxNode, "Run"));
+	spiConfigSend(devHandle, FPGA_MUX, 1, sshsNodeGetBool(muxNode, "TimestampRun"));
+	spiConfigSend(devHandle, FPGA_MUX, 2, sshsNodeGetBool(muxNode, "TimestampReset"));
+	spiConfigSend(devHandle, FPGA_MUX, 3, sshsNodeGetBool(muxNode, "ForceChipBiasEnable"));
+	spiConfigSend(devHandle, FPGA_MUX, 4, sshsNodeGetBool(muxNode, "DropDVSOnTransferStall"));
+	spiConfigSend(devHandle, FPGA_MUX, 5, sshsNodeGetBool(muxNode, "DropAPSOnTransferStall"));
+	spiConfigSend(devHandle, FPGA_MUX, 6, sshsNodeGetBool(muxNode, "DropIMUOnTransferStall"));
+	spiConfigSend(devHandle, FPGA_MUX, 7, sshsNodeGetBool(muxNode, "DropExtInputOnTransferStall"));
+}
+
+void sendDVSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	sshsNode dvsNode = sshsGetRelativeNode(moduleNode, "dvs/");
+
+	spiConfigSend(devHandle, FPGA_DVS, 0, sshsNodeGetBool(dvsNode, "Run"));
+	spiConfigSend(devHandle, FPGA_DVS, 1, sshsNodeGetByte(dvsNode, "AckDelay"));
+	spiConfigSend(devHandle, FPGA_DVS, 2, sshsNodeGetByte(dvsNode, "AckExtension"));
+	spiConfigSend(devHandle, FPGA_DVS, 3, sshsNodeGetBool(dvsNode, "WaitOnTransferStall"));
+	spiConfigSend(devHandle, FPGA_DVS, 4, sshsNodeGetBool(dvsNode, "SendRowOnlyEvents"));
+}
+
+void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	sshsNode apsNode = sshsGetRelativeNode(moduleNode, "aps/");
+
+	spiConfigSend(devHandle, FPGA_APS, 0, sshsNodeGetBool(apsNode, "Run"));
+	spiConfigSend(devHandle, FPGA_APS, 1, sshsNodeGetBool(apsNode, "ForceADCRunning"));
+	spiConfigSend(devHandle, FPGA_APS, 2, sshsNodeGetBool(apsNode, "GlobalShutter"));
+	spiConfigSend(devHandle, FPGA_APS, 3, sshsNodeGetShort(apsNode, "StartColumn"));
+	spiConfigSend(devHandle, FPGA_APS, 4, sshsNodeGetShort(apsNode, "StartRow"));
+	spiConfigSend(devHandle, FPGA_APS, 5, sshsNodeGetShort(apsNode, "EndColumn"));
+	spiConfigSend(devHandle, FPGA_APS, 6, sshsNodeGetShort(apsNode, "EndRow"));
+	spiConfigSend(devHandle, FPGA_APS, 7, sshsNodeGetInt(apsNode, "Exposure") * EXT_ADC_FREQ); // in µs, converted to cycles here
+	spiConfigSend(devHandle, FPGA_APS, 8, sshsNodeGetInt(apsNode, "FrameDelay") * EXT_ADC_FREQ); // in µs, converted to cycles here
+	spiConfigSend(devHandle, FPGA_APS, 9, sshsNodeGetShort(apsNode, "ResetSettle")); // in cycles
+	spiConfigSend(devHandle, FPGA_APS, 10, sshsNodeGetByte(apsNode, "ColumnSettle")); // in cycles
+	spiConfigSend(devHandle, FPGA_APS, 11, sshsNodeGetByte(apsNode, "RowSettle")); // in cycles
+	spiConfigSend(devHandle, FPGA_APS, 12, sshsNodeGetBool(apsNode, "GSTXGateOpenReset"));
+	spiConfigSend(devHandle, FPGA_APS, 13, sshsNodeGetBool(apsNode, "ResetRead"));
+	spiConfigSend(devHandle, FPGA_APS, 14, sshsNodeGetBool(apsNode, "WaitOnTransferStall"));
+}
+
+void sendIMUConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	sshsNode imuNode = sshsGetRelativeNode(moduleNode, "imu/");
+
+	uint8_t accelStandby = 0;
+	accelStandby |= U8T(sshsNodeGetBool(imuNode, "AccelXStandby") << 2);
+	accelStandby |= U8T(sshsNodeGetBool(imuNode, "AccelYStandby") << 1);
+	accelStandby |= U8T(sshsNodeGetBool(imuNode, "AccelZStandby") << 0);
+
+	uint8_t gyroStandby = 0;
+	gyroStandby |= U8T(sshsNodeGetBool(imuNode, "GyroXStandby") << 2);
+	gyroStandby |= U8T(sshsNodeGetBool(imuNode, "GyroYStandby") << 1);
+	gyroStandby |= U8T(sshsNodeGetBool(imuNode, "GyroZStandby") << 0);
+
+	spiConfigSend(devHandle, FPGA_IMU, 0, sshsNodeGetBool(imuNode, "Run"));
+	spiConfigSend(devHandle, FPGA_IMU, 1, sshsNodeGetBool(imuNode, "TempStandby"));
+	spiConfigSend(devHandle, FPGA_IMU, 2, accelStandby);
+	spiConfigSend(devHandle, FPGA_IMU, 3, gyroStandby);
+	spiConfigSend(devHandle, FPGA_IMU, 4, sshsNodeGetBool(imuNode, "LowPowerCycle"));
+	spiConfigSend(devHandle, FPGA_IMU, 5, sshsNodeGetByte(imuNode, "LowPowerWakeupFrequency"));
+	spiConfigSend(devHandle, FPGA_IMU, 6, sshsNodeGetByte(imuNode, "SampleRateDivider"));
+	spiConfigSend(devHandle, FPGA_IMU, 7, sshsNodeGetByte(imuNode, "DigitalLowPassFilter"));
+	spiConfigSend(devHandle, FPGA_IMU, 8, sshsNodeGetByte(imuNode, "AccelFullScale"));
+	spiConfigSend(devHandle, FPGA_IMU, 9, sshsNodeGetByte(imuNode, "GyroFullScale"));
+}
+
+void sendExternalInputDetectorConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	sshsNode extNode = sshsGetRelativeNode(moduleNode, "externalInput/");
+
+	spiConfigSend(devHandle, FPGA_EXTINPUT, 0, sshsNodeGetBool(extNode, "RunDetector"));
+	spiConfigSend(devHandle, FPGA_EXTINPUT, 1, sshsNodeGetBool(extNode, "DetectRisingEdges"));
+	spiConfigSend(devHandle, FPGA_EXTINPUT, 2, sshsNodeGetBool(extNode, "DetectFallingEdges"));
+	spiConfigSend(devHandle, FPGA_EXTINPUT, 3, sshsNodeGetBool(extNode, "DetectPulses"));
+	spiConfigSend(devHandle, FPGA_EXTINPUT, 4, sshsNodeGetBool(extNode, "DetectPulsePolarity"));
+	spiConfigSend(devHandle, FPGA_EXTINPUT, 5, sshsNodeGetInt(extNode, "DetectPulseLength"));
+}
+
+void reallocateUSBBuffers(sshsNode moduleNode, davisCommonState state) {
+	sshsNode usbNode = sshsGetRelativeNode(moduleNode, "usb/");
+
+	deallocateDataTransfers(state);
+	allocateDataTransfers(state, sshsNodeGetInt(usbNode, "BufferNumber"), sshsNodeGetInt(usbNode, "BufferSize"));
+}
+
+void updatePacketSizesIntervals(sshsNode moduleNode, davisCommonState state) {
+	sshsNode sysNode = sshsGetRelativeNode(moduleNode, "system/");
+
+	// Packet settings (size (in events) and time interval (in µs)).
+	state->maxPolarityPacketSize = sshsNodeGetInt(sysNode, "PolarityPacketMaxSize");
+	state->maxPolarityPacketInterval = sshsNodeGetInt(sysNode, "PolarityPacketMaxInterval");
+
+	state->maxFramePacketSize = sshsNodeGetInt(sysNode, "FramePacketMaxSize");
+	state->maxFramePacketInterval = sshsNodeGetInt(sysNode, "FramePacketMaxInterval");
+
+	state->maxIMU6PacketSize = sshsNodeGetInt(sysNode, "IMU6PacketMaxSize");
+	state->maxIMU6PacketInterval = sshsNodeGetInt(sysNode, "IMU6PacketMaxInterval");
+
+	state->maxSpecialPacketSize = sshsNodeGetInt(sysNode, "SpecialPacketMaxSize");
+	state->maxSpecialPacketInterval = sshsNodeGetInt(sysNode, "SpecialPacketMaxInterval");
 }
