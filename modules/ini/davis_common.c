@@ -1119,6 +1119,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 				case 2: // X address, Polarity OFF
 				case 3: { // X address, Polarity ON
+					// X address must be flipped, to get expected sensor orientation.
+					data = U16T(state->dvsSizeX - 1 - data);
+
 					// Check range conformity.
 					if (data >= state->dvsSizeX) {
 						caerLog(LOG_ALERT, state->sourceSubSystemString, "X address out of range (0-%d): %" PRIu16 ".",

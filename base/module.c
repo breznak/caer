@@ -31,7 +31,9 @@ void caerModuleSMv(caerModuleFunctions moduleFunctions, caerModuleData moduleDat
 			}
 		}
 
-		moduleFunctions->moduleRun(moduleData, argsNumber, args);
+		if (moduleFunctions->moduleRun != NULL) {
+			moduleFunctions->moduleRun(moduleData, argsNumber, args);
+		}
 	}
 	else if (moduleData->moduleStatus == STOPPED && running == 1) {
 		moduleData->moduleState = calloc(1, memSize);

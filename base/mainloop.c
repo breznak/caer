@@ -256,6 +256,25 @@ sshsNode caerMainloopGetSourceInfo(uint16_t source) {
 	return (sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"));
 }
 
+void *caerMainloopGetSourceState(uint16_t source) {
+	caerMainloopData mainloopData = glMainloopData;
+	caerModuleData moduleData;
+
+	// This is only ever called from within modules running in a main-loop.
+	// So always inside the same thread, needing thus no synchronization.
+	HASH_FIND(hh, mainloopData->modules, &source, sizeof(uint16_t), moduleData);
+
+	if (moduleData == NULL) {
+		// This is impossible if used correctly, you can't have a packet with
+		// an event source X and that event source doesn't exist ...
+		caerLog(LOG_CRITICAL, sshsNodeGetName(mainloopData->mainloopNode),
+			"Impossible to get module data for source ID %" PRIu16 ".", source);
+		pthread_exit(NULL);
+	}
+
+	return (moduleData->moduleState);
+}
+
 static void caerMainloopSignalHandler(int signal) {
 	// Simply set the running flag to false on SIGTERM and SIGINT (CTRL+C) for global shutdown.
 	if (signal == SIGTERM || signal == SIGINT) {
