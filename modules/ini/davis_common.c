@@ -465,10 +465,12 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNode dvsNode = sshsGetRelativeNode(moduleData->moduleNode, "dvs/");
 
 	sshsNodePutBoolIfAbsent(dvsNode, "Run", 1);
-	sshsNodePutByteIfAbsent(dvsNode, "AckDelay", 8);
-	sshsNodePutByteIfAbsent(dvsNode, "AckExtension", 2);
+	sshsNodePutByteIfAbsent(dvsNode, "AckDelayRow", 4);
+	sshsNodePutByteIfAbsent(dvsNode, "AckDelayColumn", 0);
+	sshsNodePutByteIfAbsent(dvsNode, "AckExtensionRow", 1);
+	sshsNodePutByteIfAbsent(dvsNode, "AckExtensionColumn", 0);
 	sshsNodePutBoolIfAbsent(dvsNode, "WaitOnTransferStall", 0);
-	sshsNodePutBoolIfAbsent(dvsNode, "SendRowOnlyEvents", 0);
+	sshsNodePutBoolIfAbsent(dvsNode, "FilterRowOnlyEvents", 1);
 
 	// Subsystem 2: APS ADC
 	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
@@ -1119,9 +1121,6 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 				case 2: // X address, Polarity OFF
 				case 3: { // X address, Polarity ON
-					// X address must be flipped, to get expected sensor orientation.
-					data = U16T(state->dvsSizeX - 1 - data);
-
 					// Check range conformity.
 					if (data >= state->dvsSizeX) {
 						caerLog(LOG_ALERT, state->sourceSubSystemString, "X address out of range (0-%d): %" PRIu16 ".",
@@ -1479,10 +1478,12 @@ void sendDVSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
 	sshsNode dvsNode = sshsGetRelativeNode(moduleNode, "dvs/");
 
 	spiConfigSend(devHandle, FPGA_DVS, 0, sshsNodeGetBool(dvsNode, "Run"));
-	spiConfigSend(devHandle, FPGA_DVS, 1, sshsNodeGetByte(dvsNode, "AckDelay"));
-	spiConfigSend(devHandle, FPGA_DVS, 2, sshsNodeGetByte(dvsNode, "AckExtension"));
-	spiConfigSend(devHandle, FPGA_DVS, 3, sshsNodeGetBool(dvsNode, "WaitOnTransferStall"));
-	spiConfigSend(devHandle, FPGA_DVS, 4, sshsNodeGetBool(dvsNode, "SendRowOnlyEvents"));
+	spiConfigSend(devHandle, FPGA_DVS, 1, sshsNodeGetByte(dvsNode, "AckDelayRow"));
+	spiConfigSend(devHandle, FPGA_DVS, 2, sshsNodeGetByte(dvsNode, "AckDelayColumn"));
+	spiConfigSend(devHandle, FPGA_DVS, 3, sshsNodeGetByte(dvsNode, "AckExtensionRow"));
+	spiConfigSend(devHandle, FPGA_DVS, 4, sshsNodeGetByte(dvsNode, "AckExtensionColumn"));
+	spiConfigSend(devHandle, FPGA_DVS, 5, sshsNodeGetBool(dvsNode, "WaitOnTransferStall"));
+	spiConfigSend(devHandle, FPGA_DVS, 6, sshsNodeGetBool(dvsNode, "FilterRowOnlyEvents"));
 }
 
 void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
