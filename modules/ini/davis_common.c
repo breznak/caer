@@ -481,10 +481,10 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutBoolIfAbsent(apsNode, "Run", 1);
 	sshsNodePutBoolIfAbsent(apsNode, "ForceADCRunning", 0);
 	sshsNodePutBoolIfAbsent(apsNode, "GlobalShutter", globalShutterSupported);
-	sshsNodePutShortIfAbsent(apsNode, "StartColumn", 0);
-	sshsNodePutShortIfAbsent(apsNode, "StartRow", 0);
-	sshsNodePutShortIfAbsent(apsNode, "EndColumn", U16T(cstate->apsSizeX - 1));
-	sshsNodePutShortIfAbsent(apsNode, "EndRow", U16T(cstate->apsSizeY - 1));
+	sshsNodePutShortIfAbsent(apsNode, "StartColumn0", 0);
+	sshsNodePutShortIfAbsent(apsNode, "StartRow0", 0);
+	sshsNodePutShortIfAbsent(apsNode, "EndColumn0", U16T(cstate->apsSizeX - 1));
+	sshsNodePutShortIfAbsent(apsNode, "EndRow0", U16T(cstate->apsSizeY - 1));
 	sshsNodePutIntIfAbsent(apsNode, "Exposure", 2000); // in µs, converted to cycles later
 	sshsNodePutIntIfAbsent(apsNode, "FrameDelay", 200); // in µs, converted to cycles later
 	sshsNodePutShortIfAbsent(apsNode, "ResetSettle", 10); // in cycles
@@ -1492,10 +1492,10 @@ void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
 	spiConfigSend(devHandle, FPGA_APS, 0, sshsNodeGetBool(apsNode, "Run"));
 	spiConfigSend(devHandle, FPGA_APS, 1, sshsNodeGetBool(apsNode, "ForceADCRunning"));
 	spiConfigSend(devHandle, FPGA_APS, 2, sshsNodeGetBool(apsNode, "GlobalShutter"));
-	spiConfigSend(devHandle, FPGA_APS, 3, sshsNodeGetShort(apsNode, "StartColumn"));
-	spiConfigSend(devHandle, FPGA_APS, 4, sshsNodeGetShort(apsNode, "StartRow"));
-	spiConfigSend(devHandle, FPGA_APS, 5, sshsNodeGetShort(apsNode, "EndColumn"));
-	spiConfigSend(devHandle, FPGA_APS, 6, sshsNodeGetShort(apsNode, "EndRow"));
+	spiConfigSend(devHandle, FPGA_APS, 3, sshsNodeGetShort(apsNode, "StartColumn0"));
+	spiConfigSend(devHandle, FPGA_APS, 4, sshsNodeGetShort(apsNode, "StartRow0"));
+	spiConfigSend(devHandle, FPGA_APS, 5, sshsNodeGetShort(apsNode, "EndColumn0"));
+	spiConfigSend(devHandle, FPGA_APS, 6, sshsNodeGetShort(apsNode, "EndRow0"));
 	spiConfigSend(devHandle, FPGA_APS, 7, sshsNodeGetInt(apsNode, "Exposure") * EXT_ADC_FREQ); // in µs, converted to cycles here
 	spiConfigSend(devHandle, FPGA_APS, 8, sshsNodeGetInt(apsNode, "FrameDelay") * EXT_ADC_FREQ); // in µs, converted to cycles here
 	spiConfigSend(devHandle, FPGA_APS, 9, sshsNodeGetShort(apsNode, "ResetSettle")); // in cycles

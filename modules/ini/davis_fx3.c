@@ -55,6 +55,8 @@ static void LIBUSB_CALL libUsbDebugCallback(struct libusb_transfer *transfer);
 static void debugTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSent);
 static void sendBiases(sshsNode moduleNode, libusb_device_handle *devHandle);
 static void sendChipSR(sshsNode moduleNode, libusb_device_handle *devHandle);
+static void sendDVSFilterConfig(sshsNode moduleNode, libusb_device_handle *devHandle);
+static void sendAPSQuadROIConfig(sshsNode moduleNode, libusb_device_handle *devHandle);
 static void sendExternalInputGeneratorConfig(sshsNode moduleNode, libusb_device_handle *devHandle);
 
 static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
@@ -75,6 +77,44 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 	}
 
 	createCommonConfiguration(moduleData, cstate);
+
+	// Subsystem 1: DVS AER (Pixel and BA filtering support present only in FX3)
+	sshsNode dvsNode = sshsGetRelativeNode(moduleData->moduleNode, "dvs/");
+
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel0Row", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel0Column", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel1Row", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel1Column", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel2Row", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel2Column", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel3Row", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel3Column", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel4Row", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel4Column", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel5Row", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel5Column", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel6Row", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel6Column", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel7Row", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel7Column", cstate->apsSizeX);
+	sshsNodePutBoolIfAbsent(dvsNode, "FilterBackgroundActivity", 0);
+	sshsNodePutIntIfAbsent(dvsNode, "FilterBackgroundActivityDeltaTime", 20000);
+
+	// Subsystem 2: APS ADC (Quad-ROI support present only in FX3)
+	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
+
+	sshsNodePutShortIfAbsent(apsNode, "StartColumn1", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(apsNode, "StartRow1", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(apsNode, "EndColumn1", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(apsNode, "EndRow1", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(apsNode, "StartColumn2", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(apsNode, "StartRow2", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(apsNode, "EndColumn2", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(apsNode, "EndRow2", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(apsNode, "StartColumn3", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(apsNode, "StartRow3", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(apsNode, "EndColumn3", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(apsNode, "EndRow3", cstate->apsSizeY);
 
 	// Subsystem 4: External Input (Generator module present only in FX3)
 	sshsNode extNode = sshsGetRelativeNode(moduleData->moduleNode, "externalInput/");
@@ -206,10 +246,12 @@ static void dataAcquisitionThreadConfig(caerModuleData moduleData) {
 
 	if (configUpdate & (0x01 << 3)) {
 		sendDVSConfig(moduleData->moduleNode, cstate->deviceHandle);
+		sendDVSFilterConfig(moduleData->moduleNode, cstate->deviceHandle);
 	}
 
 	if (configUpdate & (0x01 << 4)) {
 		sendAPSConfig(moduleData->moduleNode, cstate->deviceHandle);
+		sendAPSQuadROIConfig(moduleData->moduleNode, cstate->deviceHandle);
 	}
 
 	if (configUpdate & (0x01 << 5)) {
@@ -366,6 +408,46 @@ static void sendBiases(sshsNode moduleNode, libusb_device_handle *devHandle) {
 
 static void sendChipSR(sshsNode moduleNode, libusb_device_handle *devHandle) {
 	// TODO: depends on used chip.
+}
+
+static void sendDVSFilterConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	sshsNode dvsNode = sshsGetRelativeNode(moduleNode, "dvs/");
+
+	spiConfigSend(devHandle, FPGA_DVS, 7, sshsNodeGetShort(dvsNode, "FilterPixel0Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 8, sshsNodeGetShort(dvsNode, "FilterPixel0Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 9, sshsNodeGetShort(dvsNode, "FilterPixel1Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 10, sshsNodeGetShort(dvsNode, "FilterPixel1Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 11, sshsNodeGetShort(dvsNode, "FilterPixel2Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 12, sshsNodeGetShort(dvsNode, "FilterPixel2Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 13, sshsNodeGetShort(dvsNode, "FilterPixel3Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 15, sshsNodeGetShort(dvsNode, "FilterPixel3Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 15, sshsNodeGetShort(dvsNode, "FilterPixel4Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 16, sshsNodeGetShort(dvsNode, "FilterPixel4Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 17, sshsNodeGetShort(dvsNode, "FilterPixel5Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 18, sshsNodeGetShort(dvsNode, "FilterPixel5Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 19, sshsNodeGetShort(dvsNode, "FilterPixel6Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 20, sshsNodeGetShort(dvsNode, "FilterPixel6Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 21, sshsNodeGetShort(dvsNode, "FilterPixel7Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 22, sshsNodeGetShort(dvsNode, "FilterPixel7Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 23, sshsNodeGetBool(dvsNode, "FilterBackgroundActivity"));
+	spiConfigSend(devHandle, FPGA_DVS, 24, sshsNodeGetInt(dvsNode, "FilterBackgroundActivityDeltaTime"));
+}
+
+static void sendAPSQuadROIConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	sshsNode apsNode = sshsGetRelativeNode(moduleNode, "aps/");
+
+	spiConfigSend(devHandle, FPGA_APS, 15, sshsNodeGetShort(apsNode, "StartColumn1"));
+	spiConfigSend(devHandle, FPGA_APS, 16, sshsNodeGetShort(apsNode, "StartRow1"));
+	spiConfigSend(devHandle, FPGA_APS, 17, sshsNodeGetShort(apsNode, "EndColumn1"));
+	spiConfigSend(devHandle, FPGA_APS, 18, sshsNodeGetShort(apsNode, "EndRow1"));
+	spiConfigSend(devHandle, FPGA_APS, 19, sshsNodeGetShort(apsNode, "StartColumn2"));
+	spiConfigSend(devHandle, FPGA_APS, 20, sshsNodeGetShort(apsNode, "StartRow2"));
+	spiConfigSend(devHandle, FPGA_APS, 21, sshsNodeGetShort(apsNode, "EndColumn2"));
+	spiConfigSend(devHandle, FPGA_APS, 22, sshsNodeGetShort(apsNode, "EndRow2"));
+	spiConfigSend(devHandle, FPGA_APS, 23, sshsNodeGetShort(apsNode, "StartColumn3"));
+	spiConfigSend(devHandle, FPGA_APS, 24, sshsNodeGetShort(apsNode, "StartRow3"));
+	spiConfigSend(devHandle, FPGA_APS, 25, sshsNodeGetShort(apsNode, "EndColumn3"));
+	spiConfigSend(devHandle, FPGA_APS, 26, sshsNodeGetShort(apsNode, "EndRow3"));
 }
 
 static void sendExternalInputGeneratorConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
