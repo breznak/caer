@@ -94,14 +94,8 @@ struct davisCommon_state {
 
 typedef struct davisCommon_state *davisCommonState;
 
-void freeAllMemory(davisCommonState state);
-void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8_t coarseValue, uint8_t voltageValue);
 uint16_t generateVDACBias(sshsNode biasNode, const char *biasName);
-void createAddressedCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type, const char *sex,
-	uint8_t coarseValue, uint8_t fineValue, bool enabled);
 uint16_t generateAddressedCoarseFineBias(sshsNode biasNode, const char *biasName);
-void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasName, uint8_t regValue, uint8_t refValue,
-	const char *operatingMode, const char *voltageLevel);
 uint16_t generateShiftedSourceBias(sshsNode biasNode, const char *biasName);
 void spiConfigSend(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr, uint32_t param);
 uint32_t spiConfigReceive(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr);
@@ -110,20 +104,11 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState cstate,
 	void *dataAcquisitionThread(void *inPtr));
 void caerInputDAVISCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args);
+void caerInputDAVISCommonExit(caerModuleData moduleData);
 void allocateDataTransfers(davisCommonState state, uint32_t bufferNum, uint32_t bufferSize);
 void deallocateDataTransfers(davisCommonState state);
-libusb_device_handle *deviceOpen(libusb_context *devContext, uint16_t devVID, uint16_t devPID, uint8_t devType,
-	uint8_t busNumber, uint8_t devAddress);
-void deviceClose(libusb_device_handle *devHandle);
 void sendEnableDataConfig(sshsNode moduleNode, libusb_device_handle *devHandle);
 void sendDisableDataConfig(libusb_device_handle *devHandle);
-void sendUSBConfig(sshsNode moduleNode, libusb_device_handle *devHandle);
-void sendMultiplexerConfig(sshsNode moduleNode, libusb_device_handle *devHandle);
-void sendDVSConfig(sshsNode moduleNode, libusb_device_handle *devHandle);
-void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle);
-void sendIMUConfig(sshsNode moduleNode, libusb_device_handle *devHandle);
-void sendExternalInputDetectorConfig(sshsNode moduleNode, libusb_device_handle *devHandle);
-void reallocateUSBBuffers(sshsNode moduleNode, davisCommonState state);
-void updatePacketSizesIntervals(sshsNode moduleNode, davisCommonState state);
+void dataAcquisitionThreadConfig(caerModuleData moduleData);
 
 #endif /* DAVIS_COMMON_H_ */

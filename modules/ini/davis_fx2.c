@@ -17,10 +17,10 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData);
 // Biases are configured asynchronously, and buffer sizes in the data
 // acquisition thread itself. Resetting the main config_refresh flag
 // will also happen there.
-static void caerInputDAVISFX2Exit(caerModuleData moduleData);
+// EXIT: common to all DAVIS systems.
 
 static struct caer_module_functions caerInputDAVISFX2Functions = { .moduleInit = &caerInputDAVISFX2Init, .moduleRun =
-	&caerInputDAVISCommonRun, .moduleConfig = NULL, .moduleExit = &caerInputDAVISFX2Exit };
+	&caerInputDAVISCommonRun, .moduleConfig = NULL, .moduleExit = &caerInputDAVISCommonExit };
 
 void caerInputDAVISFX2(uint16_t moduleID, caerPolarityEventPacket *polarity, caerFrameEventPacket *frame,
 	caerIMU6EventPacket *imu6, caerSpecialEventPacket *special) {
@@ -45,10 +45,13 @@ void caerInputDAVISFX2(uint16_t moduleID, caerPolarityEventPacket *polarity, cae
 }
 
 static void *dataAcquisitionThread(void *inPtr);
-static void dataAcquisitionThreadConfig(caerModuleData data);
 static void sendBias(libusb_device_handle *devHandle, uint16_t biasAddress, uint16_t biasValue);
 static void sendBiases(sshsNode moduleNode, libusb_device_handle *devHandle);
 static void sendChipSR(sshsNode moduleNode, libusb_device_handle *devHandle);
+static void BiasesListener(sshsNode node, void *userData, enum sshs_node_attribute_events event, const char *changeKey,
+	enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
+static void ChipSRListener(sshsNode node, void *userData, enum sshs_node_attribute_events event, const char *changeKey,
+	enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
 static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Initializing module ...");
@@ -69,44 +72,27 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 
 	createCommonConfiguration(moduleData, cstate);
 
+	// Install default listeners to signal configuration updates asynchronously.
+	sshsNodeAddAttrListener(sshsGetRelativeNode(moduleData->moduleNode, "chip/"), moduleData, &ChipSRListener);
+	// The chip SR needs to be updated also when GlobalShutter in APS changes.
+	sshsNodeAddAttrListener(sshsGetRelativeNode(moduleData->moduleNode, "aps/"), moduleData, &ChipSRListener);
+
+	// Walk all bias nodes and install the default handler for changes.
+	size_t numBiasNodes;
+	sshsNode *biasNodes = sshsNodeGetChildren(sshsGetRelativeNode(moduleData->moduleNode, "bias/"), &numBiasNodes);
+
+	for (size_t i = 0; i < numBiasNodes; i++) {
+		sshsNodeAddAttrListener(biasNodes[i], cstate->deviceHandle, &BiasesListener);
+	}
+
+	free(biasNodes);
+
 	if (!initializeCommonConfiguration(moduleData, cstate, &dataAcquisitionThread)) {
 		return (false);
 	}
 
 	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Initialized DAVISFX2 module successfully.");
 	return (true);
-}
-
-static void caerInputDAVISFX2Exit(caerModuleData moduleData) {
-	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Shutting down ...");
-
-	davisFX2State state = moduleData->moduleState;
-	davisCommonState cstate = &state->cstate;
-
-	// Wait for data acquisition thread to terminate...
-	if ((errno = pthread_join(state->cstate.dataAcquisitionThread, NULL)) != 0) {
-		// This should never happen!
-		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"Failed to join data acquisition thread. Error: %s (%d).", caerLogStrerror(errno), errno);
-	}
-
-	// Finally, close the device fully.
-	deviceClose(cstate->deviceHandle);
-
-	// Destroy libusb context.
-	libusb_exit(cstate->deviceContext);
-
-	// Empty ringbuffer.
-	void *packet;
-	while ((packet = ringBufferGet(cstate->dataExchangeBuffer)) != NULL) {
-		caerMainloopDataAvailableDecrease(cstate->mainloopNotify);
-		free(packet);
-	}
-
-	// Free remaining incomplete packets.
-	freeAllMemory(cstate);
-
-	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Shutdown successful.");
 }
 
 static void *dataAcquisitionThread(void *inPtr) {
@@ -157,62 +143,6 @@ static void *dataAcquisitionThread(void *inPtr) {
 	return (NULL);
 }
 
-static void dataAcquisitionThreadConfig(caerModuleData moduleData) {
-	davisFX2State state = moduleData->moduleState;
-	davisCommonState cstate = &state->cstate;
-
-	// Get the current value to examine by atomic exchange, since we don't
-	// want there to be any possible store between a load/store pair.
-	uintptr_t configUpdate = atomic_ops_uint_swap(&moduleData->configUpdate, 0, ATOMIC_OPS_FENCE_NONE);
-
-	if (configUpdate & (0x01 << 0)) {
-		sendBiases(moduleData->moduleNode, cstate->deviceHandle);
-	}
-
-	if (configUpdate & (0x01 << 1)) {
-		sendChipSR(moduleData->moduleNode, cstate->deviceHandle);
-	}
-
-	if (configUpdate & (0x01 << 2)) {
-		sendMultiplexerConfig(moduleData->moduleNode, cstate->deviceHandle);
-
-		// If timestamp reset was changed, we put it back to OFF, since
-		// it's just an instant pulse to the device.
-		sshsNode muxNode = sshsGetRelativeNode(moduleData->moduleNode, "multiplexer/");
-		if (sshsNodeGetBool(muxNode, "TimestampReset")) {
-			sshsNodePutBool(muxNode, "TimestampReset", 0);
-		}
-	}
-
-	if (configUpdate & (0x01 << 3)) {
-		sendDVSConfig(moduleData->moduleNode, cstate->deviceHandle);
-	}
-
-	if (configUpdate & (0x01 << 4)) {
-		sendAPSConfig(moduleData->moduleNode, cstate->deviceHandle);
-	}
-
-	if (configUpdate & (0x01 << 5)) {
-		sendIMUConfig(moduleData->moduleNode, cstate->deviceHandle);
-	}
-
-	if (configUpdate & (0x01 << 6)) {
-		sendExternalInputDetectorConfig(moduleData->moduleNode, cstate->deviceHandle);
-	}
-
-	if (configUpdate & (0x01 << 7)) {
-		sendUSBConfig(moduleData->moduleNode, cstate->deviceHandle);
-	}
-
-	if (configUpdate & (0x01 << 8)) {
-		reallocateUSBBuffers(moduleData->moduleNode, cstate);
-	}
-
-	if (configUpdate & (0x01 << 9)) {
-		updatePacketSizesIntervals(moduleData->moduleNode, cstate);
-	}
-}
-
 static void sendBias(libusb_device_handle *devHandle, uint16_t biasAddress, uint16_t biasValue) {
 	// All biases are two byte quantities.
 	uint8_t bias[2];
@@ -225,7 +155,86 @@ static void sendBias(libusb_device_handle *devHandle, uint16_t biasAddress, uint
 	VR_CHIP_BIAS, biasAddress, 0, bias, sizeof(bias), 0);
 }
 
+static void BiasesListener(sshsNode node, void *userData, enum sshs_node_attribute_events event, const char *changeKey,
+	enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
+	UNUSED_ARGUMENT(changeKey);
+	UNUSED_ARGUMENT(changeType);
+	UNUSED_ARGUMENT(changeValue);
+
+	libusb_device_handle *devHandle = userData;
+
+	if (event == ATTRIBUTE_MODIFIED) {
+		if (str_equals(sshsNodeGetName(node), "DiffBn")) {
+			sendBias(devHandle, 0, generateAddressedCoarseFineBias(node, "DiffBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "OnBn")) {
+			sendBias(devHandle, 1, generateAddressedCoarseFineBias(node, "OnBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "OffBn")) {
+			sendBias(devHandle, 2, generateAddressedCoarseFineBias(node, "OffBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "ApsCasEpc")) {
+			sendBias(devHandle, 3, generateAddressedCoarseFineBias(node, "ApsCasEpc"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "DiffCasBnc")) {
+			sendBias(devHandle, 4, generateAddressedCoarseFineBias(node, "DiffCasBnc"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "ApsROSFBn")) {
+			sendBias(devHandle, 5, generateAddressedCoarseFineBias(node, "ApsROSFBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "LocalBufBn")) {
+			sendBias(devHandle, 6, generateAddressedCoarseFineBias(node, "LocalBufBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "PixInvBn")) {
+			sendBias(devHandle, 7, generateAddressedCoarseFineBias(node, "PixInvBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "PrBp")) {
+			sendBias(devHandle, 8, generateAddressedCoarseFineBias(node, "PrBp"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "PrSFBp")) {
+			sendBias(devHandle, 9, generateAddressedCoarseFineBias(node, "PrSFBp"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "RefrBp")) {
+			sendBias(devHandle, 10, generateAddressedCoarseFineBias(node, "RefrBp"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "AEPdBn")) {
+			sendBias(devHandle, 11, generateAddressedCoarseFineBias(node, "AEPdBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "LcolTimeoutBn")) {
+			sendBias(devHandle, 12, generateAddressedCoarseFineBias(node, "LcolTimeoutBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "AEPuXBp")) {
+			sendBias(devHandle, 13, generateAddressedCoarseFineBias(node, "AEPuXBp"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "AEPuYBp")) {
+			sendBias(devHandle, 14, generateAddressedCoarseFineBias(node, "AEPuYBp"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "IFThrBn")) {
+			sendBias(devHandle, 15, generateAddressedCoarseFineBias(node, "IFThrBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "IFRefrBn")) {
+			sendBias(devHandle, 16, generateAddressedCoarseFineBias(node, "IFRefrBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "PadFollBn")) {
+			sendBias(devHandle, 17, generateAddressedCoarseFineBias(node, "PadFollBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "ApsOverflowLevel")) {
+			sendBias(devHandle, 18, generateAddressedCoarseFineBias(node, "ApsOverflowLevel"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "BiasBuffer")) {
+			sendBias(devHandle, 19, generateAddressedCoarseFineBias(node, "BiasBuffer"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "SSP")) {
+			sendBias(devHandle, 20, generateShiftedSourceBias(node, "SSP"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "SSN")) {
+			sendBias(devHandle, 21, generateShiftedSourceBias(node, "SSN"));
+		}
+	}
+}
+
 static void sendBiases(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	// Only DAVIS240 can be used with the FX2 boards.
 	sshsNode biasNode = sshsGetRelativeNode(moduleNode, "bias/");
 
 	// Biases are addressable now!
@@ -248,12 +257,35 @@ static void sendBiases(sshsNode moduleNode, libusb_device_handle *devHandle) {
 	sendBias(devHandle, 16, generateAddressedCoarseFineBias(biasNode, "IFRefrBn"));
 	sendBias(devHandle, 17, generateAddressedCoarseFineBias(biasNode, "PadFollBn"));
 	sendBias(devHandle, 18, generateAddressedCoarseFineBias(biasNode, "ApsOverflowLevel"));
+
 	sendBias(devHandle, 19, generateAddressedCoarseFineBias(biasNode, "BiasBuffer"));
+
 	sendBias(devHandle, 20, generateShiftedSourceBias(biasNode, "SSP"));
 	sendBias(devHandle, 21, generateShiftedSourceBias(biasNode, "SSN"));
 }
 
+static void ChipSRListener(sshsNode node, void *userData, enum sshs_node_attribute_events event, const char *changeKey,
+	enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
+	UNUSED_ARGUMENT(changeValue);
+
+	caerModuleData moduleData = userData;
+	sshsNode moduleNode = moduleData->moduleNode;
+	libusb_device_handle *devHandle = ((davisFX2State) moduleData->moduleState)->cstate.deviceHandle;
+
+	if (event == ATTRIBUTE_MODIFIED) {
+		if (str_equals(sshsNodeGetName(node), "aps")) {
+			if (changeType == BOOL && str_equals(changeKey, "GlobalShutter")) {
+				sendChipSR(moduleNode, devHandle);
+			}
+		}
+		else if (str_equals(sshsNodeGetName(node), "chip")) {
+			sendChipSR(moduleNode, devHandle);
+		}
+	}
+}
+
 static void sendChipSR(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	// Only DAVIS240 can be used with the FX2 boards.
 	sshsNode chipNode = sshsGetRelativeNode(moduleNode, "chip/");
 	sshsNode apsNode = sshsGetRelativeNode(moduleNode, "aps/");
 
