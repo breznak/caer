@@ -34,7 +34,6 @@ struct sshs_node_attr_listener {
 	sshsNodeAttrListener next;
 };
 
-static sshsNode *sshsNodeGetChildren(sshsNode node, size_t *numChildren);
 static bool sshsNodePutAttributeIfAbsent(sshsNode node, const char *key, enum sshs_node_attr_value_type type,
 	union sshs_node_attr_value value);
 static void sshsNodePutAttribute(sshsNode node, const char *key, enum sshs_node_attr_value_type type,
@@ -161,7 +160,7 @@ static int sshsNodeCmp(const void *a, const void *b) {
 	return (strcmp((*aa)->name, (*bb)->name));
 }
 
-static sshsNode *sshsNodeGetChildren(sshsNode node, size_t *numChildren) {
+sshsNode *sshsNodeGetChildren(sshsNode node, size_t *numChildren) {
 	pthread_rwlock_rdlock(&node->traversal_lock);
 
 	size_t childrenCount = HASH_COUNT(node->children);

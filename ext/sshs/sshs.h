@@ -37,6 +37,7 @@ enum sshs_node_attribute_events {
 sshsNode sshsNodeNew(const char *nodeName, sshsNode parent);
 const char *sshsNodeGetName(sshsNode node);
 const char *sshsNodeGetPath(sshsNode node);
+sshsNode *sshsNodeGetChildren(sshsNode node, size_t *numChildren); // Walk all children.
 void sshsNodeAddNodeListener(sshsNode node, void *userData,
 	void (*node_changed)(sshsNode node, void *userData, enum sshs_node_node_events event, sshsNode changeNode));
 void sshsNodeRemoveNodeListener(sshsNode node, void *userData,
