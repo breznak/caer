@@ -70,6 +70,13 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 		return (false);
 	}
 
+	// FX2 specific configuration.
+	sshsNode dvsNode = sshsGetRelativeNode(moduleData->moduleNode, "dvs/");
+
+	sshsNodePutByteIfAbsent(dvsNode, "AckDelayRow", 8);
+	sshsNodePutByteIfAbsent(dvsNode, "AckExtensionRow", 1);
+
+	// Create common default value configuration.
 	createCommonConfiguration(moduleData, cstate);
 
 	// Install default listeners to signal configuration updates asynchronously.
@@ -305,10 +312,13 @@ static void sendChipSR(sshsNode moduleNode, libusb_device_handle *devHandle) {
 	chipSR[6] |= U8T((sshsNodeGetByte(chipNode, "BiasMux") & 0x0F) << 0);
 
 	// Bytes 2-4 contain the actual 24 configuration bits. 17 are unused.
-	bool globalShutter = sshsNodeGetBool(apsNode, "GlobalShutter");
-	if (globalShutter) {
-		// Flip bit on if enabled.
-		chipSR[4] |= (1 << 6);
+	// GS may not exist on chips that don't have it.
+	if (sshsNodeAttrExists(apsNode, "GlobalShutter", BOOL)) {
+		bool globalShutter = sshsNodeGetBool(apsNode, "GlobalShutter");
+		if (globalShutter) {
+			// Flip bit on if enabled.
+			chipSR[4] |= (1 << 6);
+		}
 	}
 
 	bool useAout = sshsNodeGetBool(chipNode, "UseAout");

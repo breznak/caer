@@ -85,6 +85,7 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 		return (false);
 	}
 
+	// Create common default value configuration.
 	createCommonConfiguration(moduleData, cstate);
 
 	// Subsystem 1: DVS AER (Pixel and BA filtering support present only in FX3)

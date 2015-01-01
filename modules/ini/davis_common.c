@@ -500,12 +500,15 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	// Subsystem 2: APS ADC
 	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
 
+	// Only support GS on chips that have it available.
 	bool globalShutterSupported = sshsNodeGetBool(sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"),
 		"apsHasGlobalShutter");
+	if (globalShutterSupported) {
+		sshsNodePutBoolIfAbsent(apsNode, "GlobalShutter", globalShutterSupported);
+	}
 
 	sshsNodePutBoolIfAbsent(apsNode, "Run", 1);
 	sshsNodePutBoolIfAbsent(apsNode, "ForceADCRunning", 0);
-	sshsNodePutBoolIfAbsent(apsNode, "GlobalShutter", globalShutterSupported);
 	sshsNodePutShortIfAbsent(apsNode, "StartColumn0", 0);
 	sshsNodePutShortIfAbsent(apsNode, "StartRow0", 0);
 	sshsNodePutShortIfAbsent(apsNode, "EndColumn0", U16T(cstate->apsSizeX - 1));
@@ -1645,8 +1648,12 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 static void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
 	sshsNode apsNode = sshsGetRelativeNode(moduleNode, "aps/");
 
+	// GS may not exist on chips that don't have it.
+	if (sshsNodeAttrExists(apsNode, "GlobalShutter", BOOL)) {
+		spiConfigSend(devHandle, FPGA_APS, 2, sshsNodeGetBool(apsNode, "GlobalShutter"));
+	}
+
 	spiConfigSend(devHandle, FPGA_APS, 1, sshsNodeGetBool(apsNode, "ForceADCRunning"));
-	spiConfigSend(devHandle, FPGA_APS, 2, sshsNodeGetBool(apsNode, "GlobalShutter"));
 	spiConfigSend(devHandle, FPGA_APS, 3, sshsNodeGetShort(apsNode, "StartColumn0"));
 	spiConfigSend(devHandle, FPGA_APS, 4, sshsNodeGetShort(apsNode, "StartRow0"));
 	spiConfigSend(devHandle, FPGA_APS, 5, sshsNodeGetShort(apsNode, "EndColumn0"));
