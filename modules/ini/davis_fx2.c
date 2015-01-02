@@ -73,8 +73,8 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 	// FX2 specific configuration.
 	sshsNode dvsNode = sshsGetRelativeNode(moduleData->moduleNode, "dvs/");
 
-	sshsNodePutByteIfAbsent(dvsNode, "AckDelayRow", 8);
-	sshsNodePutByteIfAbsent(dvsNode, "AckExtensionRow", 1);
+	sshsNodePutByteIfAbsent(dvsNode, "AckDelayRow", 12);
+	sshsNodePutByteIfAbsent(dvsNode, "AckExtensionRow", 2);
 
 	// Create common default value configuration.
 	createCommonConfiguration(moduleData, cstate);
