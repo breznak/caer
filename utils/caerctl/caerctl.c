@@ -423,12 +423,12 @@ static void handleCommandCompletion(const char *buf, linenoiseCompletions *lc) {
 
 	// Also calculate number of commands already present in line (word-depth).
 	// This is actually much more useful to understand where we are and what to do.
-	size_t commandDepth = 0;
+	size_t commandDepth = idx;
 
-	for (size_t i = 0; i < bufLength; i++) {
-		if (buf[i] == ' ') {
-			commandDepth++;
-		}
+	if (commandDepth > 0 && bufLength > 1 && buf[bufLength - 1] != ' ') {
+		// If commands are present, ensure they have been "confirmed" by at least
+		// one terminating spacing character. Else don't calculate the last command.
+		commandDepth--;
 	}
 
 	// Check that we got something.
@@ -623,7 +623,7 @@ static void nodeCompletion(const char *buf, size_t bufLength, linenoiseCompletio
 
 	// At this point we made a valid request and got back a full response.
 	for (size_t i = 0; i < msgLength; i++) {
-		if (strncmp((const char *) dataBuffer + 4 + i, lastNode + 1, strlen(lastNode + 1)) == 0) {
+		if (strncasecmp((const char *) dataBuffer + 4 + i, lastNode + 1, strlen(lastNode + 1)) == 0) {
 			linenoiseAddCompletionSuffix(lc, buf, bufLength - strlen(lastNode + 1), (const char *) dataBuffer + 4 + i,
 			false, true);
 		}
@@ -678,7 +678,7 @@ static void keyCompletion(const char *buf, size_t bufLength, linenoiseCompletion
 
 	// At this point we made a valid request and got back a full response.
 	for (size_t i = 0; i < msgLength; i++) {
-		if (strncmp((const char *) dataBuffer + 4 + i, partialKeyString, partialKeyStringLength) == 0) {
+		if (strncasecmp((const char *) dataBuffer + 4 + i, partialKeyString, partialKeyStringLength) == 0) {
 			linenoiseAddCompletionSuffix(lc, buf, bufLength - partialKeyStringLength, (const char *) dataBuffer + 4 + i,
 			true, false);
 		}
@@ -737,7 +737,7 @@ static void typeCompletion(const char *buf, size_t bufLength, linenoiseCompletio
 
 	// At this point we made a valid request and got back a full response.
 	for (size_t i = 0; i < msgLength; i++) {
-		if (strncmp((const char *) dataBuffer + 4 + i, partialTypeString, partialTypeStringLength) == 0) {
+		if (strncasecmp((const char *) dataBuffer + 4 + i, partialTypeString, partialTypeStringLength) == 0) {
 			linenoiseAddCompletionSuffix(lc, buf, bufLength - partialTypeStringLength,
 				(const char *) dataBuffer + 4 + i, true, false);
 		}
