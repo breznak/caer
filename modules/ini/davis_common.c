@@ -577,7 +577,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	// Install default listeners to signal configuration updates asynchronously.
 	sshsNodeAddAttrListener(muxNode, cstate->deviceHandle, &MultiplexerConfigListener);
 	sshsNodeAddAttrListener(dvsNode, cstate->deviceHandle, &DVSConfigListener);
-	sshsNodeAddAttrListener(apsNode, cstate->deviceHandle, &APSConfigListener);
+	sshsNodeAddAttrListener(apsNode, moduleData->moduleState, &APSConfigListener);
 	sshsNodeAddAttrListener(imuNode, cstate->deviceHandle, &IMUConfigListener);
 	sshsNodeAddAttrListener(extNode, cstate->deviceHandle, &ExternalInputDetectorConfigListener);
 	sshsNodeAddAttrListener(usbNode, cstate->deviceHandle, &USBConfigListener);
@@ -609,6 +609,10 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 	cstate->dvsTimestamp = 0;
 	cstate->dvsLastY = 0;
 	cstate->dvsGotY = false;
+	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
+	cstate->apsWindow0SizeX = U16T(sshsNodeGetShort(apsNode, "EndColumn0") - sshsNodeGetShort(apsNode, "StartColumn0"));
+	cstate->apsWindow0SizeY = U16T(sshsNodeGetShort(apsNode, "EndRow0") - sshsNodeGetShort(apsNode, "StartRow0"));
+	cstate->apsResetRead = sshsNodeGetBool(apsNode, "ResetRead");
 	cstate->apsGlobalShutter = false; // Determined by frame type in Data Translator.
 	cstate->apsCurrentReadoutType = APS_READOUT_RESET;
 	for (size_t i = 0; i < APS_READOUT_TYPES_NUM; i++) {
@@ -1057,6 +1061,12 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 								state->currentFramePacketPosition);
 							caerFrameEventSetTSStartOfFrame(currentFrameEvent, state->currentTimestamp);
 
+							// If reset reads are disabled, the start of exposure coincides with
+							// the start of frame.
+							if (!state->apsResetRead) {
+								caerFrameEventSetTSStartOfExposure(currentFrameEvent, state->currentTimestamp);
+							}
+
 							// Setup frame.
 							caerFrameEventSetChannelNumber(currentFrameEvent, DAVIS_COLOR_CHANNELS);
 							caerFrameEventSetLengthXY(currentFrameEvent, state->currentFramePacket, state->apsSizeX,
@@ -1071,6 +1081,11 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							bool validFrame = true;
 
 							for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
+								// Skip checking of reset read if disabled.
+								if (!state->apsResetRead && j == APS_READOUT_RESET) {
+									continue;
+								}
+
 								caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Frame End: CountX[%zu] is %d.", j,
 									state->apsCountX[j]);
 
@@ -1127,7 +1142,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 								caerFrameEventSetTSEndOfExposure(currentFrameEvent, state->currentTimestamp);
 
 								// If GS, then we can check that all Reset Reads have been done.
-								if (state->apsGlobalShutter && state->apsCountX[APS_READOUT_RESET] != state->apsSizeX) {
+								if (state->apsGlobalShutter && state->apsResetRead
+									&& state->apsCountX[APS_READOUT_RESET] != state->apsSizeX) {
 									caerLog(LOG_ERROR, state->sourceSubSystemString,
 										"APS Signal Column Start: not all Reset columns [%d] have been read before the first Signal column in GS mode.",
 										state->apsCountX[APS_READOUT_RESET]);
@@ -1254,8 +1270,10 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							U16T((pixelValue < 0) ? (0) : (pixelValue)));
 					}
 
-					caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS ADC Sample: row is %d.",
-						state->apsCountY[state->apsCurrentReadoutType]);
+					caerLog(LOG_DEBUG, state->sourceSubSystemString,
+						"APS ADC Sample: column=%" PRIu16 ", row=%" PRIu16 ", xPos=%" PRIu16 ", yPos=%" PRIu16 ", data=%" PRIu16 ".",
+						state->apsCountX[state->apsCurrentReadoutType], state->apsCountY[state->apsCurrentReadoutType],
+						xPos, yPos, data);
 
 					state->apsCountY[state->apsCurrentReadoutType]++;
 
@@ -1593,8 +1611,8 @@ static void sendDVSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) 
 static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
 	UNUSED_ARGUMENT(node);
-
-	libusb_device_handle *devHandle = userData;
+	davisCommonState state = userData;
+	libusb_device_handle *devHandle = state->deviceHandle;
 
 	if (event == ATTRIBUTE_MODIFIED) {
 		if (changeType == BOOL && str_equals(changeKey, "Run")) {
@@ -1607,16 +1625,32 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 			spiConfigSend(devHandle, FPGA_APS, 2, changeValue.boolean);
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "StartColumn0")) {
-			spiConfigSend(devHandle, FPGA_APS, 3, changeValue.ushort);
+			// The APS chip view is flipped on both axes. Reverse and exchange.
+			uint16_t endColumn0 = changeValue.ushort;
+			endColumn0 = U16T(state->apsSizeX - 1 - endColumn0);
+
+			spiConfigSend(devHandle, FPGA_APS, 5, endColumn0);
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "StartRow0")) {
-			spiConfigSend(devHandle, FPGA_APS, 4, changeValue.ushort);
+			// The APS chip view is flipped on both axes. Reverse and exchange.
+			uint16_t endRow0 = changeValue.ushort;
+			endRow0 = U16T(state->apsSizeY - 1 - endRow0);
+
+			spiConfigSend(devHandle, FPGA_APS, 6, endRow0);
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "EndColumn0")) {
-			spiConfigSend(devHandle, FPGA_APS, 5, changeValue.ushort);
+			// The APS chip view is flipped on both axes. Reverse and exchange.
+			uint16_t startColumn0 = changeValue.ushort;
+			startColumn0 = U16T(state->apsSizeX - 1 - startColumn0);
+
+			spiConfigSend(devHandle, FPGA_APS, 3, startColumn0);
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "EndRow0")) {
-			spiConfigSend(devHandle, FPGA_APS, 6, changeValue.ushort);
+			// The APS chip view is flipped on both axes. Reverse and exchange.
+			uint16_t startRow0 = changeValue.ushort;
+			startRow0 = U16T(state->apsSizeY - 1 - startRow0);
+
+			spiConfigSend(devHandle, FPGA_APS, 4, startRow0);
 		}
 		else if (changeType == INT && str_equals(changeKey, "Exposure")) {
 			spiConfigSend(devHandle, FPGA_APS, 7, changeValue.uint * EXT_ADC_FREQ);
@@ -1638,6 +1672,7 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 		}
 		else if (changeType == BOOL && str_equals(changeKey, "ResetRead")) {
 			spiConfigSend(devHandle, FPGA_APS, 13, changeValue.boolean);
+			state->apsResetRead = changeValue.boolean;
 		}
 		else if (changeType == BOOL && str_equals(changeKey, "WaitOnTransferStall")) {
 			spiConfigSend(devHandle, FPGA_APS, 14, changeValue.boolean);

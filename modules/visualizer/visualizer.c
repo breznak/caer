@@ -3,10 +3,19 @@
 #include "base/module.h"
 #include <GLFW/glfw3.h>
 
+const char *polarityShader =
+	"#version 330 core"
+	""
+	"";
+
 struct visualizer_state {
 	GLFWwindow* window;
 	uint32_t eventRenderer[240 * 180];
 	size_t slowDown;
+	GLuint glPBOFrameID;
+	GLuint glTextureFrameID;
+	GLuint glPBOPolarityID;
+	GLuint glTexturePolarityID;
 };
 
 typedef struct visualizer_state *visualizerState;
@@ -41,20 +50,21 @@ static bool caerVisualizerInit(caerModuleData moduleData) {
 
 	glfwMakeContextCurrent(state->window);
 
+	glfwSwapInterval(1);
+
 	glClearColor(0, 0, 0, 0);
 	glShadeModel(GL_FLAT);
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
 
-	glDisable(GL_ALPHA_TEST);
-	glDisable(GL_BLEND);
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_DITHER);
-	glDisable(GL_FOG);
-	glDisable(GL_LIGHTING);
-	glDisable(GL_LOGIC_OP);
-	glDisable(GL_STENCIL_TEST);
-	glDisable(GL_TEXTURE_1D);
-	glDisable(GL_TEXTURE_2D);
+	// Initialize OpenGL objects.
+	glGenBuffers(1, &state->glPBOPolarityID);
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, state->glPBOPolarityID);
+	glBufferData(GL_PIXEL_UNPACK_BUFFER, 240 * 180 * 4, NULL, GL_DYNAMIC_DRAW);
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+
+	glGenTextures(1, &state->glTexturePolarityID);
+	glBindTexture(GL_TEXTURE_2D, state->glTexturePolarityID);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, 240, 180, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glBindTexture(GL_TEXTURE_2D, 0);
 
 	state->slowDown = 0;
 
@@ -82,7 +92,7 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 	// Frames to render.
 	caerFrameEventPacket frame = va_arg(args, caerFrameEventPacket);
 
-	if (polarity != NULL) {
+	if (polarity != NULL && false) {
 		caerPolarityEvent currPolarityEvent;
 
 		for (uint32_t i = 0; i < caerEventPacketHeaderGetEventNumber(&polarity->packetHeader); i++) {
@@ -118,7 +128,7 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 		}
 	}
 
-	if (frame != NULL && false) {
+	if (frame != NULL) {
 		// Render frames one by one.
 		caerFrameEvent currFrameEvent;
 
