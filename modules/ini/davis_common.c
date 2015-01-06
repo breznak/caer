@@ -610,8 +610,9 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 	cstate->dvsLastY = 0;
 	cstate->dvsGotY = false;
 	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
-	cstate->apsWindow0SizeX = U16T(sshsNodeGetShort(apsNode, "EndColumn0") - sshsNodeGetShort(apsNode, "StartColumn0"));
-	cstate->apsWindow0SizeY = U16T(sshsNodeGetShort(apsNode, "EndRow0") - sshsNodeGetShort(apsNode, "StartRow0"));
+	cstate->apsWindow0SizeX = U16T(
+		sshsNodeGetShort(apsNode, "EndColumn0") + 1 - sshsNodeGetShort(apsNode, "StartColumn0"));
+	cstate->apsWindow0SizeY = U16T(sshsNodeGetShort(apsNode, "EndRow0") + 1 - sshsNodeGetShort(apsNode, "StartRow0"));
 	cstate->apsResetRead = sshsNodeGetBool(apsNode, "ResetRead");
 	cstate->apsGlobalShutter = false; // Determined by frame type in Data Translator.
 	cstate->apsCurrentReadoutType = APS_READOUT_RESET;
@@ -970,6 +971,16 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 			CHECK_MONOTONIC_TIMESTAMP(state->currentTimestamp, state->lastTimestamp);
 		}
 		else {
+			// Get all current events, so we don't have to duplicate code in every branch.
+			caerPolarityEvent currentPolarityEvent = caerPolarityEventPacketGetEvent(state->currentPolarityPacket,
+				state->currentPolarityPacketPosition);
+			caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
+				state->currentFramePacketPosition);
+			caerIMU6Event currentIMU6Event = caerIMU6EventPacketGetEvent(state->currentIMU6Packet,
+				state->currentIMU6PacketPosition);
+			caerSpecialEvent currentSpecialEvent = caerSpecialEventPacketGetEvent(state->currentSpecialPacket,
+				state->currentSpecialPacketPosition);
+
 			// Look at the code, to determine event and data type.
 			uint8_t code = (uint8_t) ((event & 0x7000) >> 12);
 			uint16_t data = (event & 0x0FFF);
@@ -990,11 +1001,10 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							caerLog(LOG_INFO, state->sourceSubSystemString, "Timestamp reset event received.");
 
 							// Create timestamp reset event.
-							caerSpecialEvent currentResetEvent = caerSpecialEventPacketGetEvent(
-								state->currentSpecialPacket, state->currentSpecialPacketPosition++);
-							caerSpecialEventSetTimestamp(currentResetEvent, UINT32_MAX);
-							caerSpecialEventSetType(currentResetEvent, TIMESTAMP_RESET);
-							caerSpecialEventValidate(currentResetEvent, state->currentSpecialPacket);
+							caerSpecialEventSetTimestamp(currentSpecialEvent, UINT32_MAX);
+							caerSpecialEventSetType(currentSpecialEvent, TIMESTAMP_RESET);
+							caerSpecialEventValidate(currentSpecialEvent, state->currentSpecialPacket);
+							state->currentSpecialPacketPosition++;
 
 							// Commit packets when doing a reset to clearly separate them.
 							forcePacketCommit = true;
@@ -1005,18 +1015,15 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						case 2: // External trigger (falling edge)
 						case 3: // External trigger (rising edge)
 						case 4: { // External trigger (pulse)
-							caerSpecialEvent currentExtTriggerEvent = caerSpecialEventPacketGetEvent(
-								state->currentSpecialPacket, state->currentSpecialPacketPosition++);
-							caerSpecialEventSetTimestamp(currentExtTriggerEvent, state->currentTimestamp);
-							caerSpecialEventSetType(currentExtTriggerEvent, EXTERNAL_TRIGGER);
-							caerSpecialEventValidate(currentExtTriggerEvent, state->currentSpecialPacket);
+							caerSpecialEventSetTimestamp(currentSpecialEvent, state->currentTimestamp);
+							caerSpecialEventSetType(currentSpecialEvent, EXTERNAL_TRIGGER);
+							caerSpecialEventValidate(currentSpecialEvent, state->currentSpecialPacket);
+							state->currentSpecialPacketPosition++;
 							break;
 						}
 
 						case 5: { // IMU Start (6 axes)
-							caerIMU6Event currentIMUEvent = caerIMU6EventPacketGetEvent(state->currentIMU6Packet,
-								state->currentIMU6PacketPosition);
-							caerIMU6EventSetTimestamp(currentIMUEvent, state->currentTimestamp);
+							caerIMU6EventSetTimestamp(currentIMU6Event, state->currentTimestamp);
 							break;
 						}
 
@@ -1034,14 +1041,12 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							}
 
 							// Write out start of frame timestamp.
-							caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
-								state->currentFramePacketPosition);
 							caerFrameEventSetTSStartOfFrame(currentFrameEvent, state->currentTimestamp);
 
 							// Setup frame.
 							caerFrameEventSetChannelNumber(currentFrameEvent, DAVIS_COLOR_CHANNELS);
-							caerFrameEventSetLengthXY(currentFrameEvent, state->currentFramePacket, state->apsSizeX,
-								state->apsSizeY);
+							caerFrameEventSetLengthXY(currentFrameEvent, state->currentFramePacket,
+								state->apsWindow0SizeX, state->apsWindow0SizeY);
 
 							break;
 						}
@@ -1057,8 +1062,6 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							}
 
 							// Write out start of frame timestamp.
-							caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
-								state->currentFramePacketPosition);
 							caerFrameEventSetTSStartOfFrame(currentFrameEvent, state->currentTimestamp);
 
 							// If reset reads are disabled, the start of exposure coincides with
@@ -1069,8 +1072,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 							// Setup frame.
 							caerFrameEventSetChannelNumber(currentFrameEvent, DAVIS_COLOR_CHANNELS);
-							caerFrameEventSetLengthXY(currentFrameEvent, state->currentFramePacket, state->apsSizeX,
-								state->apsSizeY);
+							caerFrameEventSetLengthXY(currentFrameEvent, state->currentFramePacket,
+								state->apsWindow0SizeX, state->apsWindow0SizeY);
 
 							break;
 						}
@@ -1089,7 +1092,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 								caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Frame End: CountX[%zu] is %d.", j,
 									state->apsCountX[j]);
 
-								if (state->apsCountX[j] != state->apsSizeX) {
+								if (state->apsCountX[j] != caerFrameEventGetLengthX(currentFrameEvent)) {
 									caerLog(LOG_ERROR, state->sourceSubSystemString,
 										"APS Frame End: wrong column count [%zu - %d] detected.", j,
 										state->apsCountX[j]);
@@ -1098,8 +1101,6 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							}
 
 							// Write out end of frame timestamp.
-							caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
-								state->currentFramePacketPosition);
 							caerFrameEventSetTSEndOfFrame(currentFrameEvent, state->currentTimestamp);
 
 							// Validate event and advance frame packet position.
@@ -1120,8 +1121,6 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							// The first Reset Column Read Start is also the start
 							// of the exposure for the RS.
 							if (!state->apsGlobalShutter && state->apsCountX[APS_READOUT_RESET] == 0) {
-								caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(
-									state->currentFramePacket, state->currentFramePacketPosition);
 								caerFrameEventSetTSStartOfExposure(currentFrameEvent, state->currentTimestamp);
 							}
 
@@ -1137,13 +1136,12 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							// The first Signal Column Read Start is also always the end
 							// of the exposure time, for both RS and GS.
 							if (state->apsCountX[APS_READOUT_SIGNAL] == 0) {
-								caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(
-									state->currentFramePacket, state->currentFramePacketPosition);
 								caerFrameEventSetTSEndOfExposure(currentFrameEvent, state->currentTimestamp);
 
 								// If GS, then we can check that all Reset Reads have been done.
 								if (state->apsGlobalShutter && state->apsResetRead
-									&& state->apsCountX[APS_READOUT_RESET] != state->apsSizeX) {
+									&& state->apsCountX[APS_READOUT_RESET]
+										!= caerFrameEventGetLengthX(currentFrameEvent)) {
 									caerLog(LOG_ERROR, state->sourceSubSystemString,
 										"APS Signal Column Start: not all Reset columns [%d] have been read before the first Signal column in GS mode.",
 										state->apsCountX[APS_READOUT_RESET]);
@@ -1156,7 +1154,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						case 13: { // APS Column End
 							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End");
 
-							if (state->apsCountY[state->apsCurrentReadoutType] != state->apsSizeY) {
+							if (state->apsCountY[state->apsCurrentReadoutType]
+								!= caerFrameEventGetLengthY(currentFrameEvent)) {
 								caerLog(LOG_ERROR, state->sourceSubSystemString,
 									"APS Column End: wrong row count [%d - %d] detected.", state->apsCurrentReadoutType,
 									state->apsCountY[state->apsCurrentReadoutType]);
@@ -1172,9 +1171,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							// The last Reset Column Read End is also the start
 							// of the exposure for the GS.
 							if (state->apsGlobalShutter && state->apsCurrentReadoutType == APS_READOUT_RESET
-								&& state->apsCountX[APS_READOUT_RESET] == state->apsSizeX) {
-								caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(
-									state->currentFramePacket, state->currentFramePacketPosition);
+								&& state->apsCountX[APS_READOUT_RESET] == caerFrameEventGetLengthX(currentFrameEvent)) {
 								caerFrameEventSetTSStartOfExposure(currentFrameEvent, state->currentTimestamp);
 							}
 
@@ -1197,13 +1194,12 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					}
 
 					if (state->dvsGotY) {
-						caerSpecialEvent currentRowOnlyEvent = caerSpecialEventPacketGetEvent(
-							state->currentSpecialPacket, state->currentSpecialPacketPosition++);
 						// Use the previous timestamp here, since this refers to the previous Y.
-						caerSpecialEventSetTimestamp(currentRowOnlyEvent, state->dvsTimestamp);
-						caerSpecialEventSetType(currentRowOnlyEvent, ROW_ONLY);
-						caerSpecialEventSetData(currentRowOnlyEvent, state->dvsLastY);
-						caerSpecialEventValidate(currentRowOnlyEvent, state->currentSpecialPacket);
+						caerSpecialEventSetTimestamp(currentSpecialEvent, state->dvsTimestamp);
+						caerSpecialEventSetType(currentSpecialEvent, ROW_ONLY);
+						caerSpecialEventSetData(currentSpecialEvent, state->dvsLastY);
+						caerSpecialEventValidate(currentSpecialEvent, state->currentSpecialPacket);
+						state->currentSpecialPacketPosition++;
 
 						caerLog(LOG_DEBUG, state->sourceSubSystemString, "Row-only event at address Y=%" PRIu16 ".",
 							state->dvsLastY);
@@ -1224,13 +1220,12 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						continue; // Skip invalid event.
 					}
 
-					caerPolarityEvent currentPolarityEvent = caerPolarityEventPacketGetEvent(
-						state->currentPolarityPacket, state->currentPolarityPacketPosition++);
 					caerPolarityEventSetTimestamp(currentPolarityEvent, state->dvsTimestamp);
 					caerPolarityEventSetPolarity(currentPolarityEvent, (code & 0x01));
 					caerPolarityEventSetY(currentPolarityEvent, state->dvsLastY);
 					caerPolarityEventSetX(currentPolarityEvent, data);
 					caerPolarityEventValidate(currentPolarityEvent, state->currentPolarityPacket);
+					state->currentPolarityPacketPosition++;
 
 					state->dvsGotY = false;
 
@@ -1243,7 +1238,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 					// Let's check that apsCountY is not above the maximum. This could happen
 					// if start/end of column events are discarded (no wait on transfer stall).
-					if (state->apsCountY[state->apsCurrentReadoutType] >= state->apsSizeY) {
+					if (state->apsCountY[state->apsCurrentReadoutType] >= caerFrameEventGetLengthY(currentFrameEvent)) {
 						continue;
 					}
 
@@ -1253,11 +1248,12 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					// around all the time and consuming memory. This way we can also only take
 					// infrequent reset reads and re-use them for multiple frames, which can heavily
 					// reduce traffic, and should not impact image quality heavily, at least in GS.
-					caerFrameEvent currentFrameEvent = caerFrameEventPacketGetEvent(state->currentFramePacket,
-						state->currentFramePacketPosition);
-
-					uint16_t xPos = U16T(state->apsSizeX - 1 - state->apsCountX[state->apsCurrentReadoutType]);
-					uint16_t yPos = U16T(state->apsSizeY - 1 - state->apsCountY[state->apsCurrentReadoutType]);
+					uint16_t xPos = U16T(
+						caerFrameEventGetLengthX(currentFrameEvent) - 1
+							- state->apsCountX[state->apsCurrentReadoutType]);
+					uint16_t yPos = U16T(
+						caerFrameEventGetLengthY(currentFrameEvent) - 1
+							- state->apsCountY[state->apsCurrentReadoutType]);
 
 					size_t pixelPosition = (size_t) (yPos * caerFrameEventGetLengthX(currentFrameEvent)) + xPos;
 
@@ -1630,6 +1626,7 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 			endColumn0 = U16T(state->apsSizeX - 1 - endColumn0);
 
 			spiConfigSend(devHandle, FPGA_APS, 5, endColumn0);
+			state->apsWindow0SizeX = U16T(sshsNodeGetShort(node, "EndColumn0") + 1 - changeValue.ushort);
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "StartRow0")) {
 			// The APS chip view is flipped on both axes. Reverse and exchange.
@@ -1637,6 +1634,7 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 			endRow0 = U16T(state->apsSizeY - 1 - endRow0);
 
 			spiConfigSend(devHandle, FPGA_APS, 6, endRow0);
+			state->apsWindow0SizeY = U16T(sshsNodeGetShort(node, "EndRow0") + 1 - changeValue.ushort);
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "EndColumn0")) {
 			// The APS chip view is flipped on both axes. Reverse and exchange.
@@ -1644,6 +1642,7 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 			startColumn0 = U16T(state->apsSizeX - 1 - startColumn0);
 
 			spiConfigSend(devHandle, FPGA_APS, 3, startColumn0);
+			state->apsWindow0SizeX = U16T(changeValue.ushort + 1 - sshsNodeGetShort(node, "StartColumn0"));
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "EndRow0")) {
 			// The APS chip view is flipped on both axes. Reverse and exchange.
@@ -1651,6 +1650,7 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 			startRow0 = U16T(state->apsSizeY - 1 - startRow0);
 
 			spiConfigSend(devHandle, FPGA_APS, 4, startRow0);
+			state->apsWindow0SizeY = U16T(changeValue.ushort + 1 - sshsNodeGetShort(node, "StartRow0"));
 		}
 		else if (changeType == INT && str_equals(changeKey, "Exposure")) {
 			spiConfigSend(devHandle, FPGA_APS, 7, changeValue.uint * EXT_ADC_FREQ);
