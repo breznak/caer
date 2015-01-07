@@ -518,7 +518,6 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutShortIfAbsent(apsNode, "ResetSettle", 10); // in cycles
 	sshsNodePutByteIfAbsent(apsNode, "ColumnSettle", 10); // in cycles
 	sshsNodePutByteIfAbsent(apsNode, "RowSettle", 10); // in cycles
-	sshsNodePutBoolIfAbsent(apsNode, "GSTXGateOpenReset", 1);
 	sshsNodePutBoolIfAbsent(apsNode, "ResetRead", 1);
 	sshsNodePutBoolIfAbsent(apsNode, "WaitOnTransferStall", 0);
 
@@ -1667,9 +1666,6 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 		else if (changeType == BYTE && str_equals(changeKey, "RowSettle")) {
 			spiConfigSend(devHandle, FPGA_APS, 11, changeValue.ubyte);
 		}
-		else if (changeType == BOOL && str_equals(changeKey, "GSTXGateOpenReset")) {
-			spiConfigSend(devHandle, FPGA_APS, 12, changeValue.boolean);
-		}
 		else if (changeType == BOOL && str_equals(changeKey, "ResetRead")) {
 			spiConfigSend(devHandle, FPGA_APS, 13, changeValue.boolean);
 			state->apsResetRead = changeValue.boolean;
@@ -1698,7 +1694,6 @@ static void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) 
 	spiConfigSend(devHandle, FPGA_APS, 9, sshsNodeGetShort(apsNode, "ResetSettle")); // in cycles
 	spiConfigSend(devHandle, FPGA_APS, 10, sshsNodeGetByte(apsNode, "ColumnSettle")); // in cycles
 	spiConfigSend(devHandle, FPGA_APS, 11, sshsNodeGetByte(apsNode, "RowSettle")); // in cycles
-	spiConfigSend(devHandle, FPGA_APS, 12, sshsNodeGetBool(apsNode, "GSTXGateOpenReset"));
 	spiConfigSend(devHandle, FPGA_APS, 13, sshsNodeGetBool(apsNode, "ResetRead"));
 	spiConfigSend(devHandle, FPGA_APS, 14, sshsNodeGetBool(apsNode, "WaitOnTransferStall"));
 	spiConfigSend(devHandle, FPGA_APS, 0, sshsNodeGetBool(apsNode, "Run"));
