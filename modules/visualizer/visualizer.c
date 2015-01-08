@@ -50,7 +50,7 @@ static bool caerVisualizerInit(caerModuleData moduleData) {
 
 	glfwMakeContextCurrent(state->window);
 
-	glfwSwapInterval(1);
+	glfwSwapInterval(0);
 
 	glClearColor(0, 0, 0, 0);
 	glShadeModel(GL_FLAT);
