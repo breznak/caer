@@ -1238,6 +1238,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					// Let's check that apsCountY is not above the maximum. This could happen
 					// if start/end of column events are discarded (no wait on transfer stall).
 					if (state->apsCountY[state->apsCurrentReadoutType] >= caerFrameEventGetLengthY(currentFrameEvent)) {
+						caerLog(LOG_DEBUG, state->sourceSubSystemString,
+							"APS row count over maximum, ignoring reading.");
 						continue;
 					}
 
@@ -1678,17 +1680,39 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 
 static void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
 	sshsNode apsNode = sshsGetRelativeNode(moduleNode, "aps/");
+	sshsNode infoNode = sshsGetRelativeNode(moduleNode, "sourceInfo/");
+
+	spiConfigSend(devHandle, FPGA_APS, 1, sshsNodeGetBool(apsNode, "ForceADCRunning"));
 
 	// GS may not exist on chips that don't have it.
 	if (sshsNodeAttrExists(apsNode, "GlobalShutter", BOOL)) {
 		spiConfigSend(devHandle, FPGA_APS, 2, sshsNodeGetBool(apsNode, "GlobalShutter"));
 	}
 
-	spiConfigSend(devHandle, FPGA_APS, 1, sshsNodeGetBool(apsNode, "ForceADCRunning"));
-	spiConfigSend(devHandle, FPGA_APS, 3, sshsNodeGetShort(apsNode, "StartColumn0"));
-	spiConfigSend(devHandle, FPGA_APS, 4, sshsNodeGetShort(apsNode, "StartRow0"));
-	spiConfigSend(devHandle, FPGA_APS, 5, sshsNodeGetShort(apsNode, "EndColumn0"));
-	spiConfigSend(devHandle, FPGA_APS, 6, sshsNodeGetShort(apsNode, "EndRow0"));
+	// The APS chip view is flipped on both axes. Reverse and exchange.
+	uint16_t endColumn0 = sshsNodeGetShort(apsNode, "StartColumn0");
+	endColumn0 = U16T(sshsNodeGetShort(infoNode, "apsSizeX") - 1 - endColumn0);
+
+	spiConfigSend(devHandle, FPGA_APS, 5, endColumn0);
+
+	// The APS chip view is flipped on both axes. Reverse and exchange.
+	uint16_t endRow0 = sshsNodeGetShort(apsNode, "StartRow0");
+	endRow0 = U16T(sshsNodeGetShort(infoNode, "apsSizeY") - 1 - endRow0);
+
+	spiConfigSend(devHandle, FPGA_APS, 6, endRow0);
+
+	// The APS chip view is flipped on both axes. Reverse and exchange.
+	uint16_t startColumn0 = sshsNodeGetShort(apsNode, "EndColumn0");
+	startColumn0 = U16T(sshsNodeGetShort(infoNode, "apsSizeX") - 1 - startColumn0);
+
+	spiConfigSend(devHandle, FPGA_APS, 3, startColumn0);
+
+	// The APS chip view is flipped on both axes. Reverse and exchange.
+	uint16_t startRow0 = sshsNodeGetShort(apsNode, "EndRow0");
+	startRow0 = U16T(sshsNodeGetShort(infoNode, "apsSizeY") - 1 - startRow0);
+
+	spiConfigSend(devHandle, FPGA_APS, 4, startRow0);
+
 	spiConfigSend(devHandle, FPGA_APS, 7, sshsNodeGetInt(apsNode, "Exposure") * EXT_ADC_FREQ); // in µs, converted to cycles here
 	spiConfigSend(devHandle, FPGA_APS, 8, sshsNodeGetInt(apsNode, "FrameDelay") * EXT_ADC_FREQ); // in µs, converted to cycles here
 	spiConfigSend(devHandle, FPGA_APS, 9, sshsNodeGetShort(apsNode, "ResetSettle")); // in cycles

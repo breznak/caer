@@ -145,7 +145,7 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 
 				glDrawPixels(caerFrameEventGetLengthX(currFrameEvent), caerFrameEventGetLengthY(currFrameEvent),
 				GL_LUMINANCE, GL_UNSIGNED_SHORT, caerFrameEventGetPixelArrayUnsafe(currFrameEvent));
-				glPixelZoom(4, 4);
+				glPixelZoom(6, 6);
 
 				glfwSwapBuffers(state->window);
 				glfwPollEvents();
