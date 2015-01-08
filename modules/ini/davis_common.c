@@ -609,6 +609,8 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 	cstate->dvsLastY = 0;
 	cstate->dvsGotY = false;
 	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
+	cstate->apsWindow0StartX = sshsNodeGetShort(apsNode, "StartColumn0");
+	cstate->apsWindow0StartY = sshsNodeGetShort(apsNode, "StartRow0");
 	cstate->apsWindow0SizeX = U16T(
 		sshsNodeGetShort(apsNode, "EndColumn0") + 1 - sshsNodeGetShort(apsNode, "StartColumn0"));
 	cstate->apsWindow0SizeY = U16T(sshsNodeGetShort(apsNode, "EndRow0") + 1 - sshsNodeGetShort(apsNode, "StartRow0"));
@@ -1255,14 +1257,17 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					uint16_t yPos = U16T(
 						caerFrameEventGetLengthY(currentFrameEvent) - 1
 							- state->apsCountY[state->apsCurrentReadoutType]);
-
 					size_t pixelPosition = (size_t) (yPos * caerFrameEventGetLengthX(currentFrameEvent)) + xPos;
 
+					uint16_t xPosAbs = U16T(xPos + state->apsWindow0StartX);
+					uint16_t yPosAbs = U16T(yPos + state->apsWindow0StartY);
+					size_t pixelPositionAbs = (size_t) (yPosAbs * state->apsSizeX) + xPosAbs;
+
 					if (state->apsCurrentReadoutType == APS_READOUT_RESET) {
-						state->apsCurrentResetFrame[pixelPosition] = data;
+						state->apsCurrentResetFrame[pixelPositionAbs] = data;
 					}
 					else {
-						int32_t pixelValue = state->apsCurrentResetFrame[pixelPosition] - data;
+						int32_t pixelValue = state->apsCurrentResetFrame[pixelPositionAbs] - data;
 						caerFrameEventGetPixelArrayUnsafe(currentFrameEvent)[pixelPosition] = htole16(
 							U16T((pixelValue < 0) ? (0) : (pixelValue)));
 					}
@@ -1628,6 +1633,9 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 
 			spiConfigSend(devHandle, FPGA_APS, 5, endColumn0);
 			state->apsWindow0SizeX = U16T(sshsNodeGetShort(node, "EndColumn0") + 1 - changeValue.ushort);
+
+			// Update start offset for absolute pixel position (reset map).
+			state->apsWindow0StartX = changeValue.ushort;
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "StartRow0")) {
 			// The APS chip view is flipped on both axes. Reverse and exchange.
@@ -1636,6 +1644,9 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 
 			spiConfigSend(devHandle, FPGA_APS, 6, endRow0);
 			state->apsWindow0SizeY = U16T(sshsNodeGetShort(node, "EndRow0") + 1 - changeValue.ushort);
+
+			// Update start offset for absolute pixel position (reset map).
+			state->apsWindow0StartY = changeValue.ushort;
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "EndColumn0")) {
 			// The APS chip view is flipped on both axes. Reverse and exchange.

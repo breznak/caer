@@ -65,6 +65,8 @@ struct davisCommon_state {
 	// APS specific fields
 	uint16_t apsSizeX;
 	uint16_t apsSizeY;
+	uint16_t apsWindow0StartX;
+	uint16_t apsWindow0StartY;
 	uint16_t apsWindow0SizeX;
 	uint16_t apsWindow0SizeY;
 	bool apsGlobalShutter;
