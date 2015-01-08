@@ -54,6 +54,7 @@ static bool caerVisualizerInit(caerModuleData moduleData) {
 
 	glClearColor(0, 0, 0, 0);
 	glShadeModel(GL_FLAT);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
 
 	// Initialize OpenGL objects.
 	glGenBuffers(1, &state->glPBOPolarityID);
