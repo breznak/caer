@@ -516,7 +516,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutIntIfAbsent(apsNode, "Exposure", 2000); // in µs, converted to cycles later
 	sshsNodePutIntIfAbsent(apsNode, "FrameDelay", 200); // in µs, converted to cycles later
 	sshsNodePutShortIfAbsent(apsNode, "ResetSettle", 10); // in cycles
-	sshsNodePutByteIfAbsent(apsNode, "ColumnSettle", 10); // in cycles
+	sshsNodePutByteIfAbsent(apsNode, "ColumnSettle", 30); // in cycles
 	sshsNodePutByteIfAbsent(apsNode, "RowSettle", 10); // in cycles
 	sshsNodePutBoolIfAbsent(apsNode, "ResetRead", 1);
 	sshsNodePutBoolIfAbsent(apsNode, "WaitOnTransferStall", 0);
