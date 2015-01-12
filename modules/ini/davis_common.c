@@ -515,7 +515,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutShortIfAbsent(apsNode, "EndRow0", U16T(cstate->apsSizeY - 1));
 	sshsNodePutIntIfAbsent(apsNode, "Exposure", 2000); // in µs, converted to cycles later
 	sshsNodePutIntIfAbsent(apsNode, "FrameDelay", 200); // in µs, converted to cycles later
-	sshsNodePutByteIfAbsent(apsNode, "ResetSettle", 10); // in cycles
+	sshsNodePutShortIfAbsent(apsNode, "ResetSettle", 10); // in cycles
 	sshsNodePutShortIfAbsent(apsNode, "ColumnSettle", 30); // in cycles
 	sshsNodePutShortIfAbsent(apsNode, "RowSettle", 10); // in cycles
 	sshsNodePutBoolIfAbsent(apsNode, "ResetRead", 1);
@@ -1792,8 +1792,8 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 		else if (changeType == INT && str_equals(changeKey, "FrameDelay")) {
 			spiConfigSend(devHandle, FPGA_APS, 8, changeValue.uint * EXT_ADC_FREQ);
 		}
-		else if (changeType == BYTE && str_equals(changeKey, "ResetSettle")) {
-			spiConfigSend(devHandle, FPGA_APS, 9, changeValue.ubyte);
+		else if (changeType == SHORT && str_equals(changeKey, "ResetSettle")) {
+			spiConfigSend(devHandle, FPGA_APS, 9, changeValue.ushort);
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "ColumnSettle")) {
 			spiConfigSend(devHandle, FPGA_APS, 10, changeValue.ushort);
@@ -1848,7 +1848,7 @@ static void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) 
 
 	spiConfigSend(devHandle, FPGA_APS, 7, sshsNodeGetInt(apsNode, "Exposure") * EXT_ADC_FREQ); // in µs, converted to cycles here
 	spiConfigSend(devHandle, FPGA_APS, 8, sshsNodeGetInt(apsNode, "FrameDelay") * EXT_ADC_FREQ); // in µs, converted to cycles here
-	spiConfigSend(devHandle, FPGA_APS, 9, sshsNodeGetByte(apsNode, "ResetSettle")); // in cycles
+	spiConfigSend(devHandle, FPGA_APS, 9, sshsNodeGetShort(apsNode, "ResetSettle")); // in cycles
 	spiConfigSend(devHandle, FPGA_APS, 10, sshsNodeGetShort(apsNode, "ColumnSettle")); // in cycles
 	spiConfigSend(devHandle, FPGA_APS, 11, sshsNodeGetShort(apsNode, "RowSettle")); // in cycles
 	spiConfigSend(devHandle, FPGA_APS, 13, sshsNodeGetBool(apsNode, "ResetRead"));
