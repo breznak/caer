@@ -515,9 +515,9 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutShortIfAbsent(apsNode, "EndRow0", U16T(cstate->apsSizeY - 1));
 	sshsNodePutIntIfAbsent(apsNode, "Exposure", 2000); // in µs, converted to cycles later
 	sshsNodePutIntIfAbsent(apsNode, "FrameDelay", 200); // in µs, converted to cycles later
-	sshsNodePutShortIfAbsent(apsNode, "ResetSettle", 10); // in cycles
-	sshsNodePutByteIfAbsent(apsNode, "ColumnSettle", 30); // in cycles
-	sshsNodePutByteIfAbsent(apsNode, "RowSettle", 10); // in cycles
+	sshsNodePutByteIfAbsent(apsNode, "ResetSettle", 10); // in cycles
+	sshsNodePutShortIfAbsent(apsNode, "ColumnSettle", 30); // in cycles
+	sshsNodePutShortIfAbsent(apsNode, "RowSettle", 10); // in cycles
 	sshsNodePutBoolIfAbsent(apsNode, "ResetRead", 1);
 	sshsNodePutBoolIfAbsent(apsNode, "WaitOnTransferStall", 0);
 
@@ -608,6 +608,8 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 	cstate->dvsTimestamp = 0;
 	cstate->dvsLastY = 0;
 	cstate->dvsGotY = false;
+	cstate->imuCount = 0;
+	cstate->imuTmpData = 0;
 	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
 	cstate->apsWindow0StartX = sshsNodeGetShort(apsNode, "StartColumn0");
 	cstate->apsWindow0StartY = sshsNodeGetShort(apsNode, "StartRow0");
@@ -1013,22 +1015,54 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							break;
 						}
 
-						case 2: // External trigger (falling edge)
-						case 3: // External trigger (rising edge)
-						case 4: { // External trigger (pulse)
+						case 2: { // External input (falling edge)
+							caerLog(LOG_DEBUG, state->sourceSubSystemString,
+								"External input (falling edge) event received.");
+
 							caerSpecialEventSetTimestamp(currentSpecialEvent, state->currentTimestamp);
-							caerSpecialEventSetType(currentSpecialEvent, EXTERNAL_TRIGGER);
+							caerSpecialEventSetType(currentSpecialEvent, EXTERNAL_INPUT_FALLING_EDGE);
+							caerSpecialEventValidate(currentSpecialEvent, state->currentSpecialPacket);
+							state->currentSpecialPacketPosition++;
+							break;
+						}
+
+						case 3: { // External input (rising edge)
+							caerLog(LOG_DEBUG, state->sourceSubSystemString,
+								"External input (rising edge) event received.");
+
+							caerSpecialEventSetTimestamp(currentSpecialEvent, state->currentTimestamp);
+							caerSpecialEventSetType(currentSpecialEvent, EXTERNAL_INPUT_RISING_EDGE);
+							caerSpecialEventValidate(currentSpecialEvent, state->currentSpecialPacket);
+							state->currentSpecialPacketPosition++;
+							break;
+						}
+
+						case 4: { // External input (pulse)
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "External input (pulse) event received.");
+
+							caerSpecialEventSetTimestamp(currentSpecialEvent, state->currentTimestamp);
+							caerSpecialEventSetType(currentSpecialEvent, EXTERNAL_INPUT_PULSE);
 							caerSpecialEventValidate(currentSpecialEvent, state->currentSpecialPacket);
 							state->currentSpecialPacketPosition++;
 							break;
 						}
 
 						case 5: { // IMU Start (6 axes)
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "IMU6 Start event received.");
+
+							state->imuCount = 0;
+
 							caerIMU6EventSetTimestamp(currentIMU6Event, state->currentTimestamp);
 							break;
 						}
 
 						case 7: // IMU End
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "IMU End event received.");
+
+							if (state->imuCount == IMU6_COUNT) {
+								caerIMU6EventValidate(currentIMU6Event, state->currentIMU6Packet);
+								state->currentIMU6PacketPosition++;
+							}
 							break;
 
 						case 8: { // APS Global Shutter Frame Start
@@ -1197,7 +1231,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					if (state->dvsGotY) {
 						// Use the previous timestamp here, since this refers to the previous Y.
 						caerSpecialEventSetTimestamp(currentSpecialEvent, state->dvsTimestamp);
-						caerSpecialEventSetType(currentSpecialEvent, ROW_ONLY);
+						caerSpecialEventSetType(currentSpecialEvent, DVS_ROW_ONLY);
 						caerSpecialEventSetData(currentSpecialEvent, state->dvsLastY);
 						caerSpecialEventValidate(currentSpecialEvent, state->currentSpecialPacket);
 						state->currentSpecialPacketPosition++;
@@ -1282,9 +1316,75 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					break;
 				}
 
-				case 5: // Misc 8bit data, used currently only
-						// for IMU events in DAVIS FX3 boards.
+				case 5: {
+					// Misc 8bit data, used currently only
+					// for IMU events in DAVIS FX3 boards.
+					uint8_t misc8Code = U8T((data & 0x0F00) >> 8);
+					uint8_t misc8Data = U8T(data & 0x00FF);
+
+					switch (misc8Code) {
+						case 0:
+							// Detect missing IMU end events.
+							if (state->imuCount >= IMU6_COUNT) {
+								break;
+							}
+
+							// IMU data event.
+							switch (state->imuCount) {
+								case 0:
+								case 2:
+								case 4:
+								case 6:
+								case 8:
+								case 10:
+								case 12:
+									state->imuTmpData = misc8Data;
+									break;
+
+								case 1:
+									caerIMU6EventSetAccelX(currentIMU6Event,
+										U16T((state->imuTmpData << 8) | misc8Data));
+									break;
+
+								case 3:
+									caerIMU6EventSetAccelY(currentIMU6Event,
+										U16T((state->imuTmpData << 8) | misc8Data));
+									break;
+
+								case 5:
+									caerIMU6EventSetAccelZ(currentIMU6Event,
+										U16T((state->imuTmpData << 8) | misc8Data));
+									break;
+
+								case 7:
+									caerIMU6EventSetTemp(currentIMU6Event, U16T((state->imuTmpData << 8) | misc8Data));
+									break;
+
+								case 9:
+									caerIMU6EventSetGyroX(currentIMU6Event, U16T((state->imuTmpData << 8) | misc8Data));
+									break;
+
+								case 11:
+									caerIMU6EventSetGyroY(currentIMU6Event, U16T((state->imuTmpData << 8) | misc8Data));
+									break;
+
+								case 13:
+									caerIMU6EventSetGyroZ(currentIMU6Event, U16T((state->imuTmpData << 8) | misc8Data));
+									break;
+							}
+
+							state->imuCount++;
+
+							break;
+
+						default:
+							caerLog(LOG_ERROR, state->sourceSubSystemString,
+								"Caught Misc8 event that can't be handled.");
+							break;
+					}
+
 					break;
+				}
 
 				case 7: // Timestamp wrap
 					// Each wrap is 2^15 µs (~32ms), and we have
@@ -1338,6 +1438,51 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 		}
 
 		if (forcePacketCommit
+			|| (state->currentFramePacketPosition
+				>= caerEventPacketHeaderGetEventCapacity(&state->currentFramePacket->packetHeader))
+			|| ((state->currentFramePacketPosition > 1)
+				&& (caerFrameEventGetTSStartOfExposure(
+					caerFrameEventPacketGetEvent(state->currentFramePacket, state->currentFramePacketPosition - 1))
+					- caerFrameEventGetTSStartOfExposure(caerFrameEventPacketGetEvent(state->currentFramePacket, 0))
+					>= state->maxFramePacketInterval))) {
+			if (!ringBufferPut(state->dataExchangeBuffer, state->currentFramePacket)) {
+				// Failed to forward packet, drop it.
+				free(state->currentFramePacket);
+				caerLog(LOG_INFO, state->sourceSubSystemString, "Dropped Frame Event Packet because ring-buffer full!");
+			}
+			else {
+				caerMainloopDataAvailableIncrease(state->mainloopNotify);
+			}
+
+			// Allocate new packet for next iteration.
+			state->currentFramePacket = caerFrameEventPacketAllocate(state->maxFramePacketSize, state->sourceID,
+				state->apsSizeX, state->apsSizeY, DAVIS_COLOR_CHANNELS);
+			state->currentFramePacketPosition = 0;
+		}
+
+		if (forcePacketCommit
+			|| (state->currentIMU6PacketPosition
+				>= caerEventPacketHeaderGetEventCapacity(&state->currentIMU6Packet->packetHeader))
+			|| ((state->currentIMU6PacketPosition > 1)
+				&& (caerIMU6EventGetTimestamp(
+					caerIMU6EventPacketGetEvent(state->currentIMU6Packet, state->currentIMU6PacketPosition - 1))
+					- caerIMU6EventGetTimestamp(caerIMU6EventPacketGetEvent(state->currentIMU6Packet, 0))
+					>= state->maxIMU6PacketInterval))) {
+			if (!ringBufferPut(state->dataExchangeBuffer, state->currentIMU6Packet)) {
+				// Failed to forward packet, drop it.
+				free(state->currentIMU6Packet);
+				caerLog(LOG_INFO, state->sourceSubSystemString, "Dropped IMU6 Event Packet because ring-buffer full!");
+			}
+			else {
+				caerMainloopDataAvailableIncrease(state->mainloopNotify);
+			}
+
+			// Allocate new packet for next iteration.
+			state->currentIMU6Packet = caerIMU6EventPacketAllocate(state->maxIMU6PacketSize, state->sourceID);
+			state->currentIMU6PacketPosition = 0;
+		}
+
+		if (forcePacketCommit
 			|| (state->currentSpecialPacketPosition
 				>= caerEventPacketHeaderGetEventCapacity(&state->currentSpecialPacket->packetHeader))
 			|| ((state->currentSpecialPacketPosition > 1)
@@ -1367,29 +1512,6 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 			// Allocate new packet for next iteration.
 			state->currentSpecialPacket = caerSpecialEventPacketAllocate(state->maxSpecialPacketSize, state->sourceID);
 			state->currentSpecialPacketPosition = 0;
-		}
-
-		if (forcePacketCommit
-			|| (state->currentFramePacketPosition
-				>= caerEventPacketHeaderGetEventCapacity(&state->currentFramePacket->packetHeader))
-			|| ((state->currentFramePacketPosition > 1)
-				&& (caerFrameEventGetTSStartOfExposure(
-					caerFrameEventPacketGetEvent(state->currentFramePacket, state->currentFramePacketPosition - 1))
-					- caerFrameEventGetTSStartOfExposure(caerFrameEventPacketGetEvent(state->currentFramePacket, 0))
-					>= state->maxFramePacketInterval))) {
-			if (!ringBufferPut(state->dataExchangeBuffer, state->currentFramePacket)) {
-				// Failed to forward packet, drop it.
-				free(state->currentFramePacket);
-				caerLog(LOG_INFO, state->sourceSubSystemString, "Dropped Frame Event Packet because ring-buffer full!");
-			}
-			else {
-				caerMainloopDataAvailableIncrease(state->mainloopNotify);
-			}
-
-			// Allocate new packet for next iteration.
-			state->currentFramePacket = caerFrameEventPacketAllocate(state->maxFramePacketSize, state->sourceID,
-				state->apsSizeX, state->apsSizeY, DAVIS_COLOR_CHANNELS);
-			state->currentFramePacketPosition = 0;
 		}
 	}
 }
@@ -1670,14 +1792,14 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 		else if (changeType == INT && str_equals(changeKey, "FrameDelay")) {
 			spiConfigSend(devHandle, FPGA_APS, 8, changeValue.uint * EXT_ADC_FREQ);
 		}
-		else if (changeType == SHORT && str_equals(changeKey, "ResetSettle")) {
-			spiConfigSend(devHandle, FPGA_APS, 9, changeValue.ushort);
+		else if (changeType == BYTE && str_equals(changeKey, "ResetSettle")) {
+			spiConfigSend(devHandle, FPGA_APS, 9, changeValue.ubyte);
 		}
-		else if (changeType == BYTE && str_equals(changeKey, "ColumnSettle")) {
-			spiConfigSend(devHandle, FPGA_APS, 10, changeValue.ubyte);
+		else if (changeType == SHORT && str_equals(changeKey, "ColumnSettle")) {
+			spiConfigSend(devHandle, FPGA_APS, 10, changeValue.ushort);
 		}
-		else if (changeType == BYTE && str_equals(changeKey, "RowSettle")) {
-			spiConfigSend(devHandle, FPGA_APS, 11, changeValue.ubyte);
+		else if (changeType == SHORT && str_equals(changeKey, "RowSettle")) {
+			spiConfigSend(devHandle, FPGA_APS, 11, changeValue.ushort);
 		}
 		else if (changeType == BOOL && str_equals(changeKey, "ResetRead")) {
 			spiConfigSend(devHandle, FPGA_APS, 13, changeValue.boolean);
@@ -1726,9 +1848,9 @@ static void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) 
 
 	spiConfigSend(devHandle, FPGA_APS, 7, sshsNodeGetInt(apsNode, "Exposure") * EXT_ADC_FREQ); // in µs, converted to cycles here
 	spiConfigSend(devHandle, FPGA_APS, 8, sshsNodeGetInt(apsNode, "FrameDelay") * EXT_ADC_FREQ); // in µs, converted to cycles here
-	spiConfigSend(devHandle, FPGA_APS, 9, sshsNodeGetShort(apsNode, "ResetSettle")); // in cycles
-	spiConfigSend(devHandle, FPGA_APS, 10, sshsNodeGetByte(apsNode, "ColumnSettle")); // in cycles
-	spiConfigSend(devHandle, FPGA_APS, 11, sshsNodeGetByte(apsNode, "RowSettle")); // in cycles
+	spiConfigSend(devHandle, FPGA_APS, 9, sshsNodeGetByte(apsNode, "ResetSettle")); // in cycles
+	spiConfigSend(devHandle, FPGA_APS, 10, sshsNodeGetShort(apsNode, "ColumnSettle")); // in cycles
+	spiConfigSend(devHandle, FPGA_APS, 11, sshsNodeGetShort(apsNode, "RowSettle")); // in cycles
 	spiConfigSend(devHandle, FPGA_APS, 13, sshsNodeGetBool(apsNode, "ResetRead"));
 	spiConfigSend(devHandle, FPGA_APS, 14, sshsNodeGetBool(apsNode, "WaitOnTransferStall"));
 	spiConfigSend(devHandle, FPGA_APS, 0, sshsNodeGetBool(apsNode, "Run"));

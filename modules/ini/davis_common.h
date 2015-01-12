@@ -14,6 +14,9 @@
 #define APS_READOUT_RESET 0
 #define APS_READOUT_SIGNAL 1
 
+#define IMU6_COUNT 14
+#define IMU9_COUNT 20
+
 #define DAVIS_ADC_DEPTH 10
 #define DAVIS_COLOR_CHANNELS 1
 
@@ -75,6 +78,9 @@ struct davisCommon_state {
 	uint16_t apsCountX[APS_READOUT_TYPES_NUM];
 	uint16_t apsCountY[APS_READOUT_TYPES_NUM];
 	uint16_t *apsCurrentResetFrame;
+	// IMU specific fields
+	uint8_t imuCount;
+	uint8_t imuTmpData;
 	// Polarity Packet State
 	caerPolarityEventPacket currentPolarityPacket;
 	uint32_t currentPolarityPacketPosition;

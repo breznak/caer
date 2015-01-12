@@ -590,7 +590,7 @@ static void dvs128EventTranslator(dvs128State state, uint8_t *buffer, size_t byt
 				caerSpecialEvent currentEvent = caerSpecialEventPacketGetEvent(state->currentSpecialPacket,
 					state->currentSpecialPacketPosition++);
 				caerSpecialEventSetTimestamp(currentEvent, timestamp);
-				caerSpecialEventSetType(currentEvent, EXTERNAL_TRIGGER);
+				caerSpecialEventSetType(currentEvent, EXTERNAL_INPUT_RISING_EDGE);
 				caerSpecialEventValidate(currentEvent, state->currentSpecialPacket);
 			}
 			else {
