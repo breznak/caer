@@ -172,70 +172,70 @@ static void BiasesListener(sshsNode node, void *userData, enum sshs_node_attribu
 
 	if (event == ATTRIBUTE_MODIFIED) {
 		if (str_equals(sshsNodeGetName(node), "DiffBn")) {
-			sendBias(devHandle, 0, generateAddressedCoarseFineBias(node, "DiffBn"));
+			sendBias(devHandle, 0, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "DiffBn"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "OnBn")) {
-			sendBias(devHandle, 1, generateAddressedCoarseFineBias(node, "OnBn"));
+			sendBias(devHandle, 1, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "OnBn"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "OffBn")) {
-			sendBias(devHandle, 2, generateAddressedCoarseFineBias(node, "OffBn"));
+			sendBias(devHandle, 2, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "OffBn"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "ApsCasEpc")) {
-			sendBias(devHandle, 3, generateAddressedCoarseFineBias(node, "ApsCasEpc"));
+			sendBias(devHandle, 3, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "ApsCasEpc"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "DiffCasBnc")) {
-			sendBias(devHandle, 4, generateAddressedCoarseFineBias(node, "DiffCasBnc"));
+			sendBias(devHandle, 4, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "DiffCasBnc"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "ApsROSFBn")) {
-			sendBias(devHandle, 5, generateAddressedCoarseFineBias(node, "ApsROSFBn"));
+			sendBias(devHandle, 5, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "ApsROSFBn"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "LocalBufBn")) {
-			sendBias(devHandle, 6, generateAddressedCoarseFineBias(node, "LocalBufBn"));
+			sendBias(devHandle, 6, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "LocalBufBn"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "PixInvBn")) {
-			sendBias(devHandle, 7, generateAddressedCoarseFineBias(node, "PixInvBn"));
+			sendBias(devHandle, 7, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "PixInvBn"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "PrBp")) {
-			sendBias(devHandle, 8, generateAddressedCoarseFineBias(node, "PrBp"));
+			sendBias(devHandle, 8, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "PrBp"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "PrSFBp")) {
-			sendBias(devHandle, 9, generateAddressedCoarseFineBias(node, "PrSFBp"));
+			sendBias(devHandle, 9, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "PrSFBp"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "RefrBp")) {
-			sendBias(devHandle, 10, generateAddressedCoarseFineBias(node, "RefrBp"));
+			sendBias(devHandle, 10, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "RefrBp"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "AEPdBn")) {
-			sendBias(devHandle, 11, generateAddressedCoarseFineBias(node, "AEPdBn"));
+			sendBias(devHandle, 11, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "AEPdBn"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "LcolTimeoutBn")) {
-			sendBias(devHandle, 12, generateAddressedCoarseFineBias(node, "LcolTimeoutBn"));
+			sendBias(devHandle, 12, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "LcolTimeoutBn"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "AEPuXBp")) {
-			sendBias(devHandle, 13, generateAddressedCoarseFineBias(node, "AEPuXBp"));
+			sendBias(devHandle, 13, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "AEPuXBp"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "AEPuYBp")) {
-			sendBias(devHandle, 14, generateAddressedCoarseFineBias(node, "AEPuYBp"));
+			sendBias(devHandle, 14, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "AEPuYBp"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "IFThrBn")) {
-			sendBias(devHandle, 15, generateAddressedCoarseFineBias(node, "IFThrBn"));
+			sendBias(devHandle, 15, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "IFThrBn"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "IFRefrBn")) {
-			sendBias(devHandle, 16, generateAddressedCoarseFineBias(node, "IFRefrBn"));
+			sendBias(devHandle, 16, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "IFRefrBn"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "PadFollBn")) {
-			sendBias(devHandle, 17, generateAddressedCoarseFineBias(node, "PadFollBn"));
+			sendBias(devHandle, 17, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "PadFollBn"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "ApsOverflowLevel")) {
-			sendBias(devHandle, 18, generateAddressedCoarseFineBias(node, "ApsOverflowLevel"));
+			sendBias(devHandle, 18, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "ApsOverflowLevel"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "BiasBuffer")) {
-			sendBias(devHandle, 19, generateAddressedCoarseFineBias(node, "BiasBuffer"));
+			sendBias(devHandle, 19, generateAddressedCoarseFineBias(sshsNodeGetParent(node), "BiasBuffer"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "SSP")) {
-			sendBias(devHandle, 20, generateShiftedSourceBias(node, "SSP"));
+			sendBias(devHandle, 20, generateShiftedSourceBias(sshsNodeGetParent(node), "SSP"));
 		}
 		else if (str_equals(sshsNodeGetName(node), "SSN")) {
-			sendBias(devHandle, 21, generateShiftedSourceBias(node, "SSN"));
+			sendBias(devHandle, 21, generateShiftedSourceBias(sshsNodeGetParent(node), "SSN"));
 		}
 	}
 }

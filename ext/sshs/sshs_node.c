@@ -5,6 +5,7 @@
 struct sshs_node {
 	char *name;
 	char *path;
+	sshsNode parent;
 	sshsNode children;
 	sshsNodeAttr attributes;
 	sshsNodeListener nodeListeners;
@@ -61,6 +62,7 @@ sshsNode sshsNodeNew(const char *nodeName, sshsNode parent) {
 	// Copy the string.
 	strcpy(newNode->name, nodeName);
 
+	newNode->parent = parent;
 	newNode->children = NULL;
 	newNode->attributes = NULL;
 	newNode->nodeListeners = NULL;
@@ -103,6 +105,10 @@ const char *sshsNodeGetPath(sshsNode node) {
 	return (node->path);
 }
 
+sshsNode sshsNodeGetParent(sshsNode node) {
+	return (node->parent);
+}
+
 sshsNode sshsNodeAddChild(sshsNode node, const char *childName) {
 	pthread_rwlock_wrlock(&node->traversal_lock);
 
@@ -116,7 +122,7 @@ sshsNode sshsNodeAddChild(sshsNode node, const char *childName) {
 		newChild = sshsNodeNew(childName, node);
 
 		// No node present, let's add it.
-		HASH_ADD_KEYPTR(hh, node->children, newChild->name, strlen(newChild->name), newChild);
+		HASH_ADD_KEYPTR(hh, node->children, sshsNodeGetName(newChild), strlen(sshsNodeGetName(newChild)), newChild);
 	}
 
 	pthread_rwlock_unlock(&node->traversal_lock);
@@ -157,7 +163,7 @@ static int sshsNodeCmp(const void *a, const void *b) {
 	const sshsNode *aa = a;
 	const sshsNode *bb = b;
 
-	return (strcmp((*aa)->name, (*bb)->name));
+	return (strcmp(sshsNodeGetName(*aa), sshsNodeGetName(*bb)));
 }
 
 sshsNode *sshsNodeGetChildren(sshsNode node, size_t *numChildren) {
@@ -1013,7 +1019,7 @@ const char **sshsNodeGetChildNames(sshsNode node, size_t *numNames) {
 
 	// Copy pointers to name string over. Safe because nodes are never deleted.
 	for (size_t i = 0; i < numChildren; i++) {
-		childNames[i] = children[i]->name;
+		childNames[i] = sshsNodeGetName(children[i]);
 	}
 
 	free(children);
