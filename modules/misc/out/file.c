@@ -7,6 +7,8 @@
 #include <pwd.h>
 #include <time.h>
 
+#define USE_OLD_AEDAT_FORMAT_HACK false
+
 struct file_state {
 	int fileDescriptor;
 	bool validOnly;
@@ -142,14 +144,15 @@ static bool caerOutputFileInit(caerModuleData moduleData) {
 	state->fileDescriptor = open(filePath, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP);
 	if (state->fileDescriptor < 0) {
 		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"Could not create or open output file '%s' for writing. Error: %s (%d).",
-			filePath, caerLogStrerror(errno), errno);
+			"Could not create or open output file '%s' for writing. Error: %s (%d).", filePath, caerLogStrerror(errno),
+			errno);
 		free(filePath);
 
 		return (false);
 	}
 
-	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Opened output file '%s' successfully for writing.", filePath);
+	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Opened output file '%s' successfully for writing.",
+		filePath);
 	free(filePath);
 
 	// Set valid events flag, and allocate memory for scatter/gather IO for it.
@@ -160,14 +163,21 @@ static bool caerOutputFileInit(caerModuleData moduleData) {
 	if (state->validOnly) {
 		state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
 		if (state->sgioMemory == NULL) {
-			caerLog(LOG_ALERT, moduleData->moduleSubSystemString, "Impossible to allocate memory for scatter/gather IO, using memory copy method.");
+			caerLog(LOG_ALERT, moduleData->moduleSubSystemString,
+				"Impossible to allocate memory for scatter/gather IO, using memory copy method.");
 		}
 		else {
-			caerLog(LOG_INFO, moduleData->moduleSubSystemString, "Using scatter/gather IO for outputting valid events only.");
+			caerLog(LOG_INFO, moduleData->moduleSubSystemString,
+				"Using scatter/gather IO for outputting valid events only.");
 		}
 	}
 	else {
 		state->sgioMemory = NULL;
+	}
+
+	if (USE_OLD_AEDAT_FORMAT_HACK) {
+		// Write AEDAT header.
+		write(state->fileDescriptor, "#!AER-DAT2.0\r\n", 14);
 	}
 
 	return (true);
@@ -187,7 +197,8 @@ static void caerOutputFileRun(caerModuleData moduleData, size_t argsNumber, va_l
 			if ((state->validOnly && caerEventPacketHeaderGetEventValid(packetHeader) > 0)
 				|| (!state->validOnly && caerEventPacketHeaderGetEventNumber(packetHeader) > 0)) {
 				caerOutputCommonSend(moduleData->moduleSubSystemString, packetHeader, state->fileDescriptor,
-					state->sgioMemory, state->validOnly, state->excludeHeader, state->maxBytesPerPacket);
+					state->sgioMemory, state->validOnly, state->excludeHeader, state->maxBytesPerPacket,
+					USE_OLD_AEDAT_FORMAT_HACK);
 			}
 		}
 	}
@@ -216,7 +227,8 @@ static void caerOutputFileConfig(caerModuleData moduleData) {
 						"Impossible to allocate memory for scatter/gather IO, using memory copy method.");
 				}
 				else {
-					caerLog(LOG_INFO, moduleData->moduleSubSystemString, "Using scatter/gather IO for outputting valid events only.");
+					caerLog(LOG_INFO, moduleData->moduleSubSystemString,
+						"Using scatter/gather IO for outputting valid events only.");
 				}
 			}
 			else {
@@ -245,14 +257,16 @@ static void caerOutputFileConfig(caerModuleData moduleData) {
 
 		int newFileDescriptor = open(filePath, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP);
 		if (newFileDescriptor < 0) {
-			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create or open output file '%s' for writing. Error: %s (%d).",
-				filePath, caerLogStrerror(errno), errno);
+			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"Could not create or open output file '%s' for writing. Error: %s (%d).", filePath,
+				caerLogStrerror(errno), errno);
 			free(filePath);
 
 			return;
 		}
 
-		caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Opened output file '%s' successfully for writing.", filePath);
+		caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Opened output file '%s' successfully for writing.",
+			filePath);
 		free(filePath);
 
 		// New fd ready and opened, close old and set new.

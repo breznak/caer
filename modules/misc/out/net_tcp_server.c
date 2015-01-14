@@ -228,7 +228,7 @@ static void caerOutputNetTCPServerRun(caerModuleData moduleData, size_t argsNumb
 					if (state->clientDescriptors[c].fd >= 0) {
 						caerOutputCommonSend(moduleData->moduleSubSystemString, packetHeader,
 							state->clientDescriptors[c].fd, state->sgioMemory,
-							state->validOnly, state->excludeHeader, state->maxBytesPerPacket);
+							state->validOnly, state->excludeHeader, state->maxBytesPerPacket, false);
 					}
 				}
 			}

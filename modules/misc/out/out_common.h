@@ -10,6 +10,7 @@
 
 #include "main.h"
 #include "events/common.h"
+#include "events/polarity.h"
 #include <unistd.h>
 #include <sys/uio.h>
 
@@ -44,6 +45,35 @@ bool excludeHeader, size_t maxBytesPerPacket) {
 	}
 }
 
+static inline void caerOutputWriteOldAERHack(int fileDescriptor, void *startAddress, size_t fullLength) {
+	UNUSED_ARGUMENT(fullLength);
+
+	// Check that we're working with polarity events, which are the only support
+	// format for old AER compatibility.
+	caerEventPacketHeader packetHeader = startAddress;
+
+	if (caerEventPacketHeaderGetEventType(packetHeader) != POLARITY_EVENT) {
+		return;
+	}
+
+	// Convert the events to the old format and write them out.
+	for (uint32_t i = 0; i < caerEventPacketHeaderGetEventNumber(packetHeader); i++) {
+		caerPolarityEvent polarity = caerPolarityEventPacketGetEvent((caerPolarityEventPacket) packetHeader, i);
+
+		uint32_t data = U32T((caerPolarityEventGetPolarity(polarity) & 0x01) << 11);
+		data |= U32T(((239 - caerPolarityEventGetX(polarity)) & 0x3FF) << 12);
+		data |= U32T((caerPolarityEventGetY(polarity) & 0x1FF) << 22);
+		data = htobe32(data);
+
+		write(fileDescriptor, &data, 4);
+
+		uint32_t ts = caerPolarityEventGetTimestamp(polarity);
+		ts = htobe32(ts);
+
+		write(fileDescriptor, &ts, 4);
+	}
+}
+
 static inline void caerOutputCommonWriteFullSGIO(int fileDescriptor, struct iovec *sgioMemory, size_t sgioLength,
 bool excludeHeader, size_t maxBytesPerPacket) {
 	// Skip header if requested.
@@ -71,7 +101,8 @@ bool excludeHeader, size_t maxBytesPerPacket) {
 }
 
 static inline void caerOutputCommonSend(const char *subSystemString, caerEventPacketHeader packetHeader,
-	int fileDescriptor, struct iovec *sgioMemory, bool validOnly, bool excludeHeader, size_t maxBytesPerPacket) {
+	int fileDescriptor, struct iovec *sgioMemory, bool validOnly, bool excludeHeader, size_t maxBytesPerPacket,
+	bool oldAERFormat) {
 	// If validOnly is not specified, we can just send the whole packet
 	// in one go directly.
 	if (!validOnly) {
@@ -84,9 +115,15 @@ static inline void caerOutputCommonSend(const char *subSystemString, caerEventPa
 		caerEventPacketHeaderSetEventCapacity(packetHeader, eventNumber);
 
 		// Write the whole packet, up to the last event.
-		caerOutputCommonWriteFull(fileDescriptor, packetHeader,
-			sizeof(*packetHeader) + (eventNumber * caerEventPacketHeaderGetEventSize(packetHeader)), excludeHeader,
-			maxBytesPerPacket);
+		if (oldAERFormat) {
+			caerOutputWriteOldAERHack(fileDescriptor, packetHeader,
+				sizeof(*packetHeader) + (eventNumber * caerEventPacketHeaderGetEventSize(packetHeader)));
+		}
+		else {
+			caerOutputCommonWriteFull(fileDescriptor, packetHeader,
+				sizeof(*packetHeader) + (eventNumber * caerEventPacketHeaderGetEventSize(packetHeader)), excludeHeader,
+				maxBytesPerPacket);
+		}
 
 		// Reset to old value.
 		caerEventPacketHeaderSetEventCapacity(packetHeader, oldCapacity);

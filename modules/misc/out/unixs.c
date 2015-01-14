@@ -106,7 +106,7 @@ static void caerOutputUnixSRun(caerModuleData moduleData, size_t argsNumber, va_
 			if ((state->validOnly && caerEventPacketHeaderGetEventValid(packetHeader) > 0)
 				|| (!state->validOnly && caerEventPacketHeaderGetEventNumber(packetHeader) > 0)) {
 				caerOutputCommonSend(moduleData->moduleSubSystemString, packetHeader, state->unixSocketDescriptor,
-					state->sgioMemory, state->validOnly, state->excludeHeader, state->maxBytesPerPacket);
+					state->sgioMemory, state->validOnly, state->excludeHeader, state->maxBytesPerPacket, false);
 			}
 		}
 	}

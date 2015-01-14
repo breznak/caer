@@ -110,7 +110,7 @@ static void caerOutputNetUDPRun(caerModuleData moduleData, size_t argsNumber, va
 			if ((state->validOnly && caerEventPacketHeaderGetEventValid(packetHeader) > 0)
 				|| (!state->validOnly && caerEventPacketHeaderGetEventNumber(packetHeader) > 0)) {
 				caerOutputCommonSend(moduleData->moduleSubSystemString, packetHeader, state->netUDPDescriptor,
-					state->sgioMemory, state->validOnly, state->excludeHeader, state->maxBytesPerPacket);
+					state->sgioMemory, state->validOnly, state->excludeHeader, state->maxBytesPerPacket, false);
 			}
 		}
 	}
