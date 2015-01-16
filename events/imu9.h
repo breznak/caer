@@ -18,7 +18,7 @@ struct caer_imu9_event {
 	uint16_t gyro_x;
 	uint16_t gyro_y;
 	uint16_t gyro_z;
-	uint16_t temp;
+	int16_t temp;
 	uint32_t timestamp;
 	uint16_t comp_x;
 	uint16_t comp_y;
@@ -215,11 +215,11 @@ static inline void caerIMU9EventSetCompZ(caerIMU9Event event, uint16_t compZ) {
 	event->comp_z = htole16(compZ);
 }
 
-static inline uint16_t caerIMU9EventGetTemp(caerIMU9Event event) {
+static inline int16_t caerIMU9EventGetTemp(caerIMU9Event event) {
 	return le16toh(event->temp);
 }
 
-static inline void caerIMU9EventSetTemp(caerIMU9Event event, uint16_t temp) {
+static inline void caerIMU9EventSetTemp(caerIMU9Event event, int16_t temp) {
 	event->temp = htole16(temp);
 }
 
