@@ -12,17 +12,17 @@
 
 struct caer_imu9_event {
 	uint16_t info;
-	uint16_t accel_x;
-	uint16_t accel_y;
-	uint16_t accel_z;
-	uint16_t gyro_x;
-	uint16_t gyro_y;
-	uint16_t gyro_z;
-	int16_t temp; // Temperature can be negative.
+	float accel_x;
+	float accel_y;
+	float accel_z;
+	float gyro_x;
+	float gyro_y;
+	float gyro_z;
+	float temp;
 	uint32_t timestamp;
-	uint16_t comp_x;
-	uint16_t comp_y;
-	uint16_t comp_z;
+	float comp_x;
+	float comp_y;
+	float comp_z;
 }__attribute__((__packed__));
 
 typedef struct caer_imu9_event *caerIMU9Event;
@@ -143,84 +143,84 @@ static inline void caerIMU9EventInvalidate(caerIMU9Event event, caerIMU9EventPac
 	}
 }
 
-static inline uint16_t caerIMU9EventGetAccelX(caerIMU9Event event) {
-	return le16toh(event->accel_x);
+static inline float caerIMU9EventGetAccelX(caerIMU9Event event) {
+	return le32toh(event->accel_x);
 }
 
-static inline void caerIMU9EventSetAccelX(caerIMU9Event event, uint16_t accelX) {
-	event->accel_x = htole16(accelX);
+static inline void caerIMU9EventSetAccelX(caerIMU9Event event, float accelX) {
+	event->accel_x = htole32(accelX);
 }
 
-static inline uint16_t caerIMU9EventGetAccelY(caerIMU9Event event) {
-	return le16toh(event->accel_y);
+static inline float caerIMU9EventGetAccelY(caerIMU9Event event) {
+	return le32toh(event->accel_y);
 }
 
-static inline void caerIMU9EventSetAccelY(caerIMU9Event event, uint16_t accelY) {
-	event->accel_y = htole16(accelY);
+static inline void caerIMU9EventSetAccelY(caerIMU9Event event, float accelY) {
+	event->accel_y = htole32(accelY);
 }
 
-static inline uint16_t caerIMU9EventGetAccelZ(caerIMU9Event event) {
-	return le16toh(event->accel_z);
+static inline float caerIMU9EventGetAccelZ(caerIMU9Event event) {
+	return le32toh(event->accel_z);
 }
 
-static inline void caerIMU9EventSetAccelZ(caerIMU9Event event, uint16_t accelZ) {
-	event->accel_z = htole16(accelZ);
+static inline void caerIMU9EventSetAccelZ(caerIMU9Event event, float accelZ) {
+	event->accel_z = htole32(accelZ);
 }
 
-static inline uint16_t caerIMU9EventGetGyroX(caerIMU9Event event) {
-	return le16toh(event->gyro_x);
+static inline float caerIMU9EventGetGyroX(caerIMU9Event event) {
+	return le32toh(event->gyro_x);
 }
 
-static inline void caerIMU9EventSetGyroX(caerIMU9Event event, uint16_t gyroX) {
-	event->gyro_x = htole16(gyroX);
+static inline void caerIMU9EventSetGyroX(caerIMU9Event event, float gyroX) {
+	event->gyro_x = htole32(gyroX);
 }
 
-static inline uint16_t caerIMU9EventGetGyroY(caerIMU9Event event) {
-	return le16toh(event->gyro_y);
+static inline float caerIMU9EventGetGyroY(caerIMU9Event event) {
+	return le32toh(event->gyro_y);
 }
 
-static inline void caerIMU9EventSetGyroY(caerIMU9Event event, uint16_t gyroY) {
-	event->gyro_y = htole16(gyroY);
+static inline void caerIMU9EventSetGyroY(caerIMU9Event event, float gyroY) {
+	event->gyro_y = htole32(gyroY);
 }
 
-static inline uint16_t caerIMU9EventGetGyroZ(caerIMU9Event event) {
-	return le16toh(event->gyro_z);
+static inline float caerIMU9EventGetGyroZ(caerIMU9Event event) {
+	return le32toh(event->gyro_z);
 }
 
-static inline void caerIMU9EventSetGyroZ(caerIMU9Event event, uint16_t gyroZ) {
-	event->gyro_z = htole16(gyroZ);
+static inline void caerIMU9EventSetGyroZ(caerIMU9Event event, float gyroZ) {
+	event->gyro_z = htole32(gyroZ);
 }
 
-static inline uint16_t caerIMU9EventGetCompX(caerIMU9Event event) {
-	return le16toh(event->comp_x);
+static inline float caerIMU9EventGetCompX(caerIMU9Event event) {
+	return le32toh(event->comp_x);
 }
 
-static inline void caerIMU9EventSetCompX(caerIMU9Event event, uint16_t compX) {
-	event->comp_x = htole16(compX);
+static inline void caerIMU9EventSetCompX(caerIMU9Event event, float compX) {
+	event->comp_x = htole32(compX);
 }
 
-static inline uint16_t caerIMU9EventGetCompY(caerIMU9Event event) {
-	return le16toh(event->comp_y);
+static inline float caerIMU9EventGetCompY(caerIMU9Event event) {
+	return le32toh(event->comp_y);
 }
 
-static inline void caerIMU9EventSetCompY(caerIMU9Event event, uint16_t compY) {
-	event->comp_y = htole16(compY);
+static inline void caerIMU9EventSetCompY(caerIMU9Event event, float compY) {
+	event->comp_y = htole32(compY);
 }
 
-static inline uint16_t caerIMU9EventGetCompZ(caerIMU9Event event) {
-	return le16toh(event->comp_z);
+static inline float caerIMU9EventGetCompZ(caerIMU9Event event) {
+	return le32toh(event->comp_z);
 }
 
-static inline void caerIMU9EventSetCompZ(caerIMU9Event event, uint16_t compZ) {
-	event->comp_z = htole16(compZ);
+static inline void caerIMU9EventSetCompZ(caerIMU9Event event, float compZ) {
+	event->comp_z = htole32(compZ);
 }
 
-static inline int16_t caerIMU9EventGetTemp(caerIMU9Event event) {
-	return le16toh(event->temp);
+static inline float caerIMU9EventGetTemp(caerIMU9Event event) {
+	return le32toh(event->temp);
 }
 
-static inline void caerIMU9EventSetTemp(caerIMU9Event event, int16_t temp) {
-	event->temp = htole16(temp);
+static inline void caerIMU9EventSetTemp(caerIMU9Event event, float temp) {
+	event->temp = htole32(temp);
 }
 
 #endif /* IMU9_H_ */
