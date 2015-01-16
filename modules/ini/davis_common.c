@@ -43,6 +43,46 @@ static void HostConfigListener(sshsNode node, void *userData, enum sshs_node_att
 static void reallocateUSBBuffers(sshsNode moduleNode, davisCommonState state);
 static void updatePacketSizesIntervals(sshsNode moduleNode, davisCommonState state);
 
+static inline void initFrame(davisCommonState state, caerFrameEvent currentFrameEvent) {
+	state->apsCurrentReadoutType = APS_READOUT_RESET;
+	for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
+		state->apsCountX[j] = 0;
+		state->apsCountY[j] = 0;
+	}
+
+	if (currentFrameEvent != NULL) {
+		// Write out start of frame timestamp.
+		caerFrameEventSetTSStartOfFrame(currentFrameEvent, state->currentTimestamp);
+
+		// Setup frame.
+		caerFrameEventSetChannelNumber(currentFrameEvent, DAVIS_COLOR_CHANNELS);
+		caerFrameEventSetLengthXY(currentFrameEvent, state->currentFramePacket, state->apsWindow0SizeX,
+			state->apsWindow0SizeY);
+	}
+}
+
+static inline float calculateIMUAccelScale(uint8_t imuAccelScale) {
+	// Accelerometer scale is:
+	// 0 - +-2 g - 16384 LSB/g
+	// 1 - +-4 g - 8192 LSB/g
+	// 2 - +-8 g - 4096 LSB/g
+	// 3 - +-16 g - 2048 LSB/g
+	float accelScale = 65536.0f / (float) U32T(4 * (1 << imuAccelScale));
+
+	return (accelScale);
+}
+
+static inline float calculateIMUGyroScale(uint8_t imuGyroScale) {
+	// Gyroscope scale is:
+	// 0 - +-250 °/s - 131 LSB/°/s
+	// 1 - +-500 °/s - 65.5 LSB/°/s
+	// 2 - +-1000 °/s - 32.8 LSB/°/s
+	// 3 - +-2000 °/s - 16.4 LSB/°/s
+	float gyroScale = 65536.0f / (float) U32T(500 * (1 << imuGyroScale));
+
+	return (gyroScale);
+}
+
 static void freeAllMemory(davisCommonState state) {
 	if (state->currentPolarityPacket != NULL) {
 		free(state->currentPolarityPacket);
@@ -612,8 +652,8 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 	sshsNode imuNode = sshsGetRelativeNode(moduleData->moduleNode, "imu/");
 	cstate->imuCount = 0;
 	cstate->imuTmpData = 0;
-	cstate->imuAccelScale = sshsNodeGetByte(imuNode, "AccelFullScale");
-	cstate->imuGyroScale = sshsNodeGetByte(imuNode, "GyroFullScale");
+	cstate->imuAccelScale = calculateIMUAccelScale(sshsNodeGetByte(imuNode, "AccelFullScale"));
+	cstate->imuGyroScale = calculateIMUGyroScale(sshsNodeGetByte(imuNode, "GyroFullScale"));
 	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
 	cstate->apsWindow0StartX = sshsNodeGetShort(apsNode, "StartColumn0");
 	cstate->apsWindow0StartY = sshsNodeGetShort(apsNode, "StartRow0");
@@ -627,11 +667,7 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 	else {
 		cstate->apsGlobalShutter = false;
 	}
-	cstate->apsCurrentReadoutType = APS_READOUT_RESET;
-	for (size_t i = 0; i < APS_READOUT_TYPES_NUM; i++) {
-		cstate->apsCountX[i] = 0;
-		cstate->apsCountY[i] = 0;
-	}
+	initFrame(cstate, NULL);
 	cstate->apsCurrentResetFrame = calloc((size_t) cstate->apsSizeX * cstate->apsSizeY * DAVIS_COLOR_CHANNELS,
 		sizeof(uint16_t));
 	if (cstate->apsCurrentResetFrame == NULL) {
@@ -960,22 +996,6 @@ static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer) {
 	libusb_free_transfer(transfer);
 }
 
-static inline void initFrame(caerFrameEvent currentFrameEvent, davisCommonState state) {
-	state->apsCurrentReadoutType = APS_READOUT_RESET;
-	for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
-		state->apsCountX[j] = 0;
-		state->apsCountY[j] = 0;
-	}
-
-	// Write out start of frame timestamp.
-	caerFrameEventSetTSStartOfFrame(currentFrameEvent, state->currentTimestamp);
-
-	// Setup frame.
-	caerFrameEventSetChannelNumber(currentFrameEvent, DAVIS_COLOR_CHANNELS);
-	caerFrameEventSetLengthXY(currentFrameEvent, state->currentFramePacket, state->apsWindow0SizeX,
-		state->apsWindow0SizeY);
-}
-
 static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytesSent) {
 	// Truncate off any extra partial event.
 	if ((bytesSent & 0x01) != 0) {
@@ -1095,7 +1115,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							state->apsGlobalShutter = true;
 							state->apsResetRead = true;
 
-							initFrame(currentFrameEvent, state);
+							initFrame(state, currentFrameEvent);
 
 							break;
 						}
@@ -1105,7 +1125,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							state->apsGlobalShutter = false;
 							state->apsResetRead = true;
 
-							initFrame(currentFrameEvent, state);
+							initFrame(state, currentFrameEvent);
 
 							break;
 						}
@@ -1208,7 +1228,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							state->apsGlobalShutter = true;
 							state->apsResetRead = false;
 
-							initFrame(currentFrameEvent, state);
+							initFrame(state, currentFrameEvent);
 
 							// If reset reads are disabled, the start of exposure is closest to
 							// the start of frame.
@@ -1222,7 +1242,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							state->apsGlobalShutter = false;
 							state->apsResetRead = false;
 
-							initFrame(currentFrameEvent, state);
+							initFrame(state, currentFrameEvent);
 
 							// If reset reads are disabled, the start of exposure is closest to
 							// the start of frame.
@@ -1249,8 +1269,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						case 31: {
 							// Set correct IMU accel and gyro scales, used to interpret subsequent
 							// IMU samples from the device.
-							state->imuAccelScale = data & 0x000C;
-							state->imuGyroScale = data & 0x0003;
+							state->imuAccelScale = calculateIMUAccelScale((data >> 2) & 0x03);
+							state->imuGyroScale = calculateIMUGyroScale(data & 0x03);
 							break;
 						}
 
@@ -1382,50 +1402,49 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 									state->imuTmpData = misc8Data;
 									break;
 
-									// Accelerometer scale is:
-									// 0 - 2 g - 16384 LSB/g
-									// 1 - 4 g - 8192 LSB/g
-									// 2 - 8 g - 4096 LSB/g
-									// 3 - 16 g - 2048 LSB/g
-								case 1:
-									caerIMU6EventSetAccelX(currentIMU6Event,
-										U16T((state->imuTmpData << 8) | misc8Data));
+								case 1: {
+									uint16_t accelX = U16T((state->imuTmpData << 8) | misc8Data);
+									caerIMU6EventSetAccelX(currentIMU6Event, accelX / state->imuAccelScale);
 									break;
+								}
 
-								case 3:
-									caerIMU6EventSetAccelY(currentIMU6Event,
-										U16T((state->imuTmpData << 8) | misc8Data));
+								case 3: {
+									uint16_t accelY = U16T((state->imuTmpData << 8) | misc8Data);
+									caerIMU6EventSetAccelY(currentIMU6Event, accelY / state->imuAccelScale);
 									break;
+								}
 
-								case 5:
-									caerIMU6EventSetAccelZ(currentIMU6Event,
-										U16T((state->imuTmpData << 8) | misc8Data));
+								case 5: {
+									uint16_t accelZ = U16T((state->imuTmpData << 8) | misc8Data);
+									caerIMU6EventSetAccelZ(currentIMU6Event, accelZ / state->imuAccelScale);
 									break;
+								}
 
 									// Temperature is signed. Formula for converting to °C:
 									// (SIGNED_VAL / 340) + 36.53
 								case 7: {
 									int16_t temp = (int16_t) U16T((state->imuTmpData << 8) | misc8Data);
-									caerIMU6EventSetTemp(currentIMU6Event, (int16_t) ((temp / 340.0) + 36.53));
+									caerIMU6EventSetTemp(currentIMU6Event, (temp / 340.0f) + 36.53f);
 									break;
 								}
 
-									// Gyroscope scale is:
-									// 0 - 250 °/s - 131 LSB/°/s
-									// 1 - 500 °/s - 65.5 LSB/°/s
-									// 2 - 1000 °/s - 32.8 LSB/°/s
-									// 3 - 2000 °/s - 16.4 LSB/°/s
-								case 9:
-									caerIMU6EventSetGyroX(currentIMU6Event, U16T((state->imuTmpData << 8) | misc8Data));
+								case 9: {
+									uint16_t gyroX = U16T((state->imuTmpData << 8) | misc8Data);
+									caerIMU6EventSetGyroX(currentIMU6Event, gyroX / state->imuGyroScale);
 									break;
+								}
 
-								case 11:
-									caerIMU6EventSetGyroY(currentIMU6Event, U16T((state->imuTmpData << 8) | misc8Data));
+								case 11: {
+									uint16_t gyroY = U16T((state->imuTmpData << 8) | misc8Data);
+									caerIMU6EventSetGyroY(currentIMU6Event, gyroY / state->imuGyroScale);
 									break;
+								}
 
-								case 13:
-									caerIMU6EventSetGyroZ(currentIMU6Event, U16T((state->imuTmpData << 8) | misc8Data));
+								case 13: {
+									uint16_t gyroZ = U16T((state->imuTmpData << 8) | misc8Data);
+									caerIMU6EventSetGyroZ(currentIMU6Event, gyroZ / state->imuGyroScale);
 									break;
+								}
 							}
 
 							state->imuCount++;
