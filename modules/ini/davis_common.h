@@ -81,6 +81,8 @@ struct davisCommon_state {
 	// IMU specific fields
 	uint8_t imuCount;
 	uint8_t imuTmpData;
+	uint8_t imuAccelScale;
+	uint8_t imuGyroScale;
 	// Polarity Packet State
 	caerPolarityEventPacket currentPolarityPacket;
 	uint32_t currentPolarityPacketPosition;

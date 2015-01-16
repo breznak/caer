@@ -18,7 +18,7 @@ struct caer_imu6_event {
 	uint16_t gyro_x;
 	uint16_t gyro_y;
 	uint16_t gyro_z;
-	uint16_t temp;
+	int16_t temp; // Temperature can be negative.
 	uint32_t timestamp;
 }__attribute__((__packed__));
 
@@ -188,11 +188,11 @@ static inline void caerIMU6EventSetGyroZ(caerIMU6Event event, uint16_t gyroZ) {
 	event->gyro_z = htole16(gyroZ);
 }
 
-static inline uint16_t caerIMU6EventGetTemp(caerIMU6Event event) {
+static inline int16_t caerIMU6EventGetTemp(caerIMU6Event event) {
 	return le16toh(event->temp);
 }
 
-static inline void caerIMU6EventSetTemp(caerIMU6Event event, uint16_t temp) {
+static inline void caerIMU6EventSetTemp(caerIMU6Event event, int16_t temp) {
 	event->temp = htole16(temp);
 }
 

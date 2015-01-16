@@ -611,6 +611,8 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 	cstate->dvsGotY = false;
 	cstate->imuCount = 0;
 	cstate->imuTmpData = 0;
+	cstate->imuAccelScale = 0; // Determined by frame type in Data Translator.
+	cstate->imuGyroScale = 0; // Determined by frame type in Data Translator.
 	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
 	cstate->apsWindow0StartX = sshsNodeGetShort(apsNode, "StartColumn0");
 	cstate->apsWindow0StartY = sshsNodeGetShort(apsNode, "StartRow0");
@@ -1223,6 +1225,29 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							break;
 						}
 
+						case 16:
+						case 17:
+						case 18:
+						case 19:
+						case 20:
+						case 21:
+						case 22:
+						case 23:
+						case 24:
+						case 25:
+						case 26:
+						case 27:
+						case 28:
+						case 29:
+						case 30:
+						case 31: {
+							// Set correct IMU accel and gyro scales, used to interpret subsequent
+							// IMU samples from the device.
+							state->imuAccelScale = data & 0x000C;
+							state->imuGyroScale = data & 0x0003;
+							break;
+						}
+
 						default:
 							caerLog(LOG_ERROR, state->sourceSubSystemString,
 								"Caught special event that can't be handled.");
@@ -1351,6 +1376,11 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 									state->imuTmpData = misc8Data;
 									break;
 
+									// Accelerometer scale is:
+									// 0 - 2 g - 16384 LSB/g
+									// 1 - 4 g - 8192 LSB/g
+									// 2 - 8 g - 4096 LSB/g
+									// 3 - 16 g - 2048 LSB/g
 								case 1:
 									caerIMU6EventSetAccelX(currentIMU6Event,
 										U16T((state->imuTmpData << 8) | misc8Data));
@@ -1366,10 +1396,19 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 										U16T((state->imuTmpData << 8) | misc8Data));
 									break;
 
-								case 7:
-									caerIMU6EventSetTemp(currentIMU6Event, U16T((state->imuTmpData << 8) | misc8Data));
+									// Temperature is signed. Formula for converting to °C:
+									// (SIGNED_VAL / 340) + 36.53
+								case 7: {
+									int16_t temp = (int16_t) U16T((state->imuTmpData << 8) | misc8Data);
+									caerIMU6EventSetTemp(currentIMU6Event, (int16_t) ((temp / 340.0) + 36.53));
 									break;
+								}
 
+									// Gyroscope scale is:
+									// 0 - 250 °/s - 131 LSB/°/s
+									// 1 - 500 °/s - 65.5 LSB/°/s
+									// 2 - 1000 °/s - 32.8 LSB/°/s
+									// 3 - 2000 °/s - 16.4 LSB/°/s
 								case 9:
 									caerIMU6EventSetGyroX(currentIMU6Event, U16T((state->imuTmpData << 8) | misc8Data));
 									break;
