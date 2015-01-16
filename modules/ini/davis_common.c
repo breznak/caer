@@ -617,7 +617,7 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 	cstate->apsWindow0SizeX = U16T(
 		sshsNodeGetShort(apsNode, "EndColumn0") + 1 - sshsNodeGetShort(apsNode, "StartColumn0"));
 	cstate->apsWindow0SizeY = U16T(sshsNodeGetShort(apsNode, "EndRow0") + 1 - sshsNodeGetShort(apsNode, "StartRow0"));
-	cstate->apsResetRead = sshsNodeGetBool(apsNode, "ResetRead");
+	cstate->apsResetRead = false; // Determined by frame type in Data Translator.
 	cstate->apsGlobalShutter = false; // Determined by frame type in Data Translator.
 	cstate->apsCurrentReadoutType = APS_READOUT_RESET;
 	for (size_t i = 0; i < APS_READOUT_TYPES_NUM; i++) {
@@ -952,6 +952,22 @@ static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer) {
 	libusb_free_transfer(transfer);
 }
 
+static inline void initFrame(caerFrameEvent currentFrameEvent, davisCommonState state) {
+	state->apsCurrentReadoutType = APS_READOUT_RESET;
+	for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
+		state->apsCountX[j] = 0;
+		state->apsCountY[j] = 0;
+	}
+
+	// Write out start of frame timestamp.
+	caerFrameEventSetTSStartOfFrame(currentFrameEvent, state->currentTimestamp);
+
+	// Setup frame.
+	caerFrameEventSetChannelNumber(currentFrameEvent, DAVIS_COLOR_CHANNELS);
+	caerFrameEventSetLengthXY(currentFrameEvent, state->currentFramePacket, state->apsWindow0SizeX,
+		state->apsWindow0SizeY);
+}
+
 static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytesSent) {
 	// Truncate off any extra partial event.
 	if ((bytesSent & 0x01) != 0) {
@@ -1069,20 +1085,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						case 8: { // APS Global Shutter Frame Start
 							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS GS Frame Start");
 							state->apsGlobalShutter = true;
+							state->apsResetRead = true;
 
-							state->apsCurrentReadoutType = APS_READOUT_RESET;
-							for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
-								state->apsCountX[j] = 0;
-								state->apsCountY[j] = 0;
-							}
-
-							// Write out start of frame timestamp.
-							caerFrameEventSetTSStartOfFrame(currentFrameEvent, state->currentTimestamp);
-
-							// Setup frame.
-							caerFrameEventSetChannelNumber(currentFrameEvent, DAVIS_COLOR_CHANNELS);
-							caerFrameEventSetLengthXY(currentFrameEvent, state->currentFramePacket,
-								state->apsWindow0SizeX, state->apsWindow0SizeY);
+							initFrame(currentFrameEvent, state);
 
 							break;
 						}
@@ -1090,26 +1095,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						case 9: { // APS Rolling Shutter Frame Start
 							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS RS Frame Start");
 							state->apsGlobalShutter = false;
+							state->apsResetRead = true;
 
-							state->apsCurrentReadoutType = APS_READOUT_RESET;
-							for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
-								state->apsCountX[j] = 0;
-								state->apsCountY[j] = 0;
-							}
-
-							// Write out start of frame timestamp.
-							caerFrameEventSetTSStartOfFrame(currentFrameEvent, state->currentTimestamp);
-
-							// If reset reads are disabled, the start of exposure coincides with
-							// the start of frame.
-							if (!state->apsResetRead) {
-								caerFrameEventSetTSStartOfExposure(currentFrameEvent, state->currentTimestamp);
-							}
-
-							// Setup frame.
-							caerFrameEventSetChannelNumber(currentFrameEvent, DAVIS_COLOR_CHANNELS);
-							caerFrameEventSetLengthXY(currentFrameEvent, state->currentFramePacket,
-								state->apsWindow0SizeX, state->apsWindow0SizeY);
+							initFrame(currentFrameEvent, state);
 
 							break;
 						}
@@ -1120,15 +1108,17 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							bool validFrame = true;
 
 							for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
-								// Skip checking of reset read if disabled.
-								if (!state->apsResetRead && j == APS_READOUT_RESET) {
-									continue;
+								uint16_t checkValue = caerFrameEventGetLengthX(currentFrameEvent);
+
+								// Check reset read against zero if disabled.
+								if (j == APS_READOUT_RESET && !state->apsResetRead) {
+									checkValue = 0;
 								}
 
 								caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Frame End: CountX[%zu] is %d.", j,
 									state->apsCountX[j]);
 
-								if (state->apsCountX[j] != caerFrameEventGetLengthX(currentFrameEvent)) {
+								if (state->apsCountX[j] != checkValue) {
 									caerLog(LOG_ERROR, state->sourceSubSystemString,
 										"APS Frame End: wrong column count [%zu - %d] detected.", j,
 										state->apsCountX[j]);
@@ -1173,15 +1163,6 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							// of the exposure time, for both RS and GS.
 							if (state->apsCountX[APS_READOUT_SIGNAL] == 0) {
 								caerFrameEventSetTSEndOfExposure(currentFrameEvent, state->currentTimestamp);
-
-								// If GS, then we can check that all Reset Reads have been done.
-								if (state->apsGlobalShutter && state->apsResetRead
-									&& state->apsCountX[APS_READOUT_RESET]
-										!= caerFrameEventGetLengthX(currentFrameEvent)) {
-									caerLog(LOG_ERROR, state->sourceSubSystemString,
-										"APS Signal Column Start: not all Reset columns [%d] have been read before the first Signal column in GS mode.",
-										state->apsCountX[APS_READOUT_RESET]);
-								}
 							}
 
 							break;
@@ -1210,6 +1191,34 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 								&& state->apsCountX[APS_READOUT_RESET] == caerFrameEventGetLengthX(currentFrameEvent)) {
 								caerFrameEventSetTSStartOfExposure(currentFrameEvent, state->currentTimestamp);
 							}
+
+							break;
+						}
+
+						case 14: { // APS Global Shutter Frame Start with no Reset Read
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS GS NORST Frame Start");
+							state->apsGlobalShutter = true;
+							state->apsResetRead = false;
+
+							initFrame(currentFrameEvent, state);
+
+							// If reset reads are disabled, the start of exposure is closest to
+							// the start of frame.
+							caerFrameEventSetTSStartOfExposure(currentFrameEvent, state->currentTimestamp);
+
+							break;
+						}
+
+						case 15: { // APS Rolling Shutter Frame Start with no Reset Read
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS RS NORST Frame Start");
+							state->apsGlobalShutter = false;
+							state->apsResetRead = false;
+
+							initFrame(currentFrameEvent, state);
+
+							// If reset reads are disabled, the start of exposure is closest to
+							// the start of frame.
+							caerFrameEventSetTSStartOfExposure(currentFrameEvent, state->currentTimestamp);
 
 							break;
 						}
@@ -1807,7 +1816,6 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 		}
 		else if (changeType == BOOL && str_equals(changeKey, "ResetRead")) {
 			spiConfigSend(devHandle, FPGA_APS, 13, changeValue.boolean);
-			state->apsResetRead = changeValue.boolean;
 		}
 		else if (changeType == BOOL && str_equals(changeKey, "WaitOnTransferStall")) {
 			spiConfigSend(devHandle, FPGA_APS, 14, changeValue.boolean);
