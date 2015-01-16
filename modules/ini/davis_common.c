@@ -609,18 +609,24 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 	cstate->dvsTimestamp = 0;
 	cstate->dvsLastY = 0;
 	cstate->dvsGotY = false;
+	sshsNode imuNode = sshsGetRelativeNode(moduleData->moduleNode, "imu/");
 	cstate->imuCount = 0;
 	cstate->imuTmpData = 0;
-	cstate->imuAccelScale = 0; // Determined by frame type in Data Translator.
-	cstate->imuGyroScale = 0; // Determined by frame type in Data Translator.
+	cstate->imuAccelScale = sshsNodeGetByte(imuNode, "AccelFullScale");
+	cstate->imuGyroScale = sshsNodeGetByte(imuNode, "GyroFullScale");
 	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
 	cstate->apsWindow0StartX = sshsNodeGetShort(apsNode, "StartColumn0");
 	cstate->apsWindow0StartY = sshsNodeGetShort(apsNode, "StartRow0");
 	cstate->apsWindow0SizeX = U16T(
 		sshsNodeGetShort(apsNode, "EndColumn0") + 1 - sshsNodeGetShort(apsNode, "StartColumn0"));
 	cstate->apsWindow0SizeY = U16T(sshsNodeGetShort(apsNode, "EndRow0") + 1 - sshsNodeGetShort(apsNode, "StartRow0"));
-	cstate->apsResetRead = false; // Determined by frame type in Data Translator.
-	cstate->apsGlobalShutter = false; // Determined by frame type in Data Translator.
+	cstate->apsResetRead = sshsNodeGetBool(apsNode, "ResetRead");
+	if (sshsNodeAttrExists(apsNode, "GlobalShutter", BOOL)) {
+		cstate->apsGlobalShutter = sshsNodeGetBool(apsNode, "GlobalShutter");
+	}
+	else {
+		cstate->apsGlobalShutter = false;
+	}
 	cstate->apsCurrentReadoutType = APS_READOUT_RESET;
 	for (size_t i = 0; i < APS_READOUT_TYPES_NUM; i++) {
 		cstate->apsCountX[i] = 0;

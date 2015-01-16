@@ -18,7 +18,7 @@ struct caer_imu9_event {
 	uint16_t gyro_x;
 	uint16_t gyro_y;
 	uint16_t gyro_z;
-	int16_t temp;
+	int16_t temp; // Temperature can be negative.
 	uint32_t timestamp;
 	uint16_t comp_x;
 	uint16_t comp_y;
