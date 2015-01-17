@@ -3,8 +3,7 @@
 #include "base/module.h"
 #include <GLFW/glfw3.h>
 
-const char *polarityShader =
-	"#version 330 core"
+const char *polarityShader = "#version 330 core"
 	""
 	"";
 
@@ -71,6 +70,10 @@ static bool caerVisualizerInit(caerModuleData moduleData) {
 
 	memset(state->eventRenderer, 0, 240 * 180 * sizeof(uint32_t));
 
+	// Configuration.
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showEvents", true);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showFrames", false);
+
 	return (true);
 }
 
@@ -89,11 +92,13 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 
 	// Polarity events to render.
 	caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
+	bool renderPolarity = sshsNodeGetBool(moduleData->moduleNode, "showEvents");
 
 	// Frames to render.
 	caerFrameEventPacket frame = va_arg(args, caerFrameEventPacket);
+	bool renderFrame = sshsNodeGetBool(moduleData->moduleNode, "showFrames");
 
-	if (polarity != NULL && false) {
+	if (renderPolarity && !renderFrame && polarity != NULL) {
 		caerPolarityEvent currPolarityEvent;
 
 		for (uint32_t i = 0; i < caerEventPacketHeaderGetEventNumber(&polarity->packetHeader); i++) {
@@ -129,7 +134,7 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 		}
 	}
 
-	if (frame != NULL) {
+	if (!renderPolarity && renderFrame && frame != NULL) {
 		// Render frames one by one.
 		caerFrameEvent currFrameEvent;
 
