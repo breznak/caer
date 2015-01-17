@@ -2,13 +2,6 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#define CHECK_MONOTONIC_TIMESTAMP(CURR_TS, LAST_TS) \
-	if (CURR_TS <= LAST_TS) { \
-		caerLog(LOG_ALERT, state->sourceSubSystemString, \
-			"DAVISFX3: non-strictly-monotonic time-stamp detected: lastTimestamp=%" PRIu32 ", currentTimestamp=%" PRIu32 ", difference=%" PRIu32 ".", \
-			LAST_TS, CURR_TS, (LAST_TS - CURR_TS)); \
-	}
-
 static void freeAllMemory(davisCommonState state);
 static void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8_t coarseValue, uint8_t voltageValue);
 static void createAddressedCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type,
@@ -42,6 +35,14 @@ static void HostConfigListener(sshsNode node, void *userData, enum sshs_node_att
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 static void reallocateUSBBuffers(sshsNode moduleNode, davisCommonState state);
 static void updatePacketSizesIntervals(sshsNode moduleNode, davisCommonState state);
+
+static inline void checkMonotonicTimestamp(davisCommonState state) {
+	if (state->currentTimestamp <= state->lastTimestamp) {
+		caerLog(LOG_ALERT, state->sourceSubSystemString,
+			"Timestamps: non strictly-monotonic timestamp detected: lastTimestamp=%" PRIu32 ", currentTimestamp=%" PRIu32 ", difference=%" PRIu32 ".",
+			state->lastTimestamp, state->currentTimestamp, (state->lastTimestamp - state->currentTimestamp));
+	}
+}
 
 static inline void initFrame(davisCommonState state, caerFrameEvent currentFrameEvent) {
 	state->apsCurrentReadoutType = APS_READOUT_RESET;
@@ -1016,7 +1017,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 			state->currentTimestamp = state->wrapAdd + (event & 0x7FFF);
 
 			// Check monotonicity of timestamps.
-			CHECK_MONOTONIC_TIMESTAMP(state->currentTimestamp, state->lastTimestamp);
+			checkMonotonicTimestamp(state);
 		}
 		else {
 			// Get all current events, so we don't have to duplicate code in every branch.
@@ -1108,10 +1109,15 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 								caerIMU6EventValidate(currentIMU6Event, state->currentIMU6Packet);
 								state->currentIMU6PacketPosition++;
 							}
+							else {
+								caerLog(LOG_INFO, state->sourceSubSystemString,
+									"IMU End: failed to validate IMU sample count (%" PRIu8 "), discarding samples.",
+									state->imuCount);
+							}
 							break;
 
 						case 8: { // APS Global Shutter Frame Start
-							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS GS Frame Start");
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS GS Frame Start event received.");
 							state->apsGlobalShutter = true;
 							state->apsResetRead = true;
 
@@ -1121,7 +1127,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						}
 
 						case 9: { // APS Rolling Shutter Frame Start
-							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS RS Frame Start");
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS RS Frame Start event received.");
 							state->apsGlobalShutter = false;
 							state->apsResetRead = true;
 
@@ -1131,7 +1137,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						}
 
 						case 10: { // APS Frame End
-							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Frame End");
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Frame End event received.");
 
 							bool validFrame = true;
 
@@ -1167,7 +1173,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						}
 
 						case 11: { // APS Reset Column Start
-							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Reset Column Start");
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Reset Column Start event received.");
 
 							state->apsCurrentReadoutType = APS_READOUT_RESET;
 							state->apsCountY[state->apsCurrentReadoutType] = 0;
@@ -1182,7 +1188,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						}
 
 						case 12: { // APS Signal Column Start
-							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Signal Column Start");
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Signal Column Start event received.");
 
 							state->apsCurrentReadoutType = APS_READOUT_SIGNAL;
 							state->apsCountY[state->apsCurrentReadoutType] = 0;
@@ -1197,7 +1203,12 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						}
 
 						case 13: { // APS Column End
-							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End");
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End event received.");
+
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End: CountX[%d] is %d.",
+								state->apsCurrentReadoutType, state->apsCountX[state->apsCurrentReadoutType]);
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End: CountY[%d] is %d.",
+								state->apsCurrentReadoutType, state->apsCountY[state->apsCurrentReadoutType]);
 
 							if (state->apsCountY[state->apsCurrentReadoutType]
 								!= caerFrameEventGetLengthY(currentFrameEvent)) {
@@ -1205,11 +1216,6 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 									"APS Column End: wrong row count [%d - %d] detected.", state->apsCurrentReadoutType,
 									state->apsCountY[state->apsCurrentReadoutType]);
 							}
-
-							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End: CountX[%d] is %d.",
-								state->apsCurrentReadoutType, state->apsCountX[state->apsCurrentReadoutType]);
-							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End: CountY[%d] is %d.",
-								state->apsCurrentReadoutType, state->apsCountY[state->apsCurrentReadoutType]);
 
 							state->apsCountX[state->apsCurrentReadoutType]++;
 
@@ -1224,7 +1230,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						}
 
 						case 14: { // APS Global Shutter Frame Start with no Reset Read
-							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS GS NORST Frame Start");
+							caerLog(LOG_DEBUG, state->sourceSubSystemString,
+								"APS GS NORST Frame Start event received.");
 							state->apsGlobalShutter = true;
 							state->apsResetRead = false;
 
@@ -1238,7 +1245,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						}
 
 						case 15: { // APS Rolling Shutter Frame Start with no Reset Read
-							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS RS NORST Frame Start");
+							caerLog(LOG_DEBUG, state->sourceSubSystemString,
+								"APS RS NORST Frame Start event received.");
 							state->apsGlobalShutter = false;
 							state->apsResetRead = false;
 
@@ -1267,6 +1275,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						case 29:
 						case 30:
 						case 31: {
+							caerLog(LOG_DEBUG, state->sourceSubSystemString,
+								"IMU Scale Config event (%" PRIu16 ") received.", data);
+
 							// Set correct IMU accel and gyro scales, used to interpret subsequent
 							// IMU samples from the device.
 							state->imuAccelScale = calculateIMUAccelScale((data >> 2) & 0x03);
@@ -1274,8 +1285,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 							// At this point the IMU event count should be zero (reset by start).
 							if (state->imuCount != 0) {
-								caerLog(LOG_ERROR, state->sourceSubSystemString,
-									"IMU Scale Config: count is not zero, previous IMU start event missed.");
+								caerLog(LOG_INFO, state->sourceSubSystemString,
+									"IMU Scale Config: previous IMU start event missed, attempting recovery.");
 							}
 
 							// Increase IMU count by one, to a total of one (0+1=1).
@@ -1296,8 +1307,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 				case 1: // Y address
 					// Check range conformity.
 					if (data >= state->dvsSizeY) {
-						caerLog(LOG_ALERT, state->sourceSubSystemString, "Y address out of range (0-%d): %" PRIu16 ".",
-							state->dvsSizeY - 1, data);
+						caerLog(LOG_ALERT, state->sourceSubSystemString,
+							"DVS: Y address out of range (0-%d): %" PRIu16 ".", state->dvsSizeY - 1, data);
 						continue; // Skip invalid Y address (don't update lastY).
 					}
 
@@ -1309,8 +1320,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						caerSpecialEventValidate(currentSpecialEvent, state->currentSpecialPacket);
 						state->currentSpecialPacketPosition++;
 
-						caerLog(LOG_DEBUG, state->sourceSubSystemString, "Row-only event at address Y=%" PRIu16 ".",
-							state->dvsLastY);
+						caerLog(LOG_DEBUG, state->sourceSubSystemString,
+							"DVS: row-only event received for address Y=%" PRIu16 ".", state->dvsLastY);
 					}
 
 					state->dvsLastY = data;
@@ -1323,8 +1334,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 				case 3: { // X address, Polarity ON
 					// Check range conformity.
 					if (data >= state->dvsSizeX) {
-						caerLog(LOG_ALERT, state->sourceSubSystemString, "X address out of range (0-%d): %" PRIu16 ".",
-							state->dvsSizeX - 1, data);
+						caerLog(LOG_ALERT, state->sourceSubSystemString,
+							"DVS: X address out of range (0-%d): %" PRIu16 ".", state->dvsSizeX - 1, data);
 						continue; // Skip invalid event.
 					}
 
@@ -1348,7 +1359,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					// if start/end of column events are discarded (no wait on transfer stall).
 					if (state->apsCountY[state->apsCurrentReadoutType] >= caerFrameEventGetLengthY(currentFrameEvent)) {
 						caerLog(LOG_DEBUG, state->sourceSubSystemString,
-							"APS row count over maximum, ignoring reading.");
+							"APS ADC sample: row count is at maximum, discarding further samples.");
 						continue;
 					}
 
@@ -1399,6 +1410,8 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						case 0:
 							// Detect missing IMU end events.
 							if (state->imuCount >= IMU6_COUNT) {
+								caerLog(LOG_INFO, state->sourceSubSystemString,
+									"IMU data: IMU samples count is at maximum, discarding further samples.");
 								break;
 							}
 
@@ -1406,7 +1419,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							switch (state->imuCount) {
 								case 0:
 									caerLog(LOG_ERROR, state->sourceSubSystemString,
-										"Missing IMU Scale Config event. Parsing of IMU events will still be attempted, but be aware that Accel/Gyro scale conversions may be inaccurate.");
+										"IMU data: missing IMU Scale Config event. Parsing of IMU events will still be attempted, but be aware that Accel/Gyro scale conversions may be inaccurate.");
 									state->imuCount = 1;
 									// Fall through to next case, as if imuCount was equal to 1.
 
@@ -1489,8 +1502,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					state->currentTimestamp = state->wrapAdd;
 
 					// Check monotonicity of timestamps.
-					CHECK_MONOTONIC_TIMESTAMP(state->currentTimestamp, state->lastTimestamp)
-					;
+					checkMonotonicTimestamp(state);
 
 					caerLog(LOG_DEBUG, state->sourceSubSystemString,
 						"Timestamp wrap event received with multiplier of %" PRIu16 ".", data);
