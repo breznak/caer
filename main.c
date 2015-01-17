@@ -22,10 +22,12 @@ static bool mainloop_1(void) {
 	// Typed EventPackets contain events of a certain type.
 	caerPolarityEventPacket davis_polarity;
 	caerFrameEventPacket davis_frame;
+	caerIMU6EventPacket davis_imu;
+	caerSpecialEventPacket davis_special;
 
 	// Input modules grab data from outside sources (like devices, files, ...)
 	// and put events into an event packet.
-	caerInputDAVISFX2(1, &davis_polarity, &davis_frame, NULL, NULL);
+	caerInputDAVISFX2(1, &davis_polarity, &davis_frame, &davis_imu, &davis_special);
 
 	// Filters process event packets: for example to suppress certain events,
 	// like with the Background Activity Filter, which suppresses events that

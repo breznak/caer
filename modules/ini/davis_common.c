@@ -1271,6 +1271,18 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							// IMU samples from the device.
 							state->imuAccelScale = calculateIMUAccelScale((data >> 2) & 0x03);
 							state->imuGyroScale = calculateIMUGyroScale(data & 0x03);
+
+							// At this point the IMU event count should be zero (reset by start).
+							if (state->imuCount != 0) {
+								caerLog(LOG_ERROR, state->sourceSubSystemString,
+									"IMU Scale Config: count is not zero, previous IMU start event missed.");
+							}
+
+							// Increase IMU count by one, to a total of one (0+1=1).
+							// This way we can recover from the above error of missing start, and we can
+							// later discover if the IMU Scale Config event actually arrived itself.
+							state->imuCount = 1;
+
 							break;
 						}
 
@@ -1393,28 +1405,34 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							// IMU data event.
 							switch (state->imuCount) {
 								case 0:
-								case 2:
-								case 4:
-								case 6:
-								case 8:
-								case 10:
-								case 12:
+									caerLog(LOG_ERROR, state->sourceSubSystemString,
+										"Missing IMU Scale Config event. Parsing of IMU events will still be attempted, but be aware that Accel/Gyro scale conversions may be inaccurate.");
+									state->imuCount = 1;
+									// Fall through to next case, as if imuCount was equal to 1.
+
+								case 1:
+								case 3:
+								case 5:
+								case 7:
+								case 9:
+								case 11:
+								case 13:
 									state->imuTmpData = misc8Data;
 									break;
 
-								case 1: {
+								case 2: {
 									uint16_t accelX = U16T((state->imuTmpData << 8) | misc8Data);
 									caerIMU6EventSetAccelX(currentIMU6Event, accelX / state->imuAccelScale);
 									break;
 								}
 
-								case 3: {
+								case 4: {
 									uint16_t accelY = U16T((state->imuTmpData << 8) | misc8Data);
 									caerIMU6EventSetAccelY(currentIMU6Event, accelY / state->imuAccelScale);
 									break;
 								}
 
-								case 5: {
+								case 6: {
 									uint16_t accelZ = U16T((state->imuTmpData << 8) | misc8Data);
 									caerIMU6EventSetAccelZ(currentIMU6Event, accelZ / state->imuAccelScale);
 									break;
@@ -1422,25 +1440,25 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 									// Temperature is signed. Formula for converting to °C:
 									// (SIGNED_VAL / 340) + 36.53
-								case 7: {
+								case 8: {
 									int16_t temp = (int16_t) U16T((state->imuTmpData << 8) | misc8Data);
 									caerIMU6EventSetTemp(currentIMU6Event, (temp / 340.0f) + 36.53f);
 									break;
 								}
 
-								case 9: {
+								case 10: {
 									uint16_t gyroX = U16T((state->imuTmpData << 8) | misc8Data);
 									caerIMU6EventSetGyroX(currentIMU6Event, gyroX / state->imuGyroScale);
 									break;
 								}
 
-								case 11: {
+								case 12: {
 									uint16_t gyroY = U16T((state->imuTmpData << 8) | misc8Data);
 									caerIMU6EventSetGyroY(currentIMU6Event, gyroY / state->imuGyroScale);
 									break;
 								}
 
-								case 13: {
+								case 14: {
 									uint16_t gyroZ = U16T((state->imuTmpData << 8) | misc8Data);
 									caerIMU6EventSetGyroZ(currentIMU6Event, gyroZ / state->imuGyroScale);
 									break;
