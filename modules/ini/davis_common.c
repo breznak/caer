@@ -1744,6 +1744,8 @@ static void sendUSBConfig(sshsNode moduleNode, libusb_device_handle *devHandle) 
 
 static void MultiplexerConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
+	UNUSED_ARGUMENT(node);
+
 	libusb_device_handle *devHandle = userData;
 
 	if (event == ATTRIBUTE_MODIFIED) {
@@ -1754,14 +1756,7 @@ static void MultiplexerConfigListener(sshsNode node, void *userData, enum sshs_n
 			spiConfigSend(devHandle, FPGA_MUX, 1, changeValue.boolean);
 		}
 		else if (changeType == BOOL && str_equals(changeKey, "TimestampReset")) {
-			// Only act when switching to true. This avoids infinite recursion.
-			if (changeValue.boolean == true) {
-				spiConfigSend(devHandle, FPGA_MUX, 2, true);
-				spiConfigSend(devHandle, FPGA_MUX, 2, false);
-
-				// Reset yourself on TS reset. It's a pulse command.
-				sshsNodePutBool(node, "TimestampReset", false);
-			}
+			spiConfigSend(devHandle, FPGA_MUX, 2, changeValue.boolean);
 		}
 		else if (changeType == BOOL && str_equals(changeKey, "ForceChipBiasEnable")) {
 			spiConfigSend(devHandle, FPGA_MUX, 3, changeValue.boolean);
