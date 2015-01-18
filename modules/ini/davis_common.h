@@ -66,6 +66,7 @@ struct davisCommon_state {
 	uint16_t dvsLastY;
 	bool dvsGotY;
 	// APS specific fields
+	bool apsIgnoreEvents;
 	uint16_t apsSizeX;
 	uint16_t apsSizeY;
 	uint16_t apsWindow0StartX;
@@ -79,6 +80,7 @@ struct davisCommon_state {
 	uint16_t apsCountY[APS_READOUT_TYPES_NUM];
 	uint16_t *apsCurrentResetFrame;
 	// IMU specific fields
+	bool imuIgnoreEvents;
 	uint8_t imuCount;
 	uint8_t imuTmpData;
 	float imuAccelScale;

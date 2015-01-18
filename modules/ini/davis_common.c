@@ -651,11 +651,13 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 	cstate->dvsLastY = 0;
 	cstate->dvsGotY = false;
 	sshsNode imuNode = sshsGetRelativeNode(moduleData->moduleNode, "imu/");
+	cstate->imuIgnoreEvents = false;
 	cstate->imuCount = 0;
 	cstate->imuTmpData = 0;
 	cstate->imuAccelScale = calculateIMUAccelScale(sshsNodeGetByte(imuNode, "AccelFullScale"));
 	cstate->imuGyroScale = calculateIMUGyroScale(sshsNodeGetByte(imuNode, "GyroFullScale"));
 	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
+	cstate->apsIgnoreEvents = false;
 	cstate->apsWindow0StartX = sshsNodeGetShort(apsNode, "StartColumn0");
 	cstate->apsWindow0StartY = sshsNodeGetShort(apsNode, "StartRow0");
 	cstate->apsWindow0SizeX = U16T(
@@ -1096,6 +1098,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						case 5: { // IMU Start (6 axes)
 							caerLog(LOG_DEBUG, state->sourceSubSystemString, "IMU6 Start event received.");
 
+							state->imuIgnoreEvents = false;
 							state->imuCount = 0;
 
 							caerIMU6EventSetTimestamp(currentIMU6Event, state->currentTimestamp);
@@ -1104,6 +1107,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 						case 7: // IMU End
 							caerLog(LOG_DEBUG, state->sourceSubSystemString, "IMU End event received.");
+							if (state->imuIgnoreEvents) {
+								break;
+							}
 
 							if (state->imuCount == IMU6_COUNT) {
 								caerIMU6EventValidate(currentIMU6Event, state->currentIMU6Packet);
@@ -1118,6 +1124,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 						case 8: { // APS Global Shutter Frame Start
 							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS GS Frame Start event received.");
+							state->apsIgnoreEvents = false;
 							state->apsGlobalShutter = true;
 							state->apsResetRead = true;
 
@@ -1128,6 +1135,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 						case 9: { // APS Rolling Shutter Frame Start
 							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS RS Frame Start event received.");
+							state->apsIgnoreEvents = false;
 							state->apsGlobalShutter = false;
 							state->apsResetRead = true;
 
@@ -1138,6 +1146,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 						case 10: { // APS Frame End
 							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Frame End event received.");
+							if (state->apsIgnoreEvents) {
+								break;
+							}
 
 							bool validFrame = true;
 
@@ -1174,6 +1185,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 						case 11: { // APS Reset Column Start
 							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Reset Column Start event received.");
+							if (state->apsIgnoreEvents) {
+								break;
+							}
 
 							state->apsCurrentReadoutType = APS_READOUT_RESET;
 							state->apsCountY[state->apsCurrentReadoutType] = 0;
@@ -1189,6 +1203,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 						case 12: { // APS Signal Column Start
 							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Signal Column Start event received.");
+							if (state->apsIgnoreEvents) {
+								break;
+							}
 
 							state->apsCurrentReadoutType = APS_READOUT_SIGNAL;
 							state->apsCountY[state->apsCurrentReadoutType] = 0;
@@ -1204,6 +1221,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 						case 13: { // APS Column End
 							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End event received.");
+							if (state->apsIgnoreEvents) {
+								break;
+							}
 
 							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Column End: CountX[%d] is %d.",
 								state->apsCurrentReadoutType, state->apsCountX[state->apsCurrentReadoutType]);
@@ -1232,6 +1252,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						case 14: { // APS Global Shutter Frame Start with no Reset Read
 							caerLog(LOG_DEBUG, state->sourceSubSystemString,
 								"APS GS NORST Frame Start event received.");
+							state->apsIgnoreEvents = false;
 							state->apsGlobalShutter = true;
 							state->apsResetRead = false;
 
@@ -1247,6 +1268,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						case 15: { // APS Rolling Shutter Frame Start with no Reset Read
 							caerLog(LOG_DEBUG, state->sourceSubSystemString,
 								"APS RS NORST Frame Start event received.");
+							state->apsIgnoreEvents = false;
 							state->apsGlobalShutter = false;
 							state->apsResetRead = false;
 
@@ -1277,6 +1299,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						case 31: {
 							caerLog(LOG_DEBUG, state->sourceSubSystemString,
 								"IMU Scale Config event (%" PRIu16 ") received.", data);
+							if (state->imuIgnoreEvents) {
+								break;
+							}
 
 							// Set correct IMU accel and gyro scales, used to interpret subsequent
 							// IMU samples from the device.
@@ -1352,6 +1377,10 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 				}
 
 				case 4: {
+					if (state->apsIgnoreEvents) {
+						break;
+					}
+
 					// First, let's normalize the ADC value to 16bit generic depth.
 					data = U16T(data << (16 - DAVIS_ADC_DEPTH));
 
@@ -1408,6 +1437,10 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 					switch (misc8Code) {
 						case 0:
+							if (state->imuIgnoreEvents) {
+								break;
+							}
+
 							// Detect missing IMU end events.
 							if (state->imuCount >= IMU6_COUNT) {
 								caerLog(LOG_INFO, state->sourceSubSystemString,
@@ -1562,6 +1595,13 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 			state->currentFramePacket = caerFrameEventPacketAllocate(state->maxFramePacketSize, state->sourceID,
 				state->apsSizeX, state->apsSizeY, DAVIS_COLOR_CHANNELS);
 			state->currentFramePacketPosition = 0;
+
+			// Ignore all APS events, until a new APS Start event comes in.
+			// This is to correctly support the forced packet commits that a TS reset,
+			// or a timeout condition, impose. Continuing to parse events would result
+			// in a corrupted state of the first event in the new packet, as it would
+			// be incomplete and miss vital initialization data.
+			state->apsIgnoreEvents = true;
 		}
 
 		if (forcePacketCommit
@@ -1584,6 +1624,13 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 			// Allocate new packet for next iteration.
 			state->currentIMU6Packet = caerIMU6EventPacketAllocate(state->maxIMU6PacketSize, state->sourceID);
 			state->currentIMU6PacketPosition = 0;
+
+			// Ignore all IMU events, until a new IMU Start event comes in.
+			// This is to correctly support the forced packet commits that a TS reset,
+			// or a timeout condition, impose. Continuing to parse events would result
+			// in a corrupted state of the first event in the new packet, as it would
+			// be incomplete and miss vital initialization data.
+			state->imuIgnoreEvents = true;
 		}
 
 		if (forcePacketCommit
