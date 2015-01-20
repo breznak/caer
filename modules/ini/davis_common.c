@@ -1334,7 +1334,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					if (data >= state->dvsSizeY) {
 						caerLog(LOG_ALERT, state->sourceSubSystemString,
 							"DVS: Y address out of range (0-%d): %" PRIu16 ".", state->dvsSizeY - 1, data);
-						continue; // Skip invalid Y address (don't update lastY).
+						break; // Skip invalid Y address (don't update lastY).
 					}
 
 					if (state->dvsGotY) {
@@ -1361,7 +1361,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					if (data >= state->dvsSizeX) {
 						caerLog(LOG_ALERT, state->sourceSubSystemString,
 							"DVS: X address out of range (0-%d): %" PRIu16 ".", state->dvsSizeX - 1, data);
-						continue; // Skip invalid event.
+						break; // Skip invalid event.
 					}
 
 					caerPolarityEventSetTimestamp(currentPolarityEvent, state->dvsTimestamp);
@@ -1389,7 +1389,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					if (state->apsCountY[state->apsCurrentReadoutType] >= caerFrameEventGetLengthY(currentFrameEvent)) {
 						caerLog(LOG_DEBUG, state->sourceSubSystemString,
 							"APS ADC sample: row count is at maximum, discarding further samples.");
-						continue;
+						break;
 					}
 
 					// If reset read, we store the values in a local array. If signal read, we
