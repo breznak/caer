@@ -345,22 +345,24 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 	free(configSerialNumber);
 
 	// So now we have a working connection to the device we want. Let's get some data!
-	cstate->chipID = U16T(spiConfigReceive(cstate->deviceHandle, 6, 1));
-	cstate->apsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, 6, 2));
-	cstate->apsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, 6, 3));
-	cstate->dvsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, 6, 4));
-	cstate->dvsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, 6, 5));
+	cstate->chipID = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 1));
+	cstate->apsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 2));
+	cstate->apsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 3));
+	cstate->dvsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 4));
+	cstate->dvsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 5));
 
 	// Put global source information into SSHS, so it's globally available.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
+	sshsNodePutShort(sourceInfoNode, "logicVersion", U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 0)));
 	sshsNodePutShort(sourceInfoNode, "dvsSizeX", cstate->dvsSizeX);
 	sshsNodePutShort(sourceInfoNode, "dvsSizeY", cstate->dvsSizeY);
 	sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeX);
 	sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->apsSizeY);
 	sshsNodePutShort(sourceInfoNode, "apsOriginalDepth", DAVIS_ADC_DEPTH);
 	sshsNodePutShort(sourceInfoNode, "apsOriginalChannels", DAVIS_COLOR_CHANNELS);
-	sshsNodePutBool(sourceInfoNode, "apsHasGlobalShutter", spiConfigReceive(cstate->deviceHandle, 6, 6));
-	sshsNodePutBool(sourceInfoNode, "apsHasIntegratedADC", spiConfigReceive(cstate->deviceHandle, 6, 7));
+	sshsNodePutBool(sourceInfoNode, "apsHasGlobalShutter", spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 6));
+	sshsNodePutBool(sourceInfoNode, "apsHasIntegratedADC", spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 7));
+	sshsNodePutBool(sourceInfoNode, "deviceIsMaster", spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 8));
 
 	return (true);
 }
@@ -1059,6 +1061,11 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 							// Commit packets when doing a reset to clearly separate them.
 							forcePacketCommit = true;
+
+							// Update Master/Slave status on incoming TS resets.
+							sshsNode sourceInfoNode = caerMainloopGetSourceInfo(state->sourceID);
+							sshsNodePutBool(sourceInfoNode, "deviceIsMaster",
+								spiConfigReceive(state->deviceHandle, FPGA_SYSINFO, 8));
 
 							break;
 						}

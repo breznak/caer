@@ -29,6 +29,7 @@
 #define FPGA_APS 2
 #define FPGA_IMU 3
 #define FPGA_EXTINPUT 4
+#define FPGA_SYSINFO 6
 #define FPGA_USB 9
 
 #define EXT_ADC_FREQ 30
