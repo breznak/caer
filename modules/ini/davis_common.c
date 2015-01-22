@@ -892,8 +892,6 @@ void caerInputDAVISCommonRun(caerModuleData moduleData, size_t argsNumber, va_li
 }
 
 void allocateDataTransfers(davisCommonState state, uint32_t bufferNum, uint32_t bufferSize) {
-	atomic_ops_uint_store(&state->dataTransfersLength, 0, ATOMIC_OPS_FENCE_NONE);
-
 	// Set number of transfers and allocate memory for the main transfer array.
 	state->dataTransfers = calloc(bufferNum, sizeof(struct libusb_transfer *));
 	if (state->dataTransfers == NULL) {
@@ -902,6 +900,7 @@ void allocateDataTransfers(davisCommonState state, uint32_t bufferNum, uint32_t 
 			caerLogStrerror(errno), errno);
 		return;
 	}
+	state->dataTransfersLength = bufferNum;
 
 	// Allocate transfers and set them up.
 	for (size_t i = 0; i < bufferNum; i++) {
@@ -909,7 +908,7 @@ void allocateDataTransfers(davisCommonState state, uint32_t bufferNum, uint32_t 
 		if (state->dataTransfers[i] == NULL) {
 			caerLog(LOG_CRITICAL, state->sourceSubSystemString,
 				"Unable to allocate further libusb transfers (data channel, %zu of %" PRIu32 ").", i, bufferNum);
-			return;
+			continue;
 		}
 
 		// Create data buffer.
@@ -923,7 +922,7 @@ void allocateDataTransfers(davisCommonState state, uint32_t bufferNum, uint32_t 
 			libusb_free_transfer(state->dataTransfers[i]);
 			state->dataTransfers[i] = NULL;
 
-			return;
+			continue;
 		}
 
 		// Initialize Transfer.
@@ -936,7 +935,7 @@ void allocateDataTransfers(davisCommonState state, uint32_t bufferNum, uint32_t 
 		state->dataTransfers[i]->flags = LIBUSB_TRANSFER_FREE_BUFFER;
 
 		if ((errno = libusb_submit_transfer(state->dataTransfers[i])) == LIBUSB_SUCCESS) {
-			atomic_ops_uint_inc(&state->dataTransfersLength, ATOMIC_OPS_FENCE_NONE);
+			state->activeDataTransfers++;
 		}
 		else {
 			caerLog(LOG_CRITICAL, state->sourceSubSystemString,
@@ -948,36 +947,46 @@ void allocateDataTransfers(davisCommonState state, uint32_t bufferNum, uint32_t 
 			libusb_free_transfer(state->dataTransfers[i]);
 			state->dataTransfers[i] = NULL;
 
-			return;
+			continue;
 		}
+	}
+
+	if (state->activeDataTransfers == 0) {
+		// Didn't manage to allocate any USB transfers, free array memory and log failure.
+		free(state->dataTransfers);
+		state->dataTransfers = NULL;
+		state->dataTransfersLength = 0;
+
+		caerLog(LOG_CRITICAL, state->sourceSubSystemString, "Unable to allocate any libusb transfers.");
 	}
 }
 
 void deallocateDataTransfers(davisCommonState state) {
-	// This will change later on, but we still need it.
-	uint32_t transfersNum = (uint32_t) atomic_ops_uint_load(&state->dataTransfersLength, ATOMIC_OPS_FENCE_NONE);
-
 	// Cancel all current transfers first.
-	for (size_t i = 0; i < transfersNum; i++) {
-		errno = libusb_cancel_transfer(state->dataTransfers[i]);
-		if (errno != LIBUSB_SUCCESS && errno != LIBUSB_ERROR_NOT_FOUND) {
-			caerLog(LOG_CRITICAL, state->sourceSubSystemString,
-				"Unable to cancel libusb transfer %zu (data channel). Error: %s (%d).", i, libusb_strerror(errno),
-				errno);
-			// Proceed with canceling all transfers regardless of errors.
+	for (size_t i = 0; i < state->dataTransfersLength; i++) {
+		if (state->dataTransfers[i] != NULL) {
+			errno = libusb_cancel_transfer(state->dataTransfers[i]);
+			if (errno != LIBUSB_SUCCESS && errno != LIBUSB_ERROR_NOT_FOUND) {
+				caerLog(LOG_CRITICAL, state->sourceSubSystemString,
+					"Unable to cancel libusb transfer %zu (data channel). Error: %s (%d).", i, libusb_strerror(errno),
+					errno);
+				// Proceed with trying to cancel all transfers regardless of errors.
+			}
 		}
 	}
 
 	// Wait for all transfers to go away (0.1 seconds timeout).
 	struct timeval te = { .tv_sec = 0, .tv_usec = 100000 };
 
-	while (atomic_ops_uint_load(&state->dataTransfersLength, ATOMIC_OPS_FENCE_NONE) > 0) {
+	while (state->activeDataTransfers > 0) {
 		libusb_handle_events_timeout(state->deviceContext, &te);
 	}
 
 	// The buffers and transfers have been deallocated in the callback.
-	// Only the transfers array remains.
+	// Only the transfers array remains, which we free here.
 	free(state->dataTransfers);
+	state->dataTransfers = NULL;
+	state->dataTransfersLength = 0;
 }
 
 static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer) {
@@ -997,7 +1006,13 @@ static void LIBUSB_CALL libUsbDataCallback(struct libusb_transfer *transfer) {
 
 	// Cannot recover (cancelled, no device, or other critical error).
 	// Signal this by adjusting the counter, free and exit.
-	atomic_ops_uint_dec(&state->dataTransfersLength, ATOMIC_OPS_FENCE_NONE);
+	state->activeDataTransfers--;
+	for (size_t i = 0; i < state->dataTransfersLength; i++) {
+		// Remove from list, so we don't try to cancel it later on.
+		if (state->dataTransfers[i] == transfer) {
+			state->dataTransfers[i] = NULL;
+		}
+	}
 	libusb_free_transfer(transfer);
 }
 

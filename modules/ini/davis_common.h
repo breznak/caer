@@ -55,7 +55,8 @@ struct davisCommon_state {
 	// Data Acquisition Thread
 	pthread_t dataAcquisitionThread;
 	struct libusb_transfer **dataTransfers;
-	atomic_ops_uint dataTransfersLength;
+	size_t dataTransfersLength;
+	size_t activeDataTransfers;
 	uint32_t wrapAdd;
 	uint32_t lastTimestamp;
 	uint32_t currentTimestamp;

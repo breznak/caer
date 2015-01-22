@@ -8,8 +8,8 @@ struct davisFX3_state {
 	// State for data management, common to all DAVISes.
 	struct davisCommon_state cstate;
 	// Debug transfer support (FX3 only).
-	struct libusb_transfer **debugTransfers;
-	atomic_ops_uint debugTransfersLength;
+	struct libusb_transfer *debugTransfers[DEBUG_TRANSFER_NUM];
+	size_t activeDebugTransfers;
 };
 
 typedef struct davisFX3_state *davisFX3State;
@@ -187,8 +187,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 
 	caerLog(LOG_DEBUG, data->moduleSubSystemString, "Data acquisition thread ready to process events.");
 
-	while (atomic_ops_uint_load(&data->running, ATOMIC_OPS_FENCE_NONE) != 0
-		&& atomic_ops_uint_load(&cstate->dataTransfersLength, ATOMIC_OPS_FENCE_NONE) > 0) {
+	while (atomic_ops_uint_load(&data->running, ATOMIC_OPS_FENCE_NONE) != 0 && cstate->activeDataTransfers > 0) {
 		// Check config refresh, in this case to adjust buffer sizes.
 		if (atomic_ops_uint_load(&data->configUpdate, ATOMIC_OPS_FENCE_NONE) != 0) {
 			dataAcquisitionThreadConfig(data);
@@ -216,16 +215,7 @@ static void *dataAcquisitionThread(void *inPtr) {
 }
 
 static void allocateDebugTransfers(davisFX3State state) {
-	atomic_ops_uint_store(&state->debugTransfersLength, 0, ATOMIC_OPS_FENCE_NONE);
-
 	// Set number of transfers and allocate memory for the main transfer array.
-	state->debugTransfers = calloc(DEBUG_TRANSFER_NUM, sizeof(struct libusb_transfer *));
-	if (state->debugTransfers == NULL) {
-		caerLog(LOG_CRITICAL, state->cstate.sourceSubSystemString,
-			"Failed to allocate memory for %" PRIu32 " libusb transfers (debug channel). Error: %s (%d).",
-			DEBUG_TRANSFER_NUM, caerLogStrerror(errno), errno);
-		return;
-	}
 
 	// Allocate transfers and set them up.
 	for (size_t i = 0; i < DEBUG_TRANSFER_NUM; i++) {
@@ -234,7 +224,7 @@ static void allocateDebugTransfers(davisFX3State state) {
 			caerLog(LOG_CRITICAL, state->cstate.sourceSubSystemString,
 				"Unable to allocate further libusb transfers (debug channel, %zu of %" PRIu32 ").", i,
 				DEBUG_TRANSFER_NUM);
-			return;
+			continue;
 		}
 
 		// Create data buffer.
@@ -248,7 +238,7 @@ static void allocateDebugTransfers(davisFX3State state) {
 			libusb_free_transfer(state->debugTransfers[i]);
 			state->debugTransfers[i] = NULL;
 
-			return;
+			continue;
 		}
 
 		// Initialize Transfer.
@@ -261,7 +251,7 @@ static void allocateDebugTransfers(davisFX3State state) {
 		state->debugTransfers[i]->flags = LIBUSB_TRANSFER_FREE_BUFFER;
 
 		if ((errno = libusb_submit_transfer(state->debugTransfers[i])) == LIBUSB_SUCCESS) {
-			atomic_ops_uint_inc(&state->debugTransfersLength, ATOMIC_OPS_FENCE_NONE);
+			state->activeDebugTransfers++;
 		}
 		else {
 			caerLog(LOG_CRITICAL, state->cstate.sourceSubSystemString,
@@ -273,36 +263,36 @@ static void allocateDebugTransfers(davisFX3State state) {
 			libusb_free_transfer(state->debugTransfers[i]);
 			state->debugTransfers[i] = NULL;
 
-			return;
+			continue;
 		}
+	}
+
+	if (state->activeDebugTransfers == 0) {
+		// Didn't manage to allocate any USB transfers, log failure.
+		caerLog(LOG_CRITICAL, state->cstate.sourceSubSystemString, "Unable to allocate any libusb transfers.");
 	}
 }
 
 static void deallocateDebugTransfers(davisFX3State state) {
-	// This will change later on, but we still need it.
-	uint32_t transfersNum = (uint32_t) atomic_ops_uint_load(&state->debugTransfersLength, ATOMIC_OPS_FENCE_NONE);
-
 	// Cancel all current transfers first.
-	for (size_t i = 0; i < transfersNum; i++) {
-		errno = libusb_cancel_transfer(state->debugTransfers[i]);
-		if (errno != LIBUSB_SUCCESS && errno != LIBUSB_ERROR_NOT_FOUND) {
-			caerLog(LOG_CRITICAL, state->cstate.sourceSubSystemString,
-				"Unable to cancel libusb transfer %zu (debug channel). Error: %s (%d).", i, libusb_strerror(errno),
-				errno);
-			// Proceed with canceling all transfers regardless of errors.
+	for (size_t i = 0; i < DEBUG_TRANSFER_NUM; i++) {
+		if (state->debugTransfers[i] != NULL) {
+			errno = libusb_cancel_transfer(state->debugTransfers[i]);
+			if (errno != LIBUSB_SUCCESS && errno != LIBUSB_ERROR_NOT_FOUND) {
+				caerLog(LOG_CRITICAL, state->cstate.sourceSubSystemString,
+					"Unable to cancel libusb transfer %zu (debug channel). Error: %s (%d).", i, libusb_strerror(errno),
+					errno);
+				// Proceed with trying to cancel all transfers regardless of errors.
+			}
 		}
 	}
 
 	// Wait for all transfers to go away (0.1 seconds timeout).
 	struct timeval te = { .tv_sec = 0, .tv_usec = 100000 };
 
-	while (atomic_ops_uint_load(&state->debugTransfersLength, ATOMIC_OPS_FENCE_NONE) > 0) {
+	while (state->activeDebugTransfers > 0) {
 		libusb_handle_events_timeout(state->cstate.deviceContext, &te);
 	}
-
-	// The buffers and transfers have been deallocated in the callback.
-	// Only the transfers array remains.
-	free(state->debugTransfers);
 }
 
 static void LIBUSB_CALL libUsbDebugCallback(struct libusb_transfer *transfer) {
@@ -322,7 +312,13 @@ static void LIBUSB_CALL libUsbDebugCallback(struct libusb_transfer *transfer) {
 
 	// Cannot recover (cancelled, no device, or other critical error).
 	// Signal this by adjusting the counter, free and exit.
-	atomic_ops_uint_dec(&state->debugTransfersLength, ATOMIC_OPS_FENCE_NONE);
+	state->activeDebugTransfers--;
+	for (size_t i = 0; i < DEBUG_TRANSFER_NUM; i++) {
+		// Remove from list, so we don't try to cancel it later on.
+		if (state->debugTransfers[i] == transfer) {
+			state->debugTransfers[i] = NULL;
+		}
+	}
 	libusb_free_transfer(transfer);
 }
 
