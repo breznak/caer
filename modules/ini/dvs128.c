@@ -24,7 +24,8 @@ struct dvs128_state {
 	libusb_device_handle *deviceHandle;
 	// Data Acquisition Thread State
 	struct libusb_transfer **transfers;
-	atomic_ops_uint transfersLength;
+	size_t transfersLength;
+	size_t activeTransfers;
 	uint32_t wrapAdd;
 	uint32_t lastTimestamp;
 	// Polarity Packet State
@@ -355,8 +356,7 @@ static void *dvs128DataAcquisitionThread(void *inPtr) {
 
 	caerLog(LOG_DEBUG, data->moduleSubSystemString, "data acquisition thread ready to process events.");
 
-	while (atomic_ops_uint_load(&data->running, ATOMIC_OPS_FENCE_NONE) != 0
-		&& atomic_ops_uint_load(&state->transfersLength, ATOMIC_OPS_FENCE_NONE) > 0) {
+	while (atomic_ops_uint_load(&data->running, ATOMIC_OPS_FENCE_NONE) != 0 && state->activeTransfers > 0) {
 		// Check config refresh, in this case to adjust buffer sizes.
 		if (atomic_ops_uint_load(&data->configUpdate, ATOMIC_OPS_FENCE_NONE) != 0) {
 			dvs128DataAcquisitionThreadConfig(data);
@@ -413,8 +413,6 @@ static void dvs128DataAcquisitionThreadConfig(caerModuleData moduleData) {
 }
 
 static void dvs128AllocateTransfers(dvs128State state, uint32_t bufferNum, uint32_t bufferSize) {
-	atomic_ops_uint_store(&state->transfersLength, 0, ATOMIC_OPS_FENCE_NONE);
-
 	// Set number of transfers and allocate memory for the main transfer array.
 	state->transfers = calloc(bufferNum, sizeof(struct libusb_transfer *));
 	if (state->transfers == NULL) {
@@ -423,6 +421,7 @@ static void dvs128AllocateTransfers(dvs128State state, uint32_t bufferNum, uint3
 			caerLogStrerror(errno), errno);
 		return;
 	}
+	state->transfersLength = bufferNum;
 
 	// Allocate transfers and set them up.
 	for (size_t i = 0; i < bufferNum; i++) {
@@ -430,7 +429,7 @@ static void dvs128AllocateTransfers(dvs128State state, uint32_t bufferNum, uint3
 		if (state->transfers[i] == NULL) {
 			caerLog(LOG_CRITICAL, state->sourceSubSystemString,
 				"Unable to allocate further libusb transfers (%zu of %" PRIu32 ").", i, bufferNum);
-			return;
+			continue;
 		}
 
 		// Create data buffer.
@@ -443,7 +442,7 @@ static void dvs128AllocateTransfers(dvs128State state, uint32_t bufferNum, uint3
 			libusb_free_transfer(state->transfers[i]);
 			state->transfers[i] = NULL;
 
-			return;
+			continue;
 		}
 
 		// Initialize Transfer.
@@ -456,7 +455,7 @@ static void dvs128AllocateTransfers(dvs128State state, uint32_t bufferNum, uint3
 		state->transfers[i]->flags = LIBUSB_TRANSFER_FREE_BUFFER;
 
 		if ((errno = libusb_submit_transfer(state->transfers[i])) == LIBUSB_SUCCESS) {
-			atomic_ops_uint_inc(&state->transfersLength, ATOMIC_OPS_FENCE_NONE);
+			state->activeTransfers++;
 		}
 		else {
 			caerLog(LOG_CRITICAL, state->sourceSubSystemString, "Unable to submit libusb transfer %zu. Error: %s (%d).",
@@ -467,35 +466,45 @@ static void dvs128AllocateTransfers(dvs128State state, uint32_t bufferNum, uint3
 			libusb_free_transfer(state->transfers[i]);
 			state->transfers[i] = NULL;
 
-			return;
+			continue;
 		}
+	}
+
+	if (state->activeTransfers == 0) {
+		// Didn't manage to allocate any USB transfers, free array memory and log failure.
+		free(state->transfers);
+		state->transfers = NULL;
+		state->transfersLength = 0;
+
+		caerLog(LOG_CRITICAL, state->sourceSubSystemString, "Unable to allocate any libusb transfers.");
 	}
 }
 
 static void dvs128DeallocateTransfers(dvs128State state) {
-	// This will change later on, but we still need it.
-	uint32_t transfersNum = (uint32_t) atomic_ops_uint_load(&state->transfersLength, ATOMIC_OPS_FENCE_NONE);
-
 	// Cancel all current transfers first.
-	for (size_t i = 0; i < transfersNum; i++) {
-		errno = libusb_cancel_transfer(state->transfers[i]);
-		if (errno != LIBUSB_SUCCESS && errno != LIBUSB_ERROR_NOT_FOUND) {
-			caerLog(LOG_CRITICAL, state->sourceSubSystemString, "Unable to cancel libusb transfer %zu. Error: %s (%d).",
-				i, libusb_strerror(errno), errno);
-			// Proceed with canceling all transfers regardless of errors.
+	for (size_t i = 0; i < state->transfersLength; i++) {
+		if (state->transfers[i] != NULL) {
+			errno = libusb_cancel_transfer(state->transfers[i]);
+			if (errno != LIBUSB_SUCCESS && errno != LIBUSB_ERROR_NOT_FOUND) {
+				caerLog(LOG_CRITICAL, state->sourceSubSystemString,
+					"Unable to cancel libusb transfer %zu. Error: %s (%d).", i, libusb_strerror(errno), errno);
+				// Proceed with trying to cancel all transfers regardless of errors.
+			}
 		}
 	}
 
 	// Wait for all transfers to go away (0.1 seconds timeout).
 	struct timeval te = { .tv_sec = 0, .tv_usec = 100000 };
 
-	while (atomic_ops_uint_load(&state->transfersLength, ATOMIC_OPS_FENCE_NONE) > 0) {
+	while (state->activeTransfers > 0) {
 		libusb_handle_events_timeout(state->deviceContext, &te);
 	}
 
 	// The buffers and transfers have been deallocated in the callback.
-	// Only the transfers array remains.
+	// Only the transfers array remains, which we free here.
 	free(state->transfers);
+	state->transfers = NULL;
+	state->transfersLength = 0;
 }
 
 static void LIBUSB_CALL dvs128LibUsbCallback(struct libusb_transfer *transfer) {
@@ -515,7 +524,13 @@ static void LIBUSB_CALL dvs128LibUsbCallback(struct libusb_transfer *transfer) {
 
 	// Cannot recover (cancelled, no device, or other critical error).
 	// Signal this by adjusting the counter, free and exit.
-	atomic_ops_uint_dec(&state->transfersLength, ATOMIC_OPS_FENCE_NONE);
+	state->activeTransfers--;
+	for (size_t i = 0; i < state->transfersLength; i++) {
+		// Remove from list, so we don't try to cancel it later on.
+		if (state->transfers[i] == transfer) {
+			state->transfers[i] = NULL;
+		}
+	}
 	libusb_free_transfer(transfer);
 }
 
