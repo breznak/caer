@@ -339,20 +339,222 @@ static void debugTranslator(davisFX3State state, uint8_t *buffer, size_t bytesSe
 
 static void BiasesListener(sshsNode node, void *userData, enum sshs_node_attribute_events event, const char *changeKey,
 	enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
-	UNUSED_ARGUMENT(node);
+	UNUSED_ARGUMENT(changeKey);
+	UNUSED_ARGUMENT(changeType);
+	UNUSED_ARGUMENT(changeValue);
+
+	libusb_device_handle *devHandle = userData;
+
+	// This is currently for DAVIS240 only.
+	if (event == ATTRIBUTE_MODIFIED) {
+		if (str_equals(sshsNodeGetName(node), "DiffBn")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 0,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "DiffBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "OnBn")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 1,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "OnBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "OffBn")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 2,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "OffBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "ApsCasEpc")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 3,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "ApsCasEpc"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "DiffCasBnc")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 4,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "DiffCasBnc"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "ApsROSFBn")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 5,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "ApsROSFBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "LocalBufBn")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 6,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "LocalBufBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "PixInvBn")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 7,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "PixInvBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "PrBp")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 8,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "PrBp"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "PrSFBp")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 9,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "PrSFBp"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "RefrBp")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 10,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "RefrBp"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "AEPdBn")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 11,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "AEPdBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "LcolTimeoutBn")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 12,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "LcolTimeoutBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "AEPuXBp")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 13,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "AEPuXBp"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "AEPuYBp")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 14,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "AEPuYBp"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "IFThrBn")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 15,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "IFThrBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "IFRefrBn")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 16,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "IFRefrBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "PadFollBn")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 17,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "PadFollBn"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "ApsOverflowLevel")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 18,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "ApsOverflowLevel"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "BiasBuffer")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 19,
+				generateAddressedCoarseFineBias(sshsNodeGetParent(node), "BiasBuffer"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "SSP")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 20, generateShiftedSourceBias(sshsNodeGetParent(node), "SSP"));
+		}
+		else if (str_equals(sshsNodeGetName(node), "SSN")) {
+			spiConfigSend(devHandle, FPGA_CHIPBIAS, 21, generateShiftedSourceBias(sshsNodeGetParent(node), "SSN"));
+		}
+	}
 }
 
 static void sendBiases(sshsNode moduleNode, libusb_device_handle *devHandle) {
-	// TODO: depends on used chip.
+	// This is currently for DAVIS240 only.
+	sshsNode biasNode = sshsGetRelativeNode(moduleNode, "bias/");
+
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 0, generateAddressedCoarseFineBias(biasNode, "DiffBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 1, generateAddressedCoarseFineBias(biasNode, "OnBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 2, generateAddressedCoarseFineBias(biasNode, "OffBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 3, generateAddressedCoarseFineBias(biasNode, "ApsCasEpc"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 4, generateAddressedCoarseFineBias(biasNode, "DiffCasBnc"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 5, generateAddressedCoarseFineBias(biasNode, "ApsROSFBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 6, generateAddressedCoarseFineBias(biasNode, "LocalBufBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 7, generateAddressedCoarseFineBias(biasNode, "PixInvBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 8, generateAddressedCoarseFineBias(biasNode, "PrBp"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 9, generateAddressedCoarseFineBias(biasNode, "PrSFBp"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 10, generateAddressedCoarseFineBias(biasNode, "RefrBp"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 11, generateAddressedCoarseFineBias(biasNode, "AEPdBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 12, generateAddressedCoarseFineBias(biasNode, "LcolTimeoutBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 13, generateAddressedCoarseFineBias(biasNode, "AEPuXBp"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 14, generateAddressedCoarseFineBias(biasNode, "AEPuYBp"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 15, generateAddressedCoarseFineBias(biasNode, "IFThrBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 16, generateAddressedCoarseFineBias(biasNode, "IFRefrBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 17, generateAddressedCoarseFineBias(biasNode, "PadFollBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 18, generateAddressedCoarseFineBias(biasNode, "ApsOverflowLevel"));
+
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 19, generateAddressedCoarseFineBias(biasNode, "BiasBuffer"));
+
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 20, generateShiftedSourceBias(biasNode, "SSP"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 21, generateShiftedSourceBias(biasNode, "SSN"));
 }
 
 static void ChipSRListener(sshsNode node, void *userData, enum sshs_node_attribute_events event, const char *changeKey,
 	enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
-	UNUSED_ARGUMENT(node);
+	UNUSED_ARGUMENT(changeValue);
+
+	// This is currently for DAVIS240 only.
+	caerModuleData moduleData = userData;
+	libusb_device_handle *devHandle = ((davisFX3State) moduleData->moduleState)->cstate.deviceHandle;
+
+	if (event == ATTRIBUTE_MODIFIED) {
+		if (str_equals(sshsNodeGetName(node), "aps")) {
+			if (changeType == BOOL && str_equals(changeKey, "GlobalShutter")) {
+				spiConfigSend(devHandle, FPGA_CHIPBIAS, 142, changeValue.boolean);
+			}
+		}
+		else if (str_equals(sshsNodeGetName(node), "chip")) {
+			if (changeType == BYTE && str_equals(changeKey, "AnalogMux0")) {
+				spiConfigSend(devHandle, FPGA_CHIPBIAS, 132, changeValue.ubyte);
+			}
+			else if (changeType == BYTE && str_equals(changeKey, "AnalogMux1")) {
+				spiConfigSend(devHandle, FPGA_CHIPBIAS, 133, changeValue.ubyte);
+			}
+			else if (changeType == BYTE && str_equals(changeKey, "AnalogMux2")) {
+				spiConfigSend(devHandle, FPGA_CHIPBIAS, 134, changeValue.ubyte);
+			}
+			else if (changeType == BYTE && str_equals(changeKey, "BiasMux")) {
+				spiConfigSend(devHandle, FPGA_CHIPBIAS, 135, changeValue.ubyte);
+			}
+			else if (changeType == BYTE && str_equals(changeKey, "DigitalMux0")) {
+				spiConfigSend(devHandle, FPGA_CHIPBIAS, 128, changeValue.ubyte);
+			}
+			else if (changeType == BYTE && str_equals(changeKey, "DigitalMux1")) {
+				spiConfigSend(devHandle, FPGA_CHIPBIAS, 129, changeValue.ubyte);
+			}
+			else if (changeType == BYTE && str_equals(changeKey, "DigitalMux2")) {
+				spiConfigSend(devHandle, FPGA_CHIPBIAS, 130, changeValue.ubyte);
+			}
+			else if (changeType == BYTE && str_equals(changeKey, "DigitalMux3")) {
+				spiConfigSend(devHandle, FPGA_CHIPBIAS, 131, changeValue.ubyte);
+			}
+			else if (changeType == BOOL && str_equals(changeKey, "UseAout")) {
+				spiConfigSend(devHandle, FPGA_CHIPBIAS, 141, changeValue.boolean);
+			}
+			else if (changeType == BOOL && str_equals(changeKey, "nArow")) {
+				spiConfigSend(devHandle, FPGA_CHIPBIAS, 140, changeValue.boolean);
+			}
+			else if (changeType == BOOL && str_equals(changeKey, "ResetTestPixel")) {
+				spiConfigSend(devHandle, FPGA_CHIPBIAS, 138, changeValue.boolean);
+			}
+			else if (changeType == BOOL && str_equals(changeKey, "TypeNCalibNeuron")) {
+				spiConfigSend(devHandle, FPGA_CHIPBIAS, 137, changeValue.boolean);
+			}
+			else if (changeType == BOOL && str_equals(changeKey, "ResetCalibNeuron")) {
+				spiConfigSend(devHandle, FPGA_CHIPBIAS, 136, changeValue.boolean);
+			}
+			else if (changeType == BOOL && str_equals(changeKey, "HotPixelSuppression")) {
+				spiConfigSend(devHandle, FPGA_CHIPBIAS, 139, changeValue.boolean);
+			}
+		}
+	}
 }
 
 static void sendChipSR(sshsNode moduleNode, libusb_device_handle *devHandle) {
-	// TODO: depends on used chip.
+	// This is currently for DAVIS240 only.
+	sshsNode chipNode = sshsGetRelativeNode(moduleNode, "chip/");
+	sshsNode apsNode = sshsGetRelativeNode(moduleNode, "aps/");
+
+	// Debug muxes control.
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 131, sshsNodeGetByte(chipNode, "DigitalMux3"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 130, sshsNodeGetByte(chipNode, "DigitalMux2"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 129, sshsNodeGetByte(chipNode, "DigitalMux1"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 128, sshsNodeGetByte(chipNode, "DigitalMux0"));
+
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 134, sshsNodeGetByte(chipNode, "AnalogMux2"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 133, sshsNodeGetByte(chipNode, "AnalogMux1"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 132, sshsNodeGetByte(chipNode, "AnalogMux0"));
+
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 135, sshsNodeGetByte(chipNode, "BiasMux"));
+
+	// GS may not exist on chips that don't have it.
+	if (sshsNodeAttrExists(apsNode, "GlobalShutter", BOOL)) {
+		spiConfigSend(devHandle, FPGA_CHIPBIAS, 142, sshsNodeGetBool(apsNode, "GlobalShutter"));
+	}
+
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 141, sshsNodeGetBool(chipNode, "UseAout"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 140, sshsNodeGetBool(chipNode, "nArow"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 139, sshsNodeGetBool(chipNode, "HotPixelSuppression"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 138, sshsNodeGetBool(chipNode, "ResetTestPixel"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 137, sshsNodeGetBool(chipNode, "TypeNCalibNeuron"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 136, sshsNodeGetBool(chipNode, "ResetCalibNeuron"));
 }
 
 static void DVSFilterConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,

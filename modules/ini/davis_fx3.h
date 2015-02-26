@@ -9,7 +9,7 @@
 
 #define DAVIS_FX3_VID 0x152A
 #define DAVIS_FX3_PID 0x841A
-#define DAVIS_FX3_DID_TYPE 0x00
+#define DAVIS_FX3_DID_TYPE 0x01
 
 #define FPGA_CHIPBIAS 5
 
