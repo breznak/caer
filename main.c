@@ -10,7 +10,7 @@
 #include "base/config_server.h"
 #include "base/mainloop.h"
 #include "base/misc.h"
-#include "modules/ini/davis_fx2.h"
+#include "modules/ini/davis_fx3.h"
 #include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
 #include "modules/statistics/statistics.h"
 #include "modules/visualizer/visualizer.h"
@@ -27,7 +27,7 @@ static bool mainloop_1(void) {
 
 	// Input modules grab data from outside sources (like devices, files, ...)
 	// and put events into an event packet.
-	caerInputDAVISFX2(1, &davis_polarity, &davis_frame, &davis_imu, &davis_special);
+	caerInputDAVISFX3(1, &davis_polarity, &davis_frame, &davis_imu, &davis_special);
 
 	// Filters process event packets: for example to suppress certain events,
 	// like with the Background Activity Filter, which suppresses events that
@@ -36,7 +36,7 @@ static bool mainloop_1(void) {
 
 	// Filters can also extract information from event packets: for example
 	// to show statistics about the current event-rate.
-	caerStatistics(3, (caerEventPacketHeader) davis_frame, 1);
+	caerStatistics(3, (caerEventPacketHeader) davis_polarity, 1000000);
 
 	// A small OpenGL visualizer exists to show what the output looks like.
 	caerVisualizer(4, davis_polarity, davis_frame);

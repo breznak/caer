@@ -440,30 +440,62 @@ static void sendBiases(sshsNode moduleNode, libusb_device_handle *devHandle) {
 	// This is currently for DAVIS240 only.
 	sshsNode biasNode = sshsGetRelativeNode(moduleNode, "bias/");
 
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 0, generateAddressedCoarseFineBias(biasNode, "DiffBn"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 1, generateAddressedCoarseFineBias(biasNode, "OnBn"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 2, generateAddressedCoarseFineBias(biasNode, "OffBn"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 3, generateAddressedCoarseFineBias(biasNode, "ApsCasEpc"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 4, generateAddressedCoarseFineBias(biasNode, "DiffCasBnc"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 5, generateAddressedCoarseFineBias(biasNode, "ApsROSFBn"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 6, generateAddressedCoarseFineBias(biasNode, "LocalBufBn"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 7, generateAddressedCoarseFineBias(biasNode, "PixInvBn"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 8, generateAddressedCoarseFineBias(biasNode, "PrBp"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 9, generateAddressedCoarseFineBias(biasNode, "PrSFBp"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 10, generateAddressedCoarseFineBias(biasNode, "RefrBp"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 11, generateAddressedCoarseFineBias(biasNode, "AEPdBn"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 12, generateAddressedCoarseFineBias(biasNode, "LcolTimeoutBn"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 13, generateAddressedCoarseFineBias(biasNode, "AEPuXBp"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 14, generateAddressedCoarseFineBias(biasNode, "AEPuYBp"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 15, generateAddressedCoarseFineBias(biasNode, "IFThrBn"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 16, generateAddressedCoarseFineBias(biasNode, "IFRefrBn"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 17, generateAddressedCoarseFineBias(biasNode, "PadFollBn"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 18, generateAddressedCoarseFineBias(biasNode, "ApsOverflowLevel"));
+	/*spiConfigSend(devHandle, FPGA_CHIPBIAS, 0, generateAddressedCoarseFineBias(biasNode, "DiffBn"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 1, generateAddressedCoarseFineBias(biasNode, "OnBn"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 2, generateAddressedCoarseFineBias(biasNode, "OffBn"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 3, generateAddressedCoarseFineBias(biasNode, "ApsCasEpc"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 4, generateAddressedCoarseFineBias(biasNode, "DiffCasBnc"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 5, generateAddressedCoarseFineBias(biasNode, "ApsROSFBn"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 6, generateAddressedCoarseFineBias(biasNode, "LocalBufBn"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 7, generateAddressedCoarseFineBias(biasNode, "PixInvBn"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 8, generateAddressedCoarseFineBias(biasNode, "PrBp"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 9, generateAddressedCoarseFineBias(biasNode, "PrSFBp"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 10, generateAddressedCoarseFineBias(biasNode, "RefrBp"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 11, generateAddressedCoarseFineBias(biasNode, "AEPdBn"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 12, generateAddressedCoarseFineBias(biasNode, "LcolTimeoutBn"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 13, generateAddressedCoarseFineBias(biasNode, "AEPuXBp"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 14, generateAddressedCoarseFineBias(biasNode, "AEPuYBp"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 15, generateAddressedCoarseFineBias(biasNode, "IFThrBn"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 16, generateAddressedCoarseFineBias(biasNode, "IFRefrBn"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 17, generateAddressedCoarseFineBias(biasNode, "PadFollBn"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 18, generateAddressedCoarseFineBias(biasNode, "ApsOverflowLevel"));
 
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 19, generateAddressedCoarseFineBias(biasNode, "BiasBuffer"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 19, generateAddressedCoarseFineBias(biasNode, "BiasBuffer"));
 
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 20, generateShiftedSourceBias(biasNode, "SSP"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 21, generateShiftedSourceBias(biasNode, "SSN"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 20, generateShiftedSourceBias(biasNode, "SSP"));
+	 spiConfigSend(devHandle, FPGA_CHIPBIAS, 21, generateShiftedSourceBias(biasNode, "SSN"));*/
+
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 0, generateVDACBias(biasNode, "ApsOverflowLevel"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 1, generateVDACBias(biasNode, "ApsCas"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 2, generateVDACBias(biasNode, "AdcRefHigh"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 3, generateVDACBias(biasNode, "AdcRefLow"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 4, generateVDACBias(biasNode, "AdcTestVoltage"));
+
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 8, generateAddressedCoarseFineBias(biasNode, "LocalBufBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 9, generateAddressedCoarseFineBias(biasNode, "PadFollBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 10, generateAddressedCoarseFineBias(biasNode, "DiffBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 11, generateAddressedCoarseFineBias(biasNode, "OnBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 12, generateAddressedCoarseFineBias(biasNode, "OffBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 13, generateAddressedCoarseFineBias(biasNode, "PixInvBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 14, generateAddressedCoarseFineBias(biasNode, "PrBp"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 15, generateAddressedCoarseFineBias(biasNode, "PrSFBp"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 16, generateAddressedCoarseFineBias(biasNode, "RefrBp"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 17, generateAddressedCoarseFineBias(biasNode, "ReadoutBufBp"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 18, generateAddressedCoarseFineBias(biasNode, "ApsROSFBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 19, generateAddressedCoarseFineBias(biasNode, "AdcCompBp"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 20, generateAddressedCoarseFineBias(biasNode, "ColSelLowBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 21, generateAddressedCoarseFineBias(biasNode, "DACBufBp"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 22, generateAddressedCoarseFineBias(biasNode, "LcolTimeoutBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 23, generateAddressedCoarseFineBias(biasNode, "AEPdBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 24, generateAddressedCoarseFineBias(biasNode, "AEPuXBp"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 25, generateAddressedCoarseFineBias(biasNode, "AEPuYBp"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 26, generateAddressedCoarseFineBias(biasNode, "IFRefrBn"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 27, generateAddressedCoarseFineBias(biasNode, "IFThrBn"));
+
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 34, generateAddressedCoarseFineBias(biasNode, "BiasBuffer"));
+
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 35, generateShiftedSourceBias(biasNode, "SSP"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 36, generateShiftedSourceBias(biasNode, "SSN"));
 }
 
 static void ChipSRListener(sshsNode node, void *userData, enum sshs_node_attribute_events event, const char *changeKey,
@@ -551,10 +583,13 @@ static void sendChipSR(sshsNode moduleNode, libusb_device_handle *devHandle) {
 
 	spiConfigSend(devHandle, FPGA_CHIPBIAS, 141, sshsNodeGetBool(chipNode, "UseAout"));
 	spiConfigSend(devHandle, FPGA_CHIPBIAS, 140, sshsNodeGetBool(chipNode, "nArow"));
-	spiConfigSend(devHandle, FPGA_CHIPBIAS, 139, sshsNodeGetBool(chipNode, "HotPixelSuppression"));
+	// Not on 346: spiConfigSend(devHandle, FPGA_CHIPBIAS, 139, sshsNodeGetBool(chipNode, "HotPixelSuppression"));
 	spiConfigSend(devHandle, FPGA_CHIPBIAS, 138, sshsNodeGetBool(chipNode, "ResetTestPixel"));
 	spiConfigSend(devHandle, FPGA_CHIPBIAS, 137, sshsNodeGetBool(chipNode, "TypeNCalibNeuron"));
 	spiConfigSend(devHandle, FPGA_CHIPBIAS, 136, sshsNodeGetBool(chipNode, "ResetCalibNeuron"));
+	// 346 only.
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 143, sshsNodeGetBool(chipNode, "SelectGrayCounter"));
+	spiConfigSend(devHandle, FPGA_CHIPBIAS, 144, sshsNodeGetBool(chipNode, "TestADC"));
 }
 
 static void DVSFilterConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
