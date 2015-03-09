@@ -401,7 +401,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	}
 
 	if (cstate->chipID == CHIP_DAVIS128 || cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B
-		|| cstate->chipID == CHIP_DAVIS640) {
+		|| cstate->chipID == CHIP_DAVIS640 || cstate->chipID == CHIP_DAVIS192) {
 		createVDACBiasSetting(biasNode, "ApsOverflowLevel", 6, 27);
 		createVDACBiasSetting(biasNode, "ApsCas", 6, 21);
 		createVDACBiasSetting(biasNode, "AdcRefHigh", 6, 52);
@@ -412,17 +412,17 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 		createAddressedCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 7, 215, true);
 		createAddressedCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 4, 39, true);
 		createAddressedCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 5, 255, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "OffBn",  "Normal", "N", 4, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 4, 0, true);
 		createAddressedCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 5, 129, true);
 		createAddressedCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "P", 2, 58, true);
 		createAddressedCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 1, 16, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "RefrBp","Normal", "P", 4, 25, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "P", 4, 25, true);
 		createAddressedCoarseFineBiasSetting(biasNode, "ReadoutBufBp", "Normal", "P", 6, 20, true);
 		createAddressedCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 6, 219, true);
 		createAddressedCoarseFineBiasSetting(biasNode, "AdcCompBp", "Normal", "P", 4, 20, true);
 		createAddressedCoarseFineBiasSetting(biasNode, "ColSelLowBn", "Normal", "N", 0, 1, true);
 		createAddressedCoarseFineBiasSetting(biasNode, "DACBufBp", "Normal", "P", 6, 60, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn",  "Normal", "N", 5, 49, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 5, 49, true);
 		createAddressedCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 6, 91, true);
 		createAddressedCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "P", 4, 80, true);
 		createAddressedCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "P", 7, 152, true);
@@ -435,42 +435,47 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 		createShiftedSourceBiasSetting(biasNode, "SSN", 33, 1, "ShiftedSource", "SplitGate");
 	}
 
-	if (cstate->chipID == CHIP_DAVISRGB) {
-		createVDACBiasSetting(biasNode, "ApsCasBpc", 0, 0);
-		createVDACBiasSetting(biasNode, "OVG1Lo", 0, 0);
-		createVDACBiasSetting(biasNode, "OVG2Lo", 0, 0);
-		createVDACBiasSetting(biasNode, "TX2OVG2Hi", 0, 0);
-		createVDACBiasSetting(biasNode, "Gnd07", 0, 0);
-		createVDACBiasSetting(biasNode, "vADCTest", 0, 0);
-		createVDACBiasSetting(biasNode, "AdcRefHigh", 0, 0);
-		createVDACBiasSetting(biasNode, "AdcRefLow", 0, 0);
+	if (cstate->chipID == CHIP_DAVIS192) {
+		createVDACBiasSetting(biasNode, "ResetHpxBv", 7, 63);
+		createVDACBiasSetting(biasNode, "RefSsbxBv", 5, 11);
 
-		createAddressedCoarseFineBiasSetting(biasNode, "IFRefrBn", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "LocalBufBn", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "Blk1N", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "ArrayBiasBufferBn", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "Blk1P", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "ArrayLogicBufferBn", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "FalltimeBn", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "RisetimeBp", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "ReadoutBufBp", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "AdcCompBp", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "DACBufBp", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "Blk2P", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "N", 0, 0, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "N", 0, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "RegBiasBp", "Normal", "P", 5, 20, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "RefSsbxBv", "Normal", "N", 5, 20, true);
+	}
+
+	if (cstate->chipID == CHIP_DAVISRGB) {
+		createVDACBiasSetting(biasNode, "ApsCasBpc", 6, 21);
+		createVDACBiasSetting(biasNode, "OVG1Lo", 6, 27);
+		createVDACBiasSetting(biasNode, "OVG2Lo", 0, 0);
+		createVDACBiasSetting(biasNode, "TX2OVG2Hi", 4, 63);
+		createVDACBiasSetting(biasNode, "Gnd07", 5, 13);
+		createVDACBiasSetting(biasNode, "vADCTest", 6, 23);
+		createVDACBiasSetting(biasNode, "AdcRefHigh", 6, 52);
+		createVDACBiasSetting(biasNode, "AdcRefLow", 6, 23);
+
+		createAddressedCoarseFineBiasSetting(biasNode, "IFRefrBn", "Normal", "N", 5, 255, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 5, 255, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "LocalBufBn", "Normal", "N", 5, 164, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 7, 215, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 5, 129, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 4, 39, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 5, 255, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 4, 0, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "P", 2, 58, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 1, 16, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "P", 4, 25, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "ArrayBiasBufferBn", "Normal", "N", 4, 10, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "ArrayLogicBufferBn", "Normal", "N", 4, 10, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "FalltimeBn", "Normal", "N", 3, 20, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "RisetimeBp", "Normal", "P", 3, 20, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "ReadoutBufBp", "Normal", "P", 6, 20, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 6, 219, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "AdcCompBp", "Normal", "P", 4, 20, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "DACBufBp", "Normal", "P", 6, 60, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 5, 49, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 6, 91, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "P", 4, 80, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "P", 7, 152, true);
 
 		createAddressedCoarseFineBiasSetting(biasNode, "BiasBuffer", "Normal", "N", 6, 251, true);
 
@@ -512,9 +517,21 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	if (cstate->chipID == CHIP_DAVISRGB) {
 		sshsNodePutBoolIfAbsent(chipNode, "SelectGrayCounter", false);
 		sshsNodePutBoolIfAbsent(chipNode, "TestADC", false);
-		sshsNodePutBoolIfAbsent(chipNode, "AdjOVG1Lo", false);
+
+		sshsNodePutBoolIfAbsent(chipNode, "AdjOVG1Lo", true);
 		sshsNodePutBoolIfAbsent(chipNode, "AdjOVG2Lo", false);
 		sshsNodePutBoolIfAbsent(chipNode, "AdjTX2OVG2Hi", false);
+	}
+
+	if (cstate->chipID == CHIP_DAVIS192) {
+		sshsNodePutBoolIfAbsent(chipNode, "HotPixelSuppression", false);
+		sshsNodePutBoolIfAbsent(chipNode, "SelectGrayCounter", false);
+
+		sshsNodePutBoolIfAbsent(chipNode, "SelPreAmpAvgxD", false);
+		sshsNodePutBoolIfAbsent(chipNode, "SelBiasRefxD", false);
+		sshsNodePutBoolIfAbsent(chipNode, "nSelSensexD", false);
+		sshsNodePutBoolIfAbsent(chipNode, "nSelPosFbxD", false);
+		sshsNodePutBoolIfAbsent(chipNode, "nSelHpxD", false);
 	}
 
 	// Subsystem 0: Multiplexer

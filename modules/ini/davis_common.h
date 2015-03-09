@@ -42,6 +42,7 @@
 #define CHIP_DAVIS346B 5
 #define CHIP_DAVIS640  6
 #define CHIP_DAVISRGB  7
+#define CHIP_DAVIS192  8
 
 struct davisCommon_state {
 	// Data Acquisition Thread -> Mainloop Exchange

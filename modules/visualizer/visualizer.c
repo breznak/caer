@@ -9,7 +9,7 @@ const char *polarityShader = "#version 330 core"
 
 struct visualizer_state {
 	GLFWwindow* window;
-	uint32_t eventRenderer[240 * 180];
+	uint32_t eventRenderer[CHIP_X * CHIP_Y];
 	size_t slowDown;
 	GLuint glPBOFrameID;
 	GLuint glTextureFrameID;
@@ -58,17 +58,17 @@ static bool caerVisualizerInit(caerModuleData moduleData) {
 	// Initialize OpenGL objects.
 	glGenBuffers(1, &state->glPBOPolarityID);
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, state->glPBOPolarityID);
-	glBufferData(GL_PIXEL_UNPACK_BUFFER, 240 * 180 * 4, NULL, GL_DYNAMIC_DRAW);
+	glBufferData(GL_PIXEL_UNPACK_BUFFER, CHIP_X * CHIP_Y * 4, NULL, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
 	glGenTextures(1, &state->glTexturePolarityID);
 	glBindTexture(GL_TEXTURE_2D, state->glTexturePolarityID);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, 240, 180, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, CHIP_X, CHIP_Y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 	glBindTexture(GL_TEXTURE_2D, 0);
 
 	state->slowDown = 0;
 
-	memset(state->eventRenderer, 0, 240 * 180 * sizeof(uint32_t));
+	memset(state->eventRenderer, 0, CHIP_X * CHIP_Y * sizeof(uint32_t));
 
 	// Configuration.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showEvents", true);
@@ -108,12 +108,12 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 			if (caerPolarityEventIsValid(currPolarityEvent)) {
 				if (caerPolarityEventGetPolarity(currPolarityEvent)) {
 					// Green.
-					state->eventRenderer[(caerPolarityEventGetY(currPolarityEvent) * 240)
+					state->eventRenderer[(caerPolarityEventGetY(currPolarityEvent) * CHIP_X)
 						+ caerPolarityEventGetX(currPolarityEvent)] = be32toh(U32T(0xFF << 16));
 				}
 				else {
 					// Red.
-					state->eventRenderer[(caerPolarityEventGetY(currPolarityEvent) * 240)
+					state->eventRenderer[(caerPolarityEventGetY(currPolarityEvent) * CHIP_X)
 						+ caerPolarityEventGetX(currPolarityEvent)] = be32toh(U32T(0xFF << 24));
 				}
 			}
@@ -124,13 +124,13 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 
 			glClear(GL_COLOR_BUFFER_BIT);
 
-			glDrawPixels(240, 180, GL_RGBA, GL_UNSIGNED_BYTE, state->eventRenderer);
-			glPixelZoom(4, 4);
+			glDrawPixels(CHIP_X, CHIP_Y, GL_RGBA, GL_UNSIGNED_BYTE, state->eventRenderer);
+			glPixelZoom(PIXEL_ZOOM, PIXEL_ZOOM);
 
 			glfwSwapBuffers(state->window);
 			glfwPollEvents();
 
-			memset(state->eventRenderer, 0, 240 * 180 * sizeof(uint32_t));
+			memset(state->eventRenderer, 0, CHIP_X * CHIP_Y * sizeof(uint32_t));
 		}
 	}
 
@@ -150,7 +150,7 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 
 				glDrawPixels(caerFrameEventGetLengthX(currFrameEvent), caerFrameEventGetLengthY(currFrameEvent),
 				GL_LUMINANCE, GL_UNSIGNED_SHORT, caerFrameEventGetPixelArrayUnsafe(currFrameEvent));
-				glPixelZoom(6, 6);
+				glPixelZoom(PIXEL_ZOOM, PIXEL_ZOOM);
 
 				glfwSwapBuffers(state->window);
 				glfwPollEvents();
