@@ -401,7 +401,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	}
 
 	if (cstate->chipID == CHIP_DAVIS128 || cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B
-		|| cstate->chipID == CHIP_DAVIS640 || cstate->chipID == CHIP_DAVIS192) {
+		|| cstate->chipID == CHIP_DAVIS640 || cstate->chipID == CHIP_DAVIS208) {
 		createVDACBiasSetting(biasNode, "ApsOverflowLevel", 6, 27);
 		createVDACBiasSetting(biasNode, "ApsCas", 6, 21);
 		createVDACBiasSetting(biasNode, "AdcRefHigh", 6, 52);
@@ -435,7 +435,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 		createShiftedSourceBiasSetting(biasNode, "SSN", 33, 1, "ShiftedSource", "SplitGate");
 	}
 
-	if (cstate->chipID == CHIP_DAVIS192) {
+	if (cstate->chipID == CHIP_DAVIS208) {
 		createVDACBiasSetting(biasNode, "ResetHpxBv", 7, 63);
 		createVDACBiasSetting(biasNode, "RefSsbxBv", 5, 11);
 
@@ -523,7 +523,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 		sshsNodePutBoolIfAbsent(chipNode, "AdjTX2OVG2Hi", false);
 	}
 
-	if (cstate->chipID == CHIP_DAVIS192) {
+	if (cstate->chipID == CHIP_DAVIS208) {
 		sshsNodePutBoolIfAbsent(chipNode, "HotPixelSuppression", false);
 		sshsNodePutBoolIfAbsent(chipNode, "SelectGrayCounter", false);
 
