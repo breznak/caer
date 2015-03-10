@@ -48,9 +48,9 @@
 
 struct bias_descriptor {
 	uint16_t (*generatorFunction)(sshsNode biasNode, const char *biasName);
-	uint16_t address;
+	uint8_t address;
 	size_t nameLength;
-	char *name[];
+	char name[];
 };
 
 typedef struct bias_descriptor *biasDescriptor;
@@ -59,9 +59,9 @@ typedef struct bias_descriptor *biasDescriptor;
 
 struct configchain_descriptor {
 	enum sshs_node_attr_value_type type;
-	uint16_t address;
+	uint8_t address;
 	size_t nameLength;
-	char *name[];
+	char name[];
 };
 
 typedef struct configchain_descriptor *configChainDescriptor;
@@ -138,9 +138,6 @@ struct davisCommon_state {
 
 typedef struct davisCommon_state *davisCommonState;
 
-uint16_t generateVDACBias(sshsNode biasNode, const char *biasName);
-uint16_t generateAddressedCoarseFineBias(sshsNode biasNode, const char *biasName);
-uint16_t generateShiftedSourceBias(sshsNode biasNode, const char *biasName);
 void spiConfigSend(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr, uint32_t param);
 uint32_t spiConfigReceive(libusb_device_handle *devHandle, uint8_t moduleAddr, uint8_t paramAddr);
 bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t VID, uint16_t PID, uint8_t DID_TYPE);
