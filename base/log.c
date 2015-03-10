@@ -185,7 +185,7 @@ static void caerLogShutDownWriteBack(void) {
 }
 
 static void caerLogSSHSLogger(const char *msg) {
-	caerLog(LOG_CRITICAL, "SSHS", "%s", msg);
+	caerLog(LOG_EMERGENCY, "SSHS", "%s", msg);
 	// SSHS will exit automatically on critical errors.
 }
 

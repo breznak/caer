@@ -28,7 +28,7 @@ void caerConfigServerStart(void) {
 	}
 	else {
 		// Failed to create thread.
-		caerLog(LOG_CRITICAL, "Config Server", "Failed to create thread. Error: %s (%d).",
+		caerLog(LOG_EMERGENCY, "Config Server", "Failed to create thread. Error: %s (%d).",
 			caerLogStrerror(errno), errno);
 		exit(EXIT_FAILURE);
 	}
@@ -50,7 +50,7 @@ void caerConfigServerStop(void) {
 	}
 	else {
 		// Failed to join thread.
-		caerLog(LOG_CRITICAL, "Config Server", "Failed to terminate thread. Error: %s (%d).",
+		caerLog(LOG_EMERGENCY, "Config Server", "Failed to terminate thread. Error: %s (%d).",
 			caerLogStrerror(errno), errno);
 		exit(EXIT_FAILURE);
 	}

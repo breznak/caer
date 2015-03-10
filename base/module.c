@@ -73,7 +73,7 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	// Allocate memory for the module.
 	caerModuleData moduleData = calloc(1, sizeof(struct caer_module_data));
 	if (moduleData == NULL) {
-		caerLog(LOG_CRITICAL, nameString, "Failed to allocate memory for module. Error: %s (%d).",
+		caerLog(LOG_ALERT, nameString, "Failed to allocate memory for module. Error: %s (%d).",
 			caerLogStrerror(errno), errno);
 		pthread_exit(NULL);
 	}
@@ -94,7 +94,7 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	// Initialize configuration, shutdown hooks.
 	moduleData->moduleNode = sshsGetRelativeNode(mainloopNode, sshsString);
 	if (moduleData->moduleNode == NULL) {
-		caerLog(LOG_CRITICAL, nameString, "Failed to allocate configuration node for module.");
+		caerLog(LOG_ALERT, nameString, "Failed to allocate configuration node for module.");
 		pthread_exit(NULL);
 	}
 
@@ -104,7 +104,7 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	// Setup default full log string name.
 	moduleData->moduleSubSystemString = malloc(nameLength + 1);
 	if (moduleData->moduleSubSystemString == NULL) {
-		caerLog(LOG_CRITICAL, nameString, "Failed to allocate subsystem string for module.");
+		caerLog(LOG_ALERT, nameString, "Failed to allocate subsystem string for module.");
 		pthread_exit(NULL);
 	}
 
