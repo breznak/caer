@@ -44,6 +44,28 @@
 #define CHIP_DAVISRGB  7
 #define CHIP_DAVIS208  8
 
+#define BIAS_MAX_NUM_DESC 37
+
+struct bias_descriptor {
+	uint16_t (*generatorFunction)(sshsNode biasNode, const char *biasName);
+	uint16_t address;
+	size_t nameLength;
+	char *name[];
+};
+
+typedef struct bias_descriptor *biasDescriptor;
+
+#define CONFIGCHAIN_MAX_NUM_DESC 32
+
+struct configchain_descriptor {
+	enum sshs_node_attr_value_type type;
+	uint16_t address;
+	size_t nameLength;
+	char *name[];
+};
+
+typedef struct configchain_descriptor *configChainDescriptor;
+
 struct davisCommon_state {
 	// Data Acquisition Thread -> Mainloop Exchange
 	uint16_t sourceID;
@@ -58,10 +80,14 @@ struct davisCommon_state {
 	struct libusb_transfer **dataTransfers;
 	size_t dataTransfersLength;
 	size_t activeDataTransfers;
+	// Chip information fields
+	uint16_t chipID;
+	biasDescriptor chipBiases[BIAS_MAX_NUM_DESC];
+	configChainDescriptor chipConfigChain[CONFIGCHAIN_MAX_NUM_DESC];
+	// Timestamp fields
 	uint32_t wrapAdd;
 	uint32_t lastTimestamp;
 	uint32_t currentTimestamp;
-	uint16_t chipID;
 	// DVS specific fields
 	uint32_t dvsTimestamp;
 	uint16_t dvsSizeX;
