@@ -436,11 +436,11 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	}
 
 	if (cstate->chipID == CHIP_DAVIS208) {
-		createVDACBiasSetting(biasNode, "ResetHpxBv", 7, 63);
-		createVDACBiasSetting(biasNode, "RefSsbxBv", 5, 11);
+		createVDACBiasSetting(biasNode, "ResetHighPass", 7, 63);
+		createVDACBiasSetting(biasNode, "RefSS", 5, 11);
 
 		createAddressedCoarseFineBiasSetting(biasNode, "RegBiasBp", "Normal", "P", 5, 20, true);
-		createAddressedCoarseFineBiasSetting(biasNode, "RefSsbxBv", "Normal", "N", 5, 20, true);
+		createAddressedCoarseFineBiasSetting(biasNode, "RefSSBn", "Normal", "N", 5, 20, true);
 	}
 
 	if (cstate->chipID == CHIP_DAVISRGB) {
@@ -488,14 +488,14 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutByteIfAbsent(chipNode, "AnalogMux0", 0);
 	sshsNodePutByteIfAbsent(chipNode, "AnalogMux1", 0);
 	sshsNodePutByteIfAbsent(chipNode, "AnalogMux2", 0);
-	sshsNodePutByteIfAbsent(chipNode, "BiasMux", 0);
+	sshsNodePutByteIfAbsent(chipNode, "BiasMux0", 0);
 	sshsNodePutByteIfAbsent(chipNode, "DigitalMux0", 0);
 	sshsNodePutByteIfAbsent(chipNode, "DigitalMux1", 0);
 	sshsNodePutByteIfAbsent(chipNode, "DigitalMux2", 0);
 	sshsNodePutByteIfAbsent(chipNode, "DigitalMux3", 0);
 
-	sshsNodePutBoolIfAbsent(chipNode, "UseAout", true);
-	sshsNodePutBoolIfAbsent(chipNode, "nArow", false);
+	sshsNodePutBoolIfAbsent(chipNode, "UseAOut", false); // Enable analog pads for aMUX output (testing).
+	sshsNodePutBoolIfAbsent(chipNode, "AERnArow", false); // Use nArow in the AER state machine.
 	sshsNodePutBoolIfAbsent(chipNode, "ResetTestPixel", true);
 	sshsNodePutBoolIfAbsent(chipNode, "TypeNCalibNeuron", false);
 	sshsNodePutBoolIfAbsent(chipNode, "ResetCalibNeuron", true);
@@ -518,20 +518,20 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 		sshsNodePutBoolIfAbsent(chipNode, "SelectGrayCounter", false);
 		sshsNodePutBoolIfAbsent(chipNode, "TestADC", false);
 
-		sshsNodePutBoolIfAbsent(chipNode, "AdjOVG1Lo", true);
-		sshsNodePutBoolIfAbsent(chipNode, "AdjOVG2Lo", false);
-		sshsNodePutBoolIfAbsent(chipNode, "AdjTX2OVG2Hi", false);
+		sshsNodePutBoolIfAbsent(chipNode, "AdjustOVG1Lo", true);
+		sshsNodePutBoolIfAbsent(chipNode, "AdjustOVG2Lo", false);
+		sshsNodePutBoolIfAbsent(chipNode, "AdjustTX2OVG2Hi", false);
 	}
 
 	if (cstate->chipID == CHIP_DAVIS208) {
 		sshsNodePutBoolIfAbsent(chipNode, "HotPixelSuppression", false);
 		sshsNodePutBoolIfAbsent(chipNode, "SelectGrayCounter", false);
 
-		sshsNodePutBoolIfAbsent(chipNode, "SelPreAmpAvgxD", false);
-		sshsNodePutBoolIfAbsent(chipNode, "SelBiasRefxD", false);
-		sshsNodePutBoolIfAbsent(chipNode, "nSelSensexD", false);
-		sshsNodePutBoolIfAbsent(chipNode, "nSelPosFbxD", false);
-		sshsNodePutBoolIfAbsent(chipNode, "nSelHpxD", false);
+		sshsNodePutBoolIfAbsent(chipNode, "SelectPreAmpAvg", false);
+		sshsNodePutBoolIfAbsent(chipNode, "SelectBiasRefSS", false);
+		sshsNodePutBoolIfAbsent(chipNode, "SelectSense", false);
+		sshsNodePutBoolIfAbsent(chipNode, "SelectPosFb", false);
+		sshsNodePutBoolIfAbsent(chipNode, "SelectHighPass", false);
 	}
 
 	// Subsystem 0: Multiplexer
