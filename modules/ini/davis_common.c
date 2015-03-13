@@ -728,6 +728,12 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutBoolIfAbsent(apsNode, "ResetRead", 1);
 	sshsNodePutBoolIfAbsent(apsNode, "WaitOnTransferStall", 0);
 
+	bool integratedADCSupported = sshsNodeGetBool(sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"),
+		"apsHasIntegratedADC");
+	if (integratedADCSupported) {
+		sshsNodePutShortIfAbsent(apsNode, "SampleSettle", 60); // in cycles
+	}
+
 	// Subsystem 3: IMU
 	sshsNode imuNode = sshsGetRelativeNode(moduleData->moduleNode, "imu/");
 
@@ -2141,6 +2147,9 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 		else if (changeType == BOOL && str_equals(changeKey, "WaitOnTransferStall")) {
 			spiConfigSend(devHandle, FPGA_APS, 14, changeValue.boolean);
 		}
+		else if (changeType == SHORT && str_equals(changeKey, "SampleSettle")) {
+			spiConfigSend(devHandle, FPGA_APS, 27, changeValue.ushort);
+		}
 	}
 }
 
@@ -2153,6 +2162,11 @@ static void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) 
 	// GS may not exist on chips that don't have it.
 	if (sshsNodeAttrExists(apsNode, "GlobalShutter", BOOL)) {
 		spiConfigSend(devHandle, FPGA_APS, 2, sshsNodeGetBool(apsNode, "GlobalShutter"));
+	}
+
+	// SampleSettle may not exist on chips that don't have integrated ADC.
+	if (sshsNodeAttrExists(apsNode, "SampleSettle", SHORT)) {
+		spiConfigSend(devHandle, FPGA_APS, 27, sshsNodeGetShort(apsNode, "SampleSettle"));
 	}
 
 	// The APS chip view is flipped on both axes. Reverse and exchange.
