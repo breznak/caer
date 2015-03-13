@@ -549,7 +549,10 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 		createVDACBiasSetting(biases, biasNode, "ApsCas", 1, 6, 21);
 		createVDACBiasSetting(biases, biasNode, "AdcRefHigh", 2, 6, 52);
 		createVDACBiasSetting(biases, biasNode, "AdcRefLow", 3, 6, 23);
-		createVDACBiasSetting(biases, biasNode, "AdcTestVoltage", 4, 6, 35);
+		if (cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B || cstate->chipID == CHIP_DAVIS640) {
+			// Only DAVIS346 and 640 have ADC testing.
+			createVDACBiasSetting(biases, biasNode, "AdcTestVoltage", 4, 6, 35);
+		}
 
 		createCoarseFineBiasSetting(biases, biasNode, "LocalBufBn", 8, "Normal", "N", 5, 164, true);
 		createCoarseFineBiasSetting(biases, biasNode, "PadFollBn", 9, "Normal", "N", 7, 215, true);
@@ -587,12 +590,12 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	}
 
 	if (cstate->chipID == CHIP_DAVISRGB) {
-		createVDACBiasSetting(biases, biasNode, "ApsCasBpc", 0, 6, 21);
+		createVDACBiasSetting(biases, biasNode, "ApsCas", 0, 6, 21);
 		createVDACBiasSetting(biases, biasNode, "OVG1Lo", 1, 6, 27);
 		createVDACBiasSetting(biases, biasNode, "OVG2Lo", 2, 0, 0);
 		createVDACBiasSetting(biases, biasNode, "TX2OVG2Hi", 3, 4, 63);
 		createVDACBiasSetting(biases, biasNode, "Gnd07", 4, 5, 13);
-		createVDACBiasSetting(biases, biasNode, "vADCTest", 5, 6, 35);
+		createVDACBiasSetting(biases, biasNode, "AdcTestVoltage", 5, 6, 35);
 		createVDACBiasSetting(biases, biasNode, "AdcRefHigh", 6, 6, 52);
 		createVDACBiasSetting(biases, biasNode, "AdcRefLow", 7, 6, 23);
 
