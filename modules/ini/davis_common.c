@@ -547,11 +547,11 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 		|| cstate->chipID == CHIP_DAVIS640 || cstate->chipID == CHIP_DAVIS208) {
 		createVDACBiasSetting(biases, biasNode, "ApsOverflowLevel", 0, 6, 27);
 		createVDACBiasSetting(biases, biasNode, "ApsCas", 1, 6, 21);
-		createVDACBiasSetting(biases, biasNode, "AdcRefHigh", 2, 6, 52);
-		createVDACBiasSetting(biases, biasNode, "AdcRefLow", 3, 6, 23);
+		createVDACBiasSetting(biases, biasNode, "AdcRefHigh", 2, 7, 30);
+		createVDACBiasSetting(biases, biasNode, "AdcRefLow", 3, 7, 1);
 		if (cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B || cstate->chipID == CHIP_DAVIS640) {
 			// Only DAVIS346 and 640 have ADC testing.
-			createVDACBiasSetting(biases, biasNode, "AdcTestVoltage", 4, 6, 35);
+			createVDACBiasSetting(biases, biasNode, "AdcTestVoltage", 4, 7, 21);
 		}
 
 		createCoarseFineBiasSetting(biases, biasNode, "LocalBufBn", 8, "Normal", "N", 5, 164, true);
@@ -565,7 +565,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 		createCoarseFineBiasSetting(biases, biasNode, "RefrBp", 16, "Normal", "P", 4, 25, true);
 		createCoarseFineBiasSetting(biases, biasNode, "ReadoutBufBp", 17, "Normal", "P", 6, 20, true);
 		createCoarseFineBiasSetting(biases, biasNode, "ApsROSFBn", 18, "Normal", "N", 6, 219, true);
-		createCoarseFineBiasSetting(biases, biasNode, "AdcCompBp", 19, "Normal", "P", 4, 20, true);
+		createCoarseFineBiasSetting(biases, biasNode, "AdcCompBp", 19, "Normal", "P", 5, 20, true);
 		createCoarseFineBiasSetting(biases, biasNode, "ColSelLowBn", 20, "Normal", "N", 0, 1, true);
 		createCoarseFineBiasSetting(biases, biasNode, "DACBufBp", 21, "Normal", "P", 6, 60, true);
 		createCoarseFineBiasSetting(biases, biasNode, "LcolTimeoutBn", 22, "Normal", "N", 5, 49, true);
@@ -595,9 +595,9 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 		createVDACBiasSetting(biases, biasNode, "OVG2Lo", 2, 0, 0);
 		createVDACBiasSetting(biases, biasNode, "TX2OVG2Hi", 3, 4, 63);
 		createVDACBiasSetting(biases, biasNode, "Gnd07", 4, 5, 13);
-		createVDACBiasSetting(biases, biasNode, "AdcTestVoltage", 5, 6, 35);
-		createVDACBiasSetting(biases, biasNode, "AdcRefHigh", 6, 6, 52);
-		createVDACBiasSetting(biases, biasNode, "AdcRefLow", 7, 6, 23);
+		createVDACBiasSetting(biases, biasNode, "AdcTestVoltage", 5, 7, 21);
+		createVDACBiasSetting(biases, biasNode, "AdcRefHigh", 6, 7, 30);
+		createVDACBiasSetting(biases, biasNode, "AdcRefLow", 7, 7, 1);
 
 		createCoarseFineBiasSetting(biases, biasNode, "IFRefrBn", 8, "Normal", "N", 5, 255, true);
 		createCoarseFineBiasSetting(biases, biasNode, "IFThrBn", 9, "Normal", "N", 5, 255, true);
@@ -616,7 +616,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 		createCoarseFineBiasSetting(biases, biasNode, "RisetimeBp", 24, "Normal", "P", 3, 20, true);
 		createCoarseFineBiasSetting(biases, biasNode, "ReadoutBufBp", 25, "Normal", "P", 6, 20, true);
 		createCoarseFineBiasSetting(biases, biasNode, "ApsROSFBn", 26, "Normal", "N", 6, 219, true);
-		createCoarseFineBiasSetting(biases, biasNode, "AdcCompBp", 27, "Normal", "P", 4, 20, true);
+		createCoarseFineBiasSetting(biases, biasNode, "AdcCompBp", 27, "Normal", "P", 5, 20, true);
 		createCoarseFineBiasSetting(biases, biasNode, "DACBufBp", 28, "Normal", "P", 6, 60, true);
 		createCoarseFineBiasSetting(biases, biasNode, "LcolTimeoutBn", 30, "Normal", "N", 5, 49, true);
 		createCoarseFineBiasSetting(biases, biasNode, "AEPdBn", 31, "Normal", "N", 6, 91, true);
@@ -669,7 +669,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	if (cstate->chipID == CHIP_DAVIS208) {
 		createBoolConfigSetting(configChain, chipNode, "SelectPreAmpAvg", 145, false);
 		createBoolConfigSetting(configChain, chipNode, "SelectBiasRefSS", 146, false);
-		createBoolConfigSetting(configChain, chipNode, "SelectSense", 147, false);
+		createBoolConfigSetting(configChain, chipNode, "SelectSense", 147, true);
 		createBoolConfigSetting(configChain, chipNode, "SelectPosFb", 148, false);
 		createBoolConfigSetting(configChain, chipNode, "SelectHighPass", 149, false);
 	}
@@ -719,7 +719,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutShortIfAbsent(apsNode, "StartRow0", 0);
 	sshsNodePutShortIfAbsent(apsNode, "EndColumn0", U16T(cstate->apsSizeX - 1));
 	sshsNodePutShortIfAbsent(apsNode, "EndRow0", U16T(cstate->apsSizeY - 1));
-	sshsNodePutIntIfAbsent(apsNode, "Exposure", 2000); // in µs, converted to cycles later
+	sshsNodePutIntIfAbsent(apsNode, "Exposure", 4000); // in µs, converted to cycles later
 	sshsNodePutIntIfAbsent(apsNode, "FrameDelay", 200); // in µs, converted to cycles later
 	sshsNodePutShortIfAbsent(apsNode, "ResetSettle", 10); // in cycles
 	sshsNodePutShortIfAbsent(apsNode, "ColumnSettle", 30); // in cycles
@@ -732,6 +732,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 		"apsHasIntegratedADC");
 	if (integratedADCSupported) {
 		sshsNodePutShortIfAbsent(apsNode, "SampleSettle", 60); // in cycles
+		sshsNodePutBoolIfAbsent(apsNode, "SampleEnable", true);
 	}
 
 	// Subsystem 3: IMU
@@ -1572,9 +1573,6 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						break;
 					}
 
-					// First, let's normalize the ADC value to 16bit generic depth.
-					data = U16T(data << (16 - DAVIS_ADC_DEPTH));
-
 					// Let's check that apsCountY is not above the maximum. This could happen
 					// if start/end of column events are discarded (no wait on transfer stall).
 					if (state->apsCountY[state->apsCurrentReadoutType] >= caerFrameEventGetLengthY(currentFrameEvent)) {
@@ -1605,7 +1603,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						state->apsCurrentResetFrame[pixelPositionAbs] = data;
 					}
 					else {
-						int32_t pixelValue = state->apsCurrentResetFrame[pixelPositionAbs] - data;
+						// Normalize the ADC value to 16bit generic depth and check for underflow.
+						int32_t pixelValue = (state->apsCurrentResetFrame[pixelPositionAbs] - data)
+							<< (16 - DAVIS_ADC_DEPTH);
 						caerFrameEventGetPixelArrayUnsafe(currentFrameEvent)[pixelPosition] = htole16(
 							U16T((pixelValue < 0) ? (0) : (pixelValue)));
 					}
@@ -2150,6 +2150,9 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 		else if (changeType == SHORT && str_equals(changeKey, "SampleSettle")) {
 			spiConfigSend(devHandle, FPGA_APS, 27, changeValue.ushort);
 		}
+		else if (changeType == BOOL && str_equals(changeKey, "SampleEnable")) {
+			spiConfigSend(devHandle, FPGA_APS, 28, changeValue.boolean);
+		}
 	}
 }
 
@@ -2167,6 +2170,11 @@ static void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) 
 	// SampleSettle may not exist on chips that don't have integrated ADC.
 	if (sshsNodeAttrExists(apsNode, "SampleSettle", SHORT)) {
 		spiConfigSend(devHandle, FPGA_APS, 27, sshsNodeGetShort(apsNode, "SampleSettle"));
+	}
+
+	// SampleEnable may not exist on chips that don't have integrated ADC.
+	if (sshsNodeAttrExists(apsNode, "SampleEnable", BOOL)) {
+		spiConfigSend(devHandle, FPGA_APS, 28, sshsNodeGetBool(apsNode, "SampleEnable"));
 	}
 
 	// The APS chip view is flipped on both axes. Reverse and exchange.
