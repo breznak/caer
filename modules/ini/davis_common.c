@@ -731,8 +731,10 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	bool integratedADCSupported = sshsNodeGetBool(sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"),
 		"apsHasIntegratedADC");
 	if (integratedADCSupported) {
-		sshsNodePutShortIfAbsent(apsNode, "SampleSettle", 60); // in cycles
+		sshsNodePutBoolIfAbsent(apsNode, "UseInternalADC", true);
 		sshsNodePutBoolIfAbsent(apsNode, "SampleEnable", true);
+		sshsNodePutShortIfAbsent(apsNode, "SampleSettle", 60); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "RampReset", 10); // in cycles
 	}
 
 	// Subsystem 3: IMU
@@ -2147,11 +2149,17 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 		else if (changeType == BOOL && str_equals(changeKey, "WaitOnTransferStall")) {
 			spiConfigSend(devHandle, FPGA_APS, 14, changeValue.boolean);
 		}
-		else if (changeType == SHORT && str_equals(changeKey, "SampleSettle")) {
-			spiConfigSend(devHandle, FPGA_APS, 27, changeValue.ushort);
+		else if (changeType == BOOL && str_equals(changeKey, "UseInternalADC")) {
+			spiConfigSend(devHandle, FPGA_APS, 27, changeValue.boolean);
 		}
 		else if (changeType == BOOL && str_equals(changeKey, "SampleEnable")) {
 			spiConfigSend(devHandle, FPGA_APS, 28, changeValue.boolean);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "SampleSettle")) {
+			spiConfigSend(devHandle, FPGA_APS, 29, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "RampReset")) {
+			spiConfigSend(devHandle, FPGA_APS, 30, changeValue.ushort);
 		}
 	}
 }
@@ -2167,14 +2175,24 @@ static void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) 
 		spiConfigSend(devHandle, FPGA_APS, 2, sshsNodeGetBool(apsNode, "GlobalShutter"));
 	}
 
-	// SampleSettle may not exist on chips that don't have integrated ADC.
-	if (sshsNodeAttrExists(apsNode, "SampleSettle", SHORT)) {
-		spiConfigSend(devHandle, FPGA_APS, 27, sshsNodeGetShort(apsNode, "SampleSettle"));
+	// UseInternalADC may not exist on chips that don't have integrated ADC.
+	if (sshsNodeAttrExists(apsNode, "UseInternalADC", BOOL)) {
+		spiConfigSend(devHandle, FPGA_APS, 27, sshsNodeGetBool(apsNode, "UseInternalADC"));
 	}
 
 	// SampleEnable may not exist on chips that don't have integrated ADC.
 	if (sshsNodeAttrExists(apsNode, "SampleEnable", BOOL)) {
 		spiConfigSend(devHandle, FPGA_APS, 28, sshsNodeGetBool(apsNode, "SampleEnable"));
+	}
+
+	// SampleSettle may not exist on chips that don't have integrated ADC.
+	if (sshsNodeAttrExists(apsNode, "SampleSettle", SHORT)) {
+		spiConfigSend(devHandle, FPGA_APS, 29, sshsNodeGetShort(apsNode, "SampleSettle"));
+	}
+
+	// RampReset may not exist on chips that don't have integrated ADC.
+	if (sshsNodeAttrExists(apsNode, "RampReset", SHORT)) {
+		spiConfigSend(devHandle, FPGA_APS, 30, sshsNodeGetShort(apsNode, "RampReset"));
 	}
 
 	// The APS chip view is flipped on both axes. Reverse and exchange.
