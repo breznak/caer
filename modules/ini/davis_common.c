@@ -1349,10 +1349,13 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							for (size_t j = 0; j < APS_READOUT_TYPES_NUM; j++) {
 								uint16_t checkValue = caerFrameEventGetLengthX(currentFrameEvent);
 
-								// Check reset read against zero if disabled.
+								// Check main reset read against zero if disabled.
 								if (j == APS_READOUT_RESET && !state->apsResetRead) {
 									checkValue = 0;
 								}
+
+								// Check second reset read (Cp RST, DAVIS RGB).
+								// TODO: think about standard HDR too.
 
 								caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Frame End: CountX[%zu] is %d.", j,
 									state->apsCountX[j]);
