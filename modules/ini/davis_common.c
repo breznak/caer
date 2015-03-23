@@ -489,10 +489,12 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 
 	// So now we have a working connection to the device we want. Let's get some data!
 	cstate->chipID = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 1));
-	cstate->apsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 2));
-	cstate->apsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 3));
-	cstate->dvsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 4));
-	cstate->dvsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 5));
+	// chipOrientation = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 2));
+	// apsStreamStart = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 3));
+	cstate->apsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 4));
+	cstate->apsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 5));
+	cstate->dvsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 6));
+	cstate->dvsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 7));
 
 	// Put global source information into SSHS, so it's globally available.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
@@ -503,9 +505,9 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 	sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->apsSizeY);
 	sshsNodePutShort(sourceInfoNode, "apsOriginalDepth", DAVIS_ADC_DEPTH);
 	sshsNodePutShort(sourceInfoNode, "apsOriginalChannels", DAVIS_COLOR_CHANNELS);
-	sshsNodePutBool(sourceInfoNode, "apsHasGlobalShutter", spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 6));
-	sshsNodePutBool(sourceInfoNode, "apsHasIntegratedADC", spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 7));
-	sshsNodePutBool(sourceInfoNode, "deviceIsMaster", spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 8));
+	sshsNodePutBool(sourceInfoNode, "apsHasGlobalShutter", spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 8));
+	sshsNodePutBool(sourceInfoNode, "apsHasIntegratedADC", spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 9));
+	sshsNodePutBool(sourceInfoNode, "deviceIsMaster", spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 10));
 
 	return (true);
 }
@@ -1355,7 +1357,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 								}
 
 								// Check second reset read (Cp RST, DAVIS RGB).
-								// TODO: think about standard HDR too.
+								if (j == APS_READOUT_CPRESET) {
+									checkValue = 0;
+								}
 
 								caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Frame End: CountX[%zu] is %d.", j,
 									state->apsCountX[j]);
@@ -2153,16 +2157,16 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 			spiConfigSend(devHandle, FPGA_APS, 14, changeValue.boolean);
 		}
 		else if (changeType == BOOL && str_equals(changeKey, "UseInternalADC")) {
-			spiConfigSend(devHandle, FPGA_APS, 27, changeValue.boolean);
-		}
-		else if (changeType == BOOL && str_equals(changeKey, "SampleEnable")) {
 			spiConfigSend(devHandle, FPGA_APS, 28, changeValue.boolean);
 		}
+		else if (changeType == BOOL && str_equals(changeKey, "SampleEnable")) {
+			spiConfigSend(devHandle, FPGA_APS, 29, changeValue.boolean);
+		}
 		else if (changeType == SHORT && str_equals(changeKey, "SampleSettle")) {
-			spiConfigSend(devHandle, FPGA_APS, 29, changeValue.ushort);
+			spiConfigSend(devHandle, FPGA_APS, 30, changeValue.ushort);
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "RampReset")) {
-			spiConfigSend(devHandle, FPGA_APS, 30, changeValue.ushort);
+			spiConfigSend(devHandle, FPGA_APS, 31, changeValue.ushort);
 		}
 	}
 }
@@ -2180,22 +2184,22 @@ static void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) 
 
 	// UseInternalADC may not exist on chips that don't have integrated ADC.
 	if (sshsNodeAttrExists(apsNode, "UseInternalADC", BOOL)) {
-		spiConfigSend(devHandle, FPGA_APS, 27, sshsNodeGetBool(apsNode, "UseInternalADC"));
+		spiConfigSend(devHandle, FPGA_APS, 28, sshsNodeGetBool(apsNode, "UseInternalADC"));
 	}
 
 	// SampleEnable may not exist on chips that don't have integrated ADC.
 	if (sshsNodeAttrExists(apsNode, "SampleEnable", BOOL)) {
-		spiConfigSend(devHandle, FPGA_APS, 28, sshsNodeGetBool(apsNode, "SampleEnable"));
+		spiConfigSend(devHandle, FPGA_APS, 29, sshsNodeGetBool(apsNode, "SampleEnable"));
 	}
 
 	// SampleSettle may not exist on chips that don't have integrated ADC.
 	if (sshsNodeAttrExists(apsNode, "SampleSettle", SHORT)) {
-		spiConfigSend(devHandle, FPGA_APS, 29, sshsNodeGetShort(apsNode, "SampleSettle"));
+		spiConfigSend(devHandle, FPGA_APS, 30, sshsNodeGetShort(apsNode, "SampleSettle"));
 	}
 
 	// RampReset may not exist on chips that don't have integrated ADC.
 	if (sshsNodeAttrExists(apsNode, "RampReset", SHORT)) {
-		spiConfigSend(devHandle, FPGA_APS, 30, sshsNodeGetShort(apsNode, "RampReset"));
+		spiConfigSend(devHandle, FPGA_APS, 31, sshsNodeGetShort(apsNode, "RampReset"));
 	}
 
 	// The APS chip view is flipped on both axes. Reverse and exchange.
