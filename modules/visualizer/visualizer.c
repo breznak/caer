@@ -1,11 +1,10 @@
 #include "visualizer.h"
 #include "base/mainloop.h"
 #include "base/module.h"
-#include <GLFW/glfw3.h>
 
-const char *polarityShader = "#version 330 core"
-	""
-	"";
+#define GLFW_INCLUDE_GLEXT 1
+#define GL_GLEXT_PROTOTYPES 1
+#include <GLFW/glfw3.h>
 
 struct visualizer_state {
 	GLFWwindow* window;
@@ -13,10 +12,9 @@ struct visualizer_state {
 	uint16_t eventRendererSizeX;
 	uint16_t eventRendererSizeY;
 	size_t eventRendererSlowDown;
-/*GLuint glPBOFrameID;
- GLuint glTextureFrameID;
- GLuint glPBOPolarityID;
- GLuint glTexturePolarityID;*/
+	uint32_t *frameRenderer;
+	uint16_t frameRendererSizeX;
+	uint16_t frameRendererSizeY;
 };
 
 typedef struct visualizer_state *visualizerState;
@@ -25,6 +23,7 @@ static bool caerVisualizerInit(caerModuleData moduleData);
 static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerVisualizerExit(caerModuleData moduleData);
 static bool allocateEventRenderer(visualizerState state, uint16_t sourceID);
+static bool allocateFrameRenderer(visualizerState state, uint16_t sourceID);
 
 static struct caer_module_functions caerVisualizerFunctions = { .moduleInit = &caerVisualizerInit, .moduleRun =
 	&caerVisualizerRun, .moduleConfig =
@@ -58,20 +57,9 @@ static bool caerVisualizerInit(caerModuleData moduleData) {
 	glShadeModel(GL_FLAT);
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
 
-	// Initialize OpenGL objects.
-	/*glGenBuffers(1, &state->glPBOPolarityID);
-	 glBindBuffer(GL_PIXEL_UNPACK_BUFFER, state->glPBOPolarityID);
-	 glBufferData(GL_PIXEL_UNPACK_BUFFER, CHIP_X * CHIP_Y * 4, NULL, GL_DYNAMIC_DRAW);
-	 glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-
-	 glGenTextures(1, &state->glTexturePolarityID);
-	 glBindTexture(GL_TEXTURE_2D, state->glTexturePolarityID);
-	 glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, CHIP_X, CHIP_Y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	 glBindTexture(GL_TEXTURE_2D, 0);*/
-
 	// Configuration.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showEvents", true);
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showFrames", false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showFrames", true);
 
 	return (true);
 }
@@ -83,10 +71,15 @@ static void caerVisualizerExit(caerModuleData moduleData) {
 
 	glfwTerminate();
 
-	// Ensure map is freed.
+	// Ensure render maps are freed.
 	if (state->eventRenderer != NULL) {
 		free(state->eventRenderer);
 		state->eventRenderer = NULL;
+	}
+
+	if (state->frameRenderer != NULL) {
+		free(state->frameRenderer);
+		state->frameRenderer = NULL;
 	}
 }
 
@@ -103,9 +96,8 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 	caerFrameEventPacket frame = va_arg(args, caerFrameEventPacket);
 	bool renderFrame = sshsNodeGetBool(moduleData->moduleNode, "showFrames");
 
-	if (renderPolarity && !renderFrame && polarity != NULL) {
-		caerPolarityEvent currPolarityEvent;
-
+	// Update polarity event rendering map.
+	if (renderPolarity && polarity != NULL) {
 		// If the event renderer is not allocated yet, do it.
 		if (state->eventRenderer == NULL) {
 			if (!allocateEventRenderer(state, caerEventPacketHeaderGetEventSource(&polarity->packetHeader))) {
@@ -114,6 +106,8 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 				return;
 			}
 		}
+
+		caerPolarityEvent currPolarityEvent;
 
 		for (uint32_t i = 0; i < caerEventPacketHeaderGetEventNumber(&polarity->packetHeader); i++) {
 			currPolarityEvent = caerPolarityEventPacketGetEvent(polarity, i);
@@ -133,45 +127,74 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 			}
 		}
 
+		// Accumulate events over four polarity packets.
 		if (state->eventRendererSlowDown++ == 4) {
 			state->eventRendererSlowDown = 0;
-
-			glClear(GL_COLOR_BUFFER_BIT);
-
-			glDrawPixels(state->eventRendererSizeX, state->eventRendererSizeY, GL_RGBA, GL_UNSIGNED_BYTE,
-				state->eventRenderer);
-			glPixelZoom(PIXEL_ZOOM, PIXEL_ZOOM);
-
-			glfwSwapBuffers(state->window);
-			glfwPollEvents();
 
 			memset(state->eventRenderer, 0,
 				(size_t) state->eventRendererSizeX * state->eventRendererSizeY * sizeof(uint32_t));
 		}
 	}
 
-	if (!renderPolarity && renderFrame && frame != NULL) {
-		// Render frames one by one.
-		caerFrameEvent currFrameEvent;
-
-		for (uint32_t i = 0; i < caerEventPacketHeaderGetEventNumber(&frame->packetHeader); i++) {
-			currFrameEvent = caerFrameEventPacketGetEvent(frame, i);
-
-			// Only operate on valid events!
-			if (caerFrameEventIsValid(currFrameEvent)) {
-				glClear(GL_COLOR_BUFFER_BIT);
-
-				//glRasterPos2i(0, caerFrameEventGetLengthY(currFrameEvent) - 1);
-				//glPixelZoom(1.0f, -1.0f);
-
-				glDrawPixels(caerFrameEventGetLengthX(currFrameEvent), caerFrameEventGetLengthY(currFrameEvent),
-				GL_LUMINANCE, GL_UNSIGNED_SHORT, caerFrameEventGetPixelArrayUnsafe(currFrameEvent));
-				glPixelZoom(PIXEL_ZOOM, PIXEL_ZOOM);
-
-				glfwSwapBuffers(state->window);
-				glfwPollEvents();
+	// Select latest frame to render.
+	if (renderFrame && frame != NULL) {
+		// If the event renderer is not allocated yet, do it.
+		if (state->frameRenderer == NULL) {
+			if (!allocateFrameRenderer(state, caerEventPacketHeaderGetEventSource(&frame->packetHeader))) {
+				// Failed to allocate memory, nothing to do.
+				caerLog(LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for frameRenderer.");
+				return;
 			}
 		}
+
+		caerFrameEvent currFrameEvent;
+
+		for (int64_t i = (int64_t) caerEventPacketHeaderGetEventNumber(&frame->packetHeader) - 1; i >= 0; i--) {
+			currFrameEvent = caerFrameEventPacketGetEvent(frame, (uint32_t) i);
+
+			// Only operate on the last valid frame.
+			if (caerFrameEventIsValid(currFrameEvent)) {
+				// Copy the frame content to the permanent frameRenderer.
+				memcpy(state->frameRenderer, caerFrameEventGetPixelArrayUnsafe(currFrameEvent),
+					(size_t) state->frameRendererSizeX * state->frameRendererSizeY * sizeof(uint16_t));
+				break;
+			}
+		}
+	}
+
+	// All rendering calls at the end.
+	// Only execute if something actually changed (packets not null).
+	if ((renderPolarity && polarity != NULL) || (renderFrame && frame != NULL)) {
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		// Render polarity events.
+		if (renderPolarity) {
+			glWindowPos2i(0, 0);
+
+			glDrawPixels(state->eventRendererSizeX, state->eventRendererSizeY, GL_RGBA, GL_UNSIGNED_BYTE,
+				state->eventRenderer);
+		}
+
+		// Render latest frame.
+		if (renderFrame) {
+			// Shift APS frame to the right of the Polarity rendering, if both are enabled.
+			if (renderPolarity) {
+				glWindowPos2i(state->eventRendererSizeX * PIXEL_ZOOM, 0);
+			}
+			else {
+				glWindowPos2i(0, 0);
+			}
+
+			glDrawPixels(state->frameRendererSizeX, state->frameRendererSizeY, GL_LUMINANCE, GL_UNSIGNED_SHORT,
+				state->frameRenderer);
+		}
+
+		// Apply zoom factor.
+		glPixelZoom(PIXEL_ZOOM, PIXEL_ZOOM);
+
+		// Do glfw update.
+		glfwSwapBuffers(state->window);
+		glfwPollEvents();
 	}
 }
 
@@ -193,3 +216,20 @@ static bool allocateEventRenderer(visualizerState state, uint16_t sourceID) {
 	return (true);
 }
 
+static bool allocateFrameRenderer(visualizerState state, uint16_t sourceID) {
+	// Get size information from source.
+	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(sourceID);
+	uint16_t sizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
+	uint16_t sizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
+
+	state->frameRenderer = calloc((size_t) (sizeX * sizeY), sizeof(uint16_t));
+	if (state->frameRenderer == NULL) {
+		return (false); // Failure.
+	}
+
+	// Assign max sizes for frame renderer.
+	state->frameRendererSizeX = sizeX;
+	state->frameRendererSizeY = sizeY;
+
+	return (true);
+}
