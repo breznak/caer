@@ -155,8 +155,13 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 			// Only operate on the last valid frame.
 			if (caerFrameEventIsValid(currFrameEvent)) {
 				// Copy the frame content to the permanent frameRenderer.
+				// Use frame sizes to correctly support small ROI frames.
+				state->frameRendererSizeX = caerFrameEventGetLengthX(currFrameEvent);
+				state->frameRendererSizeY = caerFrameEventGetLengthY(currFrameEvent);
+
 				memcpy(state->frameRenderer, caerFrameEventGetPixelArrayUnsafe(currFrameEvent),
 					(size_t) state->frameRendererSizeX * state->frameRendererSizeY * sizeof(uint16_t));
+
 				break;
 			}
 		}
