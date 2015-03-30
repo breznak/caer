@@ -428,6 +428,34 @@ uint32_t spiConfigReceive(libusb_device_handle *devHandle, uint8_t moduleAddr, u
 	return (returnedParam);
 }
 
+static uint16_t applyChipRotationX(davisCommonState state, uint16_t x, uint16_t y) {
+	if (state->chipOrientation == CHIP_ORIENTATION_ROT90) {
+		return (y);
+	}
+	else if (state->chipOrientation == CHIP_ORIENTATION_ROT180) {
+		return U16T(state->apsSizeX - 1 - x);
+	}
+	else if (state->chipOrientation == CHIP_ORIENTATION_ROT270) {
+		return U16T(state->apsSizeY - 1 - y);
+	}
+
+	return (x);
+}
+
+static uint16_t applyChipRotationY(davisCommonState state, uint16_t x, uint16_t y) {
+	if (state->chipOrientation == CHIP_ORIENTATION_ROT90) {
+		return U16T(state->apsSizeX - 1 - x);
+	}
+	else if (state->chipOrientation == CHIP_ORIENTATION_ROT180) {
+		return U16T(state->apsSizeY - 1 - y);
+	}
+	else if (state->chipOrientation == CHIP_ORIENTATION_ROT270) {
+		return (x);
+	}
+
+	return (y);
+}
+
 bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t VID, uint16_t PID, uint8_t DID_TYPE) {
 	// USB port/bus/SN settings/restrictions.
 	// These can be used to force connection to one specific device.
@@ -491,6 +519,9 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 	cstate->chipID = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 1));
 	// chipOrientation = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 2));
 	// apsStreamStart = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 3));
+	cstate->chipOrientation = CHIP_ORIENTATION_ROT270;
+	cstate->apsFlipX = 0 & 0x02;
+	cstate->apsFlipY = 0 & 0x01;
 	cstate->apsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 4));
 	cstate->apsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 5));
 	cstate->dvsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 6));
@@ -499,10 +530,19 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 	// Put global source information into SSHS, so it's globally available.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
 	sshsNodePutShort(sourceInfoNode, "logicVersion", U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 0)));
-	sshsNodePutShort(sourceInfoNode, "dvsSizeX", cstate->dvsSizeX);
-	sshsNodePutShort(sourceInfoNode, "dvsSizeY", cstate->dvsSizeY);
-	sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeX);
-	sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->apsSizeY);
+	if (cstate->chipOrientation == CHIP_ORIENTATION_ROT90 || cstate->chipOrientation == CHIP_ORIENTATION_ROT270) {
+		// 90 or 270 degree chip rotation means we need to swap X/Y lenghts as reported by logic.
+		sshsNodePutShort(sourceInfoNode, "dvsSizeX", cstate->dvsSizeX);
+		sshsNodePutShort(sourceInfoNode, "dvsSizeY", cstate->dvsSizeY);
+		sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeX);
+		sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->apsSizeY);
+	}
+	else {
+		sshsNodePutShort(sourceInfoNode, "dvsSizeX", cstate->dvsSizeX);
+		sshsNodePutShort(sourceInfoNode, "dvsSizeY", cstate->dvsSizeY);
+		sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeX);
+		sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->apsSizeY);
+	}
 	sshsNodePutShort(sourceInfoNode, "apsOriginalDepth", DAVIS_ADC_DEPTH);
 	sshsNodePutShort(sourceInfoNode, "apsOriginalChannels", DAVIS_COLOR_CHANNELS);
 	sshsNodePutBool(sourceInfoNode, "apsHasGlobalShutter", spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 8));
@@ -1596,12 +1636,18 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					// around all the time and consuming memory. This way we can also only take
 					// infrequent reset reads and re-use them for multiple frames, which can heavily
 					// reduce traffic, and should not impact image quality heavily, at least in GS.
-					uint16_t xPos = U16T(
-						caerFrameEventGetLengthX(currentFrameEvent) - 1
-							- state->apsCountX[state->apsCurrentReadoutType]);
-					uint16_t yPos = U16T(
-						caerFrameEventGetLengthY(currentFrameEvent) - 1
-							- state->apsCountY[state->apsCurrentReadoutType]);
+					uint16_t xPos =
+						(state->apsFlipX) ?
+							(U16T(
+								caerFrameEventGetLengthX(currentFrameEvent) - 1
+									- state->apsCountX[state->apsCurrentReadoutType])) :
+							(U16T(state->apsCountX[state->apsCurrentReadoutType]));
+					uint16_t yPos =
+						(state->apsFlipY) ?
+							(U16T(
+								caerFrameEventGetLengthY(currentFrameEvent) - 1
+									- state->apsCountY[state->apsCurrentReadoutType])) :
+							(U16T(state->apsCountY[state->apsCurrentReadoutType]));
 					size_t pixelPosition = (size_t) (yPos * caerFrameEventGetLengthX(currentFrameEvent)) + xPos;
 
 					uint16_t xPosAbs = U16T(xPos + state->apsWindow0StartX);
