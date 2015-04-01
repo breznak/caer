@@ -689,9 +689,8 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	createBoolConfigSetting(configChain, chipNode, "AERnArow", 140, false); // Use nArow in the AER state machine.
 	createBoolConfigSetting(configChain, chipNode, "UseAOut", 141, false); // Enable analog pads for aMUX output (testing).
 
-	if (cstate->chipID == CHIP_DAVIS128 || cstate->chipID == CHIP_DAVIS208 || cstate->chipID == CHIP_DAVIS240A
-		|| cstate->chipID == CHIP_DAVIS240B || cstate->chipID == CHIP_DAVIS240C) {
-		createBoolConfigSetting(configChain, chipNode, "HotPixelSuppression", 139, false);
+	if (cstate->chipID == CHIP_DAVIS240A || cstate->chipID == CHIP_DAVIS240B) {
+		createBoolConfigSetting(configChain, chipNode, "SpecialPixelControl", 139, false);
 	}
 
 	if (cstate->chipID == CHIP_DAVIS128 || cstate->chipID == CHIP_DAVIS208 || cstate->chipID == CHIP_DAVIS346A

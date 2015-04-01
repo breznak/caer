@@ -268,10 +268,13 @@ static void sendChipSR(sshsNode moduleNode, davisCommonState cstate) {
 		chipSR[4] |= (1 << 4);
 	}
 
-	bool hotPixelSuppression = sshsNodeGetBool(chipNode, "HotPixelSuppression");
-	if (hotPixelSuppression) {
-		// Flip bit on if enabled.
-		chipSR[4] |= (1 << 3);
+	// Only DAVIS240 A/B have this, C doesn't.
+	if (sshsNodeAttrExists(chipNode, "SpecialPixelControl", BOOL)) {
+		bool specialPixelControl = sshsNodeGetBool(chipNode, "SpecialPixelControl");
+		if (specialPixelControl) {
+			// Flip bit on if enabled.
+			chipSR[4] |= (1 << 3);
+		}
 	}
 
 	bool resetTestpixel = sshsNodeGetBool(chipNode, "ResetTestPixel");
