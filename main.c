@@ -10,6 +10,8 @@
 #include "base/config_server.h"
 #include "base/mainloop.h"
 #include "base/misc.h"
+#include "modules/ini/dvs128.h"
+#include "modules/ini/davis_fx2.h"
 #include "modules/ini/davis_fx3.h"
 #include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
 #include "modules/statistics/statistics.h"
@@ -27,7 +29,7 @@ static bool mainloop_1(void) {
 
 	// Input modules grab data from outside sources (like devices, files, ...)
 	// and put events into an event packet.
-	caerInputDAVISFX3(1, &davis_polarity, &davis_frame, &davis_imu, &davis_special);
+	caerInputDAVISFX2(1, &davis_polarity, &davis_frame, &davis_imu, &davis_special);
 
 	// Filters process event packets: for example to suppress certain events,
 	// like with the Background Activity Filter, which suppresses events that

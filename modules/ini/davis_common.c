@@ -517,11 +517,11 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 
 	// So now we have a working connection to the device we want. Let's get some data!
 	cstate->chipID = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 1));
-	// chipOrientation = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 2));
-	// apsStreamStart = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 3));
-	cstate->chipOrientation = CHIP_ORIENTATION_ROT270;
-	cstate->apsFlipX = 0 & 0x02;
-	cstate->apsFlipY = 0 & 0x01;
+	// cstate->chipOrientation = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 2));
+	cstate->chipOrientation = CHIP_ORIENTATION_STRAIGHT;
+	uint16_t chipAPSStreamStart = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 3));
+	cstate->apsFlipX = chipAPSStreamStart & 0x02;
+	cstate->apsFlipY = chipAPSStreamStart & 0x01;
 	cstate->apsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 4));
 	cstate->apsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 5));
 	cstate->dvsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 6));
@@ -532,10 +532,10 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 	sshsNodePutShort(sourceInfoNode, "logicVersion", U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 0)));
 	if (cstate->chipOrientation == CHIP_ORIENTATION_ROT90 || cstate->chipOrientation == CHIP_ORIENTATION_ROT270) {
 		// 90 or 270 degree chip rotation means we need to swap X/Y lenghts as reported by logic.
-		sshsNodePutShort(sourceInfoNode, "dvsSizeX", cstate->dvsSizeX);
-		sshsNodePutShort(sourceInfoNode, "dvsSizeY", cstate->dvsSizeY);
-		sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeX);
-		sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->apsSizeY);
+		sshsNodePutShort(sourceInfoNode, "dvsSizeX", cstate->dvsSizeY);
+		sshsNodePutShort(sourceInfoNode, "dvsSizeY", cstate->dvsSizeX);
+		sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeY);
+		sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->apsSizeX);
 	}
 	else {
 		sshsNodePutShort(sourceInfoNode, "dvsSizeX", cstate->dvsSizeX);
