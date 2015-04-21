@@ -7,7 +7,11 @@
 #include <pwd.h>
 #include <time.h>
 
-#define USE_OLD_AEDAT_FORMAT_HACK false
+#ifdef JAER_COMPAT_FORMAT
+  #define USE_OLD_AEDAT_FORMAT_HACK true
+#else
+  #define USE_OLD_AEDAT_FORMAT_HACK false
+#endif
 
 struct file_state {
 	int fileDescriptor;

@@ -1,3 +1,21 @@
 caer
 ====
 AER event-based framework, written in C, targeting embedded systems.
+
+
+
+INSTALL: 
+- configure: 
+
+$ cmake . 
+
+options: 
+ -DJAER_COMPAT_FORMAT=1 ... cAER will use (older) file output format compatible with jAER
+ -DENABLE_VISUALIZER=1  ... enable visualizer for calls of caerVisualizer()
+
+- build:
+$ make
+
+- run: 
+$./caer (see doc/ for more info on how to use cAER)
+
