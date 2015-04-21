@@ -755,7 +755,6 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	}
 
 	sshsNodePutBoolIfAbsent(apsNode, "Run", 1);
-	sshsNodePutBoolIfAbsent(apsNode, "ForceADCRunning", 0);
 	sshsNodePutShortIfAbsent(apsNode, "StartColumn0", 0);
 	sshsNodePutShortIfAbsent(apsNode, "StartRow0", 0);
 	sshsNodePutShortIfAbsent(apsNode, "EndColumn0", U16T(cstate->apsSizeX - 1));
@@ -2133,9 +2132,6 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 		if (changeType == BOOL && str_equals(changeKey, "Run")) {
 			spiConfigSend(devHandle, FPGA_APS, 0, changeValue.boolean);
 		}
-		else if (changeType == BOOL && str_equals(changeKey, "ForceADCRunning")) {
-			spiConfigSend(devHandle, FPGA_APS, 1, changeValue.boolean);
-		}
 		else if (changeType == BOOL && str_equals(changeKey, "GlobalShutter")) {
 			spiConfigSend(devHandle, FPGA_APS, 2, changeValue.boolean);
 		}
@@ -2219,8 +2215,6 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 static void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
 	sshsNode apsNode = sshsGetRelativeNode(moduleNode, "aps/");
 	sshsNode infoNode = sshsGetRelativeNode(moduleNode, "sourceInfo/");
-
-	spiConfigSend(devHandle, FPGA_APS, 1, sshsNodeGetBool(apsNode, "ForceADCRunning"));
 
 	// GS may not exist on chips that don't have it.
 	if (sshsNodeAttrExists(apsNode, "GlobalShutter", BOOL)) {
