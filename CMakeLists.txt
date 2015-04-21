@@ -10,6 +10,10 @@ IF (NOT ENABLE_VISUALIZER)
 	SET(ENABLE_VISUALIZER 0 CACHE BOOL "Enable compiling and linking the Visualizer module.")
 ENDIF()
 
+IF (NOT JAER_COMPAT_FORMAT)
+	SET(JAER_COMPAT_FORMAT 0 CACHE BOOL "Write files in a format compatible with jAER.")
+ENDIF()
+
 # Project name and version
 PROJECT(cAER C)
 SET(PROJECT_VERSION_MAJOR 0)
@@ -79,6 +83,10 @@ ENDIF()
 
 # Support for large files (>2GB) on 32-bit systems
 ADD_DEFINITIONS(-D_FILE_OFFSET_BITS=64)
+
+IF (JAER_COMPAT_FORMAT)
+    ADD_DEFINITIONS(-DJAER_COMPAT_FORMAT=1)
+ENDIF()
 
 # Enable all warnings for GCC
 IF (CC_GCC OR CC_CLANG)
