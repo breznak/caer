@@ -517,21 +517,25 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 
 	// So now we have a working connection to the device we want. Let's get some data!
 	cstate->chipID = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 1));
+
 	// cstate->chipOrientation = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 2));
 	cstate->chipOrientation = CHIP_ORIENTATION_STRAIGHT;
-	uint16_t chipAPSStreamStart = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 3));
+
+	uint16_t chipAPSStreamStart = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_APS, 2));
 	cstate->apsFlipX = chipAPSStreamStart & 0x02;
 	cstate->apsFlipY = chipAPSStreamStart & 0x01;
-	cstate->apsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 4));
-	cstate->apsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 5));
-	cstate->dvsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 6));
-	cstate->dvsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 7));
+
+	cstate->apsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_APS, 0));
+	cstate->apsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_APS, 1));
+
+	cstate->dvsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_DVS, 0));
+	cstate->dvsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_DVS, 1));
 
 	// Put global source information into SSHS, so it's globally available.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
-	sshsNodePutShort(sourceInfoNode, "logicVersion", U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 0)));
+
 	if (cstate->chipOrientation == CHIP_ORIENTATION_ROT90 || cstate->chipOrientation == CHIP_ORIENTATION_ROT270) {
-		// 90 or 270 degree chip rotation means we need to swap X/Y lenghts as reported by logic.
+		// 90 or 270 degree chip rotation means we need to swap X/Y lengths as reported by logic.
 		sshsNodePutShort(sourceInfoNode, "dvsSizeX", cstate->dvsSizeY);
 		sshsNodePutShort(sourceInfoNode, "dvsSizeY", cstate->dvsSizeX);
 		sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeY);
@@ -543,11 +547,14 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 		sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeX);
 		sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->apsSizeY);
 	}
+
 	sshsNodePutShort(sourceInfoNode, "apsOriginalDepth", DAVIS_ADC_DEPTH);
 	sshsNodePutShort(sourceInfoNode, "apsOriginalChannels", DAVIS_COLOR_CHANNELS);
-	sshsNodePutBool(sourceInfoNode, "apsHasGlobalShutter", spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 8));
-	sshsNodePutBool(sourceInfoNode, "apsHasIntegratedADC", spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 9));
-	sshsNodePutBool(sourceInfoNode, "deviceIsMaster", spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 10));
+	sshsNodePutBool(sourceInfoNode, "apsHasGlobalShutter", spiConfigReceive(cstate->deviceHandle, FPGA_APS, 7));
+	sshsNodePutBool(sourceInfoNode, "apsHasExternalADC", spiConfigReceive(cstate->deviceHandle, FPGA_APS, 32));
+	sshsNodePutBool(sourceInfoNode, "apsHasInternalADC", spiConfigReceive(cstate->deviceHandle, FPGA_APS, 33));
+	sshsNodePutShort(sourceInfoNode, "logicVersion", U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 0)));
+	sshsNodePutBool(sourceInfoNode, "deviceIsMaster", spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 3));
 
 	return (true);
 }
@@ -755,6 +762,8 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	}
 
 	sshsNodePutBoolIfAbsent(apsNode, "Run", 1);
+	sshsNodePutBoolIfAbsent(apsNode, "ResetRead", 1);
+	sshsNodePutBoolIfAbsent(apsNode, "WaitOnTransferStall", 0);
 	sshsNodePutShortIfAbsent(apsNode, "StartColumn0", 0);
 	sshsNodePutShortIfAbsent(apsNode, "StartRow0", 0);
 	sshsNodePutShortIfAbsent(apsNode, "EndColumn0", U16T(cstate->apsSizeX - 1));
@@ -765,11 +774,9 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutShortIfAbsent(apsNode, "ColumnSettle", 30); // in cycles
 	sshsNodePutShortIfAbsent(apsNode, "RowSettle", 10); // in cycles
 	sshsNodePutShortIfAbsent(apsNode, "NullSettle", 10); // in cycles
-	sshsNodePutBoolIfAbsent(apsNode, "ResetRead", 1);
-	sshsNodePutBoolIfAbsent(apsNode, "WaitOnTransferStall", 0);
 
 	bool integratedADCSupported = sshsNodeGetBool(sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"),
-		"apsHasIntegratedADC");
+		"apsHasInternalADC");
 	if (integratedADCSupported) {
 		sshsNodePutBoolIfAbsent(apsNode, "UseInternalADC", true);
 		sshsNodePutBoolIfAbsent(apsNode, "SampleEnable", true);
@@ -1292,7 +1299,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							// Update Master/Slave status on incoming TS resets.
 							//sshsNode sourceInfoNode = caerMainloopGetSourceInfo(state->sourceID);
 							//sshsNodePutBool(sourceInfoNode, "deviceIsMaster",
-							//	spiConfigReceive(state->deviceHandle, FPGA_SYSINFO, 8));
+							//	spiConfigReceive(state->deviceHandle, FPGA_SYSINFO, 3));
 
 							break;
 						}
@@ -2001,9 +2008,8 @@ void sendEnableDataConfig(sshsNode moduleNode, libusb_device_handle *devHandle) 
 void sendDisableDataConfig(libusb_device_handle *devHandle) {
 	spiConfigSend(devHandle, FPGA_EXTINPUT, 0, 0);
 	spiConfigSend(devHandle, FPGA_IMU, 0, 0);
-	spiConfigSend(devHandle, FPGA_APS, 1, 0); // Ensure ADC turns off.
-	spiConfigSend(devHandle, FPGA_APS, 0, 0);
-	spiConfigSend(devHandle, FPGA_DVS, 0, 0);
+	spiConfigSend(devHandle, FPGA_APS, 4, 0);
+	spiConfigSend(devHandle, FPGA_DVS, 2, 0);
 	spiConfigSend(devHandle, FPGA_MUX, 3, 0); // Ensure chip turns off.
 	spiConfigSend(devHandle, FPGA_MUX, 1, 0); // Turn off timestamp too.
 	spiConfigSend(devHandle, FPGA_MUX, 0, 0);
@@ -2087,25 +2093,25 @@ static void DVSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 
 	if (event == ATTRIBUTE_MODIFIED) {
 		if (changeType == BOOL && str_equals(changeKey, "Run")) {
-			spiConfigSend(devHandle, FPGA_DVS, 0, changeValue.boolean);
+			spiConfigSend(devHandle, FPGA_DVS, 2, changeValue.boolean);
 		}
 		else if (changeType == BYTE && str_equals(changeKey, "AckDelayRow")) {
-			spiConfigSend(devHandle, FPGA_DVS, 1, changeValue.ubyte);
-		}
-		else if (changeType == BYTE && str_equals(changeKey, "AckDelayColumn")) {
-			spiConfigSend(devHandle, FPGA_DVS, 2, changeValue.ubyte);
-		}
-		else if (changeType == BYTE && str_equals(changeKey, "AckExtensionRow")) {
 			spiConfigSend(devHandle, FPGA_DVS, 3, changeValue.ubyte);
 		}
-		else if (changeType == BYTE && str_equals(changeKey, "AckExtensionColumn")) {
+		else if (changeType == BYTE && str_equals(changeKey, "AckDelayColumn")) {
 			spiConfigSend(devHandle, FPGA_DVS, 4, changeValue.ubyte);
 		}
+		else if (changeType == BYTE && str_equals(changeKey, "AckExtensionRow")) {
+			spiConfigSend(devHandle, FPGA_DVS, 5, changeValue.ubyte);
+		}
+		else if (changeType == BYTE && str_equals(changeKey, "AckExtensionColumn")) {
+			spiConfigSend(devHandle, FPGA_DVS, 6, changeValue.ubyte);
+		}
 		else if (changeType == BOOL && str_equals(changeKey, "WaitOnTransferStall")) {
-			spiConfigSend(devHandle, FPGA_DVS, 5, changeValue.boolean);
+			spiConfigSend(devHandle, FPGA_DVS, 7, changeValue.boolean);
 		}
 		else if (changeType == BOOL && str_equals(changeKey, "FilterRowOnlyEvents")) {
-			spiConfigSend(devHandle, FPGA_DVS, 6, changeValue.boolean);
+			spiConfigSend(devHandle, FPGA_DVS, 8, changeValue.boolean);
 		}
 	}
 }
@@ -2113,13 +2119,13 @@ static void DVSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 static void sendDVSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
 	sshsNode dvsNode = sshsGetRelativeNode(moduleNode, "dvs/");
 
-	spiConfigSend(devHandle, FPGA_DVS, 1, sshsNodeGetByte(dvsNode, "AckDelayRow"));
-	spiConfigSend(devHandle, FPGA_DVS, 2, sshsNodeGetByte(dvsNode, "AckDelayColumn"));
-	spiConfigSend(devHandle, FPGA_DVS, 3, sshsNodeGetByte(dvsNode, "AckExtensionRow"));
-	spiConfigSend(devHandle, FPGA_DVS, 4, sshsNodeGetByte(dvsNode, "AckExtensionColumn"));
-	spiConfigSend(devHandle, FPGA_DVS, 5, sshsNodeGetBool(dvsNode, "WaitOnTransferStall"));
-	spiConfigSend(devHandle, FPGA_DVS, 6, sshsNodeGetBool(dvsNode, "FilterRowOnlyEvents"));
-	spiConfigSend(devHandle, FPGA_DVS, 0, sshsNodeGetBool(dvsNode, "Run"));
+	spiConfigSend(devHandle, FPGA_DVS, 3, sshsNodeGetByte(dvsNode, "AckDelayRow"));
+	spiConfigSend(devHandle, FPGA_DVS, 4, sshsNodeGetByte(dvsNode, "AckDelayColumn"));
+	spiConfigSend(devHandle, FPGA_DVS, 5, sshsNodeGetByte(dvsNode, "AckExtensionRow"));
+	spiConfigSend(devHandle, FPGA_DVS, 6, sshsNodeGetByte(dvsNode, "AckExtensionColumn"));
+	spiConfigSend(devHandle, FPGA_DVS, 7, sshsNodeGetBool(dvsNode, "WaitOnTransferStall"));
+	spiConfigSend(devHandle, FPGA_DVS, 8, sshsNodeGetBool(dvsNode, "FilterRowOnlyEvents"));
+	spiConfigSend(devHandle, FPGA_DVS, 2, sshsNodeGetBool(dvsNode, "Run"));
 }
 
 static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
@@ -2130,84 +2136,68 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 
 	if (event == ATTRIBUTE_MODIFIED) {
 		if (changeType == BOOL && str_equals(changeKey, "Run")) {
-			spiConfigSend(devHandle, FPGA_APS, 0, changeValue.boolean);
+			spiConfigSend(devHandle, FPGA_APS, 4, changeValue.boolean);
+		}
+		else if (changeType == BOOL && str_equals(changeKey, "ResetRead")) {
+			spiConfigSend(devHandle, FPGA_APS, 5, changeValue.boolean);
+		}
+		else if (changeType == BOOL && str_equals(changeKey, "WaitOnTransferStall")) {
+			spiConfigSend(devHandle, FPGA_APS, 6, changeValue.boolean);
 		}
 		else if (changeType == BOOL && str_equals(changeKey, "GlobalShutter")) {
-			spiConfigSend(devHandle, FPGA_APS, 2, changeValue.boolean);
+			spiConfigSend(devHandle, FPGA_APS, 8, changeValue.boolean);
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "StartColumn0")) {
-			// The APS chip view is flipped on both axes. Reverse and exchange.
-			uint16_t endColumn0 = changeValue.ushort;
-			endColumn0 = U16T(state->apsSizeX - 1 - endColumn0);
-
-			spiConfigSend(devHandle, FPGA_APS, 5, endColumn0);
+			spiConfigSend(devHandle, FPGA_APS, 9, changeValue.ushort);
 			state->apsWindow0SizeX = U16T(sshsNodeGetShort(node, "EndColumn0") + 1 - changeValue.ushort);
 
 			// Update start offset for absolute pixel position (reset map).
 			state->apsWindow0StartX = changeValue.ushort;
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "StartRow0")) {
-			// The APS chip view is flipped on both axes. Reverse and exchange.
-			uint16_t endRow0 = changeValue.ushort;
-			endRow0 = U16T(state->apsSizeY - 1 - endRow0);
-
-			spiConfigSend(devHandle, FPGA_APS, 6, endRow0);
+			spiConfigSend(devHandle, FPGA_APS, 10, changeValue.ushort);
 			state->apsWindow0SizeY = U16T(sshsNodeGetShort(node, "EndRow0") + 1 - changeValue.ushort);
 
 			// Update start offset for absolute pixel position (reset map).
 			state->apsWindow0StartY = changeValue.ushort;
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "EndColumn0")) {
-			// The APS chip view is flipped on both axes. Reverse and exchange.
-			uint16_t startColumn0 = changeValue.ushort;
-			startColumn0 = U16T(state->apsSizeX - 1 - startColumn0);
-
-			spiConfigSend(devHandle, FPGA_APS, 3, startColumn0);
+			spiConfigSend(devHandle, FPGA_APS, 11, changeValue.ushort);
 			state->apsWindow0SizeX = U16T(changeValue.ushort + 1 - sshsNodeGetShort(node, "StartColumn0"));
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "EndRow0")) {
-			// The APS chip view is flipped on both axes. Reverse and exchange.
-			uint16_t startRow0 = changeValue.ushort;
-			startRow0 = U16T(state->apsSizeY - 1 - startRow0);
-
-			spiConfigSend(devHandle, FPGA_APS, 4, startRow0);
+			spiConfigSend(devHandle, FPGA_APS, 12, changeValue.ushort);
 			state->apsWindow0SizeY = U16T(changeValue.ushort + 1 - sshsNodeGetShort(node, "StartRow0"));
 		}
 		else if (changeType == INT && str_equals(changeKey, "Exposure")) {
-			spiConfigSend(devHandle, FPGA_APS, 7, changeValue.uint * EXT_ADC_FREQ);
+			spiConfigSend(devHandle, FPGA_APS, 13, changeValue.uint * EXT_ADC_FREQ);
 		}
 		else if (changeType == INT && str_equals(changeKey, "FrameDelay")) {
-			spiConfigSend(devHandle, FPGA_APS, 8, changeValue.uint * EXT_ADC_FREQ);
+			spiConfigSend(devHandle, FPGA_APS, 14, changeValue.uint * EXT_ADC_FREQ);
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "ResetSettle")) {
-			spiConfigSend(devHandle, FPGA_APS, 9, changeValue.ushort);
+			spiConfigSend(devHandle, FPGA_APS, 15, changeValue.ushort);
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "ColumnSettle")) {
-			spiConfigSend(devHandle, FPGA_APS, 10, changeValue.ushort);
+			spiConfigSend(devHandle, FPGA_APS, 16, changeValue.ushort);
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "RowSettle")) {
-			spiConfigSend(devHandle, FPGA_APS, 11, changeValue.ushort);
+			spiConfigSend(devHandle, FPGA_APS, 17, changeValue.ushort);
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "NullSettle")) {
-			spiConfigSend(devHandle, FPGA_APS, 12, changeValue.ushort);
-		}
-		else if (changeType == BOOL && str_equals(changeKey, "ResetRead")) {
-			spiConfigSend(devHandle, FPGA_APS, 13, changeValue.boolean);
-		}
-		else if (changeType == BOOL && str_equals(changeKey, "WaitOnTransferStall")) {
-			spiConfigSend(devHandle, FPGA_APS, 14, changeValue.boolean);
+			spiConfigSend(devHandle, FPGA_APS, 18, changeValue.ushort);
 		}
 		else if (changeType == BOOL && str_equals(changeKey, "UseInternalADC")) {
-			spiConfigSend(devHandle, FPGA_APS, 28, changeValue.boolean);
+			spiConfigSend(devHandle, FPGA_APS, 34, changeValue.boolean);
 		}
 		else if (changeType == BOOL && str_equals(changeKey, "SampleEnable")) {
-			spiConfigSend(devHandle, FPGA_APS, 29, changeValue.boolean);
+			spiConfigSend(devHandle, FPGA_APS, 35, changeValue.boolean);
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "SampleSettle")) {
-			spiConfigSend(devHandle, FPGA_APS, 30, changeValue.ushort);
+			spiConfigSend(devHandle, FPGA_APS, 36, changeValue.ushort);
 		}
 		else if (changeType == SHORT && str_equals(changeKey, "RampReset")) {
-			spiConfigSend(devHandle, FPGA_APS, 31, changeValue.ushort);
+			spiConfigSend(devHandle, FPGA_APS, 37, changeValue.ushort);
 		}
 	}
 }
@@ -2218,62 +2208,42 @@ static void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) 
 
 	// GS may not exist on chips that don't have it.
 	if (sshsNodeAttrExists(apsNode, "GlobalShutter", BOOL)) {
-		spiConfigSend(devHandle, FPGA_APS, 2, sshsNodeGetBool(apsNode, "GlobalShutter"));
+		spiConfigSend(devHandle, FPGA_APS, 8, sshsNodeGetBool(apsNode, "GlobalShutter"));
 	}
 
 	// UseInternalADC may not exist on chips that don't have integrated ADC.
 	if (sshsNodeAttrExists(apsNode, "UseInternalADC", BOOL)) {
-		spiConfigSend(devHandle, FPGA_APS, 28, sshsNodeGetBool(apsNode, "UseInternalADC"));
+		spiConfigSend(devHandle, FPGA_APS, 34, sshsNodeGetBool(apsNode, "UseInternalADC"));
 	}
 
 	// SampleEnable may not exist on chips that don't have integrated ADC.
 	if (sshsNodeAttrExists(apsNode, "SampleEnable", BOOL)) {
-		spiConfigSend(devHandle, FPGA_APS, 29, sshsNodeGetBool(apsNode, "SampleEnable"));
+		spiConfigSend(devHandle, FPGA_APS, 35, sshsNodeGetBool(apsNode, "SampleEnable"));
 	}
 
 	// SampleSettle may not exist on chips that don't have integrated ADC.
 	if (sshsNodeAttrExists(apsNode, "SampleSettle", SHORT)) {
-		spiConfigSend(devHandle, FPGA_APS, 30, sshsNodeGetShort(apsNode, "SampleSettle"));
+		spiConfigSend(devHandle, FPGA_APS, 36, sshsNodeGetShort(apsNode, "SampleSettle"));
 	}
 
 	// RampReset may not exist on chips that don't have integrated ADC.
 	if (sshsNodeAttrExists(apsNode, "RampReset", SHORT)) {
-		spiConfigSend(devHandle, FPGA_APS, 31, sshsNodeGetShort(apsNode, "RampReset"));
+		spiConfigSend(devHandle, FPGA_APS, 37, sshsNodeGetShort(apsNode, "RampReset"));
 	}
 
-	// The APS chip view is flipped on both axes. Reverse and exchange.
-	uint16_t endColumn0 = sshsNodeGetShort(apsNode, "StartColumn0");
-	endColumn0 = U16T(sshsNodeGetShort(infoNode, "apsSizeX") - 1 - endColumn0);
-
-	spiConfigSend(devHandle, FPGA_APS, 5, endColumn0);
-
-	// The APS chip view is flipped on both axes. Reverse and exchange.
-	uint16_t endRow0 = sshsNodeGetShort(apsNode, "StartRow0");
-	endRow0 = U16T(sshsNodeGetShort(infoNode, "apsSizeY") - 1 - endRow0);
-
-	spiConfigSend(devHandle, FPGA_APS, 6, endRow0);
-
-	// The APS chip view is flipped on both axes. Reverse and exchange.
-	uint16_t startColumn0 = sshsNodeGetShort(apsNode, "EndColumn0");
-	startColumn0 = U16T(sshsNodeGetShort(infoNode, "apsSizeX") - 1 - startColumn0);
-
-	spiConfigSend(devHandle, FPGA_APS, 3, startColumn0);
-
-	// The APS chip view is flipped on both axes. Reverse and exchange.
-	uint16_t startRow0 = sshsNodeGetShort(apsNode, "EndRow0");
-	startRow0 = U16T(sshsNodeGetShort(infoNode, "apsSizeY") - 1 - startRow0);
-
-	spiConfigSend(devHandle, FPGA_APS, 4, startRow0);
-
-	spiConfigSend(devHandle, FPGA_APS, 7, sshsNodeGetInt(apsNode, "Exposure") * EXT_ADC_FREQ); // in µs, converted to cycles here
-	spiConfigSend(devHandle, FPGA_APS, 8, sshsNodeGetInt(apsNode, "FrameDelay") * EXT_ADC_FREQ); // in µs, converted to cycles here
-	spiConfigSend(devHandle, FPGA_APS, 9, sshsNodeGetShort(apsNode, "ResetSettle")); // in cycles
-	spiConfigSend(devHandle, FPGA_APS, 10, sshsNodeGetShort(apsNode, "ColumnSettle")); // in cycles
-	spiConfigSend(devHandle, FPGA_APS, 11, sshsNodeGetShort(apsNode, "RowSettle")); // in cycles
-	spiConfigSend(devHandle, FPGA_APS, 12, sshsNodeGetShort(apsNode, "NullSettle")); // in cycles
-	spiConfigSend(devHandle, FPGA_APS, 13, sshsNodeGetBool(apsNode, "ResetRead"));
-	spiConfigSend(devHandle, FPGA_APS, 14, sshsNodeGetBool(apsNode, "WaitOnTransferStall"));
-	spiConfigSend(devHandle, FPGA_APS, 0, sshsNodeGetBool(apsNode, "Run"));
+	spiConfigSend(devHandle, FPGA_APS, 5, sshsNodeGetBool(apsNode, "ResetRead"));
+	spiConfigSend(devHandle, FPGA_APS, 6, sshsNodeGetBool(apsNode, "WaitOnTransferStall"));
+	spiConfigSend(devHandle, FPGA_APS, 9, sshsNodeGetShort(apsNode, "StartColumn0"));
+	spiConfigSend(devHandle, FPGA_APS, 10, sshsNodeGetShort(apsNode, "StartRow0"));
+	spiConfigSend(devHandle, FPGA_APS, 11, sshsNodeGetShort(apsNode, "EndColumn0"));
+	spiConfigSend(devHandle, FPGA_APS, 12, sshsNodeGetShort(apsNode, "EndRow0"));
+	spiConfigSend(devHandle, FPGA_APS, 13, sshsNodeGetInt(apsNode, "Exposure") * EXT_ADC_FREQ); // in µs, converted to cycles here
+	spiConfigSend(devHandle, FPGA_APS, 14, sshsNodeGetInt(apsNode, "FrameDelay") * EXT_ADC_FREQ); // in µs, converted to cycles here
+	spiConfigSend(devHandle, FPGA_APS, 15, sshsNodeGetShort(apsNode, "ResetSettle")); // in cycles
+	spiConfigSend(devHandle, FPGA_APS, 16, sshsNodeGetShort(apsNode, "ColumnSettle")); // in cycles
+	spiConfigSend(devHandle, FPGA_APS, 17, sshsNodeGetShort(apsNode, "RowSettle")); // in cycles
+	spiConfigSend(devHandle, FPGA_APS, 18, sshsNodeGetShort(apsNode, "NullSettle")); // in cycles
+	spiConfigSend(devHandle, FPGA_APS, 4, sshsNodeGetBool(apsNode, "Run"));
 }
 
 static void IMUConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
