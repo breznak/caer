@@ -113,7 +113,8 @@ struct davisCommon_state {
 	uint16_t apsWindow0SizeY;
 	bool apsGlobalShutter;
 	bool apsResetRead;
-	bool apsCurrentReadoutMode;
+	bool apsRGBPixelOffsetDirection; // 0 is increasing, 1 is decreasing.
+	int16_t apsRGBPixelOffset;
 	uint16_t apsCurrentReadoutType;
 	uint16_t apsCountX[APS_READOUT_TYPES_NUM];
 	uint16_t apsCountY[APS_READOUT_TYPES_NUM];

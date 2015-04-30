@@ -70,6 +70,14 @@ static inline void initFrame(davisCommonState state, caerFrameEvent currentFrame
 	}
 }
 
+static inline bool isDavisPixel(uint16_t xPos, uint16_t yPos) {
+	if (((xPos & 0x01) == 1) && ((yPos & 0x01) == 0)) {
+		return (true);
+	}
+
+	return (false);
+}
+
 static inline float calculateIMUAccelScale(uint8_t imuAccelScale) {
 	// Accelerometer scale is:
 	// 0 - +-2 g - 16384 LSB/g
@@ -116,6 +124,11 @@ static void freeAllMemory(davisCommonState state) {
 	if (state->apsCurrentResetFrame != NULL) {
 		free(state->apsCurrentResetFrame);
 		state->apsCurrentResetFrame = NULL;
+	}
+
+	if (state->apsCurrentSignalFrame != NULL) {
+		free(state->apsCurrentSignalFrame);
+		state->apsCurrentSignalFrame = NULL;
 	}
 
 	if (state->dataExchangeBuffer != NULL) {
@@ -784,6 +797,20 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 		sshsNodePutShortIfAbsent(apsNode, "RampReset", 10); // in cycles
 	}
 
+	// DAVIS RGB has additional timing counters.
+	if (cstate->chipID == CHIP_DAVISRGB) {
+		sshsNodePutShortIfAbsent(apsNode, "TransferTime", 3000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "RSFDSettleTime", 3000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "RSCpResetTime", 3000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "RSCpSettleTime", 3000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSPDResetTime", 3000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSResetFallTime", 3000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSTXFallTime", 3000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSFDResetTime", 3000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSCpResetFDTime", 3000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSCpResetSettleTime", 3000); // in cycles
+	}
+
 	// Subsystem 3: IMU
 	sshsNode imuNode = sshsGetRelativeNode(moduleData->moduleNode, "imu/");
 
@@ -868,15 +895,18 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 	cstate->wrapAdd = 0;
 	cstate->lastTimestamp = 0;
 	cstate->currentTimestamp = 0;
+
 	cstate->dvsTimestamp = 0;
 	cstate->dvsLastY = 0;
 	cstate->dvsGotY = false;
+
 	sshsNode imuNode = sshsGetRelativeNode(moduleData->moduleNode, "imu/");
 	cstate->imuIgnoreEvents = false;
 	cstate->imuCount = 0;
 	cstate->imuTmpData = 0;
 	cstate->imuAccelScale = calculateIMUAccelScale(sshsNodeGetByte(imuNode, "AccelFullScale"));
 	cstate->imuGyroScale = calculateIMUGyroScale(sshsNodeGetByte(imuNode, "GyroFullScale"));
+
 	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
 	cstate->apsIgnoreEvents = false;
 	cstate->apsWindow0StartX = sshsNodeGetShort(apsNode, "StartColumn0");
@@ -884,13 +914,17 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 	cstate->apsWindow0SizeX = U16T(
 		sshsNodeGetShort(apsNode, "EndColumn0") + 1 - sshsNodeGetShort(apsNode, "StartColumn0"));
 	cstate->apsWindow0SizeY = U16T(sshsNodeGetShort(apsNode, "EndRow0") + 1 - sshsNodeGetShort(apsNode, "StartRow0"));
-	cstate->apsResetRead = sshsNodeGetBool(apsNode, "ResetRead");
+
 	if (sshsNodeAttrExists(apsNode, "GlobalShutter", BOOL)) {
 		cstate->apsGlobalShutter = sshsNodeGetBool(apsNode, "GlobalShutter");
 	}
 	else {
 		cstate->apsGlobalShutter = false;
 	}
+	cstate->apsResetRead = sshsNodeGetBool(apsNode, "ResetRead");
+	cstate->apsRGBPixelOffsetDirection = 0;
+	cstate->apsRGBPixelOffset = 0;
+
 	initFrame(cstate, NULL);
 	cstate->apsCurrentResetFrame = calloc((size_t) cstate->apsSizeX * cstate->apsSizeY * DAVIS_COLOR_CHANNELS,
 		sizeof(uint16_t));
@@ -899,6 +933,16 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 
 		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to allocate reset frame array.");
 		return (false);
+	}
+	if (cstate->chipID == CHIP_DAVISRGB) {
+		cstate->apsCurrentSignalFrame = calloc((size_t) cstate->apsSizeX * cstate->apsSizeY * DAVIS_COLOR_CHANNELS,
+			sizeof(uint16_t));
+		if (cstate->apsCurrentSignalFrame == NULL) {
+			freeAllMemory(cstate);
+
+			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to allocate signal frame array.");
+			return (false);
+		}
 	}
 
 	// Store reference to parent mainloop, so that we can correctly notify
@@ -1402,7 +1446,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 								}
 
 								// Check second reset read (Cp RST, DAVIS RGB).
-								if (j == APS_READOUT_CPRESET) {
+								if (j == APS_READOUT_CPRESET && state->chipID != CHIP_DAVISRGB) {
 									checkValue = 0;
 								}
 
@@ -1438,6 +1482,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							state->apsCurrentReadoutType = APS_READOUT_RESET;
 							state->apsCountY[state->apsCurrentReadoutType] = 0;
 
+							state->apsRGBPixelOffsetDirection = 0;
+							state->apsRGBPixelOffset = 1; // RGB support, first pixel of row always even.
+
 							// The first Reset Column Read Start is also the start
 							// of the exposure for the RS.
 							if (!state->apsGlobalShutter && state->apsCountX[APS_READOUT_RESET] == 0) {
@@ -1455,6 +1502,9 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 							state->apsCurrentReadoutType = APS_READOUT_SIGNAL;
 							state->apsCountY[state->apsCurrentReadoutType] = 0;
+
+							state->apsRGBPixelOffsetDirection = 0;
+							state->apsRGBPixelOffset = 1; // RGB support, first pixel of row always even.
 
 							// The first Signal Column Read Start is also always the end
 							// of the exposure time, for both RS and GS.
@@ -1568,9 +1618,26 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							break;
 						}
 
+						case 32: { // APS Reset2 Column Start
+							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Reset2 Column Start event received.");
+							if (state->apsIgnoreEvents) {
+								break;
+							}
+
+							state->apsCurrentReadoutType = APS_READOUT_CPRESET;
+							state->apsCountY[state->apsCurrentReadoutType] = 0;
+
+							state->apsRGBPixelOffsetDirection = 0;
+							state->apsRGBPixelOffset = 1; // RGB support, first pixel of row always even.
+
+							// TODO: figure out exposure time calculation from ADC sample times.
+
+							break;
+						}
+
 						default:
 							caerLog(LOG_ERROR, state->sourceSubSystemString,
-								"Caught special event that can't be handled.");
+								"Caught special event that can't be handled: %d.", data);
 							break;
 					}
 					break;
@@ -1653,6 +1720,11 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 								caerFrameEventGetLengthY(currentFrameEvent) - 1
 									- state->apsCountY[state->apsCurrentReadoutType])) :
 							(U16T(state->apsCountY[state->apsCurrentReadoutType]));
+
+					if (state->chipID == CHIP_DAVISRGB) {
+						yPos = U16T(yPos - state->apsRGBPixelOffset);
+					}
+
 					size_t pixelPosition = (size_t) (yPos * caerFrameEventGetLengthX(currentFrameEvent)) + xPos;
 
 					uint16_t xPosAbs = U16T(xPos + state->apsWindow0StartX);
@@ -1662,10 +1734,38 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					if (state->apsCurrentReadoutType == APS_READOUT_RESET) {
 						state->apsCurrentResetFrame[pixelPositionAbs] = data;
 					}
+					else if (state->chipID == CHIP_DAVISRGB && state->apsCurrentReadoutType == APS_READOUT_SIGNAL) {
+						// Only for DAVIS RGB.
+						state->apsCurrentSignalFrame[pixelPositionAbs] = data;
+					}
 					else {
+						int32_t pixelValue = 0;
+
+						if (state->chipID == CHIP_DAVISRGB) {
+							// For DAVIS RGB, this is CP Reset, the last read for both GS and RS modes.
+							float C = 7.35f / 2.13f;
+
+							if (isDavisPixel(xPos, yPos)) {
+								// DAVIS Pixel
+								pixelValue = (int32_t) ((float) (state->apsCurrentResetFrame[pixelPositionAbs]
+									- state->apsCurrentSignalFrame[pixelPositionAbs])
+									+ (C * (float) (data - state->apsCurrentSignalFrame[pixelPositionAbs])));
+
+								// Protect against overflow from addition.
+								pixelValue = (pixelValue > 1023) ? (1023) : (pixelValue);
+							}
+							else {
+								// APS Pixel
+								pixelValue = (state->apsCurrentResetFrame[pixelPositionAbs]
+									- state->apsCurrentSignalFrame[pixelPositionAbs]);
+							}
+						}
+						else {
+							pixelValue = (state->apsCurrentResetFrame[pixelPositionAbs] - data);
+						}
+
 						// Normalize the ADC value to 16bit generic depth and check for underflow.
-						int32_t pixelValue = (state->apsCurrentResetFrame[pixelPositionAbs] - data)
-							<< (16 - DAVIS_ADC_DEPTH);
+						pixelValue = pixelValue << (16 - DAVIS_ADC_DEPTH);
 						caerFrameEventGetPixelArrayUnsafe(currentFrameEvent)[pixelPosition] = htole16(
 							U16T((pixelValue < 0) ? (0) : (pixelValue)));
 					}
@@ -1676,6 +1776,22 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						xPos, yPos, data);
 
 					state->apsCountY[state->apsCurrentReadoutType]++;
+
+					// RGB support: first 320 pixels are even, then odd.
+					if (state->chipID == CHIP_DAVISRGB) {
+						if (state->apsRGBPixelOffsetDirection == 0) { // Increasing
+							state->apsRGBPixelOffset++;
+
+							if (state->apsRGBPixelOffset == 321) {
+								// Switch to decreasing after last even pixel.
+								state->apsRGBPixelOffsetDirection = 1;
+								state->apsRGBPixelOffset = 318;
+							}
+						}
+						else { // Decreasing
+							state->apsRGBPixelOffset = (int16_t) (state->apsRGBPixelOffset - 3);
+						}
+					}
 
 					break;
 				}
