@@ -45,11 +45,6 @@
 #define CHIP_DAVISRGB  7
 #define CHIP_DAVIS208  8
 
-#define CHIP_ORIENTATION_STRAIGHT 0
-#define CHIP_ORIENTATION_ROT90    1
-#define CHIP_ORIENTATION_ROT180   2
-#define CHIP_ORIENTATION_ROT270   3
-
 #define BIAS_MAX_NUM_DESC 37
 
 struct bias_descriptor {
@@ -88,7 +83,6 @@ struct davisCommon_state {
 	size_t activeDataTransfers;
 	// Chip information fields
 	uint16_t chipID;
-	uint8_t chipOrientation;
 	biasDescriptor chipBiases[BIAS_MAX_NUM_DESC];
 	configChainDescriptor chipConfigChain[CONFIGCHAIN_MAX_NUM_DESC];
 	// Timestamp fields
@@ -101,7 +95,9 @@ struct davisCommon_state {
 	uint16_t dvsSizeY;
 	uint16_t dvsLastY;
 	bool dvsGotY;
+	bool dvsInvertXY;
 	// APS specific fields
+	bool apsInvertXY;
 	bool apsFlipX;
 	bool apsFlipY;
 	bool apsIgnoreEvents;

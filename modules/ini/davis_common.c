@@ -441,34 +441,6 @@ uint32_t spiConfigReceive(libusb_device_handle *devHandle, uint8_t moduleAddr, u
 	return (returnedParam);
 }
 
-static uint16_t applyChipRotationX(davisCommonState state, uint16_t x, uint16_t y) {
-	if (state->chipOrientation == CHIP_ORIENTATION_ROT90) {
-		return (y);
-	}
-	else if (state->chipOrientation == CHIP_ORIENTATION_ROT180) {
-		return U16T(state->apsSizeX - 1 - x);
-	}
-	else if (state->chipOrientation == CHIP_ORIENTATION_ROT270) {
-		return U16T(state->apsSizeY - 1 - y);
-	}
-
-	return (x);
-}
-
-static uint16_t applyChipRotationY(davisCommonState state, uint16_t x, uint16_t y) {
-	if (state->chipOrientation == CHIP_ORIENTATION_ROT90) {
-		return U16T(state->apsSizeX - 1 - x);
-	}
-	else if (state->chipOrientation == CHIP_ORIENTATION_ROT180) {
-		return U16T(state->apsSizeY - 1 - y);
-	}
-	else if (state->chipOrientation == CHIP_ORIENTATION_ROT270) {
-		return (x);
-	}
-
-	return (y);
-}
-
 bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t VID, uint16_t PID, uint8_t DID_TYPE) {
 	// USB port/bus/SN settings/restrictions.
 	// These can be used to force connection to one specific device.
@@ -531,34 +503,38 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 	// So now we have a working connection to the device we want. Let's get some data!
 	cstate->chipID = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 1));
 
-	// cstate->chipOrientation = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 2));
-	cstate->chipOrientation = CHIP_ORIENTATION_STRAIGHT;
-
-	uint16_t chipAPSStreamStart = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_APS, 2));
-	cstate->apsFlipX = chipAPSStreamStart & 0x02;
-	cstate->apsFlipY = chipAPSStreamStart & 0x01;
-
 	cstate->apsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_APS, 0));
 	cstate->apsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_APS, 1));
+
+	uint16_t apsOrientationInfo = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_APS, 2));
+	cstate->apsInvertXY = apsOrientationInfo & 0x04;
+	cstate->apsFlipX = apsOrientationInfo & 0x02;
+	cstate->apsFlipY = apsOrientationInfo & 0x01;
 
 	cstate->dvsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_DVS, 0));
 	cstate->dvsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_DVS, 1));
 
+	cstate->dvsInvertXY = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_DVS, 2)) & 0x04;
+
 	// Put global source information into SSHS, so it's globally available.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
 
-	if (cstate->chipOrientation == CHIP_ORIENTATION_ROT90 || cstate->chipOrientation == CHIP_ORIENTATION_ROT270) {
-		// 90 or 270 degree chip rotation means we need to swap X/Y lengths as reported by logic.
+	if (cstate->apsInvertXY) {
+		sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->dvsSizeY);
+		sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->dvsSizeX);
+	}
+	else {
+		sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeX);
+		sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->apsSizeY);
+	}
+
+	if (cstate->dvsInvertXY) {
 		sshsNodePutShort(sourceInfoNode, "dvsSizeX", cstate->dvsSizeY);
 		sshsNodePutShort(sourceInfoNode, "dvsSizeY", cstate->dvsSizeX);
-		sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeY);
-		sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->apsSizeX);
 	}
 	else {
 		sshsNodePutShort(sourceInfoNode, "dvsSizeX", cstate->dvsSizeX);
 		sshsNodePutShort(sourceInfoNode, "dvsSizeY", cstate->dvsSizeY);
-		sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeX);
-		sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->apsSizeY);
 	}
 
 	sshsNodePutShort(sourceInfoNode, "apsOriginalDepth", DAVIS_ADC_DEPTH);
@@ -566,8 +542,9 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 	sshsNodePutBool(sourceInfoNode, "apsHasGlobalShutter", spiConfigReceive(cstate->deviceHandle, FPGA_APS, 7));
 	sshsNodePutBool(sourceInfoNode, "apsHasExternalADC", spiConfigReceive(cstate->deviceHandle, FPGA_APS, 32));
 	sshsNodePutBool(sourceInfoNode, "apsHasInternalADC", spiConfigReceive(cstate->deviceHandle, FPGA_APS, 33));
+
 	sshsNodePutShort(sourceInfoNode, "logicVersion", U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 0)));
-	sshsNodePutBool(sourceInfoNode, "deviceIsMaster", spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 3));
+	sshsNodePutBool(sourceInfoNode, "deviceIsMaster", spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 2));
 
 	return (true);
 }
@@ -1343,7 +1320,7 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							// Update Master/Slave status on incoming TS resets.
 							//sshsNode sourceInfoNode = caerMainloopGetSourceInfo(state->sourceID);
 							//sshsNodePutBool(sourceInfoNode, "deviceIsMaster",
-							//	spiConfigReceive(state->deviceHandle, FPGA_SYSINFO, 3));
+							//	spiConfigReceive(state->deviceHandle, FPGA_SYSINFO, 2));
 
 							break;
 						}
@@ -1679,8 +1656,14 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 					caerPolarityEventSetTimestamp(currentPolarityEvent, state->dvsTimestamp);
 					caerPolarityEventSetPolarity(currentPolarityEvent, (code & 0x01));
-					caerPolarityEventSetY(currentPolarityEvent, state->dvsLastY);
-					caerPolarityEventSetX(currentPolarityEvent, data);
+					if (state->dvsInvertXY) {
+						caerPolarityEventSetY(currentPolarityEvent, data);
+						caerPolarityEventSetX(currentPolarityEvent, state->dvsLastY);
+					}
+					else {
+						caerPolarityEventSetY(currentPolarityEvent, state->dvsLastY);
+						caerPolarityEventSetX(currentPolarityEvent, data);
+					}
 					caerPolarityEventValidate(currentPolarityEvent, state->currentPolarityPacket);
 					state->currentPolarityPacketPosition++;
 
@@ -1723,6 +1706,10 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 
 					if (state->chipID == CHIP_DAVISRGB) {
 						yPos = U16T(yPos - state->apsRGBPixelOffset);
+					}
+
+					if (state->apsInvertXY) {
+						SWAP_VAR(uint16_t, xPos, yPos);
 					}
 
 					size_t pixelPosition = (size_t) (yPos * caerFrameEventGetLengthX(currentFrameEvent)) + xPos;
@@ -2125,7 +2112,7 @@ void sendDisableDataConfig(libusb_device_handle *devHandle) {
 	spiConfigSend(devHandle, FPGA_EXTINPUT, 0, 0);
 	spiConfigSend(devHandle, FPGA_IMU, 0, 0);
 	spiConfigSend(devHandle, FPGA_APS, 4, 0);
-	spiConfigSend(devHandle, FPGA_DVS, 2, 0);
+	spiConfigSend(devHandle, FPGA_DVS, 3, 0);
 	spiConfigSend(devHandle, FPGA_MUX, 3, 0); // Ensure chip turns off.
 	spiConfigSend(devHandle, FPGA_MUX, 1, 0); // Turn off timestamp too.
 	spiConfigSend(devHandle, FPGA_MUX, 0, 0);
@@ -2209,25 +2196,25 @@ static void DVSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 
 	if (event == ATTRIBUTE_MODIFIED) {
 		if (changeType == BOOL && str_equals(changeKey, "Run")) {
-			spiConfigSend(devHandle, FPGA_DVS, 2, changeValue.boolean);
+			spiConfigSend(devHandle, FPGA_DVS, 3, changeValue.boolean);
 		}
 		else if (changeType == BYTE && str_equals(changeKey, "AckDelayRow")) {
-			spiConfigSend(devHandle, FPGA_DVS, 3, changeValue.ubyte);
-		}
-		else if (changeType == BYTE && str_equals(changeKey, "AckDelayColumn")) {
 			spiConfigSend(devHandle, FPGA_DVS, 4, changeValue.ubyte);
 		}
-		else if (changeType == BYTE && str_equals(changeKey, "AckExtensionRow")) {
+		else if (changeType == BYTE && str_equals(changeKey, "AckDelayColumn")) {
 			spiConfigSend(devHandle, FPGA_DVS, 5, changeValue.ubyte);
 		}
-		else if (changeType == BYTE && str_equals(changeKey, "AckExtensionColumn")) {
+		else if (changeType == BYTE && str_equals(changeKey, "AckExtensionRow")) {
 			spiConfigSend(devHandle, FPGA_DVS, 6, changeValue.ubyte);
 		}
+		else if (changeType == BYTE && str_equals(changeKey, "AckExtensionColumn")) {
+			spiConfigSend(devHandle, FPGA_DVS, 7, changeValue.ubyte);
+		}
 		else if (changeType == BOOL && str_equals(changeKey, "WaitOnTransferStall")) {
-			spiConfigSend(devHandle, FPGA_DVS, 7, changeValue.boolean);
+			spiConfigSend(devHandle, FPGA_DVS, 8, changeValue.boolean);
 		}
 		else if (changeType == BOOL && str_equals(changeKey, "FilterRowOnlyEvents")) {
-			spiConfigSend(devHandle, FPGA_DVS, 8, changeValue.boolean);
+			spiConfigSend(devHandle, FPGA_DVS, 9, changeValue.boolean);
 		}
 	}
 }
@@ -2235,13 +2222,13 @@ static void DVSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 static void sendDVSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
 	sshsNode dvsNode = sshsGetRelativeNode(moduleNode, "dvs/");
 
-	spiConfigSend(devHandle, FPGA_DVS, 3, sshsNodeGetByte(dvsNode, "AckDelayRow"));
-	spiConfigSend(devHandle, FPGA_DVS, 4, sshsNodeGetByte(dvsNode, "AckDelayColumn"));
-	spiConfigSend(devHandle, FPGA_DVS, 5, sshsNodeGetByte(dvsNode, "AckExtensionRow"));
-	spiConfigSend(devHandle, FPGA_DVS, 6, sshsNodeGetByte(dvsNode, "AckExtensionColumn"));
-	spiConfigSend(devHandle, FPGA_DVS, 7, sshsNodeGetBool(dvsNode, "WaitOnTransferStall"));
-	spiConfigSend(devHandle, FPGA_DVS, 8, sshsNodeGetBool(dvsNode, "FilterRowOnlyEvents"));
-	spiConfigSend(devHandle, FPGA_DVS, 2, sshsNodeGetBool(dvsNode, "Run"));
+	spiConfigSend(devHandle, FPGA_DVS, 4, sshsNodeGetByte(dvsNode, "AckDelayRow"));
+	spiConfigSend(devHandle, FPGA_DVS, 5, sshsNodeGetByte(dvsNode, "AckDelayColumn"));
+	spiConfigSend(devHandle, FPGA_DVS, 6, sshsNodeGetByte(dvsNode, "AckExtensionRow"));
+	spiConfigSend(devHandle, FPGA_DVS, 7, sshsNodeGetByte(dvsNode, "AckExtensionColumn"));
+	spiConfigSend(devHandle, FPGA_DVS, 8, sshsNodeGetBool(dvsNode, "WaitOnTransferStall"));
+	spiConfigSend(devHandle, FPGA_DVS, 9, sshsNodeGetBool(dvsNode, "FilterRowOnlyEvents"));
+	spiConfigSend(devHandle, FPGA_DVS, 3, sshsNodeGetBool(dvsNode, "Run"));
 }
 
 static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,

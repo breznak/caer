@@ -452,58 +452,58 @@ static void DVSFilterConfigListener(sshsNode node, void *userData, enum sshs_nod
 
 	if (event == ATTRIBUTE_MODIFIED) {
 		if (changeType == SHORT && str_equals(changeKey, "FilterPixel0Row")) {
-			spiConfigSend(devHandle, FPGA_DVS, 10, changeValue.ushort);
-		}
-		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel0Column")) {
 			spiConfigSend(devHandle, FPGA_DVS, 11, changeValue.ushort);
 		}
-		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel1Row")) {
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel0Column")) {
 			spiConfigSend(devHandle, FPGA_DVS, 12, changeValue.ushort);
 		}
-		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel1Column")) {
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel1Row")) {
 			spiConfigSend(devHandle, FPGA_DVS, 13, changeValue.ushort);
 		}
-		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel2Row")) {
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel1Column")) {
 			spiConfigSend(devHandle, FPGA_DVS, 14, changeValue.ushort);
 		}
-		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel2Column")) {
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel2Row")) {
 			spiConfigSend(devHandle, FPGA_DVS, 15, changeValue.ushort);
 		}
-		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel3Row")) {
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel2Column")) {
 			spiConfigSend(devHandle, FPGA_DVS, 16, changeValue.ushort);
 		}
-		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel3Column")) {
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel3Row")) {
 			spiConfigSend(devHandle, FPGA_DVS, 17, changeValue.ushort);
 		}
-		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel4Row")) {
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel3Column")) {
 			spiConfigSend(devHandle, FPGA_DVS, 18, changeValue.ushort);
 		}
-		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel4Column")) {
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel4Row")) {
 			spiConfigSend(devHandle, FPGA_DVS, 19, changeValue.ushort);
 		}
-		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel5Row")) {
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel4Column")) {
 			spiConfigSend(devHandle, FPGA_DVS, 20, changeValue.ushort);
 		}
-		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel5Column")) {
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel5Row")) {
 			spiConfigSend(devHandle, FPGA_DVS, 21, changeValue.ushort);
 		}
-		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel6Row")) {
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel5Column")) {
 			spiConfigSend(devHandle, FPGA_DVS, 22, changeValue.ushort);
 		}
-		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel6Column")) {
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel6Row")) {
 			spiConfigSend(devHandle, FPGA_DVS, 23, changeValue.ushort);
 		}
-		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel7Row")) {
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel6Column")) {
 			spiConfigSend(devHandle, FPGA_DVS, 24, changeValue.ushort);
 		}
-		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel7Column")) {
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel7Row")) {
 			spiConfigSend(devHandle, FPGA_DVS, 25, changeValue.ushort);
 		}
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel7Column")) {
+			spiConfigSend(devHandle, FPGA_DVS, 26, changeValue.ushort);
+		}
 		else if (changeType == BOOL && str_equals(changeKey, "FilterBackgroundActivity")) {
-			spiConfigSend(devHandle, FPGA_DVS, 27, changeValue.boolean);
+			spiConfigSend(devHandle, FPGA_DVS, 28, changeValue.boolean);
 		}
 		else if (changeType == INT && str_equals(changeKey, "FilterBackgroundActivityDeltaTime")) {
-			spiConfigSend(devHandle, FPGA_DVS, 28, changeValue.uint);
+			spiConfigSend(devHandle, FPGA_DVS, 29, changeValue.uint);
 		}
 	}
 }
@@ -511,24 +511,24 @@ static void DVSFilterConfigListener(sshsNode node, void *userData, enum sshs_nod
 static void sendDVSFilterConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
 	sshsNode dvsNode = sshsGetRelativeNode(moduleNode, "dvs/");
 
-	spiConfigSend(devHandle, FPGA_DVS, 10, sshsNodeGetShort(dvsNode, "FilterPixel0Row"));
-	spiConfigSend(devHandle, FPGA_DVS, 11, sshsNodeGetShort(dvsNode, "FilterPixel0Column"));
-	spiConfigSend(devHandle, FPGA_DVS, 12, sshsNodeGetShort(dvsNode, "FilterPixel1Row"));
-	spiConfigSend(devHandle, FPGA_DVS, 13, sshsNodeGetShort(dvsNode, "FilterPixel1Column"));
-	spiConfigSend(devHandle, FPGA_DVS, 14, sshsNodeGetShort(dvsNode, "FilterPixel2Row"));
-	spiConfigSend(devHandle, FPGA_DVS, 15, sshsNodeGetShort(dvsNode, "FilterPixel2Column"));
-	spiConfigSend(devHandle, FPGA_DVS, 16, sshsNodeGetShort(dvsNode, "FilterPixel3Row"));
-	spiConfigSend(devHandle, FPGA_DVS, 17, sshsNodeGetShort(dvsNode, "FilterPixel3Column"));
-	spiConfigSend(devHandle, FPGA_DVS, 18, sshsNodeGetShort(dvsNode, "FilterPixel4Row"));
-	spiConfigSend(devHandle, FPGA_DVS, 19, sshsNodeGetShort(dvsNode, "FilterPixel4Column"));
-	spiConfigSend(devHandle, FPGA_DVS, 20, sshsNodeGetShort(dvsNode, "FilterPixel5Row"));
-	spiConfigSend(devHandle, FPGA_DVS, 21, sshsNodeGetShort(dvsNode, "FilterPixel5Column"));
-	spiConfigSend(devHandle, FPGA_DVS, 22, sshsNodeGetShort(dvsNode, "FilterPixel6Row"));
-	spiConfigSend(devHandle, FPGA_DVS, 23, sshsNodeGetShort(dvsNode, "FilterPixel6Column"));
-	spiConfigSend(devHandle, FPGA_DVS, 24, sshsNodeGetShort(dvsNode, "FilterPixel7Row"));
-	spiConfigSend(devHandle, FPGA_DVS, 25, sshsNodeGetShort(dvsNode, "FilterPixel7Column"));
-	spiConfigSend(devHandle, FPGA_DVS, 27, sshsNodeGetBool(dvsNode, "FilterBackgroundActivity"));
-	spiConfigSend(devHandle, FPGA_DVS, 28, sshsNodeGetInt(dvsNode, "FilterBackgroundActivityDeltaTime"));
+	spiConfigSend(devHandle, FPGA_DVS, 11, sshsNodeGetShort(dvsNode, "FilterPixel0Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 12, sshsNodeGetShort(dvsNode, "FilterPixel0Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 13, sshsNodeGetShort(dvsNode, "FilterPixel1Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 14, sshsNodeGetShort(dvsNode, "FilterPixel1Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 15, sshsNodeGetShort(dvsNode, "FilterPixel2Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 16, sshsNodeGetShort(dvsNode, "FilterPixel2Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 17, sshsNodeGetShort(dvsNode, "FilterPixel3Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 18, sshsNodeGetShort(dvsNode, "FilterPixel3Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 19, sshsNodeGetShort(dvsNode, "FilterPixel4Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 20, sshsNodeGetShort(dvsNode, "FilterPixel4Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 21, sshsNodeGetShort(dvsNode, "FilterPixel5Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 22, sshsNodeGetShort(dvsNode, "FilterPixel5Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 23, sshsNodeGetShort(dvsNode, "FilterPixel6Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 24, sshsNodeGetShort(dvsNode, "FilterPixel6Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 25, sshsNodeGetShort(dvsNode, "FilterPixel7Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 26, sshsNodeGetShort(dvsNode, "FilterPixel7Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 28, sshsNodeGetBool(dvsNode, "FilterBackgroundActivity"));
+	spiConfigSend(devHandle, FPGA_DVS, 29, sshsNodeGetInt(dvsNode, "FilterBackgroundActivityDeltaTime"));
 }
 
 static void APSQuadROIConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
