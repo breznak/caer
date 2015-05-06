@@ -1654,8 +1654,12 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						break; // Skip invalid event.
 					}
 
+					// Invert polarity for PixelParade high gain pixels (DavisSense), because of
+					// negative gain from pre-amplifier.
+					uint8_t polarity = ((state->chipID == CHIP_DAVIS208) && (data < 192)) ? ((uint8_t) ~code) : (code);
+
 					caerPolarityEventSetTimestamp(currentPolarityEvent, state->dvsTimestamp);
-					caerPolarityEventSetPolarity(currentPolarityEvent, (code & 0x01));
+					caerPolarityEventSetPolarity(currentPolarityEvent, (polarity & 0x01));
 					if (state->dvsInvertXY) {
 						caerPolarityEventSetY(currentPolarityEvent, data);
 						caerPolarityEventSetX(currentPolarityEvent, state->dvsLastY);
