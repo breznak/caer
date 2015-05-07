@@ -740,6 +740,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutByteIfAbsent(dvsNode, "AckExtensionColumn", 0);
 	sshsNodePutBoolIfAbsent(dvsNode, "WaitOnTransferStall", 0);
 	sshsNodePutBoolIfAbsent(dvsNode, "FilterRowOnlyEvents", 1);
+	sshsNodePutBoolIfAbsent(dvsNode, "ExternalAERControl", 0);
 
 	// Subsystem 2: APS ADC
 	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
@@ -2220,6 +2221,9 @@ static void DVSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 		else if (changeType == BOOL && str_equals(changeKey, "FilterRowOnlyEvents")) {
 			spiConfigSend(devHandle, FPGA_DVS, 9, changeValue.boolean);
 		}
+		else if (changeType == BOOL && str_equals(changeKey, "ExternalAERControl")) {
+			spiConfigSend(devHandle, FPGA_DVS, 10, changeValue.boolean);
+		}
 	}
 }
 
@@ -2232,6 +2236,7 @@ static void sendDVSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) 
 	spiConfigSend(devHandle, FPGA_DVS, 7, sshsNodeGetByte(dvsNode, "AckExtensionColumn"));
 	spiConfigSend(devHandle, FPGA_DVS, 8, sshsNodeGetBool(dvsNode, "WaitOnTransferStall"));
 	spiConfigSend(devHandle, FPGA_DVS, 9, sshsNodeGetBool(dvsNode, "FilterRowOnlyEvents"));
+	spiConfigSend(devHandle, FPGA_DVS, 10, sshsNodeGetBool(dvsNode, "ExternalAERControl"));
 	spiConfigSend(devHandle, FPGA_DVS, 3, sshsNodeGetBool(dvsNode, "Run"));
 }
 
