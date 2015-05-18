@@ -773,6 +773,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 		sshsNodePutBoolIfAbsent(apsNode, "SampleEnable", true);
 		sshsNodePutShortIfAbsent(apsNode, "SampleSettle", 60); // in cycles
 		sshsNodePutShortIfAbsent(apsNode, "RampReset", 10); // in cycles
+		sshsNodePutBoolIfAbsent(apsNode, "RampShortReset", false);
 	}
 
 	// DAVIS RGB has additional timing counters.
@@ -2311,6 +2312,9 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 		else if (changeType == SHORT && str_equals(changeKey, "RampReset")) {
 			spiConfigSend(devHandle, FPGA_APS, 37, changeValue.ushort);
 		}
+		else if (changeType == BOOL && str_equals(changeKey, "RampShortReset")) {
+			spiConfigSend(devHandle, FPGA_APS, 38, changeValue.boolean);
+		}
 	}
 }
 
@@ -2341,6 +2345,11 @@ static void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) 
 	// RampReset may not exist on chips that don't have integrated ADC.
 	if (sshsNodeAttrExists(apsNode, "RampReset", SHORT)) {
 		spiConfigSend(devHandle, FPGA_APS, 37, sshsNodeGetShort(apsNode, "RampReset"));
+	}
+
+	// RampShortReset may not exist on chips that don't have integrated ADC.
+	if (sshsNodeAttrExists(apsNode, "RampShortReset", BOOL)) {
+		spiConfigSend(devHandle, FPGA_APS, 38, sshsNodeGetBool(apsNode, "RampShortReset"));
 	}
 
 	spiConfigSend(devHandle, FPGA_APS, 5, sshsNodeGetBool(apsNode, "ResetRead"));
