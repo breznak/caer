@@ -40,8 +40,10 @@ static bool mainloop_1(void) {
 	// to show statistics about the current event-rate.
 	caerStatistics(3, (caerEventPacketHeader) davis_polarity, 1000000);
 
+#ifdef ENABLE_VISUALIZER
 	// A small OpenGL visualizer exists to show what the output looks like.
 	caerVisualizer(4, davis_polarity, davis_frame);
+#endif
 
 	return (true); // If false is returned, processing of this loop stops.
 }
@@ -59,9 +61,6 @@ static bool mainloop_2(void) {
 	// like with the Background Activity Filter, which suppresses events that
 	// look to be uncorrelated with real scene changes (noise reduction).
 	caerBackgroundActivityFilter(2, davis_polarity);
-
-	// A small OpenGL visualizer exists to show what the output looks like.
-	//caerVisualizer(3, davis_polarity, davis_frame);
 
 	return (true); // If false is returned, processing of this loop stops.
 }
@@ -82,7 +81,7 @@ int main(int argc, char *argv[]) {
 
 	// Finally run the main event processing loops.
 	struct caer_mainloop_definition mainLoops[2] = { { 1, &mainloop_1 }, { 2, &mainloop_2 } };
-	caerMainloopRun(&mainLoops, 1);
+	caerMainloopRun(&mainLoops, 1); // Only start Mainloop 1.
 
 	// After shutting down the mainloops, also shutdown the config server
 	// thread if needed.
