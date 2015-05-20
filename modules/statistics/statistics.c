@@ -7,7 +7,6 @@ struct statistics_state {
 	struct timespec lastTime;
 	uint64_t totalEventsCounter;
 	uint64_t validEventsCounter;
-	uint16_t packetType;
 };
 
 typedef struct statistics_state *statisticsState;
@@ -37,7 +36,6 @@ static void caerStatisticsRun(caerModuleData moduleData, size_t argsNumber, va_l
 	if (packetHeader != NULL) {
 		state->totalEventsCounter += caerEventPacketHeaderGetEventNumber(packetHeader);
 		state->validEventsCounter += caerEventPacketHeaderGetEventValid(packetHeader);
-		state->packetType = caerEventPacketHeaderGetEventType(packetHeader);
 	}
 
 	// Print up-to-date statistic roughly every second, taking into account possible deviations.
