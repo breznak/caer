@@ -963,6 +963,10 @@ void caerInputDAVISCommonExit(caerModuleData moduleData) {
 	// for the DAVIS modules, so we can trust it being at address offset 0.
 	davisCommonState cstate = moduleData->moduleState;
 
+	// Disable all data transfer on USB end-point.
+	spiConfigSend(cstate->deviceHandle, FPGA_EXTINPUT, 7, 0); // FX3 only.
+	sendDisableDataConfig(cstate->deviceHandle);
+
 	// Wait for data acquisition thread to terminate...
 	if ((errno = pthread_join(cstate->dataAcquisitionThread, NULL)) != 0) {
 		// This should never happen!

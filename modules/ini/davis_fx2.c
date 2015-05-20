@@ -110,14 +110,14 @@ static void *dataAcquisitionThread(void *inPtr) {
 
 	caerLog(LOG_DEBUG, data->moduleSubSystemString, "Initializing data acquisition thread ...");
 
-	// Create buffers as specified in config file.
-	sshsNode usbNode = sshsGetRelativeNode(data->moduleNode, "usb/");
-	allocateDataTransfers(cstate, sshsNodeGetInt(usbNode, "BufferNumber"), sshsNodeGetInt(usbNode, "BufferSize"));
-
 	// Send default start-up biases and config values to device before enabling it.
 	sendBiases(data->moduleNode, cstate);
 	sendChipSR(data->moduleNode, cstate);
 	sendEnableDataConfig(data->moduleNode, cstate->deviceHandle);
+
+	// Create buffers as specified in config file.
+	sshsNode usbNode = sshsGetRelativeNode(data->moduleNode, "usb/");
+	allocateDataTransfers(cstate, sshsNodeGetInt(usbNode, "BufferNumber"), sshsNodeGetInt(usbNode, "BufferSize"));
 
 	// Handle USB events (1 second timeout).
 	struct timeval te = { .tv_sec = 0, .tv_usec = 1000000 };
@@ -134,9 +134,6 @@ static void *dataAcquisitionThread(void *inPtr) {
 	}
 
 	caerLog(LOG_DEBUG, data->moduleSubSystemString, "Shutting down data acquisition thread ...");
-
-	// Disable all data transfer on USB end-point.
-	sendDisableDataConfig(cstate->deviceHandle);
 
 	// Cancel all transfers and handle them.
 	deallocateDataTransfers(cstate);
