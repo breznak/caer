@@ -582,6 +582,12 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 		createShiftedSourceBiasSetting(biases, biasNode, "SSN", 21, 33, 1, "ShiftedSource", "SplitGate");
 	}
 
+	if (cstate->chipID == CHIP_DAVIS640) {
+		// Slow down pixels for big 640x480 array.
+		createCoarseFineBiasSetting(biases, biasNode, "PrBp", 14, "Normal", "P", 2, 3, true);
+		createCoarseFineBiasSetting(biases, biasNode, "PrSFBp", 15, "Normal", "P", 1, 1, true);
+	}
+
 	if (cstate->chipID == CHIP_DAVIS128 || cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B
 		|| cstate->chipID == CHIP_DAVIS640 || cstate->chipID == CHIP_DAVIS208) {
 		createVDACBiasSetting(biases, biasNode, "ApsOverflowLevel", 0, 6, 27);
@@ -597,7 +603,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 		createCoarseFineBiasSetting(biases, biasNode, "PadFollBn", 9, "Normal", "N", 7, 215, true);
 		createCoarseFineBiasSetting(biases, biasNode, "DiffBn", 10, "Normal", "N", 4, 39, true);
 		createCoarseFineBiasSetting(biases, biasNode, "OnBn", 11, "Normal", "N", 5, 255, true);
-		createCoarseFineBiasSetting(biases, biasNode, "OffBn", 12, "Normal", "N", 4, 0, true);
+		createCoarseFineBiasSetting(biases, biasNode, "OffBn", 12, "Normal", "N", 4, 1, true);
 		createCoarseFineBiasSetting(biases, biasNode, "PixInvBn", 13, "Normal", "N", 5, 129, true);
 		createCoarseFineBiasSetting(biases, biasNode, "PrBp", 14, "Normal", "P", 2, 58, true);
 		createCoarseFineBiasSetting(biases, biasNode, "PrSFBp", 15, "Normal", "P", 1, 16, true);
