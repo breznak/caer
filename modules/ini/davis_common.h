@@ -44,6 +44,7 @@
 #define CHIP_DAVIS640  6
 #define CHIP_DAVISRGB  7
 #define CHIP_DAVIS208  8
+#define CHIP_DAVIS346C 9
 
 #define BIAS_MAX_NUM_DESC 37
 

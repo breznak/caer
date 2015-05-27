@@ -589,12 +589,13 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	}
 
 	if (cstate->chipID == CHIP_DAVIS128 || cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B
-		|| cstate->chipID == CHIP_DAVIS640 || cstate->chipID == CHIP_DAVIS208) {
+		|| cstate->chipID == CHIP_DAVIS346C || cstate->chipID == CHIP_DAVIS640 || cstate->chipID == CHIP_DAVIS208) {
 		createVDACBiasSetting(biases, biasNode, "ApsOverflowLevel", 0, 6, 27);
 		createVDACBiasSetting(biases, biasNode, "ApsCas", 1, 6, 21);
 		createVDACBiasSetting(biases, biasNode, "AdcRefHigh", 2, 7, 30);
 		createVDACBiasSetting(biases, biasNode, "AdcRefLow", 3, 7, 1);
-		if (cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B || cstate->chipID == CHIP_DAVIS640) {
+		if (cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B || cstate->chipID == CHIP_DAVIS346C
+			|| cstate->chipID == CHIP_DAVIS640) {
 			// Only DAVIS346 and 640 have ADC testing.
 			createVDACBiasSetting(biases, biasNode, "AdcTestVoltage", 4, 7, 21);
 		}
@@ -697,14 +698,15 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	}
 
 	if (cstate->chipID == CHIP_DAVIS128 || cstate->chipID == CHIP_DAVIS208 || cstate->chipID == CHIP_DAVIS346A
-		|| cstate->chipID == CHIP_DAVIS346B || cstate->chipID == CHIP_DAVIS640 || cstate->chipID == CHIP_DAVISRGB) {
+		|| cstate->chipID == CHIP_DAVIS346B || cstate->chipID == CHIP_DAVIS346C || cstate->chipID == CHIP_DAVIS640
+		|| cstate->chipID == CHIP_DAVISRGB) {
 		// Select which grey counter to use with the internal ADC: '0' means the external grey counter is used, which
 		// has to be supplied off-chip. '1' means the on-chip grey counter is used instead.
 		createBoolConfigSetting(configChain, chipNode, "SelectGrayCounter", 143, true);
 	}
 
-	if (cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B || cstate->chipID == CHIP_DAVIS640
-		|| cstate->chipID == CHIP_DAVISRGB) {
+	if (cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B || cstate->chipID == CHIP_DAVIS346C
+		|| cstate->chipID == CHIP_DAVIS640 || cstate->chipID == CHIP_DAVISRGB) {
 		// Test ADC functionality: if true, the ADC takes its input voltage not from the pixel, but from the
 		// VDAC 'AdcTestVoltage'. If false, the voltage comes from the pixels.
 		createBoolConfigSetting(configChain, chipNode, "TestADC", 144, false);
