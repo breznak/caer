@@ -70,6 +70,18 @@ static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
 		return (false);
 	}
 
+	// Verify FX2 device logic version.
+	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
+	uint16_t currentLogicVersion = sshsNodeGetShort(sourceInfoNode, "logicVersion");
+
+	if (currentLogicVersion < REQUIRED_LOGIC_REVISION) {
+		// Logic too old, notify and quit.
+		caerLog(LOG_ERROR, moduleData->moduleSubSystemString,
+			"Device logic revision too old. You have revision %u; but at least revision %u is required. Please updated by following the Flashy upgrade documentation at 'https://goo.gl/TGM0w1'.",
+			currentLogicVersion, REQUIRED_LOGIC_REVISION);
+		return (false);
+	}
+
 	// FX2 specific configuration.
 	sshsNode dvsNode = sshsGetRelativeNode(moduleData->moduleNode, "dvs/");
 

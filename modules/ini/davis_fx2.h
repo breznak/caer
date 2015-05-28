@@ -14,6 +14,8 @@
 #define VR_CHIP_BIAS 0xC0
 #define VR_CHIP_DIAG 0xC1
 
+#define REQUIRED_LOGIC_REVISION 6735
+
 void caerInputDAVISFX2(uint16_t moduleID, caerPolarityEventPacket *polarity, caerFrameEventPacket *frame,
 	caerIMU6EventPacket *imu6, caerSpecialEventPacket *special);
 
