@@ -16,6 +16,7 @@
 #include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
 #include "modules/statistics/statistics.h"
 #include "modules/visualizer/visualizer.h"
+#include "modules/misc/out/net_tcp_server.h"
 
 static bool mainloop_1(void);
 static bool mainloop_2(void);
@@ -38,7 +39,7 @@ static bool mainloop_1(void) {
 
 	// Filters can also extract information from event packets: for example
 	// to show statistics about the current event-rate.
-	caerStatistics(3, (caerEventPacketHeader) davis_polarity, 1000000);
+	caerStatistics(3, (caerEventPacketHeader) davis_polarity, 1000);
 
 #ifdef ENABLE_VISUALIZER
 	// A small OpenGL visualizer exists to show what the output looks like.
@@ -61,6 +62,9 @@ static bool mainloop_2(void) {
 	// like with the Background Activity Filter, which suppresses events that
 	// look to be uncorrelated with real scene changes (noise reduction).
 	caerBackgroundActivityFilter(2, davis_polarity);
+
+	// Send polarity packets out via TCP.
+	caerOutputNetTCPServer(3, 1, davis_polarity);
 
 	return (true); // If false is returned, processing of this loop stops.
 }
