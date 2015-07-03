@@ -145,7 +145,7 @@ caerModuleData caerMainloopFindModule(uint16_t moduleID, const char *moduleShort
 	HASH_FIND(hh, mainloopData->modules, &moduleID, sizeof(uint16_t), moduleData);
 
 	if (moduleData == NULL) {
-		// Create module (will succeed!).
+		// Create module (will succeed! If errors happen, whole mainloop dies).
 		moduleData = caerModuleInitialize(moduleID, moduleShortName, mainloopData->mainloopNode);
 
 		HASH_ADD(hh, mainloopData->modules, moduleID, sizeof(uint16_t), moduleData);
@@ -236,7 +236,7 @@ void caerMainloopFreeAfterLoop(void *memPtr) {
 	utarray_push_back(mainloopData->memoryToFree, &memPtr);
 }
 
-sshsNode caerMainloopGetSourceInfo(uint16_t source) {
+static inline caerModuleData findSourceModule(uint16_t source) {
 	caerMainloopData mainloopData = glMainloopData;
 	caerModuleData moduleData;
 
@@ -251,28 +251,27 @@ sshsNode caerMainloopGetSourceInfo(uint16_t source) {
 			"Impossible to get module data for source ID %" PRIu16 ".", source);
 		pthread_exit(NULL);
 	}
+
+	return (moduleData);
+}
+
+sshsNode caerMainloopGetSourceInfo(uint16_t source) {
+	caerModuleData moduleData = findSourceModule(source);
 
 	// All sources have a sub-node in SSHS called 'sourceInfo/'.
 	return (sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"));
 }
 
 void *caerMainloopGetSourceState(uint16_t source) {
-	caerMainloopData mainloopData = glMainloopData;
-	caerModuleData moduleData;
-
-	// This is only ever called from within modules running in a main-loop.
-	// So always inside the same thread, needing thus no synchronization.
-	HASH_FIND(hh, mainloopData->modules, &source, sizeof(uint16_t), moduleData);
-
-	if (moduleData == NULL) {
-		// This is impossible if used correctly, you can't have a packet with
-		// an event source X and that event source doesn't exist ...
-		caerLog(LOG_ALERT, sshsNodeGetName(mainloopData->mainloopNode),
-			"Impossible to get module data for source ID %" PRIu16 ".", source);
-		pthread_exit(NULL);
-	}
+	caerModuleData moduleData = findSourceModule(source);
 
 	return (moduleData->moduleState);
+}
+
+uintptr_t caerMainloopGetSourceHandleUnsafe(uint16_t source) {
+	caerModuleData moduleData = findSourceModule(source);
+
+	return (*((uintptr_t *) moduleData->moduleState));
 }
 
 static void caerMainloopSignalHandler(int signal) {

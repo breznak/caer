@@ -36,6 +36,7 @@ caerModuleData caerMainloopFindModule(uint16_t moduleID, const char *moduleShort
 void caerMainloopFreeAfterLoop(void *memPtr);
 sshsNode caerMainloopGetSourceInfo(uint16_t source);
 void *caerMainloopGetSourceState(uint16_t source);
+uintptr_t caerMainloopGetSourceHandleUnsafe(uint16_t source);
 
 static inline void caerMainloopDataAvailableIncrease(caerMainloopData mainloopData) {
 	atomic_ops_uint_inc(&mainloopData->dataAvailable, ATOMIC_OPS_FENCE_RELEASE);

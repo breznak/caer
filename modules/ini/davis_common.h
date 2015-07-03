@@ -69,14 +69,14 @@ struct configchain_descriptor {
 typedef struct configchain_descriptor *configChainDescriptor;
 
 struct davisCommon_state {
+	// USB Device State
+	libusb_device_handle *deviceHandle;
+	libusb_context *deviceContext;
 	// Data Acquisition Thread -> Mainloop Exchange
 	uint16_t sourceID;
 	char *sourceSubSystemString;
 	RingBuffer dataExchangeBuffer;
 	caerMainloopData mainloopNotify;
-	// USB Device State
-	libusb_context *deviceContext;
-	libusb_device_handle *deviceHandle;
 	// Data Acquisition Thread
 	pthread_t dataAcquisitionThread;
 	struct libusb_transfer **dataTransfers;

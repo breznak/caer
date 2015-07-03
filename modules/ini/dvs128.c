@@ -13,15 +13,15 @@
 #include <libusb.h>
 
 struct dvs128_state {
+	// USB Device State
+	libusb_device_handle *deviceHandle;
+	libusb_context *deviceContext;
 	// Data Acquisition Thread -> Mainloop Exchange
 	pthread_t dataAcquisitionThread;
 	RingBuffer dataExchangeBuffer;
 	caerMainloopData mainloopNotify;
 	uint16_t sourceID;
 	char *sourceSubSystemString;
-	// USB Device State
-	libusb_context *deviceContext;
-	libusb_device_handle *deviceHandle;
 	// Data Acquisition Thread State
 	struct libusb_transfer **transfers;
 	size_t transfersLength;
