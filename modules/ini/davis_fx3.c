@@ -109,6 +109,7 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel7Column", cstate->apsSizeX);
 	sshsNodePutBoolIfAbsent(dvsNode, "FilterBackgroundActivity", 0);
 	sshsNodePutIntIfAbsent(dvsNode, "FilterBackgroundActivityDeltaTime", 20000);
+	sshsNodePutBoolIfAbsent(dvsNode, "TestEventGeneratorEnable", 0);
 
 	// Subsystem 2: APS ADC (Quad-ROI support present only in FX3)
 	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
@@ -501,6 +502,9 @@ static void DVSFilterConfigListener(sshsNode node, void *userData, enum sshs_nod
 		else if (changeType == INT && str_equals(changeKey, "FilterBackgroundActivityDeltaTime")) {
 			spiConfigSend(devHandle, FPGA_DVS, 30, changeValue.uint);
 		}
+		else if (changeType == BOOL && str_equals(changeKey, "TestEventGeneratorEnable")) {
+			spiConfigSend(devHandle, FPGA_DVS, 32, changeValue.boolean);
+		}
 	}
 }
 
@@ -525,6 +529,7 @@ static void sendDVSFilterConfig(sshsNode moduleNode, libusb_device_handle *devHa
 	spiConfigSend(devHandle, FPGA_DVS, 27, sshsNodeGetShort(dvsNode, "FilterPixel7Column"));
 	spiConfigSend(devHandle, FPGA_DVS, 29, sshsNodeGetBool(dvsNode, "FilterBackgroundActivity"));
 	spiConfigSend(devHandle, FPGA_DVS, 30, sshsNodeGetInt(dvsNode, "FilterBackgroundActivityDeltaTime"));
+	spiConfigSend(devHandle, FPGA_DVS, 32, sshsNodeGetBool(dvsNode, "TestEventGeneratorEnable"));
 }
 
 static void APSQuadROIConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
