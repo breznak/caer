@@ -152,6 +152,10 @@ IF (ENABLE_VISUALIZER)
 	SET(CAER_INCDIRS ${CAER_INCDIRS} ${OPENGL_INCLUDE_DIRS} ${GLFW3_INCLUDE_DIRS})
 	file(GLOB_RECURSE CAER_VISUALIZER_FILES modules/visualizer/*.c)
 	SET(CAER_SRC_FILES ${CAER_SRC_FILES} ${CAER_VISUALIZER_FILES})
+    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -lGL -lGLU -lglfw3 -lX11 -lXxf86vm -lXrandr -lpthread -lXi -lXinerama -lXcursor -lrt -lm -pthread")
+    FIND_PACKAGE( PkgConfig REQUIRED )
+    pkg_search_module( GLFW3 REQUIRED glfw3 ) # sets GLFW3 as prefix for glfw vars
+    INCLUDE_DIRECTORIES( ${GLFW3_INCLUDE_DIR} )
 ENDIF()
 
 INCLUDE_DIRECTORIES(${CAER_INCDIRS})
