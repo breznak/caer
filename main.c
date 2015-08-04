@@ -65,7 +65,7 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_NET_STREAM
     caerOutputNetUDP(4, 1, polarity);
-    caerOutputNetTCPServer(5, 1, polarity); // or 2 polarity and frame
+    caerOutputNetTCPServer(5, 1, polarity); // or (5,1,2, polarity,frame) for frame and polarity
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.
