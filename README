@@ -2,16 +2,19 @@ caer
 ====
 AER event-based framework, written in C, targeting embedded systems.
 
-
-
 INSTALL: 
 - configure: 
 
 $ cmake . 
 
+one of the following option is required:
+ -DDAVISFX2=1           ... set davisfx2 (for DAVIS240A/B/C models)
+ -DDVS128_H=1           ... set dvs128 (for DVS128 model)
+
 options: 
  -DJAER_COMPAT_FORMAT=1 ... cAER will use (older) file output format compatible with jAER
  -DENABLE_VISUALIZER=1  ... enable visualizer for calls of caerVisualizer()
+ -DENABLE_NET_STREAM=1  ... enable tcp server for sending packets via network
 
 - build:
 $ make

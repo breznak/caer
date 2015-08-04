@@ -22,28 +22,50 @@ static bool mainloop_1(void);
 static bool mainloop_2(void);
 
 static bool mainloop_1(void) {
-	// Typed EventPackets contain events of a certain type.
-	caerPolarityEventPacket davis_polarity;
-	caerFrameEventPacket davis_frame;
-	caerIMU6EventPacket davis_imu;
-	caerSpecialEventPacket davis_special;
 
+	// Typed EventPackets contain events of a certain type.
+	caerPolarityEventPacket polarity;
+	caerFrameEventPacket frame;
+	caerIMU6EventPacket imu;
+	caerSpecialEventPacket special;
+
+
+#ifdef DAVISFX2
 	// Input modules grab data from outside sources (like devices, files, ...)
 	// and put events into an event packet.
-	caerInputDAVISFX2(1, &davis_polarity, &davis_frame, &davis_imu, &davis_special);
+	caerInputDAVISFX2(1, &polarity, &frame, &imu, &special);
 
 	// Filters process event packets: for example to suppress certain events,
 	// like with the Background Activity Filter, which suppresses events that
 	// look to be uncorrelated with real scene changes (noise reduction).
-	caerBackgroundActivityFilter(2, davis_polarity);
+	caerBackgroundActivityFilter(2, polarity);
 
 	// Filters can also extract information from event packets: for example
 	// to show statistics about the current event-rate.
-	caerStatistics(3, (caerEventPacketHeader) davis_polarity, 1000);
+	caerStatistics(3, (caerEventPacketHeader) polarity, 1000);
+#endif
 
-#ifdef ENABLE_VISUALIZER
+#ifdef DVS128_H 
+	caerInputDVS128(1, &polarity, &special);
+
+	// Filters process event packets: for example to suppress certain events,
+	// like with the Background Activity Filter, which suppresses events that
+	// look to be uncorrelated with real scene changes (noise reduction).
+	caerBackgroundActivityFilter(2, polarity);
+
+	// Filters can also extract information from event packets: for example
+	// to show statistics about the current event-rate.
+	caerStatistics(3, (caerEventPacketHeader) polarity, 1000);
+#endif
+
+#ifdef ENABLE_VISUALIZER 
 	// A small OpenGL visualizer exists to show what the output looks like.
-	caerVisualizer(4, davis_polarity, davis_frame);
+	caerVisualizer(4, polarity, frame);
+#endif
+
+#ifdef ENABLE_NET_STREAM
+    caerOutputNetUDP(4, 1, polarity);
+    caerOutputNetTCPServer(5, 1, polarity); // or 2 polarity and frame
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.
@@ -51,20 +73,27 @@ static bool mainloop_1(void) {
 
 static bool mainloop_2(void) {
 	// Typed EventPackets contain events of a certain type.
-	caerPolarityEventPacket davis_polarity;
-	caerFrameEventPacket davis_frame;
+	caerPolarityEventPacket polarity;
+	caerFrameEventPacket frame;
 
 	// Input modules grab data from outside sources (like devices, files, ...)
 	// and put events into an event packet.
-	caerInputDAVISFX2(1, &davis_polarity, &davis_frame, NULL, NULL);
+#ifdef DVS128_H 
+	caerInputDVS128(1, &polarity, NULL);
+#endif
+
+#ifdef DAVISFX2 
+	caerInputDAVISFX2(1, &polarity, &frame, NULL, NULL);
+#endif
+
 
 	// Filters process event packets: for example to suppress certain events,
 	// like with the Background Activity Filter, which suppresses events that
 	// look to be uncorrelated with real scene changes (noise reduction).
-	caerBackgroundActivityFilter(2, davis_polarity);
+	caerBackgroundActivityFilter(2, polarity);
 
 	// Send polarity packets out via TCP.
-	caerOutputNetTCPServer(3, 1, davis_polarity);
+	caerOutputNetTCPServer(3, 1, polarity);
 
 	return (true); // If false is returned, processing of this loop stops.
 }
