@@ -13,6 +13,8 @@ one of the following option is required:
 
 options: 
  -DJAER_COMPAT_FORMAT=1 ... cAER will use (older) file output format compatible with jAER
+ 
+  (NB: the two following options cannot be enable at the same time)
  -DENABLE_VISUALIZER=1  ... enable visualizer for calls of caerVisualizer()
  -DENABLE_NET_STREAM=1  ... enable tcp server for sending packets via network
 
