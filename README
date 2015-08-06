@@ -8,8 +8,9 @@ INSTALL:
 $ cmake . 
 
 one of the following option is required:
- -DDAVISFX2=1           ... set davisfx2 (for DAVIS240A/B/C models)
  -DDVS128=1             ... set dvs128 (for DVS128 model)
+ -DDAVISFX2=1           ... set davisfx2 (for DAVIS240A/B/C models)
+ -DDAVISFX3=1           ... set davisfx3 (for FX3 platform models)
 
 options: 
  -DJAER_COMPAT_FORMAT=1 ... cAER will use (older) file output format compatible with jAER

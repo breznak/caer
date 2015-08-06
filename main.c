@@ -37,6 +37,9 @@ static bool mainloop_1(void) {
 #ifdef DAVISFX2
 	caerInputDAVISFX2(1, &polarity, &frame, &imu, &special);
 #endif
+#ifdef DAVISFX3
+	caerInputDAVISFX3(1, &polarity, &frame, &imu, &special);
+#endif
 
 	// Filters process event packets: for example to suppress certain events,
 	// like with the Background Activity Filter, which suppresses events that
@@ -72,6 +75,9 @@ static bool mainloop_2(void) {
 #endif
 #ifdef DAVISFX2
 	caerInputDAVISFX2(1, &polarity, &frame, NULL, NULL);
+#endif
+#ifdef DAVISFX3
+	caerInputDAVISFX3(1, &polarity, &frame, NULL, NULL);
 #endif
 
 	// Filters process event packets: for example to suppress certain events,
