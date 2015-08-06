@@ -15,6 +15,7 @@ struct visualizer_state {
 	uint32_t *frameRenderer;
 	uint16_t frameRendererSizeX;
 	uint16_t frameRendererSizeY;
+	uint16_t frameChannels;
 };
 
 typedef struct visualizer_state *visualizerState;
@@ -158,9 +159,10 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 				// Use frame sizes to correctly support small ROI frames.
 				state->frameRendererSizeX = caerFrameEventGetLengthX(currFrameEvent);
 				state->frameRendererSizeY = caerFrameEventGetLengthY(currFrameEvent);
+				state->frameChannels = caerFrameEventGetChannelNumber(currFrameEvent);
 
 				memcpy(state->frameRenderer, caerFrameEventGetPixelArrayUnsafe(currFrameEvent),
-					(size_t) state->frameRendererSizeX * state->frameRendererSizeY * sizeof(uint16_t));
+					(size_t) state->frameRendererSizeX * state->frameRendererSizeY * state->frameChannels* sizeof(uint16_t));
 
 				break;
 			}
@@ -189,9 +191,23 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 			else {
 				glWindowPos2i(0, 0);
 			}
-
-			glDrawPixels(state->frameRendererSizeX, state->frameRendererSizeY, GL_LUMINANCE, GL_UNSIGNED_SHORT,
-				state->frameRenderer);
+			switch (state->frameChannels) {
+			case 3:
+				glDrawPixels(state->frameRendererSizeX,
+						state->frameRendererSizeY, GL_RGB, GL_UNSIGNED_SHORT,
+						state->frameRenderer);
+				break;
+			case 4:
+				glDrawPixels(state->frameRendererSizeX,
+						state->frameRendererSizeY, GL_RGBA, GL_UNSIGNED_SHORT,
+						state->frameRenderer);
+				break;
+			case 1:
+			default:
+				glDrawPixels(state->frameRendererSizeX,
+						state->frameRendererSizeY, GL_LUMINANCE,
+						GL_UNSIGNED_SHORT, state->frameRenderer);
+			}
 		}
 
 		// Apply zoom factor.
@@ -226,8 +242,10 @@ static bool allocateFrameRenderer(visualizerState state, uint16_t sourceID) {
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(sourceID);
 	uint16_t sizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
 	uint16_t sizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
+	uint16_t channels = sshsNodeGetShort(sourceInfoNode, "apsChannels");
 
-	state->frameRenderer = calloc((size_t) (sizeX * sizeY), sizeof(uint16_t));
+
+	state->frameRenderer = calloc((size_t) (sizeX * sizeY * channels), sizeof(uint16_t));
 	if (state->frameRenderer == NULL) {
 		return (false); // Failure.
 	}
@@ -235,6 +253,7 @@ static bool allocateFrameRenderer(visualizerState state, uint16_t sourceID) {
 	// Assign max sizes for frame renderer.
 	state->frameRendererSizeX = sizeX;
 	state->frameRendererSizeY = sizeY;
+	state->frameChannels = channels;
 
 	return (true);
 }

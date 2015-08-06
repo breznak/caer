@@ -505,6 +505,7 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 
 	cstate->apsSizeX = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_APS, 0));
 	cstate->apsSizeY = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_APS, 1));
+	cstate->apsChannels = 1; // default setting for DAVIS is grayscale
 
 	uint16_t apsOrientationInfo = U16T(spiConfigReceive(cstate->deviceHandle, FPGA_APS, 2));
 	cstate->apsInvertXY = apsOrientationInfo & 0x04;
@@ -527,6 +528,7 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 		sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeX);
 		sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->apsSizeY);
 	}
+	sshsNodePutShort(sourceInfoNode, "apsChannels", cstate->apsChannels);
 
 	if (cstate->dvsInvertXY) {
 		sshsNodePutShort(sourceInfoNode, "dvsSizeX", cstate->dvsSizeY);

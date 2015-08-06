@@ -23,6 +23,7 @@ enum caer_event_types {
 	FRAME_EVENT = 4,
 	IMU6_EVENT = 5,
 	IMU9_EVENT = 6,
+	INESS_LINE_SEGMENT = 101,
 };
 
 struct caer_event_packet_header {

@@ -104,6 +104,7 @@ struct davisCommon_state {
 	bool apsIgnoreEvents;
 	uint16_t apsSizeX;
 	uint16_t apsSizeY;
+	uint16_t apsChannels;
 	uint16_t apsWindow0StartX;
 	uint16_t apsWindow0StartY;
 	uint16_t apsWindow0SizeX;

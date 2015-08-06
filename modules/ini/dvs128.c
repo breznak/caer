@@ -147,6 +147,10 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
 	sshsNodePutShort(sourceInfoNode, "dvsSizeX", DVS128_ARRAY_SIZE_X);
 	sshsNodePutShort(sourceInfoNode, "dvsSizeY", DVS128_ARRAY_SIZE_Y);
+	//Put source information for "virtual" aps frame that can be used to display and debug filter information
+	sshsNodePutShort(sourceInfoNode, "apsSizeX", DVS128_ARRAY_SIZE_X);
+	sshsNodePutShort(sourceInfoNode, "apsSizeY", DVS128_ARRAY_SIZE_Y);
+	sshsNodePutShort(sourceInfoNode, "apsChannels", 4);
 
 	// Initialize state fields.
 	state->maxPolarityPacketSize = sshsNodeGetInt(moduleData->moduleNode, "polarityPacketMaxSize");
