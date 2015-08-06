@@ -520,8 +520,8 @@ bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
 
 	if (cstate->apsInvertXY) {
-		sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->dvsSizeY);
-		sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->dvsSizeX);
+		sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeY);
+		sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->apsSizeX);
 	}
 	else {
 		sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeX);
