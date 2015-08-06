@@ -29,24 +29,14 @@ static bool mainloop_1(void) {
 	caerIMU6EventPacket imu;
 	caerSpecialEventPacket special;
 
-
-#ifdef DAVISFX2
 	// Input modules grab data from outside sources (like devices, files, ...)
 	// and put events into an event packet.
-	caerInputDAVISFX2(1, &polarity, &frame, &imu, &special);
-
-	// Filters process event packets: for example to suppress certain events,
-	// like with the Background Activity Filter, which suppresses events that
-	// look to be uncorrelated with real scene changes (noise reduction).
-	caerBackgroundActivityFilter(2, polarity);
-
-	// Filters can also extract information from event packets: for example
-	// to show statistics about the current event-rate.
-	caerStatistics(3, (caerEventPacketHeader) polarity, 1000);
-#endif
-
-#ifdef DVS128_H 
+#ifdef DVS128
 	caerInputDVS128(1, &polarity, &special);
+#endif
+#ifdef DAVISFX2
+	caerInputDAVISFX2(1, &polarity, &frame, &imu, &special);
+#endif
 
 	// Filters process event packets: for example to suppress certain events,
 	// like with the Background Activity Filter, which suppresses events that
@@ -56,16 +46,15 @@ static bool mainloop_1(void) {
 	// Filters can also extract information from event packets: for example
 	// to show statistics about the current event-rate.
 	caerStatistics(3, (caerEventPacketHeader) polarity, 1000);
-#endif
 
-#ifdef ENABLE_VISUALIZER 
+#ifdef ENABLE_VISUALIZER
 	// A small OpenGL visualizer exists to show what the output looks like.
 	caerVisualizer(4, polarity, frame);
 #endif
 
 #ifdef ENABLE_NET_STREAM
-    caerOutputNetUDP(4, 1, polarity);
-    caerOutputNetTCPServer(5, 1, polarity); // or (5,1,2, polarity,frame) for frame and polarity
+	caerOutputNetUDP(5, 1, polarity);
+	caerOutputNetTCPServer(6, 1, polarity); // or (6, 2, polarity, frame) for frame and polarity
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.
@@ -78,14 +67,12 @@ static bool mainloop_2(void) {
 
 	// Input modules grab data from outside sources (like devices, files, ...)
 	// and put events into an event packet.
-#ifdef DVS128_H 
+#ifdef DVS128
 	caerInputDVS128(1, &polarity, NULL);
 #endif
-
-#ifdef DAVISFX2 
+#ifdef DAVISFX2
 	caerInputDAVISFX2(1, &polarity, &frame, NULL, NULL);
 #endif
-
 
 	// Filters process event packets: for example to suppress certain events,
 	// like with the Background Activity Filter, which suppresses events that
