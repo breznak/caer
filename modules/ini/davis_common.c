@@ -1772,9 +1772,10 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 						}
 
 						// Normalize the ADC value to 16bit generic depth and check for underflow.
+						pixelValue = (pixelValue < 0) ? (0) : (pixelValue);
 						pixelValue = pixelValue << (16 - DAVIS_ADC_DEPTH);
-						caerFrameEventGetPixelArrayUnsafe(currentFrameEvent)[pixelPosition] = htole16(
-							U16T((pixelValue < 0) ? (0) : (pixelValue)));
+
+						caerFrameEventGetPixelArrayUnsafe(currentFrameEvent)[pixelPosition] = htole16(U16T(pixelValue));
 					}
 
 					caerLog(LOG_DEBUG, state->sourceSubSystemString,
