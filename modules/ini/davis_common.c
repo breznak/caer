@@ -731,26 +731,26 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	// Subsystem 0: Multiplexer
 	sshsNode muxNode = sshsGetRelativeNode(moduleData->moduleNode, "multiplexer/");
 
-	sshsNodePutBoolIfAbsent(muxNode, "Run", 1);
-	sshsNodePutBoolIfAbsent(muxNode, "TimestampRun", 1);
-	sshsNodePutBoolIfAbsent(muxNode, "TimestampReset", 0);
-	sshsNodePutBoolIfAbsent(muxNode, "ForceChipBiasEnable", 0);
-	sshsNodePutBoolIfAbsent(muxNode, "DropDVSOnTransferStall", 1);
-	sshsNodePutBoolIfAbsent(muxNode, "DropAPSOnTransferStall", 0);
-	sshsNodePutBoolIfAbsent(muxNode, "DropIMUOnTransferStall", 1);
-	sshsNodePutBoolIfAbsent(muxNode, "DropExtInputOnTransferStall", 1);
+	sshsNodePutBoolIfAbsent(muxNode, "Run", true);
+	sshsNodePutBoolIfAbsent(muxNode, "TimestampRun", true);
+	sshsNodePutBoolIfAbsent(muxNode, "TimestampReset", false);
+	sshsNodePutBoolIfAbsent(muxNode, "ForceChipBiasEnable", false);
+	sshsNodePutBoolIfAbsent(muxNode, "DropDVSOnTransferStall", true);
+	sshsNodePutBoolIfAbsent(muxNode, "DropAPSOnTransferStall", false);
+	sshsNodePutBoolIfAbsent(muxNode, "DropIMUOnTransferStall", true);
+	sshsNodePutBoolIfAbsent(muxNode, "DropExtInputOnTransferStall", true);
 
 	// Subsystem 1: DVS AER
 	sshsNode dvsNode = sshsGetRelativeNode(moduleData->moduleNode, "dvs/");
 
-	sshsNodePutBoolIfAbsent(dvsNode, "Run", 1);
+	sshsNodePutBoolIfAbsent(dvsNode, "Run", true);
 	sshsNodePutByteIfAbsent(dvsNode, "AckDelayRow", 4);
 	sshsNodePutByteIfAbsent(dvsNode, "AckDelayColumn", 0);
 	sshsNodePutByteIfAbsent(dvsNode, "AckExtensionRow", 1);
 	sshsNodePutByteIfAbsent(dvsNode, "AckExtensionColumn", 0);
-	sshsNodePutBoolIfAbsent(dvsNode, "WaitOnTransferStall", 0);
-	sshsNodePutBoolIfAbsent(dvsNode, "FilterRowOnlyEvents", 1);
-	sshsNodePutBoolIfAbsent(dvsNode, "ExternalAERControl", 0);
+	sshsNodePutBoolIfAbsent(dvsNode, "WaitOnTransferStall", false);
+	sshsNodePutBoolIfAbsent(dvsNode, "FilterRowOnlyEvents", true);
+	sshsNodePutBoolIfAbsent(dvsNode, "ExternalAERControl", false);
 
 	// Subsystem 2: APS ADC
 	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
@@ -762,9 +762,9 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 		sshsNodePutBoolIfAbsent(apsNode, "GlobalShutter", globalShutterSupported);
 	}
 
-	sshsNodePutBoolIfAbsent(apsNode, "Run", 1);
-	sshsNodePutBoolIfAbsent(apsNode, "ResetRead", 1);
-	sshsNodePutBoolIfAbsent(apsNode, "WaitOnTransferStall", 0);
+	sshsNodePutBoolIfAbsent(apsNode, "Run", true);
+	sshsNodePutBoolIfAbsent(apsNode, "ResetRead", true);
+	sshsNodePutBoolIfAbsent(apsNode, "WaitOnTransferStall", true);
 	sshsNodePutShortIfAbsent(apsNode, "StartColumn0", 0);
 	sshsNodePutShortIfAbsent(apsNode, "StartRow0", 0);
 	sshsNodePutShortIfAbsent(apsNode, "EndColumn0", U16T(cstate->apsSizeX - 1));
@@ -783,7 +783,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 		sshsNodePutBoolIfAbsent(apsNode, "SampleEnable", true);
 		sshsNodePutShortIfAbsent(apsNode, "SampleSettle", 60); // in cycles
 		sshsNodePutShortIfAbsent(apsNode, "RampReset", 10); // in cycles
-		sshsNodePutBoolIfAbsent(apsNode, "RampShortReset", false);
+		sshsNodePutBoolIfAbsent(apsNode, "RampShortReset", true);
 	}
 
 	// DAVIS RGB has additional timing counters.
@@ -803,15 +803,15 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	// Subsystem 3: IMU
 	sshsNode imuNode = sshsGetRelativeNode(moduleData->moduleNode, "imu/");
 
-	sshsNodePutBoolIfAbsent(imuNode, "Run", 1);
-	sshsNodePutBoolIfAbsent(imuNode, "TempStandby", 0);
-	sshsNodePutBoolIfAbsent(imuNode, "AccelXStandby", 0);
-	sshsNodePutBoolIfAbsent(imuNode, "AccelYStandby", 0);
-	sshsNodePutBoolIfAbsent(imuNode, "AccelZStandby", 0);
-	sshsNodePutBoolIfAbsent(imuNode, "GyroXStandby", 0);
-	sshsNodePutBoolIfAbsent(imuNode, "GyroYStandby", 0);
-	sshsNodePutBoolIfAbsent(imuNode, "GyroZStandby", 0);
-	sshsNodePutBoolIfAbsent(imuNode, "LowPowerCycle", 0);
+	sshsNodePutBoolIfAbsent(imuNode, "Run", true);
+	sshsNodePutBoolIfAbsent(imuNode, "TempStandby", false);
+	sshsNodePutBoolIfAbsent(imuNode, "AccelXStandby", false);
+	sshsNodePutBoolIfAbsent(imuNode, "AccelYStandby", false);
+	sshsNodePutBoolIfAbsent(imuNode, "AccelZStandby", false);
+	sshsNodePutBoolIfAbsent(imuNode, "GyroXStandby", false);
+	sshsNodePutBoolIfAbsent(imuNode, "GyroYStandby", false);
+	sshsNodePutBoolIfAbsent(imuNode, "GyroZStandby", false);
+	sshsNodePutBoolIfAbsent(imuNode, "LowPowerCycle", false);
 	sshsNodePutByteIfAbsent(imuNode, "LowPowerWakeupFrequency", 1);
 	sshsNodePutByteIfAbsent(imuNode, "SampleRateDivider", 0);
 	sshsNodePutByteIfAbsent(imuNode, "DigitalLowPassFilter", 1);
@@ -821,17 +821,17 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	// Subsystem 4: External Input
 	sshsNode extNode = sshsGetRelativeNode(moduleData->moduleNode, "externalInput/");
 
-	sshsNodePutBoolIfAbsent(extNode, "RunDetector", 0);
-	sshsNodePutBoolIfAbsent(extNode, "DetectRisingEdges", 0);
-	sshsNodePutBoolIfAbsent(extNode, "DetectFallingEdges", 0);
-	sshsNodePutBoolIfAbsent(extNode, "DetectPulses", 1);
-	sshsNodePutBoolIfAbsent(extNode, "DetectPulsePolarity", 1);
+	sshsNodePutBoolIfAbsent(extNode, "RunDetector", false);
+	sshsNodePutBoolIfAbsent(extNode, "DetectRisingEdges", false);
+	sshsNodePutBoolIfAbsent(extNode, "DetectFallingEdges", false);
+	sshsNodePutBoolIfAbsent(extNode, "DetectPulses", true);
+	sshsNodePutBoolIfAbsent(extNode, "DetectPulsePolarity", true);
 	sshsNodePutIntIfAbsent(extNode, "DetectPulseLength", 10);
 
 	// Subsystem 9: FX2/3 USB Configuration
 	sshsNode usbNode = sshsGetRelativeNode(moduleData->moduleNode, "usb/");
 
-	sshsNodePutBoolIfAbsent(usbNode, "Run", 1);
+	sshsNodePutBoolIfAbsent(usbNode, "Run", true);
 	sshsNodePutShortIfAbsent(usbNode, "EarlyPacketDelay", 8); // 125µs time-slices, so 1ms
 
 	sshsNodePutIntIfAbsent(usbNode, "BufferNumber", 8);
