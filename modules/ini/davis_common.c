@@ -1842,19 +1842,19 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 									break;
 
 								case 2: {
-									uint16_t accelX = U16T((state->imuTmpData << 8) | misc8Data);
+									int16_t accelX = (int16_t) ((state->imuTmpData << 8) | misc8Data);
 									caerIMU6EventSetAccelX(currentIMU6Event, accelX / state->imuAccelScale);
 									break;
 								}
 
 								case 4: {
-									uint16_t accelY = U16T((state->imuTmpData << 8) | misc8Data);
+									int16_t accelY = (int16_t) ((state->imuTmpData << 8) | misc8Data);
 									caerIMU6EventSetAccelY(currentIMU6Event, accelY / state->imuAccelScale);
 									break;
 								}
 
 								case 6: {
-									uint16_t accelZ = U16T((state->imuTmpData << 8) | misc8Data);
+									int16_t accelZ = (int16_t) ((state->imuTmpData << 8) | misc8Data);
 									caerIMU6EventSetAccelZ(currentIMU6Event, accelZ / state->imuAccelScale);
 									break;
 								}
@@ -1862,25 +1862,25 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 									// Temperature is signed. Formula for converting to °C:
 									// (SIGNED_VAL / 340) + 36.53
 								case 8: {
-									int16_t temp = (int16_t) U16T((state->imuTmpData << 8) | misc8Data);
+									int16_t temp = (int16_t) ((state->imuTmpData << 8) | misc8Data);
 									caerIMU6EventSetTemp(currentIMU6Event, (temp / 340.0f) + 36.53f);
 									break;
 								}
 
 								case 10: {
-									uint16_t gyroX = U16T((state->imuTmpData << 8) | misc8Data);
+									int16_t gyroX = (int16_t) ((state->imuTmpData << 8) | misc8Data);
 									caerIMU6EventSetGyroX(currentIMU6Event, gyroX / state->imuGyroScale);
 									break;
 								}
 
 								case 12: {
-									uint16_t gyroY = U16T((state->imuTmpData << 8) | misc8Data);
+									int16_t gyroY = (int16_t) ((state->imuTmpData << 8) | misc8Data);
 									caerIMU6EventSetGyroY(currentIMU6Event, gyroY / state->imuGyroScale);
 									break;
 								}
 
 								case 14: {
-									uint16_t gyroZ = U16T((state->imuTmpData << 8) | misc8Data);
+									int16_t gyroZ = (int16_t) ((state->imuTmpData << 8) | misc8Data);
 									caerIMU6EventSetGyroZ(currentIMU6Event, gyroZ / state->imuGyroScale);
 									break;
 								}
@@ -2335,7 +2335,6 @@ static void APSConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 
 static void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
 	sshsNode apsNode = sshsGetRelativeNode(moduleNode, "aps/");
-	sshsNode infoNode = sshsGetRelativeNode(moduleNode, "sourceInfo/");
 
 	// GS may not exist on chips that don't have it.
 	if (sshsNodeAttrExists(apsNode, "GlobalShutter", BOOL)) {
