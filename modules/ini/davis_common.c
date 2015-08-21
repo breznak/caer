@@ -2325,12 +2325,14 @@ static void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) 
 	spiConfigSend(devHandle, FPGA_APS, 4, sshsNodeGetBool(apsNode, "Run"));
 
 	// DAVIS RGB
-	spiConfigSend(devHandle, FPGA_APS, 50, sshsNodeGetShort(apsNode, "TransferTime"));
-	spiConfigSend(devHandle, FPGA_APS, 51, sshsNodeGetShort(apsNode, "RSFDSettleTime"));
-	spiConfigSend(devHandle, FPGA_APS, 52, sshsNodeGetShort(apsNode, "GSPDResetTime"));
-	spiConfigSend(devHandle, FPGA_APS, 53, sshsNodeGetShort(apsNode, "GSResetFallTime"));
-	spiConfigSend(devHandle, FPGA_APS, 54, sshsNodeGetShort(apsNode, "GSTXFallTime"));
-	spiConfigSend(devHandle, FPGA_APS, 55, sshsNodeGetShort(apsNode, "GSFDResetTime"));
+	if (sshsNodeAttrExists(apsNode, "TransferTime", SHORT)) {
+		spiConfigSend(devHandle, FPGA_APS, 50, sshsNodeGetShort(apsNode, "TransferTime"));
+		spiConfigSend(devHandle, FPGA_APS, 51, sshsNodeGetShort(apsNode, "RSFDSettleTime"));
+		spiConfigSend(devHandle, FPGA_APS, 52, sshsNodeGetShort(apsNode, "GSPDResetTime"));
+		spiConfigSend(devHandle, FPGA_APS, 53, sshsNodeGetShort(apsNode, "GSResetFallTime"));
+		spiConfigSend(devHandle, FPGA_APS, 54, sshsNodeGetShort(apsNode, "GSTXFallTime"));
+		spiConfigSend(devHandle, FPGA_APS, 55, sshsNodeGetShort(apsNode, "GSFDResetTime"));
+	}
 }
 
 static void IMUConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
