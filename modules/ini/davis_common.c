@@ -126,11 +126,6 @@ static void freeAllMemory(davisCommonState state) {
 		state->apsCurrentResetFrame = NULL;
 	}
 
-	if (state->apsCurrentSignalFrame != NULL) {
-		free(state->apsCurrentSignalFrame);
-		state->apsCurrentSignalFrame = NULL;
-	}
-
 	if (state->dataExchangeBuffer != NULL) {
 		ringBufferFree(state->dataExchangeBuffer);
 		state->dataExchangeBuffer = NULL;
@@ -790,14 +785,10 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	if (cstate->chipID == CHIP_DAVISRGB) {
 		sshsNodePutShortIfAbsent(apsNode, "TransferTime", 3000); // in cycles
 		sshsNodePutShortIfAbsent(apsNode, "RSFDSettleTime", 3000); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "RSCpResetTime", 3000); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "RSCpSettleTime", 3000); // in cycles
 		sshsNodePutShortIfAbsent(apsNode, "GSPDResetTime", 3000); // in cycles
 		sshsNodePutShortIfAbsent(apsNode, "GSResetFallTime", 3000); // in cycles
 		sshsNodePutShortIfAbsent(apsNode, "GSTXFallTime", 3000); // in cycles
 		sshsNodePutShortIfAbsent(apsNode, "GSFDResetTime", 3000); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSCpResetFDTime", 3000); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSCpResetSettleTime", 3000); // in cycles
 	}
 
 	// Subsystem 3: IMU
@@ -922,16 +913,6 @@ bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState c
 
 		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to allocate reset frame array.");
 		return (false);
-	}
-	if (cstate->chipID == CHIP_DAVISRGB) {
-		cstate->apsCurrentSignalFrame = calloc((size_t) cstate->apsSizeX * cstate->apsSizeY * DAVIS_COLOR_CHANNELS,
-			sizeof(uint16_t));
-		if (cstate->apsCurrentSignalFrame == NULL) {
-			freeAllMemory(cstate);
-
-			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to allocate signal frame array.");
-			return (false);
-		}
 	}
 
 	// Store reference to parent mainloop, so that we can correctly notify
@@ -1438,11 +1419,6 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 									checkValue = 0;
 								}
 
-								// Check second reset read (Cp RST, DAVIS RGB).
-								if (j == APS_READOUT_CPRESET && state->chipID != CHIP_DAVISRGB) {
-									checkValue = 0;
-								}
-
 								caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Frame End: CountX[%zu] is %d.", j,
 									state->apsCountX[j]);
 
@@ -1611,23 +1587,6 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 							break;
 						}
 
-						case 32: { // APS Reset2 Column Start
-							caerLog(LOG_DEBUG, state->sourceSubSystemString, "APS Reset2 Column Start event received.");
-							if (state->apsIgnoreEvents) {
-								break;
-							}
-
-							state->apsCurrentReadoutType = APS_READOUT_CPRESET;
-							state->apsCountY[state->apsCurrentReadoutType] = 0;
-
-							state->apsRGBPixelOffsetDirection = 0;
-							state->apsRGBPixelOffset = 1; // RGB support, first pixel of row always even.
-
-							// TODO: figure out exposure time calculation from ADC sample times.
-
-							break;
-						}
-
 						default:
 							caerLog(LOG_ERROR, state->sourceSubSystemString,
 								"Caught special event that can't be handled: %d.", data);
@@ -1738,34 +1697,19 @@ static void dataTranslator(davisCommonState state, uint8_t *buffer, size_t bytes
 					uint16_t yPosAbs = U16T(yPos + state->apsWindow0StartY);
 					size_t pixelPositionAbs = (size_t) (yPosAbs * state->apsSizeX) + xPosAbs;
 
-					if (state->apsCurrentReadoutType == APS_READOUT_RESET) {
+					if ((state->apsCurrentReadoutType == APS_READOUT_RESET
+						&& !(state->chipID == CHIP_DAVISRGB && state->apsGlobalShutter))
+						|| (state->apsCurrentReadoutType == APS_READOUT_SIGNAL
+							&& (state->chipID == CHIP_DAVISRGB && state->apsGlobalShutter))) {
 						state->apsCurrentResetFrame[pixelPositionAbs] = data;
-					}
-					else if (state->chipID == CHIP_DAVISRGB && state->apsCurrentReadoutType == APS_READOUT_SIGNAL) {
-						// Only for DAVIS RGB.
-						state->apsCurrentSignalFrame[pixelPositionAbs] = data;
 					}
 					else {
 						int32_t pixelValue = 0;
 
-						if (state->chipID == CHIP_DAVISRGB) {
-							// For DAVIS RGB, this is CP Reset, the last read for both GS and RS modes.
-							float C = 7.35f / 2.13f;
-
-							if (isDavisPixel(xPos, yPos)) {
-								// DAVIS Pixel
-								pixelValue = (int32_t) ((float) (state->apsCurrentResetFrame[pixelPositionAbs]
-									- state->apsCurrentSignalFrame[pixelPositionAbs])
-									+ (C * (float) (data - state->apsCurrentSignalFrame[pixelPositionAbs])));
-
-								// Protect against overflow from addition.
-								pixelValue = (pixelValue > 1023) ? (1023) : (pixelValue);
-							}
-							else {
-								// APS Pixel
-								pixelValue = (state->apsCurrentResetFrame[pixelPositionAbs]
-									- state->apsCurrentSignalFrame[pixelPositionAbs]);
-							}
+						if (state->chipID == CHIP_DAVISRGB && state->apsGlobalShutter) {
+							// DAVIS RGB GS has inverted samples, signal read comes first
+							// and was stored above inside state->apsCurrentResetFrame.
+							pixelValue = (data - state->apsCurrentResetFrame[pixelPositionAbs]);
 						}
 						else {
 							pixelValue = (state->apsCurrentResetFrame[pixelPositionAbs] - data);
@@ -2379,6 +2323,14 @@ static void sendAPSConfig(sshsNode moduleNode, libusb_device_handle *devHandle) 
 	spiConfigSend(devHandle, FPGA_APS, 17, sshsNodeGetShort(apsNode, "RowSettle")); // in cycles
 	spiConfigSend(devHandle, FPGA_APS, 18, sshsNodeGetShort(apsNode, "NullSettle")); // in cycles
 	spiConfigSend(devHandle, FPGA_APS, 4, sshsNodeGetBool(apsNode, "Run"));
+
+	// DAVIS RGB
+	spiConfigSend(devHandle, FPGA_APS, 50, sshsNodeGetShort(apsNode, "TransferTime"));
+	spiConfigSend(devHandle, FPGA_APS, 51, sshsNodeGetShort(apsNode, "RSFDSettleTime"));
+	spiConfigSend(devHandle, FPGA_APS, 52, sshsNodeGetShort(apsNode, "GSPDResetTime"));
+	spiConfigSend(devHandle, FPGA_APS, 53, sshsNodeGetShort(apsNode, "GSResetFallTime"));
+	spiConfigSend(devHandle, FPGA_APS, 54, sshsNodeGetShort(apsNode, "GSTXFallTime"));
+	spiConfigSend(devHandle, FPGA_APS, 55, sshsNodeGetShort(apsNode, "GSFDResetTime"));
 }
 
 static void IMUConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,

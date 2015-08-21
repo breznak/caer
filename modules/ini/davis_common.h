@@ -10,10 +10,9 @@
 #include "ext/ringbuffer/ringbuffer.h"
 #include <libusb.h>
 
-#define APS_READOUT_TYPES_NUM 3
+#define APS_READOUT_TYPES_NUM 2
 #define APS_READOUT_RESET 0
 #define APS_READOUT_SIGNAL 1
-#define APS_READOUT_CPRESET 2
 
 #define IMU6_COUNT 15
 #define IMU9_COUNT 21
@@ -117,7 +116,6 @@ struct davisCommon_state {
 	uint16_t apsCountX[APS_READOUT_TYPES_NUM];
 	uint16_t apsCountY[APS_READOUT_TYPES_NUM];
 	uint16_t *apsCurrentResetFrame;
-	uint16_t *apsCurrentSignalFrame; // Only used for DAVIS RGB currently.
 	// IMU specific fields
 	bool imuIgnoreEvents;
 	uint8_t imuCount;
