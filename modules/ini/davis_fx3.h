@@ -17,6 +17,8 @@
 #define DEBUG_TRANSFER_NUM 4
 #define DEBUG_TRANSFER_SIZE 64
 
+#define REQUIRED_LOGIC_REVISION 7084
+
 void caerInputDAVISFX3(uint16_t moduleID, caerPolarityEventPacket *polarity, caerFrameEventPacket *frame,
 	caerIMU6EventPacket *imu6, caerSpecialEventPacket *special);
 
