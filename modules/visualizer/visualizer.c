@@ -1,10 +1,16 @@
 #include "visualizer.h"
 #include "base/mainloop.h"
 #include "base/module.h"
+#include "modules/statistics/statistics.h"
 
 #define GLFW_INCLUDE_GLEXT 1
 #define GL_GLEXT_PROTOTYPES 1
 #include <GLFW/glfw3.h>
+
+#include <GL/glut.h>
+#include <GL/freeglut_ext.h>
+
+#define TEXT_SPACING 20
 
 struct visualizer_state {
 	GLFWwindow* window;
@@ -12,10 +18,12 @@ struct visualizer_state {
 	uint16_t eventRendererSizeX;
 	uint16_t eventRendererSizeY;
 	size_t eventRendererSlowDown;
+	struct caer_statistics_state eventStatistics;
 	uint32_t *frameRenderer;
 	uint16_t frameRendererSizeX;
 	uint16_t frameRendererSizeY;
 	uint16_t frameChannels;
+	struct caer_statistics_state frameStatistics;
 };
 
 typedef struct visualizer_state *visualizerState;
@@ -62,6 +70,25 @@ static bool caerVisualizerInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showEvents", true);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showFrames", true);
 
+	// Statistics text.
+	char fakeParam[] = "cAER Visualizer";
+	char *fakeargv[] = { fakeParam, NULL };
+	int fakeargc = 1;
+
+	glutInit(&fakeargc, fakeargv);
+
+	if (!caerStatisticsStringInit(&state->eventStatistics)) {
+		return (false);
+	}
+
+	state->eventStatistics.divisionFactor = 1000;
+
+	if (!caerStatisticsStringInit(&state->frameStatistics)) {
+		return (false);
+	}
+
+	state->frameStatistics.divisionFactor = 1;
+
 	return (true);
 }
 
@@ -82,6 +109,10 @@ static void caerVisualizerExit(caerModuleData moduleData) {
 		free(state->frameRenderer);
 		state->frameRenderer = NULL;
 	}
+
+	// Statistics text.
+	caerStatisticsStringExit(&state->eventStatistics);
+	caerStatisticsStringExit(&state->frameStatistics);
 }
 
 static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
@@ -162,7 +193,8 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 				state->frameChannels = caerFrameEventGetChannelNumber(currFrameEvent);
 
 				memcpy(state->frameRenderer, caerFrameEventGetPixelArrayUnsafe(currFrameEvent),
-					(size_t) state->frameRendererSizeX * state->frameRendererSizeY * state->frameChannels* sizeof(uint16_t));
+					(size_t) state->frameRendererSizeX * state->frameRendererSizeY * state->frameChannels
+						* sizeof(uint16_t));
 
 				break;
 			}
@@ -176,6 +208,18 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 
 		// Render polarity events.
 		if (renderPolarity) {
+			// Write statistics text.
+			caerStatisticsStringUpdate((caerEventPacketHeader) polarity, &state->eventStatistics);
+			glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+
+			glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + TEXT_SPACING);
+			glutBitmapString(GLUT_BITMAP_HELVETICA_18,
+				(const unsigned char *) state->eventStatistics.currentStatisticsString);
+
+			glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + (2 * TEXT_SPACING));
+			glutBitmapString(GLUT_BITMAP_HELVETICA_18, (const unsigned char *) "EVENTS");
+
+			// Position and draw events.
 			glWindowPos2i(0, 0);
 
 			glDrawPixels(state->eventRendererSizeX, state->eventRendererSizeY, GL_RGBA, GL_UNSIGNED_BYTE,
@@ -184,29 +228,50 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 
 		// Render latest frame.
 		if (renderFrame) {
+			// Write statistics text.
+			caerStatisticsStringUpdate((caerEventPacketHeader) frame, &state->frameStatistics);
+			glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+
 			// Shift APS frame to the right of the Polarity rendering, if both are enabled.
 			if (renderPolarity) {
+				glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + (4 * TEXT_SPACING));
+				glutBitmapString(GLUT_BITMAP_HELVETICA_18,
+					(const unsigned char *) state->frameStatistics.currentStatisticsString);
+
+				glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + (5 * TEXT_SPACING));
+				glutBitmapString(GLUT_BITMAP_HELVETICA_18, (const unsigned char *) "FRAMES");
+
+				// Position and draw frames after events.
 				glWindowPos2i(state->eventRendererSizeX * PIXEL_ZOOM, 0);
 			}
 			else {
+				glWindowPos2i(0, (state->frameRendererSizeX * PIXEL_ZOOM) + TEXT_SPACING);
+				glutBitmapString(GLUT_BITMAP_HELVETICA_18,
+					(const unsigned char *) state->frameStatistics.currentStatisticsString);
+
+				glWindowPos2i(0, (state->frameRendererSizeX * PIXEL_ZOOM) + (2 * TEXT_SPACING));
+				glutBitmapString(GLUT_BITMAP_HELVETICA_18, (const unsigned char *) "FRAMES");
+
+				// Position and draw frames.
 				glWindowPos2i(0, 0);
 			}
+
 			switch (state->frameChannels) {
-			case 3:
-				glDrawPixels(state->frameRendererSizeX,
-						state->frameRendererSizeY, GL_RGB, GL_UNSIGNED_SHORT,
+				case 3:
+					glDrawPixels(state->frameRendererSizeX, state->frameRendererSizeY, GL_RGB, GL_UNSIGNED_SHORT,
 						state->frameRenderer);
-				break;
-			case 4:
-				glDrawPixels(state->frameRendererSizeX,
-						state->frameRendererSizeY, GL_RGBA, GL_UNSIGNED_SHORT,
+					break;
+
+				case 4:
+					glDrawPixels(state->frameRendererSizeX, state->frameRendererSizeY, GL_RGBA, GL_UNSIGNED_SHORT,
 						state->frameRenderer);
-				break;
-			case 1:
-			default:
-				glDrawPixels(state->frameRendererSizeX,
-						state->frameRendererSizeY, GL_LUMINANCE,
-						GL_UNSIGNED_SHORT, state->frameRenderer);
+					break;
+
+				case 1:
+				default:
+					glDrawPixels(state->frameRendererSizeX, state->frameRendererSizeY, GL_LUMINANCE,
+					GL_UNSIGNED_SHORT, state->frameRenderer);
+					break;
 			}
 		}
 
@@ -243,7 +308,6 @@ static bool allocateFrameRenderer(visualizerState state, uint16_t sourceID) {
 	uint16_t sizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
 	uint16_t sizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
 	uint16_t channels = sshsNodeGetShort(sourceInfoNode, "apsChannels");
-
 
 	state->frameRenderer = calloc((size_t) (sizeX * sizeY * channels), sizeof(uint16_t));
 	if (state->frameRenderer == NULL) {
