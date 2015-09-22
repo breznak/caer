@@ -16,7 +16,9 @@ struct caer_statistics_state {
 typedef struct caer_statistics_state *caerStatisticsState;
 
 // For reuse inside other modules.
-void caerUpdateStatisticsString(caerEventPacketHeader packetHeader, caerStatisticsState state);
+bool caerStatisticsStringInit(caerStatisticsState state);
+void caerStatisticsStringUpdate(caerEventPacketHeader packetHeader, caerStatisticsState state);
+void caerStatisticsStringExit(caerStatisticsState state);
 
 void caerStatistics(uint16_t moduleID, caerEventPacketHeader packetHeader, size_t divisionFactor);
 

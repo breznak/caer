@@ -22,14 +22,7 @@ void caerStatistics(uint16_t moduleID, caerEventPacketHeader packetHeader, size_
 static bool caerStatisticsInit(caerModuleData moduleData) {
 	caerStatisticsState state = moduleData->moduleState;
 
-	size_t maxStatStringLength = (size_t) snprintf(NULL, 0, STAT_STRING, UINT64_MAX, UINT64_MAX);
-
-	state->currentStatisticsString = calloc(maxStatStringLength + 1, sizeof(char)); // +1 for NUL termination.
-	if (state->currentStatisticsString == NULL) {
-		return (false);
-	}
-
-	return (true);
+	return (caerStatisticsStringInit(state));
 }
 
 static void caerStatisticsRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
@@ -42,7 +35,7 @@ static void caerStatisticsRun(caerModuleData moduleData, size_t argsNumber, va_l
 	caerStatisticsState state = moduleData->moduleState;
 	state->divisionFactor = divisionFactor;
 
-	caerUpdateStatisticsString(packetHeader, state);
+	caerStatisticsStringUpdate(packetHeader, state);
 
 	fprintf(stdout, "\r%s", state->currentStatisticsString);
 	fflush(stdout);
@@ -51,14 +44,21 @@ static void caerStatisticsRun(caerModuleData moduleData, size_t argsNumber, va_l
 static void caerStatisticsExit(caerModuleData moduleData) {
 	caerStatisticsState state = moduleData->moduleState;
 
-	// Reclaim string memory.
-	if (state->currentStatisticsString != NULL) {
-		free(state->currentStatisticsString);
-		state->currentStatisticsString = NULL;
-	}
+	caerStatisticsStringExit(state);
 }
 
-void caerUpdateStatisticsString(caerEventPacketHeader packetHeader, caerStatisticsState state) {
+bool caerStatisticsStringInit(caerStatisticsState state) {
+	size_t maxStatStringLength = (size_t) snprintf(NULL, 0, STAT_STRING, UINT64_MAX, UINT64_MAX);
+
+	state->currentStatisticsString = calloc(maxStatStringLength + 1, sizeof(char)); // +1 for NUL termination.
+	if (state->currentStatisticsString == NULL) {
+		return (false);
+	}
+
+	return (true);
+}
+
+void caerStatisticsStringUpdate(caerEventPacketHeader packetHeader, caerStatisticsState state) {
 	// Only non-NULL packets (with content!) contribute to the event count.
 	if (packetHeader != NULL) {
 		state->totalEventsCounter += caerEventPacketHeaderGetEventNumber(packetHeader);
@@ -85,5 +85,13 @@ void caerUpdateStatisticsString(caerEventPacketHeader packetHeader, caerStatisti
 		state->validEventsCounter = 0;
 		state->lastTime.tv_sec = currentTime.tv_sec;
 		state->lastTime.tv_nsec = currentTime.tv_nsec;
+	}
+}
+
+void caerStatisticsStringExit(caerStatisticsState state) {
+	// Reclaim string memory.
+	if (state->currentStatisticsString != NULL) {
+		free(state->currentStatisticsString);
+		state->currentStatisticsString = NULL;
 	}
 }
