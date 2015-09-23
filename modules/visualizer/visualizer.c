@@ -2,6 +2,7 @@
 #include "base/mainloop.h"
 #include "base/module.h"
 #include "modules/statistics/statistics.h"
+#include <time.h>
 
 #define GLFW_INCLUDE_GLEXT 1
 #define GL_GLEXT_PROTOTYPES 1
@@ -10,7 +11,9 @@
 #include <GL/glut.h>
 #include <GL/freeglut_ext.h>
 
-#define TEXT_SPACING 20
+#define TEXT_SPACING 20 // in pixels
+
+#define SYSTEM_TIMEOUT 10 // in seconds
 
 struct visualizer_state {
 	GLFWwindow* window;
@@ -68,7 +71,11 @@ static bool caerVisualizerInit(caerModuleData moduleData) {
 
 	// Configuration.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showEvents", true);
+#ifdef DVS128
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showFrames", false);
+#else
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showFrames", true);
+#endif
 
 	// Statistics text.
 	char fakeParam[] = "cAER Visualizer";
@@ -201,23 +208,42 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 		}
 	}
 
+	// Detect if nothing happened for a long time.
+	struct timespec currentTime;
+	clock_gettime(CLOCK_MONOTONIC, &currentTime);
+
+	uint64_t diffNanoTimeEvents = (uint64_t) (((int64_t) (currentTime.tv_sec - state->eventStatistics.lastTime.tv_sec)
+		* 1000000000) + (int64_t) (currentTime.tv_nsec - state->eventStatistics.lastTime.tv_nsec));
+	bool noEventsTimeout = (diffNanoTimeEvents >= U64T(SYSTEM_TIMEOUT * 1000000000L));
+
+	uint64_t diffNanoTimeFrames = (uint64_t) (((int64_t) (currentTime.tv_sec - state->frameStatistics.lastTime.tv_sec)
+		* 1000000000) + (int64_t) (currentTime.tv_nsec - state->frameStatistics.lastTime.tv_nsec));
+	bool noFramesTimeout = (diffNanoTimeFrames >= U64T(SYSTEM_TIMEOUT * 1000000000L));
+
 	// All rendering calls at the end.
 	// Only execute if something actually changed (packets not null).
-	if ((renderPolarity && polarity != NULL) || (renderFrame && frame != NULL)) {
+	if ((renderPolarity && (polarity != NULL || noEventsTimeout))
+		|| (renderFrame && (frame != NULL || noFramesTimeout))) {
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		// Render polarity events.
 		if (renderPolarity) {
 			// Write statistics text.
 			caerStatisticsStringUpdate((caerEventPacketHeader) polarity, &state->eventStatistics);
-			glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+			if (noEventsTimeout) {
+				glColor4f(1.0f, 0.0f, 0.0f, 1.0f); // RED
+			}
+			else {
+				glColor4f(1.0f, 1.0f, 1.0f, 1.0f); // WHITE
+			}
 
 			glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + TEXT_SPACING);
 			glutBitmapString(GLUT_BITMAP_HELVETICA_18,
 				(const unsigned char *) state->eventStatistics.currentStatisticsString);
 
 			glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + (2 * TEXT_SPACING));
-			glutBitmapString(GLUT_BITMAP_HELVETICA_18, (const unsigned char *) "EVENTS");
+			glutBitmapString(GLUT_BITMAP_HELVETICA_18,
+				(noEventsTimeout) ? ((const unsigned char *) "NO EVENTS") : ((const unsigned char *) "EVENTS"));
 
 			// Position and draw events.
 			glWindowPos2i(0, 0);
@@ -230,7 +256,12 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 		if (renderFrame) {
 			// Write statistics text.
 			caerStatisticsStringUpdate((caerEventPacketHeader) frame, &state->frameStatistics);
-			glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+			if (noFramesTimeout) {
+				glColor4f(1.0f, 0.0f, 0.0f, 1.0f); // RED
+			}
+			else {
+				glColor4f(1.0f, 1.0f, 1.0f, 1.0f); // WHITE
+			}
 
 			// Shift APS frame to the right of the Polarity rendering, if both are enabled.
 			if (renderPolarity) {
@@ -239,7 +270,8 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 					(const unsigned char *) state->frameStatistics.currentStatisticsString);
 
 				glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + (5 * TEXT_SPACING));
-				glutBitmapString(GLUT_BITMAP_HELVETICA_18, (const unsigned char *) "FRAMES");
+				glutBitmapString(GLUT_BITMAP_HELVETICA_18,
+					(noFramesTimeout) ? ((const unsigned char *) "NO FRAMES") : ((const unsigned char *) "FRAMES"));
 
 				// Position and draw frames after events.
 				glWindowPos2i(state->eventRendererSizeX * PIXEL_ZOOM, 0);
@@ -250,7 +282,8 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 					(const unsigned char *) state->frameStatistics.currentStatisticsString);
 
 				glWindowPos2i(0, (state->frameRendererSizeX * PIXEL_ZOOM) + (2 * TEXT_SPACING));
-				glutBitmapString(GLUT_BITMAP_HELVETICA_18, (const unsigned char *) "FRAMES");
+				glutBitmapString(GLUT_BITMAP_HELVETICA_18,
+					(noFramesTimeout) ? ((const unsigned char *) "NO FRAMES") : ((const unsigned char *) "FRAMES"));
 
 				// Position and draw frames.
 				glWindowPos2i(0, 0);
