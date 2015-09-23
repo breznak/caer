@@ -133,6 +133,9 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 	// Ring-buffer setting (only changes value on module init/shutdown cycles).
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "dataExchangeBufferSize", 64);
 
+	// Add auto-restart setting.
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "auto-restart", true);
+
 	// Install default listener to signal configuration updates asynchronously.
 	sshsNodeAddAttrListener(biasNode, moduleData, &caerInputDVS128ConfigListener);
 	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerInputDVS128ConfigListener);
@@ -250,6 +253,11 @@ static void caerInputDVS128Exit(caerModuleData moduleData) {
 	freeAllMemory(state);
 
 	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Shutdown successful.");
+
+	if (sshsNodeGetBool(moduleData->moduleNode, "auto-restart")) {
+		// Prime input module again so that it will try to restart if new devices detected.
+		sshsNodePutBool(moduleData->moduleNode, "shutdown", false);
+	}
 }
 
 static void caerInputDVS128Run(caerModuleData moduleData, size_t argsNumber, va_list args) {

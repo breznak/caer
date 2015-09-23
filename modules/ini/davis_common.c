@@ -70,14 +70,6 @@ static inline void initFrame(davisCommonState state, caerFrameEvent currentFrame
 	}
 }
 
-static inline bool isDavisPixel(uint16_t xPos, uint16_t yPos) {
-	if (((xPos & 0x01) == 1) && ((yPos & 0x01) == 0)) {
-		return (true);
-	}
-
-	return (false);
-}
-
 static inline float calculateIMUAccelScale(uint8_t imuAccelScale) {
 	// Accelerometer scale is:
 	// 0 - +-2 g - 16384 LSB/g
@@ -843,6 +835,9 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	// Ring-buffer setting (only changes value on module init/shutdown cycles).
 	sshsNodePutIntIfAbsent(sysNode, "DataExchangeBufferSize", 64);
 
+	// Add auto-restart setting.
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "auto-restart", true);
+
 	// Install default listeners to signal configuration updates asynchronously.
 	sshsNodeAddAttrListener(muxNode, cstate->deviceHandle, &MultiplexerConfigListener);
 	sshsNodeAddAttrListener(dvsNode, cstate->deviceHandle, &DVSConfigListener);
@@ -976,6 +971,11 @@ void caerInputDAVISCommonExit(caerModuleData moduleData) {
 	freeAllMemory(cstate);
 
 	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Shutdown successful.");
+
+	if (sshsNodeGetBool(moduleData->moduleNode, "auto-restart")) {
+		// Prime input module again so that it will try to restart if new devices detected.
+		sshsNodePutBool(moduleData->moduleNode, "shutdown", false);
+	}
 }
 
 void caerInputDAVISCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
