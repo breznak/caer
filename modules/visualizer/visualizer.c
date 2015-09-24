@@ -213,12 +213,12 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 	clock_gettime(CLOCK_MONOTONIC, &currentTime);
 
 	uint64_t diffNanoTimeEvents = (uint64_t) (((int64_t) (currentTime.tv_sec - state->eventStatistics.lastTime.tv_sec)
-		* 1000000000L) + (int64_t) (currentTime.tv_nsec - state->eventStatistics.lastTime.tv_nsec));
-	bool noEventsTimeout = (diffNanoTimeEvents >= U64T(SYSTEM_TIMEOUT * 1000000000L));
+		* 1000000000LL) + (int64_t) (currentTime.tv_nsec - state->eventStatistics.lastTime.tv_nsec));
+	bool noEventsTimeout = (diffNanoTimeEvents >= U64T(SYSTEM_TIMEOUT * 1000000000LL));
 
 	uint64_t diffNanoTimeFrames = (uint64_t) (((int64_t) (currentTime.tv_sec - state->frameStatistics.lastTime.tv_sec)
-		* 1000000000L) + (int64_t) (currentTime.tv_nsec - state->frameStatistics.lastTime.tv_nsec));
-	bool noFramesTimeout = (diffNanoTimeFrames >= U64T(SYSTEM_TIMEOUT * 1000000000L));
+		* 1000000000LL) + (int64_t) (currentTime.tv_nsec - state->frameStatistics.lastTime.tv_nsec));
+	bool noFramesTimeout = (diffNanoTimeFrames >= U64T(SYSTEM_TIMEOUT * 1000000000LL));
 
 	// All rendering calls at the end.
 	// Only execute if something actually changed (packets not null).
