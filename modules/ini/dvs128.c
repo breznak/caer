@@ -354,14 +354,14 @@ static void *dvs128DataAcquisitionThread(void *inPtr) {
 	// Send default start-up biases to device before enabling it.
 	dvs128SendBiases(sshsGetRelativeNode(data->moduleNode, "bias/"), state->deviceHandle);
 
-	// Create buffers as specified in config file.
-	dvs128AllocateTransfers(state, sshsNodeGetInt(data->moduleNode, "bufferNumber"),
-		sshsNodeGetInt(data->moduleNode, "bufferSize"));
-
 	// Enable AER data transfer on USB end-point 6.
 	libusb_control_transfer(state->deviceHandle,
 		LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
 		VENDOR_REQUEST_START_TRANSFER, 0, 0, NULL, 0, 0);
+
+	// Create buffers as specified in config file.
+	dvs128AllocateTransfers(state, sshsNodeGetInt(data->moduleNode, "bufferNumber"),
+		sshsNodeGetInt(data->moduleNode, "bufferSize"));
 
 	// Handle USB events (1 second timeout).
 	struct timeval te = { .tv_sec = 0, .tv_usec = 1000000 };
@@ -604,11 +604,11 @@ static void dvs128EventTranslator(dvs128State state, uint8_t *buffer, size_t byt
 		}
 		else {
 			// address is LSB MSB (USB is LE)
-			uint16_t addressUSB = le16toh(*((uint16_t * ) (&buffer[i])));
+			uint16_t addressUSB = le16toh(*((uint16_t *) (&buffer[i])));
 
 			// same for timestamp, LSB MSB (USB is LE)
 			// 15 bit value of timestamp in 1 us tick
-			uint16_t timestampUSB = le16toh(*((uint16_t * ) (&buffer[i + 2])));
+			uint16_t timestampUSB = le16toh(*((uint16_t *) (&buffer[i + 2])));
 
 			// Expand to 32 bits. (Tick is 1µs already.)
 			uint32_t timestamp = timestampUSB + state->wrapAdd;
