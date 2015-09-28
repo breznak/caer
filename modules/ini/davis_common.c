@@ -724,7 +724,7 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutBoolIfAbsent(muxNode, "ForceChipBiasEnable", false);
 	sshsNodePutBoolIfAbsent(muxNode, "DropDVSOnTransferStall", true);
 	sshsNodePutBoolIfAbsent(muxNode, "DropAPSOnTransferStall", false);
-	sshsNodePutBoolIfAbsent(muxNode, "DropIMUOnTransferStall", true);
+	sshsNodePutBoolIfAbsent(muxNode, "DropIMUOnTransferStall", false);
 	sshsNodePutBoolIfAbsent(muxNode, "DropExtInputOnTransferStall", true);
 
 	// Subsystem 1: DVS AER
@@ -757,11 +757,11 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	sshsNodePutShortIfAbsent(apsNode, "EndColumn0", U16T(cstate->apsSizeX - 1));
 	sshsNodePutShortIfAbsent(apsNode, "EndRow0", U16T(cstate->apsSizeY - 1));
 	sshsNodePutIntIfAbsent(apsNode, "Exposure", 4000); // in µs, converted to cycles later
-	sshsNodePutIntIfAbsent(apsNode, "FrameDelay", 200); // in µs, converted to cycles later
+	sshsNodePutIntIfAbsent(apsNode, "FrameDelay", 1000); // in µs, converted to cycles later
 	sshsNodePutShortIfAbsent(apsNode, "ResetSettle", 10); // in cycles
 	sshsNodePutShortIfAbsent(apsNode, "ColumnSettle", 30); // in cycles
-	sshsNodePutShortIfAbsent(apsNode, "RowSettle", 10); // in cycles
-	sshsNodePutShortIfAbsent(apsNode, "NullSettle", 10); // in cycles
+	sshsNodePutShortIfAbsent(apsNode, "RowSettle", 8); // in cycles
+	sshsNodePutShortIfAbsent(apsNode, "NullSettle", 3); // in cycles
 
 	bool integratedADCSupported = sshsNodeGetBool(sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"),
 		"apsHasInternalADC");

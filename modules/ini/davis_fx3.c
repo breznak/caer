@@ -119,9 +119,9 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel6Column", cstate->apsSizeX);
 	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel7Row", cstate->apsSizeY);
 	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel7Column", cstate->apsSizeX);
-	sshsNodePutBoolIfAbsent(dvsNode, "FilterBackgroundActivity", 0);
+	sshsNodePutBoolIfAbsent(dvsNode, "FilterBackgroundActivity", true);
 	sshsNodePutIntIfAbsent(dvsNode, "FilterBackgroundActivityDeltaTime", 20000);
-	sshsNodePutBoolIfAbsent(dvsNode, "TestEventGeneratorEnable", 0);
+	sshsNodePutBoolIfAbsent(dvsNode, "TestEventGeneratorEnable", false);
 
 	// Subsystem 2: APS ADC (Quad-ROI support present only in FX3)
 	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
@@ -142,9 +142,9 @@ static bool caerInputDAVISFX3Init(caerModuleData moduleData) {
 	// Subsystem 4: External Input (Generator module present only in FX3)
 	sshsNode extNode = sshsGetRelativeNode(moduleData->moduleNode, "externalInput/");
 
-	sshsNodePutBoolIfAbsent(extNode, "RunGenerator", 0);
-	sshsNodePutBoolIfAbsent(extNode, "GenerateUseCustomSignal", 0);
-	sshsNodePutBoolIfAbsent(extNode, "GeneratePulsePolarity", 1);
+	sshsNodePutBoolIfAbsent(extNode, "RunGenerator", false);
+	sshsNodePutBoolIfAbsent(extNode, "GenerateUseCustomSignal", false);
+	sshsNodePutBoolIfAbsent(extNode, "GeneratePulsePolarity", true);
 	sshsNodePutIntIfAbsent(extNode, "GeneratePulseInterval", 10);
 	sshsNodePutIntIfAbsent(extNode, "GeneratePulseLength", 5);
 
