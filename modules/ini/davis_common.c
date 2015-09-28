@@ -617,8 +617,8 @@ void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstat
 	}
 
 	if (cstate->chipID == CHIP_DAVIS208) {
-		createVDACBiasSetting(biases, biasNode, "ResetHighPass", 5, 7, 63);
-		createVDACBiasSetting(biases, biasNode, "RefSS", 6, 5, 11);
+		createVDACBiasSetting(biases, biasNode, "ResetHighPass", 6, 7, 63);
+		createVDACBiasSetting(biases, biasNode, "RefSS", 7, 5, 11);
 
 		createCoarseFineBiasSetting(biases, biasNode, "RegBiasBp", 28, "Normal", "P", 5, 20, true);
 		createCoarseFineBiasSetting(biases, biasNode, "RefSSBn", 30, "Normal", "N", 5, 20, true);
