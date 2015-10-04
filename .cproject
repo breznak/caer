@@ -18,12 +18,16 @@
 					<folderInfo id="cdt.managedbuild.toolchain.gnu.base.1733434747.361979371" name="/" resourcePath="">
 						<toolChain id="cdt.managedbuild.toolchain.gnu.base.1216366819" name="cdt.managedbuild.toolchain.gnu.base" superClass="cdt.managedbuild.toolchain.gnu.base">
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.target.gnu.platform.base.894778321" name="Debug Platform" osList="linux,hpux,aix,qnx" superClass="cdt.managedbuild.target.gnu.platform.base"/>
-							<builder enableAutoBuild="true" id="cdt.managedbuild.target.gnu.builder.base.714995375" keepEnvironmentInBuildfile="false" managedBuildOn="false" name="Gnu Make Builder" superClass="cdt.managedbuild.target.gnu.builder.base"/>
+							<builder enableAutoBuild="true" id="cdt.managedbuild.target.gnu.builder.base.714995375" keepEnvironmentInBuildfile="false" managedBuildOn="false" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" stopOnErr="false" superClass="cdt.managedbuild.target.gnu.builder.base"/>
 							<tool id="cdt.managedbuild.tool.gnu.archiver.base.1646610619" name="GCC Archiver" superClass="cdt.managedbuild.tool.gnu.archiver.base"/>
 							<tool id="cdt.managedbuild.tool.gnu.cpp.compiler.base.2073536060" name="GCC C++ Compiler" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.base"/>
 							<tool id="cdt.managedbuild.tool.gnu.c.compiler.base.1181955887" name="GCC C Compiler" superClass="cdt.managedbuild.tool.gnu.c.compiler.base">
-								<option id="gnu.c.compiler.option.include.paths.816228382" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
+								<option id="gnu.c.compiler.option.include.paths.816228382" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
 									<listOptionValue builtIn="false" value="/usr/include/libusb-1.0"/>
+								</option>
+								<option id="gnu.c.compiler.option.preprocessor.def.symbols.1668023173" superClass="gnu.c.compiler.option.preprocessor.def.symbols" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="_DEFAULT_SOURCE=1"/>
+									<listOptionValue builtIn="false" value="_XOPEN_SOURCE=700"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1645890299" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
