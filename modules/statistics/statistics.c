@@ -61,22 +61,22 @@ bool caerStatisticsStringInit(caerStatisticsState state) {
 void caerStatisticsStringUpdate(caerEventPacketHeader packetHeader, caerStatisticsState state) {
 	// Only non-NULL packets (with content!) contribute to the event count.
 	if (packetHeader != NULL) {
-		state->totalEventsCounter += caerEventPacketHeaderGetEventNumber(packetHeader);
-		state->validEventsCounter += caerEventPacketHeaderGetEventValid(packetHeader);
+		state->totalEventsCounter += U64T(caerEventPacketHeaderGetEventNumber(packetHeader));
+		state->validEventsCounter += U64T(caerEventPacketHeaderGetEventValid(packetHeader));
 	}
 
 	// Print up-to-date statistic roughly every second, taking into account possible deviations.
 	struct timespec currentTime;
 	clock_gettime(CLOCK_MONOTONIC, &currentTime);
 
-	uint64_t diffNanoTime = (uint64_t) (((int64_t) (currentTime.tv_sec - state->lastTime.tv_sec) * 1000000000)
+	uint64_t diffNanoTime = (uint64_t) (((int64_t) (currentTime.tv_sec - state->lastTime.tv_sec) * 1000000000LL)
 		+ (int64_t) (currentTime.tv_nsec - state->lastTime.tv_nsec));
 
 	// DiffNanoTime is the difference in nanoseconds; we want to trigger roughly every second.
-	if (diffNanoTime >= 1000000000) {
+	if (diffNanoTime >= 1000000000LLU) {
 		// Print current values.
-		uint64_t totalEventsPerTime = (state->totalEventsCounter * (1000000000 / state->divisionFactor)) / diffNanoTime;
-		uint64_t validEventsPerTime = (state->validEventsCounter * (1000000000 / state->divisionFactor)) / diffNanoTime;
+		uint64_t totalEventsPerTime = (state->totalEventsCounter * (1000000000LLU / state->divisionFactor)) / diffNanoTime;
+		uint64_t validEventsPerTime = (state->validEventsCounter * (1000000000LLU / state->divisionFactor)) / diffNanoTime;
 
 		sprintf(state->currentStatisticsString, STAT_STRING, totalEventsPerTime, validEventsPerTime);
 

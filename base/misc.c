@@ -6,6 +6,7 @@
  */
 
 #include "misc.h"
+#include "log.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -18,7 +19,7 @@ void caerDaemonize(void) {
 
 	// Handle errors first.
 	if (result == -1) {
-		caerLog(LOG_EMERGENCY, "Daemonize", "Failed the first fork.");
+		caerLog(CAER_LOG_EMERGENCY, "Daemonize", "Failed the first fork.");
 		exit(EXIT_FAILURE);
 	}
 
@@ -37,7 +38,7 @@ void caerDaemonize(void) {
 
 	// Handle errors first.
 	if (result == -1) {
-		caerLog(LOG_EMERGENCY, "Daemonize", "Failed the second fork.");
+		caerLog(CAER_LOG_EMERGENCY, "Daemonize", "Failed the second fork.");
 		exit(EXIT_FAILURE);
 	}
 
@@ -50,28 +51,22 @@ void caerDaemonize(void) {
 	// So we must be the child here (result == 0).
 	// Ensure we don't keep directories busy.
 	if (chdir("/") != 0) {
-		caerLog(LOG_EMERGENCY, "Daemonize", "Failed to change directory to '/'.");
+		caerLog(CAER_LOG_EMERGENCY, "Daemonize", "Failed to change directory to '/'.");
 		exit(EXIT_FAILURE);
 	}
 
-	// Close stdin, stdout and stderr fds, disable console logging in caerLog().
-	caerLogDisableConsole();
+	// Close stdin and stdout fds, disable console logging.
+	close(STDIN_FILENO); // stdin
+	close(STDOUT_FILENO); // stdout
 
-	close(0); // stdin
-	close(1); // stdout
-	close(2); // stderr
-
-	// Redirect stdin to /dev/null and stdout/stderr to the log-file, just to be sure.
-	if (open("/dev/null", O_RDONLY) != 0) {
-		caerLog(LOG_EMERGENCY, "Daemonize", "Failed to redirect stdin to log file.");
+	// Redirect stdin to /dev/null and stdout to the log-file, just to be sure.
+	if (open("/dev/null", O_RDONLY) != STDIN_FILENO) {
+		caerLog(CAER_LOG_EMERGENCY, "Daemonize", "Failed to redirect stdin to log file.");
 		exit(EXIT_FAILURE);
 	}
-	if (dup2(3, 1) != 1) {
-		caerLog(LOG_EMERGENCY, "Daemonize", "Failed to redirect stdout to log file.");
-		exit(EXIT_FAILURE);
-	}
-	if (dup2(3, 2) != 2) {
-		caerLog(LOG_EMERGENCY, "Daemonize", "Failed to redirect stderr to log file.");
+
+	if (dup2(CAER_LOG_FILE_FD, STDOUT_FILENO) != STDOUT_FILENO) {
+		caerLog(CAER_LOG_EMERGENCY, "Daemonize", "Failed to redirect stdout to log file.");
 		exit(EXIT_FAILURE);
 	}
 

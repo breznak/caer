@@ -6,7 +6,10 @@
 #include <string.h>
 #include <stdarg.h>
 #include <mxml.h>
-#include <pthread.h>
+
+#ifdef HAVE_PTHREADS
+	#include "ext/c11threads_posix.h"
+#endif
 
 // Terminate process on failed memory allocation.
 #define SSHS_MALLOC_CHECK_EXIT(ptr) \

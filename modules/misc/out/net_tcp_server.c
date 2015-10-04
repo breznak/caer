@@ -60,7 +60,8 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	// Open a TCP server socket for others to connect to.
 	state->serverDescriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (state->serverDescriptor < 0) {
-		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create TCP server socket. Error: %s (%d).", caerLogStrerror(errno), errno);
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create TCP server socket. Error: %d.",
+			errno);
 		return (false);
 	}
 
@@ -69,7 +70,8 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 
 	// Set server socket, on which accept() is called, to non-blocking mode.
 	if (!socketBlockingMode(state->serverDescriptor, false)) {
-		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not set TCP server socket to non-blocking mode.");
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+			"Could not set TCP server socket to non-blocking mode.");
 		close(state->serverDescriptor);
 		return (false);
 	}
@@ -85,16 +87,16 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 
 	// Bind socket to above address.
 	if (bind(state->serverDescriptor, (struct sockaddr *) &tcpServer, sizeof(struct sockaddr_in)) < 0) {
-		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not bind TCP server socket. Error: %s (%d).",
-			caerLogStrerror(errno), errno);
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not bind TCP server socket. Error: %d.",
+			errno);
 		close(state->serverDescriptor);
 		return (false);
 	}
 
 	// Listen to new connections on the socket.
 	if (listen(state->serverDescriptor, sshsNodeGetShort(moduleData->moduleNode, "backlogSize")) < 0) {
-		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not listen on TCP server socket. Error: %s (%d).",
-			caerLogStrerror(errno), errno);
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+			"Could not listen on TCP server socket. Error: %d.", errno);
 		close(state->serverDescriptor);
 		return (false);
 	}
@@ -103,8 +105,8 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	state->clientDescriptorsLength = sshsNodeGetShort(moduleData->moduleNode, "concurrentConnections");
 	state->clientDescriptors = malloc(state->clientDescriptorsLength * sizeof(*(state->clientDescriptors)));
 	if (state->clientDescriptors == NULL) {
-		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not allocate memory for TCP client descriptors. Error: %s (%d).",
-			caerLogStrerror(errno), errno);
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+			"Could not allocate memory for TCP client descriptors. Error: %d.", errno);
 		close(state->serverDescriptor);
 		return (false);
 	}
@@ -124,18 +126,20 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	if (state->validOnly) {
 		state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
 		if (state->sgioMemory == NULL) {
-			caerLog(LOG_ALERT, moduleData->moduleSubSystemString, "Impossible to allocate memory for scatter/gather IO, using memory copy method.");
+			caerLog(CAER_LOG_ALERT, moduleData->moduleSubSystemString,
+				"Impossible to allocate memory for scatter/gather IO, using memory copy method.");
 		}
 		else {
-			caerLog(LOG_INFO, moduleData->moduleSubSystemString, "Using scatter/gather IO for outputting valid events only.");
+			caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString,
+				"Using scatter/gather IO for outputting valid events only.");
 		}
 	}
 	else {
 		state->sgioMemory = NULL;
 	}
 
-	caerLog(LOG_INFO, moduleData->moduleSubSystemString, "TCP server socket connected to %s:%" PRIu16 ".", inet_ntoa(tcpServer.sin_addr),
-		ntohs(tcpServer.sin_port));
+	caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "TCP server socket connected to %s:%" PRIu16 ".",
+		inet_ntoa(tcpServer.sin_addr), ntohs(tcpServer.sin_port));
 
 	return (true);
 }
@@ -148,7 +152,7 @@ static void caerOutputNetTCPServerConnectionHandler(caerModuleData moduleData) {
 	int pollResult = poll(state->clientDescriptors, state->clientDescriptorsLength, 0);
 	if (pollResult < 0) {
 		// Poll failure. Log and then continue.
-		caerLog(LOG_ERROR, moduleData->moduleSubSystemString, "TCP server poll() failed. Error: %s (%d).", caerLogStrerror(errno), errno);
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "TCP server poll() failed. Error: %d.", errno);
 	}
 
 	// Handle clients that have inbound data (close() calls).
@@ -163,12 +167,14 @@ static void caerOutputNetTCPServerConnectionHandler(caerModuleData moduleData) {
 				if (recvResult <= 0) {
 					// Recv failure or closed connection.
 					close(state->clientDescriptors[c].fd);
-					caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Disconnected TCP client on recv (fd %d).", state->clientDescriptors[c].fd);
+					caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString,
+						"Disconnected TCP client on recv (fd %d).", state->clientDescriptors[c].fd);
 					state->clientDescriptors[c].fd = -1;
 				}
 				else {
 					// Incoming data: what?
-					caerLog(LOG_ERROR, moduleData->moduleSubSystemString, "Incoming data from client on TCP server. Clients should never send data!");
+					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+						"Incoming data from client on TCP server. Clients should never send data!");
 				}
 			}
 		}
@@ -179,7 +185,7 @@ static void caerOutputNetTCPServerConnectionHandler(caerModuleData moduleData) {
 	int acceptResult = accept(state->serverDescriptor, NULL, NULL);
 	if (acceptResult < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
 		// Accept failure (but not would-block error). Log and then continue.
-		caerLog(LOG_ERROR, moduleData->moduleSubSystemString, "TCP server accept() failed. Error: %s (%d).", caerLogStrerror(errno), errno);
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "TCP server accept() failed. Error: %d.", errno);
 	}
 
 	// New connection present!
@@ -199,10 +205,12 @@ static void caerOutputNetTCPServerConnectionHandler(caerModuleData moduleData) {
 		// No space for new connection, just close it (client will exit).
 		if (!putInFDList) {
 			close(acceptResult);
-			caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Rejected TCP client (fd %d), queue full.", acceptResult);
+			caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString, "Rejected TCP client (fd %d), queue full.",
+				acceptResult);
 		}
 		else {
-			caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Accepted new TCP connection from client (fd %d).", acceptResult);
+			caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString,
+				"Accepted new TCP connection from client (fd %d).", acceptResult);
 		}
 	}
 }
@@ -227,8 +235,8 @@ static void caerOutputNetTCPServerRun(caerModuleData moduleData, size_t argsNumb
 				for (size_t c = 0; c < state->clientDescriptorsLength; c++) {
 					if (state->clientDescriptors[c].fd >= 0) {
 						caerOutputCommonSend(moduleData->moduleSubSystemString, packetHeader,
-							state->clientDescriptors[c].fd, state->sgioMemory,
-							state->validOnly, state->excludeHeader, state->maxBytesPerPacket, false);
+							state->clientDescriptors[c].fd, state->sgioMemory, state->validOnly, state->excludeHeader,
+							state->maxBytesPerPacket, false);
 					}
 				}
 			}
@@ -241,7 +249,7 @@ static void caerOutputNetTCPServerConfig(caerModuleData moduleData) {
 
 	// Get the current value to examine by atomic exchange, since we don't
 	// want there to be any possible store between a load/store pair.
-	uintptr_t configUpdate = atomic_ops_uint_swap(&moduleData->configUpdate, 0, ATOMIC_OPS_FENCE_NONE);
+	uintptr_t configUpdate = atomic_exchange(&moduleData->configUpdate, 0);
 
 	if (configUpdate & (0x01 << 0)) {
 		// validOnly flag changed.
@@ -255,11 +263,12 @@ static void caerOutputNetTCPServerConfig(caerModuleData moduleData) {
 
 				state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
 				if (state->sgioMemory == NULL) {
-					caerLog(LOG_ALERT, moduleData->moduleSubSystemString,
+					caerLog(CAER_LOG_ALERT, moduleData->moduleSubSystemString,
 						"Impossible to allocate memory for scatter/gather IO, using memory copy method.");
 				}
 				else {
-					caerLog(LOG_INFO, moduleData->moduleSubSystemString, "Using scatter/gather IO for outputting valid events only.");
+					caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString,
+						"Using scatter/gather IO for outputting valid events only.");
 				}
 			}
 			else {
@@ -286,7 +295,8 @@ static void caerOutputNetTCPServerConfig(caerModuleData moduleData) {
 		// Open a TCP socket on which to listen for connections.
 		int newServerDescriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (newServerDescriptor < 0) {
-			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create TCP socket. Error: %s (%d).", caerLogStrerror(errno), errno);
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create TCP socket. Error: %d.",
+				errno);
 			goto configUpdate_2;
 		}
 
@@ -295,7 +305,8 @@ static void caerOutputNetTCPServerConfig(caerModuleData moduleData) {
 
 		// Set server socket, on which accept() is called, to non-blocking mode.
 		if (!socketBlockingMode(newServerDescriptor, false)) {
-			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not set TCP server socket to non-blocking mode.");
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"Could not set TCP server socket to non-blocking mode.");
 			close(newServerDescriptor);
 			goto configUpdate_2;
 		}
@@ -311,15 +322,16 @@ static void caerOutputNetTCPServerConfig(caerModuleData moduleData) {
 
 		// Bind socket to above address.
 		if (bind(newServerDescriptor, (struct sockaddr *) &tcpServer, sizeof(struct sockaddr_in)) < 0) {
-			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not bind TCP server socket. Error: %s (%d).", caerLogStrerror(errno), errno);
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"Could not bind TCP server socket. Error: %d.", errno);
 			close(newServerDescriptor);
 			goto configUpdate_2;
 		}
 
 		// Listen to new connections on the socket.
 		if (listen(newServerDescriptor, sshsNodeGetShort(moduleData->moduleNode, "backlogSize")) < 0) {
-			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not listen on TCP server socket. Error: %s (%d).", caerLogStrerror(errno),
-			errno);
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"Could not listen on TCP server socket. Error: %d.", errno);
 			close(newServerDescriptor);
 			goto configUpdate_2;
 		}
@@ -336,8 +348,8 @@ static void caerOutputNetTCPServerConfig(caerModuleData moduleData) {
 		// Prepare memory to hold connected clients fds.
 		struct pollfd *newConnectionsArray = malloc(newConnectionsLimit * sizeof(*newConnectionsArray));
 		if (newConnectionsArray == NULL) {
-			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not allocate memory for TCP client descriptors. Error: %s (%d).",
-				caerLogStrerror(errno), errno);
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"Could not allocate memory for TCP client descriptors. Error: %d.", errno);
 			return;
 		}
 
@@ -406,21 +418,21 @@ static void caerOutputNetTCPServerConfigListener(sshsNode node, void *userData, 
 	// configUpdate appropriately like a bit-field.
 	if (event == ATTRIBUTE_MODIFIED) {
 		if (changeType == BOOL && strcmp(changeKey, "validEventsOnly") == 0) {
-			atomic_ops_uint_or(&data->configUpdate, (0x01 << 0), ATOMIC_OPS_FENCE_NONE);
+			atomic_fetch_or(&data->configUpdate, (0x01 << 0));
 		}
 
 		if ((changeType == STRING && strcmp(changeKey, "ipAddress") == 0)
 			|| (changeType == SHORT && strcmp(changeKey, "portNumber") == 0)) {
-			atomic_ops_uint_or(&data->configUpdate, (0x01 << 1), ATOMIC_OPS_FENCE_NONE);
+			atomic_fetch_or(&data->configUpdate, (0x01 << 1));
 		}
 
 		if (changeType == SHORT && strcmp(changeKey, "concurrentConnections") == 0) {
-			atomic_ops_uint_or(&data->configUpdate, (0x01 << 2), ATOMIC_OPS_FENCE_NONE);
+			atomic_fetch_or(&data->configUpdate, (0x01 << 2));
 		}
 
 		if ((changeType == BOOL && strcmp(changeKey, "excludeHeader") == 0)
 			|| (changeType == INT && strcmp(changeKey, "maxBytesPerPacket") == 0)) {
-			atomic_ops_uint_or(&data->configUpdate, (0x01 << 3), ATOMIC_OPS_FENCE_NONE);
+			atomic_fetch_or(&data->configUpdate, (0x01 << 3));
 		}
 	}
 }

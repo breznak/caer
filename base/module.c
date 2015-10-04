@@ -6,7 +6,11 @@
  */
 
 #include "module.h"
-#include <pthread.h> // For pthread_exit(), since this all happens inside threads.
+
+// For thrd_exit(), since this all happens inside threads.
+#ifdef HAVE_PTHREADS
+	#include "ext/c11threads_posix.h"
+#endif
 
 static void caerModuleShutdownListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
@@ -21,10 +25,10 @@ void caerModuleSM(caerModuleFunctions moduleFunctions, caerModuleData moduleData
 
 void caerModuleSMv(caerModuleFunctions moduleFunctions, caerModuleData moduleData, size_t memSize, size_t argsNumber,
 	va_list args) {
-	uintptr_t running = atomic_ops_uint_load(&moduleData->running, ATOMIC_OPS_FENCE_NONE);
+	bool running = atomic_load(&moduleData->running);
 
-	if (moduleData->moduleStatus == RUNNING && running == 1) {
-		if (atomic_ops_uint_load(&moduleData->configUpdate, ATOMIC_OPS_FENCE_NONE) != 0) {
+	if (moduleData->moduleStatus == RUNNING && running) {
+		if (atomic_load(&moduleData->configUpdate) != 0) {
 			if (moduleFunctions->moduleConfig != NULL) {
 				// Call config function, which will have to reset configUpdate.
 				moduleFunctions->moduleConfig(moduleData);
@@ -35,7 +39,7 @@ void caerModuleSMv(caerModuleFunctions moduleFunctions, caerModuleData moduleDat
 			moduleFunctions->moduleRun(moduleData, argsNumber, args);
 		}
 	}
-	else if (moduleData->moduleStatus == STOPPED && running == 1) {
+	else if (moduleData->moduleStatus == STOPPED && running) {
 		moduleData->moduleState = calloc(1, memSize);
 		if (moduleData->moduleState == NULL && memSize != 0) {
 			return;
@@ -52,7 +56,7 @@ void caerModuleSMv(caerModuleFunctions moduleFunctions, caerModuleData moduleDat
 
 		moduleData->moduleStatus = RUNNING;
 	}
-	else if (moduleData->moduleStatus == RUNNING && running == 0) {
+	else if (moduleData->moduleStatus == RUNNING && !running) {
 		moduleData->moduleStatus = STOPPED;
 
 		if (moduleFunctions->moduleExit != NULL) {
@@ -73,9 +77,8 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	// Allocate memory for the module.
 	caerModuleData moduleData = calloc(1, sizeof(struct caer_module_data));
 	if (moduleData == NULL) {
-		caerLog(LOG_ALERT, nameString, "Failed to allocate memory for module. Error: %s (%d).",
-			caerLogStrerror(errno), errno);
-		pthread_exit(NULL);
+		caerLog(CAER_LOG_ALERT, nameString, "Failed to allocate memory for module. Error: %d.", errno);
+		thrd_exit(EXIT_FAILURE);
 	}
 
 	// Set module ID for later identification (hash-table key).
@@ -83,7 +86,7 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 
 	// Put module into startup state.
 	moduleData->moduleStatus = STOPPED;
-	atomic_ops_uint_store(&moduleData->running, 1, ATOMIC_OPS_FENCE_FULL);
+	atomic_store(&moduleData->running, true);
 
 	// Determine SSHS module node. Use short name for better human recognition.
 	char sshsString[nameLength + 2];
@@ -94,8 +97,8 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	// Initialize configuration, shutdown hooks.
 	moduleData->moduleNode = sshsGetRelativeNode(mainloopNode, sshsString);
 	if (moduleData->moduleNode == NULL) {
-		caerLog(LOG_ALERT, nameString, "Failed to allocate configuration node for module.");
-		pthread_exit(NULL);
+		caerLog(CAER_LOG_ALERT, nameString, "Failed to allocate configuration node for module.");
+		thrd_exit(EXIT_FAILURE);
 	}
 
 	sshsNodePutBool(moduleData->moduleNode, "shutdown", false); // Always reset to false.
@@ -104,8 +107,8 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	// Setup default full log string name.
 	moduleData->moduleSubSystemString = malloc(nameLength + 1);
 	if (moduleData->moduleSubSystemString == NULL) {
-		caerLog(LOG_ALERT, nameString, "Failed to allocate subsystem string for module.");
-		pthread_exit(NULL);
+		caerLog(CAER_LOG_ALERT, nameString, "Failed to allocate subsystem string for module.");
+		thrd_exit(EXIT_FAILURE);
 	}
 
 	strncpy(moduleData->moduleSubSystemString, nameString, nameLength);
@@ -127,7 +130,8 @@ bool caerModuleSetSubSystemString(caerModuleData moduleData, const char *subSyst
 	char *newSubSystemString = malloc(subSystemStringLenght + 1);
 	if (newSubSystemString == NULL) {
 		// Failed to allocate memory. Log this and don't use the new string.
-		caerLog(LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate new subsystem string for module.");
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+			"Failed to allocate new sub-system string for module.");
 		return (false);
 	}
 
@@ -142,6 +146,10 @@ bool caerModuleSetSubSystemString(caerModuleData moduleData, const char *subSyst
 	return (true);
 }
 
+void caerModuleConfigUpdateReset(caerModuleData moduleData) {
+	atomic_store(&moduleData->configUpdate, 0);
+}
+
 void caerModuleConfigDefaultListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
 	UNUSED_ARGUMENT(node);
@@ -153,7 +161,7 @@ void caerModuleConfigDefaultListener(sshsNode node, void *userData, enum sshs_no
 
 	// Simply set the config update flag to 1 on any attribute change.
 	if (event == ATTRIBUTE_MODIFIED) {
-		atomic_ops_uint_store(&data->configUpdate, 1, ATOMIC_OPS_FENCE_NONE);
+		atomic_store(&data->configUpdate, 1);
 	}
 }
 
@@ -166,10 +174,10 @@ static void caerModuleShutdownListener(sshsNode node, void *userData, enum sshs_
 	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && strcmp(changeKey, "shutdown") == 0) {
 		// Shutdown changed, let's see.
 		if (changeValue.boolean == true) {
-			atomic_ops_uint_store(&data->running, 0, ATOMIC_OPS_FENCE_NONE);
+			atomic_store(&data->running, false);
 		}
 		else {
-			atomic_ops_uint_store(&data->running, 1, ATOMIC_OPS_FENCE_NONE);
+			atomic_store(&data->running, true);
 		}
 	}
 }

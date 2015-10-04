@@ -26,6 +26,12 @@ most.
     \s      Match whitespace
     \S      Match non-whitespace
     \d      Match decimal digit
+    \n      Match new line character
+    \r      Match line feed character
+    \f      Match form feed character
+    \v      Match vertical tab character
+    \t      Match horizontal tab character
+    \b      Match backspace character
     +       Match one or more times (greedy)
     +?      Match one or more times (non-greedy)
     *       Match zero or more times (greedy)
@@ -42,7 +48,7 @@ Under development: Unicode support.
 ## API
 
     int slre_match(const char *regexp, const char *buf, int buf_len,
-                   struct slre_cap *caps, int num_caps);
+                   struct slre_cap *caps, int num_caps, int flags);
 
 `slre_match()` matches string buffer `buf` of length `buf_len` against
 regular expression `regexp`, which should conform the syntax outlined
@@ -79,7 +85,7 @@ is no match. Negative return codes are as follows:
     struct slre_cap caps[4];
 
     if (slre_match("^\\s*(\\S+)\\s+(\\S+)\\s+HTTP/(\\d)\\.(\\d)",
-                   request, strlen(request), caps, 4) > 0) {
+                   request, strlen(request), caps, 4, 0) > 0) {
       printf("Method: [%.*s], URI: [%.*s]\n",
              caps[0].len, caps[0].ptr,
              caps[1].len, caps[1].ptr);
@@ -98,7 +104,7 @@ is no match. Negative return codes are as follows:
     int i, j = 0, str_len = strlen(str);
 
     while (j < str_len &&
-           (i = slre_match(regex, str + j, str_len - j, caps, 2, NULL)) > 0) {
+           (i = slre_match(regex, str + j, str_len - j, caps, 2, 0)) > 0) {
       printf("Found URL: [%.*s]\n", caps[0].len, caps[0].ptr);
       j += i;
     }
@@ -108,10 +114,18 @@ Output:
     Found URL: [HTTPS://FOO.COM/x?b#c=tab1]
     Found URL: [http://cesanta.com]
 
-# Licensing
+# Contributions
 
-SLRE is dual licensed. It is available either under the terms of [GNU GPL
-v.2 license](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html) for
-free, or under the terms of standard commercial license provided by [Cesanta
-Software](http://cesanta.com). Businesses who whish to use Cesanta's products
-must [license commercial version](http://cesanta.com/products.html).
+People who have agreed to the
+[Cesanta CLA](http://cesanta.com/contributors_la.html)
+can make contributions. Note that the CLA isn't a copyright
+_assigment_ but rather a copyright _license_.
+You retain the copyright on your contributions.
+
+# License
+
+SLRE is released under
+[GNU GPL v.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
+Businesses have an option to get non-restrictive, royalty-free commercial
+license and professional support from [Cesanta](http://cesanta.com).
+

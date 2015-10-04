@@ -1,5 +1,5 @@
 #include "config_server.h"
-#include <pthread.h>
+#include <stdatomic.h>
 #include <unistd.h>
 #include <poll.h>
 #include <sys/socket.h>
@@ -7,56 +7,58 @@
 #include <netinet/in.h>
 #include "ext/nets.h"
 
+#ifdef HAVE_PTHREADS
+	#include "ext/c11threads_posix.h"
+#endif
+
 static struct {
-	atomic_ops_uint running;
-	pthread_t thread;
+	atomic_bool running;
+	thrd_t thread;
 } configServerThread;
 
-static void *caerConfigServerRunner(void *inPtr);
+static int caerConfigServerRunner(void *inPtr);
 static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t action, uint8_t type, const uint8_t *extra,
 	size_t extraLength, const uint8_t *node, size_t nodeLength, const uint8_t *key, size_t keyLength,
 	const uint8_t *value, size_t valueLength);
 
 void caerConfigServerStart(void) {
 	// Enable the configuration server thread.
-	atomic_ops_uint_store(&configServerThread.running, 1, ATOMIC_OPS_FENCE_FULL);
+	atomic_store(&configServerThread.running, true);
 
 	// Start the thread.
-	if ((errno = pthread_create(&configServerThread.thread, NULL, &caerConfigServerRunner, NULL)) == 0) {
+	if ((errno = thrd_create(&configServerThread.thread, &caerConfigServerRunner, NULL)) == thrd_success) {
 		// Successfully started thread.
-		caerLog(LOG_DEBUG, "Config Server", "Thread created successfully.");
+		caerLog(CAER_LOG_DEBUG, "Config Server", "Thread created successfully.");
 	}
 	else {
 		// Failed to create thread.
-		caerLog(LOG_EMERGENCY, "Config Server", "Failed to create thread. Error: %s (%d).",
-			caerLogStrerror(errno), errno);
+		caerLog(CAER_LOG_EMERGENCY, "Config Server", "Failed to create thread. Error: %d.", errno);
 		exit(EXIT_FAILURE);
 	}
 }
 
 void caerConfigServerStop(void) {
 	// Only execute if the server thread was actually started.
-	if (atomic_ops_uint_load(&configServerThread.running, ATOMIC_OPS_FENCE_NONE) == 0) {
+	if (!atomic_load(&configServerThread.running)) {
 		return;
 	}
 
 	// Disable the configuration server thread first.
-	atomic_ops_uint_store(&configServerThread.running, 0, ATOMIC_OPS_FENCE_NONE);
+	atomic_store(&configServerThread.running, false);
 
 	// Then wait on it to finish.
-	if ((errno = pthread_join(configServerThread.thread, NULL)) == 0) {
+	if ((errno = thrd_join(configServerThread.thread, NULL)) == thrd_success) {
 		// Successfully joined thread.
-		caerLog(LOG_DEBUG, "Config Server", "Thread terminated successfully.");
+		caerLog(CAER_LOG_DEBUG, "Config Server", "Thread terminated successfully.");
 	}
 	else {
 		// Failed to join thread.
-		caerLog(LOG_EMERGENCY, "Config Server", "Failed to terminate thread. Error: %s (%d).",
-			caerLogStrerror(errno), errno);
+		caerLog(CAER_LOG_EMERGENCY, "Config Server", "Failed to terminate thread. Error: %d.",errno);
 		exit(EXIT_FAILURE);
 	}
 }
 
-static void *caerConfigServerRunner(void *inPtr) {
+static int caerConfigServerRunner(void *inPtr) {
 	UNUSED_ARGUMENT(inPtr);
 
 	// Get the right configuration node first.
@@ -72,9 +74,8 @@ static void *caerConfigServerRunner(void *inPtr) {
 	// TCP chosen for reliability, which is more important here than speed.
 	int configServerSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (configServerSocket < 0) {
-		caerLog(LOG_CRITICAL, "Config Server", "Could not create server socket. Error: %s (%d).",
-			caerLogStrerror(errno), errno);
-		return (NULL);
+		caerLog(CAER_LOG_CRITICAL, "Config Server", "Could not create server socket. Error: %d.", errno);
+		return (EXIT_FAILURE);
 	}
 
 	// Make socket address reusable right away.
@@ -91,16 +92,14 @@ static void *caerConfigServerRunner(void *inPtr) {
 
 	// Bind socket to above address.
 	if (bind(configServerSocket, (struct sockaddr *) &configServerAddress, sizeof(struct sockaddr_in)) < 0) {
-		caerLog(LOG_CRITICAL, "Config Server", "Could not bind server socket. Error: %s (%d).",
-			caerLogStrerror(errno), errno);
-		return (NULL);
+		caerLog(CAER_LOG_CRITICAL, "Config Server", "Could not bind server socket. Error: %d.",errno);
+		return (EXIT_FAILURE);
 	}
 
 	// Listen to new connections on the socket.
 	if (listen(configServerSocket, sshsNodeGetShort(serverNode, "backlogSize")) < 0) {
-		caerLog(LOG_CRITICAL, "Config Server", "Could not listen on server socket. Error: %s (%d).",
-			caerLogStrerror(errno), errno);
-		return (NULL);
+		caerLog(CAER_LOG_CRITICAL, "Config Server", "Could not listen on server socket. Error: %d.",errno);
+		return (EXIT_FAILURE);
 	}
 
 	// Control message format: 1 byte ACTION, 1 byte TYPE, 2 bytes EXTRA_LEN,
@@ -112,7 +111,7 @@ static void *caerConfigServerRunner(void *inPtr) {
 	// This results in a maximum message size of 4096 bytes (4KB).
 	uint8_t configServerBuffer[4096];
 
-	caerLog(LOG_NOTICE, "Config Server", "Ready and listening on %s:%" PRIu16 ".",
+	caerLog(CAER_LOG_NOTICE, "Config Server", "Ready and listening on %s:%" PRIu16 ".",
 		inet_ntoa(configServerAddress.sin_addr), ntohs(configServerAddress.sin_port));
 
 	size_t connections = (size_t) sshsNodeGetShort(serverNode, "concurrentConnections") + 1;// +1 for listening socket.
@@ -128,7 +127,7 @@ static void *caerConfigServerRunner(void *inPtr) {
 	// First pollfd is the listening socket, always.
 	pollSockets[0].fd = configServerSocket;
 
-	while (atomic_ops_uint_load(&configServerThread.running, ATOMIC_OPS_FENCE_NONE) != 0) {
+	while (atomic_load(&configServerThread.running)) {
 		int pollResult = poll(pollSockets, connections, 1000);
 
 		if (pollResult > 0) {
@@ -152,10 +151,10 @@ static void *caerConfigServerRunner(void *inPtr) {
 					// No space for new connection, just close it (client will exit).
 					if (!putInFDList) {
 						close(newClientSocket);
-						caerLog(LOG_DEBUG, "Config Server", "Rejected client (fd %d), queue full.", newClientSocket);
+						caerLog(CAER_LOG_DEBUG, "Config Server", "Rejected client (fd %d), queue full.", newClientSocket);
 					}
 					else {
-						caerLog(LOG_DEBUG, "Config Server", "Accepted new connection from client (fd %d).",
+						caerLog(CAER_LOG_DEBUG, "Config Server", "Accepted new connection from client (fd %d).",
 							newClientSocket);
 					}
 				}
@@ -170,7 +169,7 @@ static void *caerConfigServerRunner(void *inPtr) {
 						// Closed on other side or error. Let's just close here too.
 						close(pollSockets[i].fd);
 
-						caerLog(LOG_DEBUG, "Config Server", "Disconnected client on recv (fd %d).", pollSockets[i].fd);
+						caerLog(CAER_LOG_DEBUG, "Config Server", "Disconnected client on recv (fd %d).", pollSockets[i].fd);
 						pollSockets[i].fd = -1;
 
 						continue;
@@ -191,7 +190,7 @@ static void *caerConfigServerRunner(void *inPtr) {
 						// Closed on other side or error. Let's just close here too.
 						close(pollSockets[i].fd);
 
-						caerLog(LOG_DEBUG, "Config Server", "Disconnected client on recv (fd %d).", pollSockets[i].fd);
+						caerLog(CAER_LOG_DEBUG, "Config Server", "Disconnected client on recv (fd %d).", pollSockets[i].fd);
 						pollSockets[i].fd = -1;
 
 						continue;
@@ -207,7 +206,7 @@ static void *caerConfigServerRunner(void *inPtr) {
 			}
 		}
 		else if (pollResult < 0) {
-			caerLog(LOG_ALERT, "Config Server", "poll() failed. Error: %s (%d).", caerLogStrerror(errno), errno);
+			caerLog(CAER_LOG_ALERT, "Config Server", "poll() failed. Error: %d.", errno);
 		}
 		// pollResult == 0 just means nothing to do (timeout reached).
 	}
@@ -215,7 +214,7 @@ static void *caerConfigServerRunner(void *inPtr) {
 	// Shutdown!
 	close(configServerSocket);
 
-	return (NULL);
+	return (EXIT_SUCCESS);
 }
 
 // The response from the server follows a simplified version of the request
@@ -240,11 +239,11 @@ static inline void caerConfigSendError(int connectedClientSocket, const char *er
 
 	if (!sendUntilDone(connectedClientSocket, response, responseLength)) {
 		// Error on send. Log for now.
-		caerLog(LOG_DEBUG, "Config Server", "Disconnected client on send (fd %d).", connectedClientSocket);
+		caerLog(CAER_LOG_DEBUG, "Config Server", "Disconnected client on send (fd %d).", connectedClientSocket);
 		return;
 	}
 
-	caerLog(LOG_DEBUG, "Config Server", "Sent back error message '%s' to client.", errorMsg);
+	caerLog(CAER_LOG_DEBUG, "Config Server", "Sent back error message '%s' to client.", errorMsg);
 }
 
 static inline void caerConfigSendResponse(int connectedClientSocket, uint8_t action, uint8_t type, const uint8_t *msg,
@@ -260,11 +259,11 @@ static inline void caerConfigSendResponse(int connectedClientSocket, uint8_t act
 
 	if (!sendUntilDone(connectedClientSocket, response, responseLength)) {
 		// Error on send. Log for now.
-		caerLog(LOG_DEBUG, "Config Server", "Disconnected client on send (fd %d).", connectedClientSocket);
+		caerLog(CAER_LOG_DEBUG, "Config Server", "Disconnected client on send (fd %d).", connectedClientSocket);
 		return;
 	}
 
-	caerLog(LOG_DEBUG, "Config Server",
+	caerLog(CAER_LOG_DEBUG, "Config Server",
 		"Sent back message to client: action=%" PRIu8 ", type=%" PRIu8 ", msgLength=%zu.",
 		action, type, msgLength);
 }
@@ -274,7 +273,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 	const uint8_t *value, size_t valueLength) {
 	UNUSED_ARGUMENT(extra);
 
-	caerLog(LOG_DEBUG, "Config Server",
+	caerLog(CAER_LOG_DEBUG, "Config Server",
 		"Handling request: action=%" PRIu8 ", type=%" PRIu8 ", extraLength=%zu, nodeLength=%zu, keyLength=%zu, valueLength=%zu.",
 		action, type, extraLength, nodeLength, keyLength, valueLength);
 

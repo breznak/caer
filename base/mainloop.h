@@ -12,13 +12,17 @@
 #include "module.h"
 #include "ext/uthash/utarray.h"
 
+#ifdef HAVE_PTHREADS
+	#include "ext/c11threads_posix.h"
+#endif
+
 struct caer_mainloop_data {
-	pthread_t mainloop;
+	thrd_t mainloop;
 	uint16_t mainloopID;
 	bool (*mainloopFunction)(void);
 	sshsNode mainloopNode;
-	atomic_ops_uint running;
-	atomic_ops_uint dataAvailable;
+	atomic_bool running;
+	atomic_uint_fast32_t dataAvailable;
 	caerModuleData modules;
 	UT_array *memoryToFree;
 };
@@ -30,20 +34,12 @@ struct caer_mainloop_definition {
 	bool (*mlFunction)(void);
 };
 
-caerMainloopData caerMainloopGetReference(void);
 void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numLoops);
 caerModuleData caerMainloopFindModule(uint16_t moduleID, const char *moduleShortName);
-void caerMainloopFreeAfterLoop(void *memPtr);
+void caerMainloopFreeAfterLoop(void (*func)(void *mem), void *memPtr);
+void caerMainloopDataAvailableIncrease(void);
+void caerMainloopDataAvailableDecrease(void);
 sshsNode caerMainloopGetSourceInfo(uint16_t source);
 void *caerMainloopGetSourceState(uint16_t source);
-uintptr_t caerMainloopGetSourceHandleUnsafe(uint16_t source);
-
-static inline void caerMainloopDataAvailableIncrease(caerMainloopData mainloopData) {
-	atomic_ops_uint_inc(&mainloopData->dataAvailable, ATOMIC_OPS_FENCE_RELEASE);
-}
-
-static inline void caerMainloopDataAvailableDecrease(caerMainloopData mainloopData) {
-	atomic_ops_uint_dec(&mainloopData->dataAvailable, ATOMIC_OPS_FENCE_NONE);
-}
 
 #endif /* MAINLOOP_H_ */

@@ -2,21 +2,13 @@
 #define DAVIS_FX2_H_
 
 #include "main.h"
-#include "events/polarity.h"
-#include "events/special.h"
-#include "events/frame.h"
-#include "events/imu6.h"
 
-#define DAVIS_FX2_VID 0x152A
-#define DAVIS_FX2_PID 0x841B
-#define DAVIS_FX2_DID_TYPE 0x00
+#include <libcaer/events/packetContainer.h>
+#include <libcaer/events/special.h>
+#include <libcaer/events/polarity.h>
+#include <libcaer/events/frame.h>
+#include <libcaer/events/imu6.h>
 
-#define VR_CHIP_BIAS 0xC0
-#define VR_CHIP_DIAG 0xC1
-
-#define REQUIRED_LOGIC_REVISION 7017
-
-void caerInputDAVISFX2(uint16_t moduleID, caerPolarityEventPacket *polarity, caerFrameEventPacket *frame,
-	caerIMU6EventPacket *imu6, caerSpecialEventPacket *special);
+caerEventPacketContainer caerInputDAVISFX2(uint16_t moduleID);
 
 #endif /* DAVIS_FX2_H_ */

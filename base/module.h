@@ -11,6 +11,7 @@
 #include "main.h"
 #include "ext/uthash/uthash.h"
 #include <stdarg.h>
+#include <stdatomic.h>
 
 // Module-related definitions.
 enum caer_module_status {
@@ -22,8 +23,8 @@ struct caer_module_data {
 	uint16_t moduleID;
 	sshsNode moduleNode;
 	enum caer_module_status moduleStatus;
-	atomic_ops_uint running;
-	atomic_ops_uint configUpdate;
+	atomic_bool running;
+	atomic_uint_fast32_t configUpdate;
 	void *moduleState;
 	char *moduleSubSystemString;
 };
@@ -39,10 +40,6 @@ struct caer_module_functions {
 
 typedef struct caer_module_functions const * const caerModuleFunctions;
 
-static inline void caerModuleResetConfigUpdate(caerModuleData moduleData) {
-	atomic_ops_uint_store(&moduleData->configUpdate, 0, ATOMIC_OPS_FENCE_NONE);
-}
-
 void caerModuleSM(caerModuleFunctions moduleFunctions, caerModuleData moduleData, size_t memSize, size_t argsNumber,
 	...);
 void caerModuleSMv(caerModuleFunctions moduleFunctions, caerModuleData moduleData, size_t memSize, size_t argsNumber,
@@ -50,6 +47,7 @@ void caerModuleSMv(caerModuleFunctions moduleFunctions, caerModuleData moduleDat
 caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortName, sshsNode mainloopNode);
 bool caerModuleSetSubSystemString(caerModuleData moduleData, const char *subSystemString);
 void caerModuleDestroy(caerModuleData moduleData);
+void caerModuleConfigUpdateReset(caerModuleData moduleData);
 void caerModuleConfigDefaultListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 

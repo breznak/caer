@@ -10,7 +10,7 @@
 #include "base/module.h"
 
 struct BAFilter_state {
-	uint32_t **timestampMap;
+	int64_t **timestampMap;
 	uint32_t deltaT;
 	uint16_t sizeMaxX;
 	uint16_t sizeMaxY;
@@ -23,7 +23,7 @@ static bool caerBackgroundActivityFilterInit(caerModuleData moduleData);
 static void caerBackgroundActivityFilterRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerBackgroundActivityFilterConfig(caerModuleData moduleData);
 static void caerBackgroundActivityFilterExit(caerModuleData moduleData);
-static bool allocateTimestampMap(BAFilterState state, uint16_t sourceID);
+static bool allocateTimestampMap(BAFilterState state, int16_t sourceID);
 
 static struct caer_module_functions caerBackgroundActivityFilterFunctions = { .moduleInit =
 	&caerBackgroundActivityFilterInit, .moduleRun = &caerBackgroundActivityFilterRun, .moduleConfig =
@@ -67,7 +67,7 @@ static void caerBackgroundActivityFilterRun(caerModuleData moduleData, size_t ar
 	if (state->timestampMap == NULL) {
 		if (!allocateTimestampMap(state, caerEventPacketHeaderGetEventSource(&polarity->packetHeader))) {
 			// Failed to allocate memory, nothing to do.
-			caerLog(LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for timestampMap.");
+			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for timestampMap.");
 			return;
 		}
 	}
@@ -76,13 +76,13 @@ static void caerBackgroundActivityFilterRun(caerModuleData moduleData, size_t ar
 	// events within a certain region in the specified timeframe.
 	caerPolarityEvent currEvent = NULL;
 
-	for (uint32_t i = 0; i < caerEventPacketHeaderGetEventNumber(&polarity->packetHeader); i++) {
+	for (int32_t i = 0; i < caerEventPacketHeaderGetEventNumber(&polarity->packetHeader); i++) {
 		currEvent = caerPolarityEventPacketGetEvent(polarity, i);
 
 		// Only operate on valid events!
 		if (caerPolarityEventIsValid(currEvent)) {
 			// Get values on which to operate.
-			uint32_t ts = caerPolarityEventGetTimestamp(currEvent);
+			int64_t ts = caerPolarityEventGetTimestamp64(currEvent, polarity);
 			uint16_t x = caerPolarityEventGetX(currEvent);
 			uint16_t y = caerPolarityEventGetY(currEvent);
 
@@ -91,9 +91,9 @@ static void caerBackgroundActivityFilterRun(caerModuleData moduleData, size_t ar
 			y = U16T(y >> state->subSampleBy);
 
 			// Get value from map.
-			uint32_t lastTS = state->timestampMap[x][y];
+			int64_t lastTS = state->timestampMap[x][y];
 
-			if ((ts - lastTS) >= state->deltaT || lastTS == 0) {
+			if ((I64T(ts - lastTS) >= I64T(state->deltaT)) || (lastTS == 0)) {
 				// Filter out invalid.
 				caerPolarityEventInvalidate(currEvent, polarity);
 			}
@@ -131,7 +131,7 @@ static void caerBackgroundActivityFilterRun(caerModuleData moduleData, size_t ar
 }
 
 static void caerBackgroundActivityFilterConfig(caerModuleData moduleData) {
-	caerModuleResetConfigUpdate(moduleData);
+	caerModuleConfigUpdateReset(moduleData);
 
 	BAFilterState state = moduleData->moduleState;
 
@@ -150,20 +150,20 @@ static void caerBackgroundActivityFilterExit(caerModuleData moduleData) {
 	}
 }
 
-static bool allocateTimestampMap(BAFilterState state, uint16_t sourceID) {
+static bool allocateTimestampMap(BAFilterState state, int16_t sourceID) {
 	// Get size information from source.
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(sourceID);
+	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
 	uint16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
 	uint16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
 	// Initialize double-indirection contiguous 2D array, so that array[x][y]
 	// is possible, see http://c-faq.com/aryptr/dynmuldimary.html for info.
-	state->timestampMap = calloc(sizeX, sizeof(uint32_t *));
+	state->timestampMap = calloc(sizeX, sizeof(int64_t *));
 	if (state->timestampMap == NULL) {
 		return (false); // Failure.
 	}
 
-	state->timestampMap[0] = calloc((size_t) (sizeX * sizeY), sizeof(uint32_t));
+	state->timestampMap[0] = calloc((size_t) (sizeX * sizeY), sizeof(int64_t));
 	if (state->timestampMap[0] == NULL) {
 		free(state->timestampMap);
 		state->timestampMap = NULL;

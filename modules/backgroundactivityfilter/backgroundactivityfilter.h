@@ -9,7 +9,8 @@
 #define BACKGROUNDACTIVITYFILTER_H_
 
 #include "main.h"
-#include "events/polarity.h"
+
+#include <libcaer/events/polarity.h>
 
 void caerBackgroundActivityFilter(uint16_t moduleID, caerPolarityEventPacket polarity);
 

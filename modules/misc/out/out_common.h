@@ -9,10 +9,11 @@
 #define OUT_COMMON_H_
 
 #include "main.h"
-#include "events/common.h"
-#include "events/polarity.h"
 #include <unistd.h>
 #include <sys/uio.h>
+
+#include <libcaer/events/common.h>
+#include <libcaer/events/polarity.h>
 
 #define IOVEC_SIZE 512
 
@@ -57,7 +58,7 @@ static inline void caerOutputWriteOldAERHack(int fileDescriptor, void *startAddr
 	}
 
 	// Convert the events to the old format and write them out.
-	for (uint32_t i = 0; i < caerEventPacketHeaderGetEventNumber(packetHeader); i++) {
+	for (int32_t i = 0; i < caerEventPacketHeaderGetEventNumber(packetHeader); i++) {
 		caerPolarityEvent polarity = caerPolarityEventPacketGetEvent((caerPolarityEventPacket) packetHeader, i);
 
 		uint32_t data = U32T((caerPolarityEventGetPolarity(polarity) & 0x01) << 11);
@@ -67,8 +68,8 @@ static inline void caerOutputWriteOldAERHack(int fileDescriptor, void *startAddr
 
 		write(fileDescriptor, &data, 4);
 
-		uint32_t ts = caerPolarityEventGetTimestamp(polarity);
-		ts = htobe32(ts);
+		int32_t ts = caerPolarityEventGetTimestamp(polarity);
+		ts = I32T(htobe32(U32T(ts)));
 
 		write(fileDescriptor, &ts, 4);
 	}
@@ -108,21 +109,21 @@ static inline void caerOutputCommonSend(const char *subSystemString, caerEventPa
 	if (!validOnly) {
 		// First we need to fix the event capacity, since we don't want to
 		// send the zeroed-out tail of the packet to conserve bandwidth.
-		uint32_t oldCapacity = caerEventPacketHeaderGetEventCapacity(packetHeader);
+		int32_t oldCapacity = caerEventPacketHeaderGetEventCapacity(packetHeader);
 
 		// Set it to the event number, which we'll use when writing the packet.
-		uint32_t eventNumber = caerEventPacketHeaderGetEventNumber(packetHeader);
+		int32_t eventNumber = caerEventPacketHeaderGetEventNumber(packetHeader);
 		caerEventPacketHeaderSetEventCapacity(packetHeader, eventNumber);
 
 		// Write the whole packet, up to the last event.
 		if (oldAERFormat) {
 			caerOutputWriteOldAERHack(fileDescriptor, packetHeader,
-				sizeof(*packetHeader) + (eventNumber * caerEventPacketHeaderGetEventSize(packetHeader)));
+				sizeof(*packetHeader) + (size_t) (eventNumber * caerEventPacketHeaderGetEventSize(packetHeader)));
 		}
 		else {
 			caerOutputCommonWriteFull(fileDescriptor, packetHeader,
-				sizeof(*packetHeader) + (eventNumber * caerEventPacketHeaderGetEventSize(packetHeader)), excludeHeader,
-				maxBytesPerPacket);
+				sizeof(*packetHeader) + (size_t) (eventNumber * caerEventPacketHeaderGetEventSize(packetHeader)),
+				excludeHeader, maxBytesPerPacket);
 		}
 
 		// Reset to old value.
@@ -131,10 +132,10 @@ static inline void caerOutputCommonSend(const char *subSystemString, caerEventPa
 	else {
 		// To conserve bandwidth, we only transmit the valid events here, so
 		// the values for capacity and number will have to be adjusted.
-		uint32_t oldCapacity = caerEventPacketHeaderGetEventCapacity(packetHeader);
-		uint32_t oldNumber = caerEventPacketHeaderGetEventNumber(packetHeader);
+		int32_t oldCapacity = caerEventPacketHeaderGetEventCapacity(packetHeader);
+		int32_t oldNumber = caerEventPacketHeaderGetEventNumber(packetHeader);
 
-		uint32_t eventValid = caerEventPacketHeaderGetEventValid(packetHeader);
+		int32_t eventValid = caerEventPacketHeaderGetEventValid(packetHeader);
 
 		// Use scatter/gather IO to write only the valid events out more
 		// efficiently if possible, this is limited by the number of iovec
@@ -142,7 +143,7 @@ static inline void caerOutputCommonSend(const char *subSystemString, caerEventPa
 		// to actually satisfy the request this way, by looking at how many
 		// invalid events there are, each of which could be a split point
 		// in the event packet buffer. +1 for the packet header part.
-		uint32_t eventSize = caerEventPacketHeaderGetEventSize(packetHeader);
+		int32_t eventSize = caerEventPacketHeaderGetEventSize(packetHeader);
 
 		if (sgioMemory != NULL && (oldNumber - eventValid + 1) <= IOVEC_SIZE) {
 			size_t iovecUsed = 0;
@@ -151,7 +152,7 @@ static inline void caerOutputCommonSend(const char *subSystemString, caerEventPa
 			sgioMemory[iovecUsed].iov_base = packetHeader;
 			sgioMemory[iovecUsed].iov_len = sizeof(struct caer_event_packet_header);
 
-			for (uint32_t i = 0; i < oldNumber; i++) {
+			for (int32_t i = 0; i < oldNumber; i++) {
 				void *currEvent = caerGenericEventGetEvent(packetHeader, i);
 
 				if (caerGenericEventIsValid(currEvent)) {
@@ -159,10 +160,10 @@ static inline void caerOutputCommonSend(const char *subSystemString, caerEventPa
 					// set the data for the new run, else just make current longer.
 					if (sgioMemory[iovecUsed].iov_base == NULL) {
 						sgioMemory[iovecUsed].iov_base = currEvent;
-						sgioMemory[iovecUsed].iov_len = eventSize;
+						sgioMemory[iovecUsed].iov_len = (size_t) eventSize;
 					}
 					else {
-						sgioMemory[iovecUsed].iov_len += eventSize;
+						sgioMemory[iovecUsed].iov_len += (size_t) eventSize;
 					}
 				}
 				else {
@@ -181,22 +182,23 @@ static inline void caerOutputCommonSend(const char *subSystemString, caerEventPa
 		}
 		else {
 			// Else we use a much slower allocate-copy-free approach.
-			uint8_t *tmpValidEvents = malloc(sizeof(struct caer_event_packet_header) + (eventValid * eventSize));
+			uint8_t *tmpValidEvents = malloc(
+				sizeof(struct caer_event_packet_header) + (size_t) (eventValid * eventSize));
 
 			if (tmpValidEvents == NULL) {
 				// Failure to allocate memory, just don't send packet and log this.
-				caerLog(LOG_ALERT, subSystemString, "Failed to allocate memory for valid event copy.");
+				caerLog(CAER_LOG_ALERT, subSystemString, "Failed to allocate memory for valid event copy.");
 			}
 			else {
 				// Go through all valid events and copy them.
 				size_t currOffset = sizeof(struct caer_event_packet_header);
 
-				for (uint32_t i = 0; i < oldNumber; i++) {
+				for (int32_t i = 0; i < oldNumber; i++) {
 					void *currEvent = caerGenericEventGetEvent(packetHeader, i);
 
 					if (caerGenericEventIsValid(currEvent)) {
-						memcpy(tmpValidEvents + currOffset, currEvent, eventSize);
-						currOffset += eventSize;
+						memcpy(tmpValidEvents + currOffset, currEvent, (size_t) eventSize);
+						currOffset += (size_t) eventSize;
 					}
 				}
 

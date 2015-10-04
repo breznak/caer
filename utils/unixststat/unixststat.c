@@ -8,9 +8,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#define PRINTF_LOG 1
-
-#include "events/common.h"
+#include <libcaer/events/common.h>
 
 int main(int argc, char *argv[]) {
 	// First of all, parse the local path we need to listen on.

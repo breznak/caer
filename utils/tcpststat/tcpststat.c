@@ -17,9 +17,7 @@
 #include <netinet/in.h>
 #include "ext/nets.h"
 
-#define PRINTF_LOG 1
-
-#include "events/common.h"
+#include <libcaer/events/common.h>
 
 int main(int argc, char *argv[]) {
 	// First of all, parse the IP:Port we need to listen on.

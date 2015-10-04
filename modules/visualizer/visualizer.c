@@ -23,9 +23,9 @@ struct visualizer_state {
 	size_t eventRendererSlowDown;
 	struct caer_statistics_state eventStatistics;
 	uint32_t *frameRenderer;
-	uint16_t frameRendererSizeX;
-	uint16_t frameRendererSizeY;
-	uint16_t frameChannels;
+	int32_t frameRendererSizeX;
+	int32_t frameRendererSizeY;
+	uint8_t frameChannels;
 	struct caer_statistics_state frameStatistics;
 };
 
@@ -34,8 +34,8 @@ typedef struct visualizer_state *visualizerState;
 static bool caerVisualizerInit(caerModuleData moduleData);
 static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerVisualizerExit(caerModuleData moduleData);
-static bool allocateEventRenderer(visualizerState state, uint16_t sourceID);
-static bool allocateFrameRenderer(visualizerState state, uint16_t sourceID);
+static bool allocateEventRenderer(visualizerState state, int16_t sourceID);
+static bool allocateFrameRenderer(visualizerState state, int16_t sourceID);
 
 static struct caer_module_functions caerVisualizerFunctions = { .moduleInit = &caerVisualizerInit, .moduleRun =
 	&caerVisualizerRun, .moduleConfig =
@@ -51,13 +51,13 @@ static bool caerVisualizerInit(caerModuleData moduleData) {
 	visualizerState state = moduleData->moduleState;
 
 	if (glfwInit() == GL_FALSE) {
-		caerLog(LOG_ERROR, moduleData->moduleSubSystemString, "Failed to initialize GLFW.");
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to initialize GLFW.");
 		return (false);
 	}
 
 	state->window = glfwCreateWindow(VISUALIZER_SCREEN_WIDTH, VISUALIZER_SCREEN_HEIGHT, "cAER Visualizer", NULL, NULL);
 	if (state->window == NULL) {
-		caerLog(LOG_ERROR, moduleData->moduleSubSystemString, "Failed to create GLFW window.");
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to create GLFW window.");
 		return (false);
 	}
 
@@ -141,14 +141,15 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 		if (state->eventRenderer == NULL) {
 			if (!allocateEventRenderer(state, caerEventPacketHeaderGetEventSource(&polarity->packetHeader))) {
 				// Failed to allocate memory, nothing to do.
-				caerLog(LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for eventRenderer.");
+				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+					"Failed to allocate memory for eventRenderer.");
 				return;
 			}
 		}
 
 		caerPolarityEvent currPolarityEvent;
 
-		for (uint32_t i = 0; i < caerEventPacketHeaderGetEventNumber(&polarity->packetHeader); i++) {
+		for (int32_t i = 0; i < caerEventPacketHeaderGetEventNumber(&polarity->packetHeader); i++) {
 			currPolarityEvent = caerPolarityEventPacketGetEvent(polarity, i);
 
 			// Only operate on valid events!
@@ -181,15 +182,16 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 		if (state->frameRenderer == NULL) {
 			if (!allocateFrameRenderer(state, caerEventPacketHeaderGetEventSource(&frame->packetHeader))) {
 				// Failed to allocate memory, nothing to do.
-				caerLog(LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for frameRenderer.");
+				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+					"Failed to allocate memory for frameRenderer.");
 				return;
 			}
 		}
 
 		caerFrameEvent currFrameEvent;
 
-		for (int64_t i = (int64_t) caerEventPacketHeaderGetEventNumber(&frame->packetHeader) - 1; i >= 0; i--) {
-			currFrameEvent = caerFrameEventPacketGetEvent(frame, (uint32_t) i);
+		for (int32_t i = caerEventPacketHeaderGetEventNumber(&frame->packetHeader) - 1; i >= 0; i--) {
+			currFrameEvent = caerFrameEventPacketGetEvent(frame, i);
 
 			// Only operate on the last valid frame.
 			if (caerFrameEventIsValid(currFrameEvent)) {
@@ -200,8 +202,8 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 				state->frameChannels = caerFrameEventGetChannelNumber(currFrameEvent);
 
 				memcpy(state->frameRenderer, caerFrameEventGetPixelArrayUnsafe(currFrameEvent),
-					(size_t) state->frameRendererSizeX * state->frameRendererSizeY * state->frameChannels
-						* sizeof(uint16_t));
+					((size_t) state->frameRendererSizeX * (size_t) state->frameRendererSizeY
+						* (size_t) state->frameChannels * sizeof(uint16_t)));
 
 				break;
 			}
@@ -317,9 +319,9 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 	}
 }
 
-static bool allocateEventRenderer(visualizerState state, uint16_t sourceID) {
+static bool allocateEventRenderer(visualizerState state, int16_t sourceID) {
 	// Get size information from source.
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(sourceID);
+	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
 	uint16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
 	uint16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
@@ -335,14 +337,13 @@ static bool allocateEventRenderer(visualizerState state, uint16_t sourceID) {
 	return (true);
 }
 
-static bool allocateFrameRenderer(visualizerState state, uint16_t sourceID) {
+static bool allocateFrameRenderer(visualizerState state, int16_t sourceID) {
 	// Get size information from source.
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(sourceID);
+	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
 	uint16_t sizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
 	uint16_t sizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
-	uint16_t channels = sshsNodeGetShort(sourceInfoNode, "apsChannels");
 
-	state->frameRenderer = calloc((size_t) (sizeX * sizeY * channels), sizeof(uint16_t));
+	state->frameRenderer = calloc((size_t) (sizeX * sizeY * MAX_CHANNELS), sizeof(uint16_t));
 	if (state->frameRenderer == NULL) {
 		return (false); // Failure.
 	}
@@ -350,7 +351,7 @@ static bool allocateFrameRenderer(visualizerState state, uint16_t sourceID) {
 	// Assign max sizes for frame renderer.
 	state->frameRendererSizeX = sizeX;
 	state->frameRendererSizeY = sizeY;
-	state->frameChannels = channels;
+	state->frameChannels = MAX_CHANNELS;
 
 	return (true);
 }

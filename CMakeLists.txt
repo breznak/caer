@@ -14,17 +14,20 @@ IF (NOT JAER_COMPAT_FORMAT)
 	SET(JAER_COMPAT_FORMAT 0 CACHE BOOL "Write files in a format compatible with jAER.")
 ENDIF()
 
-IF (NOT DVS128 AND NOT DAVISFX2 AND NOT DAVISFX3)
-	MESSAGE(SEND_ERROR "Please specify one of the following options to select a camera: DVS128, DAVISFX2, DAVISFX3")
-	RETURN()
+IF (NOT ENABLE_NET_STREAM)
+	SET(ENABLE_NET_STREAM 0 CACHE BOOL "Enable TCP server module for sending data over the network.")
 ENDIF()
 
+IF (NOT DVS128 AND NOT DAVISFX2 AND NOT DAVISFX3)
+	MESSAGE(SEND_ERROR "Please specify one of the following options to select a supported device: DVS128, DAVISFX2, DAVISFX3.")
+	RETURN()
+ENDIF()
 
 # Project name and version
 PROJECT(cAER C)
 SET(PROJECT_VERSION_MAJOR 0)
 SET(PROJECT_VERSION_MINOR 9)
-SET(PROJECT_VERSION_PATCH 5)
+SET(PROJECT_VERSION_PATCH 8)
 SET(PROJECT_VERSION_NOREV ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH})
 IF (NOT PROJECT_REVISION)
 	EXECUTE_PROCESS(COMMAND svnversion OUTPUT_VARIABLE PROJECT_REVISION OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -53,86 +56,90 @@ ENDIF()
 INCLUDE(TestBigEndian)
 TEST_BIG_ENDIAN(SYSTEM_BIGENDIAN)
 
-# C99 standard needed
+# C11 standard needed (atomics, threads)
 IF (CC_GCC OR CC_CLANG)
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
+	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11")
 ENDIF()
 
 # Check size of various types
 INCLUDE(CheckTypeSize)
-CHECK_TYPE_SIZE("size_t"        SIZEOF_SIZE_T)
-CHECK_TYPE_SIZE("void *"        SIZEOF_VOID_PTR)
+CHECK_TYPE_SIZE("size_t" SIZEOF_SIZE_T)
+CHECK_TYPE_SIZE("void *" SIZEOF_VOID_PTR)
 
 IF (NOT "${SIZEOF_VOID_PTR}" STREQUAL "${SIZEOF_SIZE_T}")
 	MESSAGE(SEND_ERROR "Size of void * and size_t must be the same!")
 ENDIF()
 
-# Check for existence of functions
-INCLUDE(CheckFunctionExists)
-CHECK_FUNCTION_EXISTS(posix_memalign HAVE_POSIX_MEMALIGN)
-
-# Check threads support
+# Check threads support (almost nobody implements C11 threads yet!)
 FIND_PACKAGE(Threads)
 SET(HAVE_PTHREADS ${CMAKE_USE_PTHREADS_INIT})
 SET(HAVE_WIN32_THREADS ${CMAKE_USE_WIN32_THREADS_INIT})
 
 IF (HAVE_PTHREADS)
-	# Check specific include files
-	CHECK_INCLUDE_FILES(unistd.h HAVE_UNISTD_H)
+	ADD_DEFINITIONS(-DHAVE_PTHREADS=1)
 
-	# pthread_rwlock_t support
-	ADD_DEFINITIONS(-D_XOPEN_SOURCE=600)
+	# POSIX system (Unix, Linux, MacOS X)
+	ADD_DEFINITIONS(-D_XOPEN_SOURCE=700)
+	ADD_DEFINITIONS(-D_DEFAULT_SOURCE=1)
 
-	# endian conversions
-	ADD_DEFINITIONS(-D_BSD_SOURCE=1)
+	# Support for large files (>2GB) on 32-bit systems
+	ADD_DEFINITIONS(-D_FILE_OFFSET_BITS=64)
 ENDIF()
 
-# Support for large files (>2GB) on 32-bit systems
-ADD_DEFINITIONS(-D_FILE_OFFSET_BITS=64)
+IF (HAVE_WIN32_THREADS)
+	ADD_DEFINITIONS(-DHAVE_WIN32_THREADS=1)
+ENDIF()
 
+# Forward settings as defines
 IF (ENABLE_VISUALIZER)
 	ADD_DEFINITIONS(-DENABLE_VISUALIZER=1)
-ENDIF()
-
-IF (DVS128)
-	ADD_DEFINITIONS(-DDVS128)
-ENDIF()
-
-IF (DAVISFX2)
-	ADD_DEFINITIONS(-DDAVISFX2)
-ENDIF()
-
-IF (DAVISFX3)
-	ADD_DEFINITIONS(-DDAVISFX3)
-ENDIF()
-
-IF (ENABLE_NET_STREAM)
-	ADD_DEFINITIONS(-DENABLE_NET_STREAM)
 ENDIF()
 
 IF (JAER_COMPAT_FORMAT)
 	ADD_DEFINITIONS(-DJAER_COMPAT_FORMAT=1)
 ENDIF()
 
-# Enable all warnings for GCC
+IF (ENABLE_NET_STREAM)
+	ADD_DEFINITIONS(-DENABLE_NET_STREAM=1)
+ENDIF()
+
+IF (DVS128)
+	ADD_DEFINITIONS(-DDVS128=1)
+ENDIF()
+
+IF (DAVISFX2)
+	ADD_DEFINITIONS(-DDAVISFX2=1)
+ENDIF()
+
+IF (DAVISFX3)
+	ADD_DEFINITIONS(-DDAVISFX3=1)
+ENDIF()
+
+# Enable all warnings for GCC / Clang
 IF (CC_GCC OR CC_CLANG)
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic -Wall -Wextra")
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused-parameter -Wformat=2 -Winit-self -Wundef")
+	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused -Wundef -Wformat=2 -Winit-self -Wuninitialized")
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wpointer-arith -Wcast-qual -Wcast-align -Wwrite-strings")
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wstrict-prototypes -Wmissing-prototypes -Wredundant-decls")
+	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wmissing-declarations -Wnested-externs -Wstack-protector")
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wshadow -Wbad-function-cast -Wfloat-equal")
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wconversion -Wunused -Wstrict-overflow=5")
+	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wconversion -Wstrict-overflow=2")
+
+	# Warnings supported by GCC only
+	IF (CC_GCC)
+		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wjump-misses-init -Wunsuffixed-float-constants -Wdouble-promotion")
+	ENDIF()
 ENDIF()
 
 # Search for external libraries with pkg-config
 INCLUDE(FindPkgConfig)
 
-# Basic device support
-PKG_CHECK_MODULES(LIBUSB1 REQUIRED libusb-1.0)
+# Basic USB device support and configuration
+PKG_CHECK_MODULES(LIBCAER REQUIRED libcaer)
 PKG_CHECK_MODULES(MXML REQUIRED mxml)
-SET(CAER_LIBS ${LIBUSB1_LIBRARIES} ${MXML_LIBRARIES})
-SET(CAER_LIBDIRS ${LIBUSB1_LIBRARY_DIRS} ${MXML_LIBRARY_DIRS})
-SET(CAER_INCDIRS ${LIBUSB1_INCLUDE_DIRS} ${MXML_INCLUDE_DIRS})
+SET(CAER_LIBS ${LIBCAER_LIBRARIES} ${MXML_LIBRARIES})
+SET(CAER_LIBDIRS ${LIBCAER_LIBRARY_DIRS} ${MXML_LIBRARY_DIRS})
+SET(CAER_INCDIRS ${LIBCAER_INCLUDE_DIRS} ${MXML_INCLUDE_DIRS})
 file(GLOB_RECURSE CAER_INI_FILES modules/ini/*.c)
 SET(CAER_SRC_FILES ${CAER_INI_FILES})
 
@@ -169,13 +176,13 @@ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/)
 file(GLOB_RECURSE CAER_EXT_FILES ext/*.c)
 file(GLOB_RECURSE CAER_BASE_FILES base/*.c)
 
-ADD_EXECUTABLE(caer ${CAER_EXT_FILES} ${CAER_BASE_FILES} ${CAER_SRC_FILES} main.c)
-TARGET_LINK_LIBRARIES(caer ${CMAKE_THREAD_LIBS_INIT} rt m ${CAER_LIBS})
-INSTALL(TARGETS caer DESTINATION bin)
+ADD_EXECUTABLE(caer-bin ${CAER_EXT_FILES} ${CAER_BASE_FILES} ${CAER_SRC_FILES} main.c)
+TARGET_LINK_LIBRARIES(caer-bin ${CMAKE_THREAD_LIBS_INIT} rt m ${CAER_LIBS})
+INSTALL(TARGETS caer-bin DESTINATION bin)
 
 # Compile cAERCtl
-ADD_EXECUTABLE(caerctl ext/sshs/sshs_helper.c utils/ext/linenoise/linenoise.c utils/caerctl/caerctl.c)
-INSTALL(TARGETS caerctl DESTINATION bin)
+ADD_EXECUTABLE(caer-ctl ext/sshs/sshs_helper.c utils/ext/linenoise/linenoise.c utils/caerctl/caerctl.c)
+INSTALL(TARGETS caer-ctl DESTINATION bin)
 
 # Compile UDP stream statistics program
 ADD_EXECUTABLE(udpststat utils/udpststat/udpststat.c)

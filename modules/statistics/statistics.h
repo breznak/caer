@@ -2,7 +2,8 @@
 #define STATISTICS_H_
 
 #include "main.h"
-#include "events/common.h"
+
+#include <libcaer/events/common.h>
 
 struct caer_statistics_state {
 	uint64_t divisionFactor;

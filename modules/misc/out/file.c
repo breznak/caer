@@ -8,9 +8,9 @@
 #include <time.h>
 
 #ifdef JAER_COMPAT_FORMAT
-  #define USE_OLD_AEDAT_FORMAT_HACK true
+#define USE_OLD_AEDAT_FORMAT_HACK true
 #else
-  #define USE_OLD_AEDAT_FORMAT_HACK false
+#define USE_OLD_AEDAT_FORMAT_HACK false
 #endif
 
 struct file_state {
@@ -53,7 +53,7 @@ static char *getUserHomeDirectory(const char *subSystemString) {
 	if (homeVar != NULL) {
 		char *retVar = strdup(homeVar);
 		if (retVar == NULL) {
-			caerLog(LOG_CRITICAL, subSystemString, "Unable to allocate memory for user home directory path.");
+			caerLog(CAER_LOG_CRITICAL, subSystemString, "Unable to allocate memory for user home directory path.");
 			return (NULL);
 		}
 
@@ -69,7 +69,7 @@ static char *getUserHomeDirectory(const char *subSystemString) {
 		// Success!
 		char *retVar = strdup(userPasswd.pw_dir);
 		if (retVar == NULL) {
-			caerLog(LOG_CRITICAL, subSystemString, "Unable to allocate memory for user home directory path.");
+			caerLog(CAER_LOG_CRITICAL, subSystemString, "Unable to allocate memory for user home directory path.");
 			return (NULL);
 		}
 
@@ -79,7 +79,7 @@ static char *getUserHomeDirectory(const char *subSystemString) {
 	// Else just return /tmp as a place to write to.
 	char *retVar = strdup("/tmp");
 	if (retVar == NULL) {
-		caerLog(LOG_CRITICAL, subSystemString, "Unable to allocate memory for user home directory path.");
+		caerLog(CAER_LOG_CRITICAL, subSystemString, "Unable to allocate memory for user home directory path.");
 		return (NULL);
 	}
 
@@ -89,6 +89,12 @@ static char *getUserHomeDirectory(const char *subSystemString) {
 static char *getFullFilePath(const char *subSystemString, const char *directory, const char *prefix) {
 	// First get time suffix string.
 	time_t currentTimeEpoch = time(NULL);
+
+	// From localtime_r() man-page: "According to POSIX.1-2004, localtime()
+	// is required to behave as though tzset(3) was called, while
+	// localtime_r() does not have this requirement."
+	// So we make sure to call it here, to be portable.
+	tzset();
 
 	struct tm currentTime;
 	localtime_r(&currentTimeEpoch, &currentTime);
@@ -111,7 +117,7 @@ static char *getFullFilePath(const char *subSystemString, const char *directory,
 
 	char *filePath = malloc(filePathLength);
 	if (filePath == NULL) {
-		caerLog(LOG_CRITICAL, subSystemString, "Unable to allocate memory for full file path.");
+		caerLog(CAER_LOG_CRITICAL, subSystemString, "Unable to allocate memory for full file path.");
 		return (NULL);
 	}
 
@@ -147,15 +153,14 @@ static bool caerOutputFileInit(caerModuleData moduleData) {
 
 	state->fileDescriptor = open(filePath, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP);
 	if (state->fileDescriptor < 0) {
-		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"Could not create or open output file '%s' for writing. Error: %s (%d).", filePath, caerLogStrerror(errno),
-			errno);
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+			"Could not create or open output file '%s' for writing. Error: %d.", filePath, errno);
 		free(filePath);
 
 		return (false);
 	}
 
-	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Opened output file '%s' successfully for writing.",
+	caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString, "Opened output file '%s' successfully for writing.",
 		filePath);
 	free(filePath);
 
@@ -167,11 +172,11 @@ static bool caerOutputFileInit(caerModuleData moduleData) {
 	if (state->validOnly) {
 		state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
 		if (state->sgioMemory == NULL) {
-			caerLog(LOG_ALERT, moduleData->moduleSubSystemString,
+			caerLog(CAER_LOG_ALERT, moduleData->moduleSubSystemString,
 				"Impossible to allocate memory for scatter/gather IO, using memory copy method.");
 		}
 		else {
-			caerLog(LOG_INFO, moduleData->moduleSubSystemString,
+			caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString,
 				"Using scatter/gather IO for outputting valid events only.");
 		}
 	}
@@ -213,7 +218,7 @@ static void caerOutputFileConfig(caerModuleData moduleData) {
 
 	// Get the current value to examine by atomic exchange, since we don't
 	// want there to be any possible store between a load/store pair.
-	uintptr_t configUpdate = atomic_ops_uint_swap(&moduleData->configUpdate, 0, ATOMIC_OPS_FENCE_NONE);
+	uintptr_t configUpdate = atomic_exchange(&moduleData->configUpdate, 0);
 
 	if (configUpdate & (0x01 << 0)) {
 		// validOnly flag changed.
@@ -227,11 +232,11 @@ static void caerOutputFileConfig(caerModuleData moduleData) {
 
 				state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
 				if (state->sgioMemory == NULL) {
-					caerLog(LOG_ALERT, moduleData->moduleSubSystemString,
+					caerLog(CAER_LOG_ALERT, moduleData->moduleSubSystemString,
 						"Impossible to allocate memory for scatter/gather IO, using memory copy method.");
 				}
 				else {
-					caerLog(LOG_INFO, moduleData->moduleSubSystemString,
+					caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString,
 						"Using scatter/gather IO for outputting valid events only.");
 				}
 			}
@@ -261,15 +266,14 @@ static void caerOutputFileConfig(caerModuleData moduleData) {
 
 		int newFileDescriptor = open(filePath, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP);
 		if (newFileDescriptor < 0) {
-			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString,
-				"Could not create or open output file '%s' for writing. Error: %s (%d).", filePath,
-				caerLogStrerror(errno), errno);
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"Could not create or open output file '%s' for writing. Error: %d.", filePath, errno);
 			free(filePath);
 
 			return;
 		}
 
-		caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Opened output file '%s' successfully for writing.",
+		caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString, "Opened output file '%s' successfully for writing.",
 			filePath);
 		free(filePath);
 
@@ -301,16 +305,16 @@ static void caerOutputFileConfigListener(sshsNode node, void *userData, enum ssh
 	// configUpdate appropriately like a bit-field.
 	if (event == ATTRIBUTE_MODIFIED) {
 		if (changeType == BOOL && strcmp(changeKey, "validEventsOnly") == 0) {
-			atomic_ops_uint_or(&data->configUpdate, (0x01 << 0), ATOMIC_OPS_FENCE_NONE);
+			atomic_fetch_or(&data->configUpdate, (0x01 << 0));
 		}
 
 		if (changeType == STRING && (strcmp(changeKey, "directory") == 0 || strcmp(changeKey, "prefix") == 0)) {
-			atomic_ops_uint_or(&data->configUpdate, (0x01 << 1), ATOMIC_OPS_FENCE_NONE);
+			atomic_fetch_or(&data->configUpdate, (0x01 << 1));
 		}
 
 		if ((changeType == BOOL && strcmp(changeKey, "excludeHeader") == 0)
 			|| (changeType == INT && strcmp(changeKey, "maxBytesPerPacket") == 0)) {
-			atomic_ops_uint_or(&data->configUpdate, (0x01 << 2), ATOMIC_OPS_FENCE_NONE);
+			atomic_fetch_or(&data->configUpdate, (0x01 << 2));
 		}
 	}
 }

@@ -13,20 +13,20 @@ static bool sshsCheckAbsoluteNodePath(const char *absolutePath, size_t absoluteP
 static bool sshsCheckRelativeNodePath(const char *relativePath, size_t relativePathLength);
 
 static sshs sshsGlobal = NULL;
-static pthread_once_t sshsGlobalIsInitialized = PTHREAD_ONCE_INIT;
+static once_flag sshsGlobalIsInitialized = ONCE_FLAG_INIT;
 
 static void sshsGlobalInitialize(void) {
 	sshsGlobal = sshsNew();
 }
 
 sshs sshsGetGlobal(void) {
-	pthread_once(&sshsGlobalIsInitialized, &sshsGlobalInitialize);
+	call_once(&sshsGlobalIsInitialized, &sshsGlobalInitialize);
 
 	return (sshsGlobal);
 }
 
 static sshsErrorLogCallback sshsGlobalErrorLogCallback = NULL;
-static pthread_once_t sshsGlobalErrorLogCallbackIsInitialized = PTHREAD_ONCE_INIT;
+static once_flag sshsGlobalErrorLogCallbackIsInitialized = ONCE_FLAG_INIT;
 
 static void sshsGlobalErrorLogCallbackInitialize(void) {
 	sshsGlobalErrorLogCallbackSetInternal(&sshsDefaultErrorLogCallback);
@@ -40,7 +40,7 @@ static void sshsGlobalErrorLogCallbackSetInternal(sshsErrorLogCallback error_log
 }
 
 sshsErrorLogCallback sshsGetGlobalErrorLogCallback(void) {
-	pthread_once(&sshsGlobalErrorLogCallbackIsInitialized, &sshsGlobalErrorLogCallbackInitialize);
+	call_once(&sshsGlobalErrorLogCallbackIsInitialized, &sshsGlobalErrorLogCallbackInitialize);
 
 	return (sshsGlobalErrorLogCallback);
 }
@@ -50,7 +50,7 @@ sshsErrorLogCallback sshsGetGlobalErrorLogCallback(void) {
  * Set the global error callback preferably only once, before using SSHS.
  */
 void sshsSetGlobalErrorLogCallback(sshsErrorLogCallback error_log_cb) {
-	pthread_once(&sshsGlobalErrorLogCallbackIsInitialized, &sshsGlobalErrorLogCallbackInitialize);
+	call_once(&sshsGlobalErrorLogCallbackIsInitialized, &sshsGlobalErrorLogCallbackInitialize);
 
 	// If NULL, set to default logging callback.
 	if (error_log_cb == NULL) {
@@ -253,7 +253,7 @@ static bool sshsCheckAbsoluteNodePath(const char *absolutePath, size_t absoluteP
 		return (false);
 	}
 
-	if (slre_match(sshsAbsoluteNodePathRegexp, absolutePath, (int) absolutePathLength, NULL, 0) <= 0) {
+	if (slre_match(sshsAbsoluteNodePathRegexp, absolutePath, (int) absolutePathLength, NULL, 0, 0) <= 0) {
 		(*sshsGetGlobalErrorLogCallback())("Invalid absolute node path format.");
 		return (false);
 	}
@@ -267,7 +267,7 @@ static bool sshsCheckRelativeNodePath(const char *relativePath, size_t relativeP
 		return (false);
 	}
 
-	if (slre_match(sshsRelativeNodePathRegexp, relativePath, (int) relativePathLength, NULL, 0) <= 0) {
+	if (slre_match(sshsRelativeNodePathRegexp, relativePath, (int) relativePathLength, NULL, 0, 0) <= 0) {
 		(*sshsGetGlobalErrorLogCallback())("Invalid relative node path format.");
 		return (false);
 	}

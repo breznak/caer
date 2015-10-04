@@ -52,7 +52,7 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	// Open a UDP socket to the remote client, to which we'll send data packets.
 	state->netUDPDescriptor = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (state->netUDPDescriptor < 0) {
-		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create UDP socket. Error: %s (%d).", caerLogStrerror(errno), errno);
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create UDP socket. Error: %d.", errno);
 		return (false);
 	}
 
@@ -66,8 +66,9 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	free(ipAddress);
 
 	if (connect(state->netUDPDescriptor, (struct sockaddr *) &udpClient, sizeof(struct sockaddr_in)) != 0) {
-		caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not connect to remote UDP client %s:%" PRIu16 ". Error: %s (%d).",
-			inet_ntoa(udpClient.sin_addr), ntohs(udpClient.sin_port), caerLogStrerror(errno), errno);
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+			"Could not connect to remote UDP client %s:%" PRIu16 ". Error: %d.", inet_ntoa(udpClient.sin_addr),
+			ntohs(udpClient.sin_port), errno);
 		close(state->netUDPDescriptor);
 		return (false);
 	}
@@ -80,18 +81,20 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	if (state->validOnly) {
 		state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
 		if (state->sgioMemory == NULL) {
-			caerLog(LOG_ALERT, moduleData->moduleSubSystemString, "Impossible to allocate memory for scatter/gather IO, using memory copy method.");
+			caerLog(CAER_LOG_ALERT, moduleData->moduleSubSystemString,
+				"Impossible to allocate memory for scatter/gather IO, using memory copy method.");
 		}
 		else {
-			caerLog(LOG_INFO, moduleData->moduleSubSystemString, "Using scatter/gather IO for outputting valid events only.");
+			caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString,
+				"Using scatter/gather IO for outputting valid events only.");
 		}
 	}
 	else {
 		state->sgioMemory = NULL;
 	}
 
-	caerLog(LOG_INFO, moduleData->moduleSubSystemString, "UDP socket connected to %s:%" PRIu16 ".", inet_ntoa(udpClient.sin_addr),
-		ntohs(udpClient.sin_port));
+	caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "UDP socket connected to %s:%" PRIu16 ".",
+		inet_ntoa(udpClient.sin_addr), ntohs(udpClient.sin_port));
 
 	return (true);
 }
@@ -121,7 +124,7 @@ static void caerOutputNetUDPConfig(caerModuleData moduleData) {
 
 	// Get the current value to examine by atomic exchange, since we don't
 	// want there to be any possible store between a load/store pair.
-	uintptr_t configUpdate = atomic_ops_uint_swap(&moduleData->configUpdate, 0, ATOMIC_OPS_FENCE_NONE);
+	uintptr_t configUpdate = atomic_exchange(&moduleData->configUpdate, 0);
 
 	if (configUpdate & (0x01 << 0)) {
 		// validOnly flag changed.
@@ -135,11 +138,12 @@ static void caerOutputNetUDPConfig(caerModuleData moduleData) {
 
 				state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
 				if (state->sgioMemory == NULL) {
-					caerLog(LOG_ALERT, moduleData->moduleSubSystemString,
+					caerLog(CAER_LOG_ALERT, moduleData->moduleSubSystemString,
 						"Impossible to allocate memory for scatter/gather IO, using memory copy method.");
 				}
 				else {
-					caerLog(LOG_INFO, moduleData->moduleSubSystemString, "Using scatter/gather IO for outputting valid events only.");
+					caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString,
+						"Using scatter/gather IO for outputting valid events only.");
 				}
 			}
 			else {
@@ -162,7 +166,8 @@ static void caerOutputNetUDPConfig(caerModuleData moduleData) {
 		// Open a UDP socket to the new remote client, to which we'll send data packets.
 		int newNetUDPDescriptor = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 		if (newNetUDPDescriptor < 0) {
-			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create UDP socket. Error: %s (%d).", caerLogStrerror(errno), errno);
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create UDP socket. Error: %d.",
+				errno);
 			return;
 		}
 
@@ -176,8 +181,9 @@ static void caerOutputNetUDPConfig(caerModuleData moduleData) {
 		free(ipAddress);
 
 		if (connect(newNetUDPDescriptor, (struct sockaddr *) &udpClient, sizeof(struct sockaddr_in)) != 0) {
-			caerLog(LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not connect to remote UDP client %s:%" PRIu16 ". Error: %s (%d).",
-				inet_ntoa(udpClient.sin_addr), ntohs(udpClient.sin_port), caerLogStrerror(errno), errno);
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"Could not connect to remote UDP client %s:%" PRIu16 ". Error: %d.", inet_ntoa(udpClient.sin_addr),
+				ntohs(udpClient.sin_port), errno);
 			close(newNetUDPDescriptor);
 			return;
 		}
@@ -210,17 +216,17 @@ static void caerOutputNetUDPConfigListener(sshsNode node, void *userData, enum s
 	// configUpdate appropriately like a bit-field.
 	if (event == ATTRIBUTE_MODIFIED) {
 		if (changeType == BOOL && strcmp(changeKey, "validEventsOnly") == 0) {
-			atomic_ops_uint_or(&data->configUpdate, (0x01 << 0), ATOMIC_OPS_FENCE_NONE);
+			atomic_fetch_or(&data->configUpdate, (0x01 << 0));
 		}
 
 		if ((changeType == STRING && strcmp(changeKey, "ipAddress") == 0)
 			|| (changeType == SHORT && strcmp(changeKey, "portNumber") == 0)) {
-			atomic_ops_uint_or(&data->configUpdate, (0x01 << 1), ATOMIC_OPS_FENCE_NONE);
+			atomic_fetch_or(&data->configUpdate, (0x01 << 1));
 		}
 
 		if ((changeType == BOOL && strcmp(changeKey, "excludeHeader") == 0)
 			|| (changeType == INT && strcmp(changeKey, "maxBytesPerPacket") == 0)) {
-			atomic_ops_uint_or(&data->configUpdate, (0x01 << 2), ATOMIC_OPS_FENCE_NONE);
+			atomic_fetch_or(&data->configUpdate, (0x01 << 2));
 		}
 	}
 }

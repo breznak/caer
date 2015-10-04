@@ -8,6 +8,7 @@
 #include "main.h"
 #include "base/config.h"
 #include "base/config_server.h"
+#include "base/log.h"
 #include "base/mainloop.h"
 #include "base/misc.h"
 #include "modules/ini/dvs128.h"
@@ -57,7 +58,7 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_NET_STREAM
 	caerOutputNetUDP(5, 1, polarity);
-	caerOutputNetTCPServer(6, 1, polarity); // or (6, 2, polarity, frame) for frame and polarity
+	caerOutputNetTCPServer(6, 1, polarity); // or (6, 2, polarity, frame) for polarity and frames
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.
@@ -85,8 +86,10 @@ static bool mainloop_2(void) {
 	// look to be uncorrelated with real scene changes (noise reduction).
 	caerBackgroundActivityFilter(2, polarity);
 
+#ifdef ENABLE_NET_STREAM
 	// Send polarity packets out via TCP.
 	caerOutputNetTCPServer(3, 1, polarity);
+#endif
 
 	return (true); // If false is returned, processing of this loop stops.
 }

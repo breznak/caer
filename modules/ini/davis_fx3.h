@@ -2,24 +2,13 @@
 #define DAVIS_FX3_H_
 
 #include "main.h"
-#include "events/polarity.h"
-#include "events/special.h"
-#include "events/frame.h"
-#include "events/imu6.h"
 
-#define DAVIS_FX3_VID 0x152A
-#define DAVIS_FX3_PID 0x841A
-#define DAVIS_FX3_DID_TYPE 0x01
+#include <libcaer/events/packetContainer.h>
+#include <libcaer/events/special.h>
+#include <libcaer/events/polarity.h>
+#include <libcaer/events/frame.h>
+#include <libcaer/events/imu6.h>
 
-#define FPGA_CHIPBIAS 5
-
-#define DEBUG_ENDPOINT 0x81
-#define DEBUG_TRANSFER_NUM 4
-#define DEBUG_TRANSFER_SIZE 64
-
-#define REQUIRED_LOGIC_REVISION 7084
-
-void caerInputDAVISFX3(uint16_t moduleID, caerPolarityEventPacket *polarity, caerFrameEventPacket *frame,
-	caerIMU6EventPacket *imu6, caerSpecialEventPacket *special);
+caerEventPacketContainer caerInputDAVISFX3(uint16_t moduleID);
 
 #endif /* DAVIS_FX3_H_ */
