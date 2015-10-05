@@ -187,9 +187,9 @@ static int caerMainloopRunner(void *inPtr) {
 
 			// After each successful main-loop run, free the memory that was
 			// accumulated for things like packets, valid only during the run.
-			void **mem = NULL;
-			while ((mem = (void **) utarray_next(mainloopData->memoryToFree, mem)) != NULL) {
-				free(*mem);
+			struct genericFree *memFree = NULL;
+			while ((memFree = (struct genericFree *) utarray_next(mainloopData->memoryToFree, memFree)) != NULL) {
+				memFree->func(memFree->memPtr);
 			}
 			utarray_clear(mainloopData->memoryToFree);
 		}
@@ -297,7 +297,7 @@ static void caerMainloopShutdownListener(sshsNode node, void *userData, enum ssh
 		// Shutdown changed, let's see.
 		if (changeValue.boolean == true) {
 			// Shutdown requested!
-			atomic_store((atomic_bool *) userData, false);
+			atomic_store((atomic_bool * ) userData, false);
 		}
 	}
 }
