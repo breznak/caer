@@ -4,6 +4,8 @@
 #include "main.h"
 #include "base/mainloop.h"
 
+#include <libcaer/devices/davis.h>
+
 bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t VID, uint16_t PID, uint8_t DID_TYPE);
 void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstate);
 bool initializeCommonConfiguration(caerModuleData moduleData, davisCommonState cstate,

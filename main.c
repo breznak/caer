@@ -23,24 +23,27 @@ static bool mainloop_1(void);
 static bool mainloop_2(void);
 
 static bool mainloop_1(void) {
-
-	// Typed EventPackets contain events of a certain type.
-	caerPolarityEventPacket polarity;
-	caerFrameEventPacket frame;
-	caerIMU6EventPacket imu;
-	caerSpecialEventPacket special;
+	// An eventPacketContainer bundles event packets of different types together,
+	// to maintain time-coherence between the different events.
+	caerEventPacketContainer container;
 
 	// Input modules grab data from outside sources (like devices, files, ...)
 	// and put events into an event packet.
 #ifdef DVS128
-	caerInputDVS128(1, &polarity, &special);
+	container = caerInputDVS128(1);
 #endif
 #ifdef DAVISFX2
-	caerInputDAVISFX2(1, &polarity, &frame, &imu, &special);
+	container = caerInputDAVISFX2(1);
 #endif
 #ifdef DAVISFX3
-	caerInputDAVISFX3(1, &polarity, &frame, &imu, &special);
+	container = caerInputDAVISFX3(1);
 #endif
+
+	// Typed EventPackets contain events of a certain type.
+	caerSpecialEventPacket special = (caerSpecialEventPacket) caerEventPacketContainerGetEventPacket(container, SPECIAL_EVENT);
+	caerPolarityEventPacket polarity = (caerPolarityEventPacket) caerEventPacketContainerGetEventPacket(container, POLARITY_EVENT);
+	caerFrameEventPacket frame = (caerFrameEventPacket) caerEventPacketContainerGetEventPacket(container, FRAME_EVENT);
+	caerIMU6EventPacket imu = (caerIMU6EventPacket) caerEventPacketContainerGetEventPacket(container, IMU6_EVENT);
 
 	// Filters process event packets: for example to suppress certain events,
 	// like with the Background Activity Filter, which suppresses events that
@@ -57,29 +60,33 @@ static bool mainloop_1(void) {
 #endif
 
 #ifdef ENABLE_NET_STREAM
-	caerOutputNetUDP(5, 1, polarity);
-	caerOutputNetTCPServer(6, 1, polarity); // or (6, 2, polarity, frame) for polarity and frames
+	// Send polarity packets out via TCP.
+	caerOutputNetTCPServer(5, 1, polarity);// or (5, 2, polarity, frame) for polarity and frames
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.
 }
 
 static bool mainloop_2(void) {
-	// Typed EventPackets contain events of a certain type.
-	caerPolarityEventPacket polarity;
-	caerFrameEventPacket frame;
+	// An eventPacketContainer bundles event packets of different types together,
+	// to maintain time-coherence between the different events.
+	caerEventPacketContainer container;
 
 	// Input modules grab data from outside sources (like devices, files, ...)
 	// and put events into an event packet.
 #ifdef DVS128
-	caerInputDVS128(1, &polarity, NULL);
+	container = caerInputDVS128(1);
 #endif
 #ifdef DAVISFX2
-	caerInputDAVISFX2(1, &polarity, &frame, NULL, NULL);
+	container = caerInputDAVISFX2(1);
 #endif
 #ifdef DAVISFX3
-	caerInputDAVISFX3(1, &polarity, &frame, NULL, NULL);
+	container = caerInputDAVISFX3(1);
 #endif
+
+	// Typed EventPackets contain events of a certain type.
+	caerPolarityEventPacket polarity = (caerPolarityEventPacket) caerEventPacketContainerGetEventPacket(container, POLARITY_EVENT);
+	caerFrameEventPacket frame = (caerFrameEventPacket) caerEventPacketContainerGetEventPacket(container, FRAME_EVENT);
 
 	// Filters process event packets: for example to suppress certain events,
 	// like with the Background Activity Filter, which suppresses events that
