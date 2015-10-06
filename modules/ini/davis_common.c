@@ -5,10 +5,10 @@ static void sendDefaultConfiguration(caerModuleData moduleData, struct caer_davi
 static void mainloopDataNotifyIncrease(void *p);
 static void mainloopDataNotifyDecrease(void *p);
 static void moduleShutdownNotify(void *p);
-static void biasConfigSend(sshsNode node, caerModuleData moduleData);
+static void biasConfigSend(sshsNode node, caerModuleData moduleData, struct caer_davis_info *devInfo);
 static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
-static void chipConfigSend(sshsNode node, caerModuleData moduleData);
+static void chipConfigSend(sshsNode node, caerModuleData moduleData, struct caer_davis_info *devInfo);
 static void chipConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 static void muxConfigSend(sshsNode node, caerModuleData moduleData);
@@ -148,6 +148,8 @@ void caerInputDAVISRun(caerModuleData moduleData, size_t argsNumber, va_list arg
 static void createDefaultConfiguration(caerModuleData moduleData, struct caer_davis_info *devInfo) {
 	// First, always create all needed setting nodes, set their default values
 	// and add their listeners.
+
+	// Chip biases, based on testing defaults.
 	sshsNode biasNode = sshsGetRelativeNode(moduleData->moduleNode, "bias/");
 
 	if (devInfo->chipID == DAVIS_CHIP_DAVIS240A || devInfo->chipID == DAVIS_CHIP_DAVIS240B
@@ -274,7 +276,8 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 		createShiftedSourceBiasSetting(biasNode, "SSN", 2, 33, "ShiftedSource", "SplitGate");
 	}
 
-	sshsNodeAddAttrListener(biasNode, moduleData, &biasConfigListener);
+	// The bias listener is added for each sub-node separately in the create*BiasSetting() functions below.
+	// TODO: fix this!
 
 	// Chip configuration shift register.
 	sshsNode chipNode = sshsGetRelativeNode(moduleData->moduleNode, "chip/");
@@ -293,6 +296,9 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 	sshsNodePutBoolIfAbsent(chipNode, "ResetTestPixel", true);
 	sshsNodePutBoolIfAbsent(chipNode, "AERnArow", false); // Use nArow in the AER state machine.
 	sshsNodePutBoolIfAbsent(chipNode, "UseAOut", false); // Enable analog pads for aMUX output (testing).
+
+	// No GlobalShutter flag here, it's controlled by the APS module's GS flag, and libcaer
+	// ensures that both the chip SR and the APS module flags are kept in sync.
 
 	if (devInfo->chipID == DAVIS_CHIP_DAVIS240A || devInfo->chipID == DAVIS_CHIP_DAVIS240B) {
 		sshsNodePutBoolIfAbsent(chipNode, "SpecialPixelControl", false);
@@ -520,8 +526,8 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 
 static void sendDefaultConfiguration(caerModuleData moduleData, struct caer_davis_info *devInfo) {
 	// Send cAER configuration to libcaer and device.
-	biasConfigSend(sshsGetRelativeNode(moduleData->moduleNode, "bias/"), moduleData);
-	chipConfigSend(sshsGetRelativeNode(moduleData->moduleNode, "chip/"), moduleData);
+	biasConfigSend(sshsGetRelativeNode(moduleData->moduleNode, "bias/"), moduleData, devInfo);
+	chipConfigSend(sshsGetRelativeNode(moduleData->moduleNode, "chip/"), moduleData, devInfo);
 	systemConfigSend(sshsGetRelativeNode(moduleData->moduleNode, "system/"), moduleData);
 	usbConfigSend(sshsGetRelativeNode(moduleData->moduleNode, "usb/"), moduleData);
 	muxConfigSend(sshsGetRelativeNode(moduleData->moduleNode, "multiplexer/"), moduleData);
@@ -550,8 +556,211 @@ static void moduleShutdownNotify(void *p) {
 	sshsNodePutBool(moduleNode, "shutdown", true);
 }
 
-static void biasConfigSend(sshsNode node, caerModuleData moduleData) {
+static void biasConfigSend(sshsNode node, caerModuleData moduleData, struct caer_davis_info *devInfo) {
+	// All chips of a kind have the same bias address for the same bias!
+	if (devInfo->chipID == DAVIS_CHIP_DAVIS240A || devInfo->chipID == DAVIS_CHIP_DAVIS240B
+		|| devInfo->chipID == DAVIS_CHIP_DAVIS240C) {
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_DIFFBN,
+			generateCoarseFineBias(node, "DiffBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_ONBN,
+			generateCoarseFineBias(node, "OnBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_OFFBN,
+			generateCoarseFineBias(node, "OffBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_APSCASEPC,
+			generateCoarseFineBias(node, "ApsCasEpc"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_DIFFCASBNC,
+			generateCoarseFineBias(node, "DiffCasBnc"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_APSROSFBN,
+			generateCoarseFineBias(node, "ApsROSFBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_LOCALBUFBN,
+			generateCoarseFineBias(node, "LocalBufBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_PIXINVBN,
+			generateCoarseFineBias(node, "PixInvBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_PRBP,
+			generateCoarseFineBias(node, "PrBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_PRSFBP,
+			generateCoarseFineBias(node, "PrSFBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_REFRBP,
+			generateCoarseFineBias(node, "RefrBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_AEPDBN,
+			generateCoarseFineBias(node, "AEPdBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_LCOLTIMEOUTBN,
+			generateCoarseFineBias(node, "LcolTimeoutBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_AEPUXBP,
+			generateCoarseFineBias(node, "AEPuXBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_AEPUYBP,
+			generateCoarseFineBias(node, "AEPuYBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_IFTHRBN,
+			generateCoarseFineBias(node, "IFThrBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_IFREFRBN,
+			generateCoarseFineBias(node, "IFRefrBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_PADFOLLBN,
+			generateCoarseFineBias(node, "PadFollBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_APSOVERFLOWLEVEL,
+			generateCoarseFineBias(node, "ApsOverflowLevel"));
 
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_BIASBUFFER,
+			generateCoarseFineBias(node, "BiasBuffer"));
+
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_SSP,
+			generateShiftedSourceBias(node, "SSP"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_SSN,
+			generateShiftedSourceBias(node, "SSN"));
+	}
+
+	if (devInfo->chipID == DAVIS_CHIP_DAVIS128 || devInfo->chipID == DAVIS_CHIP_DAVIS208
+		|| devInfo->chipID == DAVIS_CHIP_DAVIS346A || devInfo->chipID == DAVIS_CHIP_DAVIS346B
+		|| devInfo->chipID == DAVIS_CHIP_DAVIS346C || devInfo->chipID == DAVIS_CHIP_DAVIS640) {
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_APSOVERFLOWLEVEL,
+			generateVDACBias(node, "ApsOverflowLevel"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_APSCAS,
+			generateVDACBias(node, "ApsCas"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_ADCREFHIGH,
+			generateVDACBias(node, "AdcRefHigh"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_ADCREFLOW,
+			generateVDACBias(node, "AdcRefLow"));
+
+		if (devInfo->chipID == DAVIS_CHIP_DAVIS346A || devInfo->chipID == DAVIS_CHIP_DAVIS346B
+			|| devInfo->chipID == DAVIS_CHIP_DAVIS346C || devInfo->chipID == DAVIS_CHIP_DAVIS640) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS346_CONFIG_BIAS_ADCTESTVOLTAGE,
+				generateVDACBias(node, "AdcTestVoltage"));
+		}
+
+		if (devInfo->chipID == DAVIS_CHIP_DAVIS208) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS208_CONFIG_BIAS_RESETHIGHPASS,
+				generateVDACBias(node, "ResetHighPass"));
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS208_CONFIG_BIAS_REFSS,
+				generateVDACBias(node, "RefSS"));
+
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS208_CONFIG_BIAS_REGBIASBP,
+				generateCoarseFineBias(node, "RegBiasBp"));
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS208_CONFIG_BIAS_REFSSBN,
+				generateCoarseFineBias(node, "RefSSBn"));
+		}
+
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_LOCALBUFBN,
+			generateCoarseFineBias(node, "LocalBufBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_PADFOLLBN,
+			generateCoarseFineBias(node, "PadFollBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_DIFFBN,
+			generateCoarseFineBias(node, "DiffBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_ONBN,
+			generateCoarseFineBias(node, "OnBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_OFFBN,
+			generateCoarseFineBias(node, "OffBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_PIXINVBN,
+			generateCoarseFineBias(node, "PixInvBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_PRBP,
+			generateCoarseFineBias(node, "PrBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_PRSFBP,
+			generateCoarseFineBias(node, "PrSFBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_REFRBP,
+			generateCoarseFineBias(node, "RefrBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_READOUTBUFBP,
+			generateCoarseFineBias(node, "ReadoutBufBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_APSROSFBN,
+			generateCoarseFineBias(node, "ApsROSFBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_ADCCOMPBP,
+			generateCoarseFineBias(node, "AdcCompBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_COLSELLOWBN,
+			generateCoarseFineBias(node, "ColSelLowBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_DACBUFBP,
+			generateCoarseFineBias(node, "DACBufBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_LCOLTIMEOUTBN,
+			generateCoarseFineBias(node, "LcolTimeoutBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_AEPDBN,
+			generateCoarseFineBias(node, "AEPdBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_AEPUXBP,
+			generateCoarseFineBias(node, "AEPuXBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_AEPUYBP,
+			generateCoarseFineBias(node, "AEPuYBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_IFREFRBN,
+			generateCoarseFineBias(node, "IFRefrBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_IFTHRBN,
+			generateCoarseFineBias(node, "IFThrBn"));
+
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_BIASBUFFER,
+			generateCoarseFineBias(node, "BiasBuffer"));
+
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_SSP,
+			generateShiftedSourceBias(node, "SSP"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_SSN,
+			generateShiftedSourceBias(node, "SSN"));
+	}
+
+	if (devInfo->chipID == DAVIS_CHIP_DAVISRGB) {
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_APSCAS,
+			generateVDACBias(node, "ApsCas"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_OVG1LO,
+			generateVDACBias(node, "OVG1Lo"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_OVG2LO,
+			generateVDACBias(node, "OVG2Lo"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_TX2OVG2HI,
+			generateVDACBias(node, "TX2OVG2Hi"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_GND07,
+			generateVDACBias(node, "Gnd07"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_ADCTESTVOLTAGE,
+			generateVDACBias(node, "AdcTestVoltage"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_ADCREFHIGH,
+			generateVDACBias(node, "AdcRefHigh"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_ADCREFLOW,
+			generateVDACBias(node, "AdcRefLow"));
+
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_IFREFRBN,
+			generateCoarseFineBias(node, "IFRefrBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_IFTHRBN,
+			generateCoarseFineBias(node, "IFThrBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_LOCALBUFBN,
+			generateCoarseFineBias(node, "LocalBufBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_PADFOLLBN,
+			generateCoarseFineBias(node, "PadFollBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_PIXINVBN,
+			generateCoarseFineBias(node, "PixInvBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_DIFFBN,
+			generateCoarseFineBias(node, "DiffBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_ONBN,
+			generateCoarseFineBias(node, "OnBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_OFFBN,
+			generateCoarseFineBias(node, "OffBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_PRBP,
+			generateCoarseFineBias(node, "PrBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_PRSFBP,
+			generateCoarseFineBias(node, "PrSFBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_REFRBP,
+			generateCoarseFineBias(node, "RefrBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_ARRAYBIASBUFFERBN,
+			generateCoarseFineBias(node, "ArrayBiasBufferBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_ARRAYLOGICBUFFERBN,
+			generateCoarseFineBias(node, "ArrayLogicBufferBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_FALLTIMEBN,
+			generateCoarseFineBias(node, "FalltimeBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_RISETIMEBP,
+			generateCoarseFineBias(node, "RisetimeBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_READOUTBUFBP,
+			generateCoarseFineBias(node, "ReadoutBufBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_APSROSFBN,
+			generateCoarseFineBias(node, "ApsROSFBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_ADCCOMPBP,
+			generateCoarseFineBias(node, "AdcCompBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_DACBUFBP,
+			generateCoarseFineBias(node, "DACBufBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_LCOLTIMEOUTBN,
+			generateCoarseFineBias(node, "LcolTimeoutBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_AEPDBN,
+			generateCoarseFineBias(node, "AEPdBn"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_AEPUXBP,
+			generateCoarseFineBias(node, "AEPuXBp"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_AEPUYBP,
+			generateCoarseFineBias(node, "AEPuYBp"));
+
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_BIASBUFFER,
+			generateCoarseFineBias(node, "BiasBuffer"));
+
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_SSP,
+			generateShiftedSourceBias(node, "SSP"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_SSN,
+			generateShiftedSourceBias(node, "SSN"));
+	}
 }
 
 static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
@@ -562,8 +771,77 @@ static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_att
 
 }
 
-static void chipConfigSend(sshsNode node, caerModuleData moduleData) {
+static void chipConfigSend(sshsNode node, caerModuleData moduleData, struct caer_davis_info *devInfo) {
+	// All chips have the same parameter address for the same setting!
+	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_DIGITALMUX0,
+		sshsNodeGetByte(node, "DigitalMux0"));
+	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_DIGITALMUX1,
+		sshsNodeGetByte(node, "DigitalMux1"));
+	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_DIGITALMUX2,
+		sshsNodeGetByte(node, "DigitalMux2"));
+	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_DIGITALMUX3,
+		sshsNodeGetByte(node, "DigitalMux3"));
+	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_ANALOGMUX0,
+		sshsNodeGetByte(node, "AnalogMux0"));
+	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_ANALOGMUX1,
+		sshsNodeGetByte(node, "AnalogMux1"));
+	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_ANALOGMUX2,
+		sshsNodeGetByte(node, "AnalogMux2"));
+	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_BIASMUX0,
+		sshsNodeGetByte(node, "BiasMux0"));
 
+	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_RESETCALIBNEURON,
+		sshsNodeGetBool(node, "ResetCalibNeuron"));
+	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_TYPENCALIBNEURON,
+		sshsNodeGetBool(node, "TypeNCalibNeuron"));
+	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_RESETTESTPIXEL,
+		sshsNodeGetBool(node, "ResetTestPixel"));
+	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_AERNAROW,
+		sshsNodeGetBool(node, "AERnArow"));
+	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_USEAOUT,
+		sshsNodeGetBool(node, "UseAOut"));
+
+	if (devInfo->chipID == DAVIS_CHIP_DAVIS240A || devInfo->chipID == DAVIS_CHIP_DAVIS240B) {
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS240_CONFIG_CHIP_SPECIALPIXELCONTROL,
+			sshsNodeGetBool(node, "SpecialPixelControl"));
+	}
+
+	if (devInfo->chipID == DAVIS_CHIP_DAVIS128 || devInfo->chipID == DAVIS_CHIP_DAVIS208
+		|| devInfo->chipID == DAVIS_CHIP_DAVIS346A || devInfo->chipID == DAVIS_CHIP_DAVIS346B
+		|| devInfo->chipID == DAVIS_CHIP_DAVIS346C || devInfo->chipID == DAVIS_CHIP_DAVIS640
+		|| devInfo->chipID == DAVIS_CHIP_DAVISRGB) {
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_SELECTGRAYCOUNTER,
+			sshsNodeGetBool(node, "SelectGrayCounter"));
+	}
+
+	if (devInfo->chipID == DAVIS_CHIP_DAVIS346A || devInfo->chipID == DAVIS_CHIP_DAVIS346B
+		|| devInfo->chipID == DAVIS_CHIP_DAVIS346C || devInfo->chipID == DAVIS_CHIP_DAVIS640
+		|| devInfo->chipID == DAVIS_CHIP_DAVISRGB) {
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS346_CONFIG_CHIP_TESTADC,
+			sshsNodeGetBool(node, "TestADC"));
+	}
+
+	if (devInfo->chipID == DAVIS_CHIP_DAVIS208) {
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS208_CONFIG_CHIP_SELECTPREAMPAVG,
+			sshsNodeGetBool(node, "SelectPreAmpAvg"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS208_CONFIG_CHIP_SELECTBIASREFSS,
+			sshsNodeGetBool(node, "SelectBiasRefSS"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS208_CONFIG_CHIP_SELECTSENSE,
+			sshsNodeGetBool(node, "SelectSense"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS208_CONFIG_CHIP_SELECTPOSFB,
+			sshsNodeGetBool(node, "SelectPosFb"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS208_CONFIG_CHIP_SELECTHIGHPASS,
+			sshsNodeGetBool(node, "SelectHighPass"));
+	}
+
+	if (devInfo->chipID == DAVIS_CHIP_DAVISRGB) {
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVISRGB_CONFIG_CHIP_ADJUSTOVG1LO,
+			sshsNodeGetBool(node, "AdjustOVG1Lo"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVISRGB_CONFIG_CHIP_ADJUSTOVG2LO,
+			sshsNodeGetBool(node, "AdjustOVG2Lo"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVISRGB_CONFIG_CHIP_ADJUSTTX2OVG2HI,
+			sshsNodeGetBool(node, "AdjustTX2OVG2Hi"));
+	}
 }
 
 static void chipConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
