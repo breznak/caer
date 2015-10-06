@@ -32,12 +32,12 @@ static void usbConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 static void systemConfigSend(sshsNode node, caerModuleData moduleData);
 static void systemConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
-static void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8_t currentValue, uint8_t voltageValue);
+static void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8_t voltageValue, uint8_t currentValue);
 static uint16_t generateVDACBias(sshsNode biasNode, const char *biasName);
-static void createCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type, const char *sex,
-	uint8_t coarseValue, uint8_t fineValue, bool enabled);
+static void createCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, uint8_t coarseValue, uint8_t fineValue,
+bool enabled, const char *sex, const char *type);
 static uint16_t generateCoarseFineBias(sshsNode biasNode, const char *biasName);
-static void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasName, uint8_t regValue, uint8_t refValue,
+static void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasName, uint8_t refValue, uint8_t regValue,
 	const char *operatingMode, const char *voltageLevel);
 static uint16_t generateShiftedSourceBias(sshsNode biasNode, const char *biasName);
 
@@ -397,10 +397,14 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 	sshsNodePutShortIfAbsent(apsNode, "EndRow0", U16T(devInfo->apsSizeY - 1));
 	sshsNodePutIntIfAbsent(apsNode, "Exposure", 4000); // in µs
 	sshsNodePutIntIfAbsent(apsNode, "FrameDelay", 1000); // in µs
-	sshsNodePutShortIfAbsent(apsNode, "ResetSettle", 10); // in cycles
-	sshsNodePutShortIfAbsent(apsNode, "ColumnSettle", 30); // in cycles
 	sshsNodePutShortIfAbsent(apsNode, "RowSettle", 8); // in cycles
-	sshsNodePutShortIfAbsent(apsNode, "NullSettle", 3); // in cycles
+
+	// Not supported on DAVIS RGB.
+	if (devInfo->chipID != DAVIS_CHIP_DAVISRGB) {
+		sshsNodePutShortIfAbsent(apsNode, "ResetSettle", 10); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "ColumnSettle", 30); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "NullSettle", 3); // in cycles
+	}
 
 	if (devInfo->apsHasQuadROI) {
 		sshsNodePutShortIfAbsent(apsNode, "StartColumn1", devInfo->apsSizeX);
@@ -608,7 +612,7 @@ static void muxConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 		}
 		else if (changeType == BOOL && caerStrEquals(changeKey, "DropExtInputOnTransferStall")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_MUX,
-				DAVIS_CONFIG_MUX_DROP_EXTINPUT_ON_TRANSFER_STALL, changeValue.boolean);
+			DAVIS_CONFIG_MUX_DROP_EXTINPUT_ON_TRANSFER_STALL, changeValue.boolean);
 		}
 		else if (changeType == BOOL && caerStrEquals(changeKey, "TimestampRun")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_MUX, DAVIS_CONFIG_MUX_TIMESTAMP_RUN,
@@ -825,14 +829,18 @@ static void apsConfigSend(sshsNode node, caerModuleData moduleData, struct caer_
 		sshsNodeGetInt(node, "Exposure"));
 	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_FRAME_DELAY,
 		sshsNodeGetInt(node, "FrameDelay"));
-	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_RESET_SETTLE,
-		sshsNodeGetShort(node, "ResetSettle"));
-	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_COLUMN_SETTLE,
-		sshsNodeGetShort(node, "ColumnSettle"));
 	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_ROW_SETTLE,
 		sshsNodeGetShort(node, "RowSettle"));
-	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_NULL_SETTLE,
-		sshsNodeGetShort(node, "NullSettle"));
+
+	// Not supported on DAVIS RGB.
+	if (devInfo->chipID != DAVIS_CHIP_DAVISRGB) {
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_RESET_SETTLE,
+			sshsNodeGetShort(node, "ResetSettle"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_COLUMN_SETTLE,
+			sshsNodeGetShort(node, "ColumnSettle"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_NULL_SETTLE,
+			sshsNodeGetShort(node, "NullSettle"));
+	}
 
 	if (devInfo->apsHasQuadROI) {
 		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_START_COLUMN_1,
@@ -1337,7 +1345,7 @@ static void systemConfigListener(sshsNode node, void *userData, enum sshs_node_a
 	}
 }
 
-static void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8_t currentValue, uint8_t voltageValue) {
+static void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8_t voltageValue, uint8_t currentValue) {
 	// Add trailing slash to node name (required!).
 	size_t biasNameLength = strlen(biasName);
 	char biasNameFull[biasNameLength + 2];
@@ -1349,8 +1357,8 @@ static void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8
 	sshsNode biasConfigNode = sshsGetRelativeNode(biasNode, biasNameFull);
 
 	// Add bias settings.
-	sshsNodePutByteIfAbsent(biasConfigNode, "currentValue", currentValue);
 	sshsNodePutByteIfAbsent(biasConfigNode, "voltageValue", voltageValue);
+	sshsNodePutByteIfAbsent(biasConfigNode, "currentValue", currentValue);
 }
 
 static uint16_t generateVDACBias(sshsNode biasNode, const char *biasName) {
@@ -1371,8 +1379,8 @@ static uint16_t generateVDACBias(sshsNode biasNode, const char *biasName) {
 	return (caerBiasVDACGenerate(biasValue));
 }
 
-static void createCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type, const char *sex,
-	uint8_t coarseValue, uint8_t fineValue, bool enabled) {
+static void createCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, uint8_t coarseValue, uint8_t fineValue,
+bool enabled, const char *sex, const char *type) {
 	// Add trailing slash to node name (required!).
 	size_t biasNameLength = strlen(biasName);
 	char biasNameFull[biasNameLength + 2];
@@ -1384,11 +1392,11 @@ static void createCoarseFineBiasSetting(sshsNode biasNode, const char *biasName,
 	sshsNode biasConfigNode = sshsGetRelativeNode(biasNode, biasNameFull);
 
 	// Add bias settings.
-	sshsNodePutStringIfAbsent(biasConfigNode, "type", type);
-	sshsNodePutStringIfAbsent(biasConfigNode, "sex", sex);
 	sshsNodePutByteIfAbsent(biasConfigNode, "coarseValue", coarseValue);
 	sshsNodePutByteIfAbsent(biasConfigNode, "fineValue", fineValue);
 	sshsNodePutBoolIfAbsent(biasConfigNode, "enabled", enabled);
+	sshsNodePutStringIfAbsent(biasConfigNode, "sex", sex);
+	sshsNodePutStringIfAbsent(biasConfigNode, "type", type);
 	sshsNodePutStringIfAbsent(biasConfigNode, "currentLevel", "Normal");
 }
 
@@ -1414,7 +1422,7 @@ static uint16_t generateCoarseFineBias(sshsNode biasNode, const char *biasName) 
 	return (caerBiasCoarseFineGenerate(biasValue));
 }
 
-static void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasName, uint8_t regValue, uint8_t refValue,
+static void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasName, uint8_t refValue, uint8_t regValue,
 	const char *operatingMode, const char *voltageLevel) {
 	// Add trailing slash to node name (required!).
 	size_t biasNameLength = strlen(biasName);
@@ -1427,8 +1435,8 @@ static void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasNa
 	sshsNode biasConfigNode = sshsGetRelativeNode(biasNode, biasNameFull);
 
 	// Add bias settings.
-	sshsNodePutByteIfAbsent(biasConfigNode, "regValue", regValue);
 	sshsNodePutByteIfAbsent(biasConfigNode, "refValue", refValue);
+	sshsNodePutByteIfAbsent(biasConfigNode, "regValue", regValue);
 	sshsNodePutStringIfAbsent(biasConfigNode, "operatingMode", operatingMode);
 	sshsNodePutStringIfAbsent(biasConfigNode, "voltageLevel", voltageLevel);
 }
