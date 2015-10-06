@@ -1,207 +1,25 @@
 #include "davis_common.h"
 #include "davis_fx2.h"
-#include "base/module.h"
 
 static bool caerInputDAVISFX2Init(caerModuleData moduleData);
 // RUN: common to all DAVIS systems.
 // CONFIG: Nothing to do here in the main thread!
-// Biases are configured asynchronously, and buffer sizes in the data
-// acquisition thread itself. Resetting the main config_refresh flag
-// will also happen there.
+// All configuration is asynchronous through SSHS listeners.
 // EXIT: common to all DAVIS systems.
 
 static struct caer_module_functions caerInputDAVISFX2Functions = { .moduleInit = &caerInputDAVISFX2Init, .moduleRun =
-	&caerInputDAVISCommonRun, .moduleConfig = NULL, .moduleExit = &caerInputDAVISCommonExit };
+	&caerInputDAVISRun, .moduleConfig = NULL, .moduleExit = &caerInputDAVISExit };
 
-void caerInputDAVISFX2(uint16_t moduleID, caerPolarityEventPacket *polarity, caerFrameEventPacket *frame,
-	caerIMU6EventPacket *imu6, caerSpecialEventPacket *special) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "DAVISFX2");
+caerEventPacketContainer caerInputDAVISFX2(uint16_t moduleID) {
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "DAVISFX3");
 
-	caerModuleSM(&caerInputDAVISFX2Functions, moduleData, sizeof(struct davisFX2_state), 4, polarity, frame, imu6,
-		special);
+	caerEventPacketContainer result = NULL;
+
+	caerModuleSM(&caerInputDAVISFX2Functions, moduleData, 0, 1, &result);
+
+	return (result);
 }
 
 static bool caerInputDAVISFX2Init(caerModuleData moduleData) {
-	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Initializing module ...");
-
-	davisFX2State state = moduleData->moduleState;
-	davisCommonState cstate = &state->cstate;
-
-	// Data source is the same as the module ID (but accessible in cstate-space).
-	// Same thing for subSystemString.
-	cstate->sourceID = moduleData->moduleID;
-	cstate->sourceSubSystemString = moduleData->moduleSubSystemString;
-
-	// First, we need to connect to the device and ask it what chip it's got,
-	// and retain that information for later stages.
-	if (!deviceOpenInfo(moduleData, cstate, DAVIS_FX2_VID, DAVIS_FX2_PID, DAVIS_FX2_DID_TYPE)) {
-		return (false);
-	}
-
-	// Verify FX2 device logic version.
-	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
-	uint16_t currentLogicVersion = sshsNodeGetShort(sourceInfoNode, "logicVersion");
-
-	if (currentLogicVersion < REQUIRED_LOGIC_REVISION) {
-		// Logic too old, notify and quit.
-		caerLog(LOG_ERROR, moduleData->moduleSubSystemString,
-			"Device logic revision too old. You have revision %u; but at least revision %u is required. Please updated by following the Flashy upgrade documentation at 'https://goo.gl/TGM0w1'.",
-			currentLogicVersion, REQUIRED_LOGIC_REVISION);
-		return (false);
-	}
-
-	// FX2 specific configuration.
-	sshsNode dvsNode = sshsGetRelativeNode(moduleData->moduleNode, "dvs/");
-
-	sshsNodePutByteIfAbsent(dvsNode, "AckDelayRow", 14);
-	sshsNodePutByteIfAbsent(dvsNode, "AckExtensionRow", 4);
-
-	// Create common default value configuration.
-	createCommonConfiguration(moduleData, cstate);
-
-	// Install default listeners to signal configuration updates asynchronously.
-	sshsNodeAddAttrListener(sshsGetRelativeNode(moduleData->moduleNode, "chip/"), moduleData, &ChipSRListener);
-	// The chip SR needs to be updated also when GlobalShutter in APS changes.
-	sshsNodeAddAttrListener(sshsGetRelativeNode(moduleData->moduleNode, "aps/"), moduleData, &ChipSRListener);
-
-	// Walk all bias nodes and install the default handler for changes.
-	size_t numBiasNodes;
-	sshsNode *biasNodes = sshsNodeGetChildren(sshsGetRelativeNode(moduleData->moduleNode, "bias/"), &numBiasNodes);
-
-	for (size_t i = 0; i < numBiasNodes; i++) {
-		sshsNodeAddAttrListener(biasNodes[i], cstate, &BiasesListener);
-	}
-
-	free(biasNodes);
-
-	if (!initializeCommonConfiguration(moduleData, cstate, &dataAcquisitionThread)) {
-		return (false);
-	}
-
-	caerLog(LOG_DEBUG, moduleData->moduleSubSystemString, "Initialized DAVISFX2 module successfully.");
-	return (true);
-}
-
-static void BiasesListener(sshsNode node, void *userData, enum sshs_node_attribute_events event, const char *changeKey,
-	enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
-	UNUSED_ARGUMENT(changeKey);
-	UNUSED_ARGUMENT(changeType);
-	UNUSED_ARGUMENT(changeValue);
-
-	davisCommonState cstate = userData;
-
-	if (event == ATTRIBUTE_MODIFIED) {
-		// Search through all biases for a matching one and send it out.
-		for (size_t i = 0; i < BIAS_MAX_NUM_DESC; i++) {
-			if (cstate->chipBiases[i] == NULL) {
-				// Reached end of valid biases.
-				break;
-			}
-
-			if (str_equals(sshsNodeGetName(node), cstate->chipBiases[i]->name)) {
-				// Found it, send it.
-				sendBias(cstate->deviceHandle, cstate->chipBiases[i]->address,
-					(*cstate->chipBiases[i]->generatorFunction)(sshsNodeGetParent(node), cstate->chipBiases[i]->name));
-				break;
-			}
-		}
-	}
-}
-
-static void ChipSRListener(sshsNode node, void *userData, enum sshs_node_attribute_events event, const char *changeKey,
-	enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
-	UNUSED_ARGUMENT(changeValue);
-
-	caerModuleData moduleData = userData;
-	sshsNode moduleNode = moduleData->moduleNode;
-	davisCommonState cstate = &((davisFX2State) moduleData->moduleState)->cstate;
-
-	if (event == ATTRIBUTE_MODIFIED) {
-		if (str_equals(sshsNodeGetName(node), "aps")) {
-			if (changeType == BOOL && str_equals(changeKey, "GlobalShutter")) {
-				sendChipSR(moduleNode, cstate);
-			}
-		}
-		else {
-			// If not called from 'aps' node, must be 'chip' node, so we
-			// always send the chip configuration chain in that case.
-			sendChipSR(moduleNode, cstate);
-		}
-	}
-}
-
-static void sendChipSR(sshsNode moduleNode, davisCommonState cstate) {
-	// Only DAVIS240 can be used with the FX2 boards.
-	// This generates the full shift register content manually, as the single
-	// configuration options are not addressable like with FX3 boards.
-	sshsNode chipNode = sshsGetRelativeNode(moduleNode, "chip/");
-	sshsNode apsNode = sshsGetRelativeNode(moduleNode, "aps/");
-
-	// A total of 56 bits (7 bytes) of configuration.
-	uint8_t chipSR[7] = { 0 };
-
-	// Debug muxes control.
-	chipSR[0] |= U8T((sshsNodeGetByte(chipNode, "DigitalMux3") & 0x0F) << 4);
-	chipSR[0] |= U8T((sshsNodeGetByte(chipNode, "DigitalMux2") & 0x0F) << 0);
-	chipSR[1] |= U8T((sshsNodeGetByte(chipNode, "DigitalMux1") & 0x0F) << 4);
-	chipSR[1] |= U8T((sshsNodeGetByte(chipNode, "DigitalMux0") & 0x0F) << 0);
-
-	chipSR[5] |= U8T((sshsNodeGetByte(chipNode, "AnalogMux2") & 0x0F) << 4);
-	chipSR[5] |= U8T((sshsNodeGetByte(chipNode, "AnalogMux1") & 0x0F) << 0);
-	chipSR[6] |= U8T((sshsNodeGetByte(chipNode, "AnalogMux0") & 0x0F) << 4);
-
-	chipSR[6] |= U8T((sshsNodeGetByte(chipNode, "BiasMux0") & 0x0F) << 0);
-
-	// Bytes 2-4 contain the actual 24 configuration bits. 17 are unused.
-	// GS may not exist on chips that don't have it.
-	if (sshsNodeAttrExists(apsNode, "GlobalShutter", BOOL)) {
-		bool globalShutter = sshsNodeGetBool(apsNode, "GlobalShutter");
-		if (globalShutter) {
-			// Flip bit on if enabled.
-			chipSR[4] |= (1 << 6);
-		}
-	}
-
-	bool useAOut = sshsNodeGetBool(chipNode, "UseAOut");
-	if (useAOut) {
-		// Flip bit on if enabled.
-		chipSR[4] |= (1 << 5);
-	}
-
-	bool AERnArow = sshsNodeGetBool(chipNode, "AERnArow");
-	if (AERnArow) {
-		// Flip bit on if enabled.
-		chipSR[4] |= (1 << 4);
-	}
-
-	// Only DAVIS240 A/B have this, C doesn't.
-	if (sshsNodeAttrExists(chipNode, "SpecialPixelControl", BOOL)) {
-		bool specialPixelControl = sshsNodeGetBool(chipNode, "SpecialPixelControl");
-		if (specialPixelControl) {
-			// Flip bit on if enabled.
-			chipSR[4] |= (1 << 3);
-		}
-	}
-
-	bool resetTestpixel = sshsNodeGetBool(chipNode, "ResetTestPixel");
-	if (resetTestpixel) {
-		// Flip bit on if enabled.
-		chipSR[4] |= (1 << 2);
-	}
-
-	bool typeNCalib = sshsNodeGetBool(chipNode, "TypeNCalibNeuron");
-	if (typeNCalib) {
-		// Flip bit on if enabled.
-		chipSR[4] |= (1 << 1);
-	}
-
-	bool resetCalib = sshsNodeGetBool(chipNode, "ResetCalibNeuron");
-	if (resetCalib) {
-		// Flip bit on if enabled.
-		chipSR[4] |= (1 << 0);
-	}
-
-	libusb_control_transfer(cstate->deviceHandle,
-		LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
-		VR_CHIP_DIAG, 0, 0, chipSR, sizeof(chipSR), 0);
+	return (caerInputDAVISInit(moduleData, CAER_DEVICE_DAVIS_FX2));
 }

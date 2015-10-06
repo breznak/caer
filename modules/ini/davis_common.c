@@ -1,5 +1,491 @@
 #include "davis_common.h"
 
+static void createDefaultConfiguration(caerModuleData moduleData, struct caer_davis_info devInfo);
+static void sendDefaultConfiguration(caerModuleData moduleData);
+static void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8_t currentValue, uint8_t voltageValue);
+static uint16_t generateVDACBias(sshsNode biasNode, const char *biasName);
+static void createCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type, const char *sex,
+	uint8_t coarseValue, uint8_t fineValue, bool enabled);
+static uint16_t generateCoarseFineBias(sshsNode biasNode, const char *biasName);
+static void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasName, uint8_t regValue, uint8_t refValue,
+	const char *operatingMode, const char *voltageLevel);
+static uint16_t generateShiftedSourceBias(sshsNode biasNode, const char *biasName);
+static void mainloopDataNotifyIncrease(void *p);
+static void mainloopDataNotifyDecrease(void *p);
+static void moduleShutdownNotify(void *p);
+static void biasConfigSend(sshsNode node, caerModuleData moduleData);
+static void dvsConfigSend(sshsNode node, caerModuleData moduleData);
+static void usbConfigSend(sshsNode node, caerModuleData moduleData);
+static void systemConfigSend(sshsNode node, caerModuleData moduleData);
+static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
+static void dvsConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
+static void usbConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
+static void systemConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
+
+bool caerInputDAVISInit(caerModuleData moduleData, uint16_t deviceType) {
+	caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString, "Initializing module ...");
+
+	// USB port/bus/SN settings/restrictions.
+	// These can be used to force connection to one specific device at startup.
+	sshsNodePutByteIfAbsent(moduleData->moduleNode, "BusNumber", 0);
+	sshsNodePutByteIfAbsent(moduleData->moduleNode, "DevAddress", 0);
+	sshsNodePutStringIfAbsent(moduleData->moduleNode, "SerialNumber", "");
+
+	// Add auto-restart setting.
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "Auto-Restart", true);
+
+	/// Start data acquisition, and correctly notify mainloop of new data and module of exceptional
+	// shutdown cases (device pulled, ...).
+	char *serialNumber = sshsNodeGetString(moduleData->moduleNode, "SerialNumber");
+	moduleData->moduleState = caerDeviceOpen(moduleData->moduleID, deviceType,
+		sshsNodeGetByte(moduleData->moduleNode, "BusNumber"), sshsNodeGetByte(moduleData->moduleNode, "DevAddress"),
+		serialNumber);
+	free(serialNumber);
+
+	if (moduleData->moduleState == NULL) {
+		// Failed to open device.
+		return (false);
+	}
+
+	// Put global source information into SSHS.
+	struct caer_davis_info devInfo = caerDavisInfoGet(moduleData->moduleState);
+
+	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
+
+	sshsNodePutShort(sourceInfoNode, "logicVersion", devInfo.logicVersion);
+	sshsNodePutBool(sourceInfoNode, "deviceIsMaster", devInfo.deviceIsMaster);
+	sshsNodePutShort(sourceInfoNode, "chipID", devInfo.chipID);
+
+	sshsNodePutShort(sourceInfoNode, "dvsSizeX", devInfo.dvsSizeX);
+	sshsNodePutShort(sourceInfoNode, "dvsSizeY", devInfo.dvsSizeY);
+	sshsNodePutBool(sourceInfoNode, "dvsHasPixelFilter", devInfo.dvsHasPixelFilter);
+	sshsNodePutBool(sourceInfoNode, "dvsHasBackgroundActivityFilter", devInfo.dvsHasBackgroundActivityFilter);
+	sshsNodePutBool(sourceInfoNode, "dvsHasTestEventGenerator", devInfo.dvsHasTestEventGenerator);
+
+	sshsNodePutShort(sourceInfoNode, "apsSizeX", devInfo.apsSizeX);
+	sshsNodePutShort(sourceInfoNode, "apsSizeY", devInfo.apsSizeY);
+	sshsNodePutByte(sourceInfoNode, "apsColorFilter", devInfo.apsColorFilter);
+	sshsNodePutBool(sourceInfoNode, "apsHasGlobalShutter", devInfo.apsHasGlobalShutter);
+	sshsNodePutBool(sourceInfoNode, "apsHasQuadROI", devInfo.apsHasQuadROI);
+	sshsNodePutBool(sourceInfoNode, "apsHasExternalADC", devInfo.apsHasExternalADC);
+	sshsNodePutBool(sourceInfoNode, "apsHasInternalADC", devInfo.apsHasInternalADC);
+
+	sshsNodePutBool(sourceInfoNode, "extInputHasGenerator", devInfo.extInputHasGenerator);
+
+	caerModuleSetSubSystemString(moduleData, devInfo.deviceString);
+
+	// Ensure good defaults for data acquisition settings.
+	// No blocking behavior due to mainloop notification, and no auto-start of
+	// all producers to ensure cAER settings are respected.
+	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_DATAEXCHANGE,
+	CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, false);
+	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_DATAEXCHANGE,
+	CAER_HOST_CONFIG_DATAEXCHANGE_START_PRODUCERS, false);
+	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_DATAEXCHANGE,
+	CAER_HOST_CONFIG_DATAEXCHANGE_STOP_PRODUCERS, true);
+
+	// Create default settings and send them to the device.
+	createDefaultConfiguration(moduleData, devInfo);
+	sendDefaultConfiguration(moduleData);
+
+	// Start data acquisition.
+	bool ret = caerDeviceDataStart(moduleData->moduleState, &mainloopDataNotifyIncrease, &mainloopDataNotifyDecrease,
+	NULL, &moduleShutdownNotify, moduleData->moduleNode);
+
+	if (!ret) {
+		// Failed to start data acquisition, close device and exit.
+		caerDeviceClose((caerDeviceHandle *) &moduleData->moduleState);
+
+		return (false);
+	}
+
+	return (true);
+}
+
+void caerInputDAVISExit(caerModuleData moduleData) {
+	caerDeviceDataStop(moduleData->moduleState);
+
+	caerDeviceClose((caerDeviceHandle *) &moduleData->moduleState);
+
+	if (sshsNodeGetBool(moduleData->moduleNode, "Auto-Restart")) {
+		// Prime input module again so that it will try to restart if new devices detected.
+		sshsNodePutBool(moduleData->moduleNode, "shutdown", false);
+	}
+}
+
+void caerInputDAVISRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
+	UNUSED_ARGUMENT(argsNumber);
+
+	// Interpret variable arguments (same as above in main function).
+	caerEventPacketContainer *container = va_arg(args, caerEventPacketContainer *);
+
+	*container = caerDeviceDataGet(moduleData->moduleState);
+
+	if (*container != NULL) {
+		caerMainloopFreeAfterLoop((void (*)(void *)) &caerEventPacketContainerFree, *container);
+	}
+}
+
+static void createDefaultConfiguration(caerModuleData moduleData, struct caer_davis_info devInfo) {
+	// First, always create all needed setting nodes, set their default values
+	// and add their listeners.
+	sshsNode biasNode = sshsGetRelativeNode(moduleData->moduleNode, "bias/");
+
+	if (devInfo.chipID == DAVIS_CHIP_DAVIS240A || devInfo.chipID == DAVIS_CHIP_DAVIS240B
+		|| devInfo.chipID == DAVIS_CHIP_DAVIS240C) {
+		createCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 4, 39, true);
+		createCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 5, 255, true);
+		createCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 4, 0, true);
+		createCoarseFineBiasSetting(biasNode, "ApsCasEpc", "Cascode", "N", 5, 185, true);
+		createCoarseFineBiasSetting(biasNode, "DiffCasBnc", "Cascode", "N", 5, 115, true);
+		createCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 6, 219, true);
+		createCoarseFineBiasSetting(biasNode, "LocalBufBn", "Normal", "N", 5, 164, true);
+		createCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 5, 129, true);
+		createCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "P", 2, 58, true);
+		createCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 1, 16, true);
+		createCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "P", 4, 25, true);
+		createCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 6, 91, true);
+		createCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 5, 49, true);
+		createCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "P", 4, 80, true);
+		createCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "P", 7, 152, true);
+		createCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 5, 255, true);
+		createCoarseFineBiasSetting(biasNode, "IFRefrBn", "Normal", "N", 5, 255, true);
+		createCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 7, 215, true);
+		createCoarseFineBiasSetting(biasNode, "ApsOverflowLevel", "Normal", "N", 6, 253, true);
+
+		createCoarseFineBiasSetting(biasNode, "BiasBuffer", "Normal", "N", 5, 254, true);
+
+		createShiftedSourceBiasSetting(biasNode, "SSP", 33, 1, "ShiftedSource", "SplitGate");
+		createShiftedSourceBiasSetting(biasNode, "SSN", 33, 1, "ShiftedSource", "SplitGate");
+	}
+
+	if (devInfo.chipID == DAVIS_CHIP_DAVIS640) {
+		// Slow down pixels for big 640x480 array.
+		createCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "P", 2, 3, true);
+		createCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 1, 1, true);
+	}
+
+	if (devInfo.chipID == DAVIS_CHIP_DAVIS128 || devInfo.chipID == DAVIS_CHIP_DAVIS346A
+		|| devInfo.chipID == DAVIS_CHIP_DAVIS346B || devInfo.chipID == DAVIS_CHIP_DAVIS346C
+		|| devInfo.chipID == DAVIS_CHIP_DAVIS640 || devInfo.chipID == DAVIS_CHIP_DAVIS208) {
+		createVDACBiasSetting(biasNode, "ApsOverflowLevel", 6, 27);
+		createVDACBiasSetting(biasNode, "ApsCas", 6, 21);
+		createVDACBiasSetting(biasNode, "AdcRefHigh", 7, 30);
+		createVDACBiasSetting(biasNode, "AdcRefLow", 7, 1);
+		if (devInfo.chipID == DAVIS_CHIP_DAVIS346A || devInfo.chipID == DAVIS_CHIP_DAVIS346B
+			|| devInfo.chipID == DAVIS_CHIP_DAVIS346C || devInfo.chipID == DAVIS_CHIP_DAVIS640) {
+			// Only DAVIS346 and 640 have ADC testing.
+			createVDACBiasSetting(biasNode, "AdcTestVoltage", 7, 21);
+		}
+
+		createCoarseFineBiasSetting(biasNode, "LocalBufBn", "Normal", "N", 5, 164, true);
+		createCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 7, 215, true);
+		createCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 4, 39, true);
+		createCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 5, 255, true);
+		createCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 4, 1, true);
+		createCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 5, 129, true);
+		createCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "P", 2, 58, true);
+		createCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 1, 16, true);
+		createCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "P", 4, 25, true);
+		createCoarseFineBiasSetting(biasNode, "ReadoutBufBp", "Normal", "P", 6, 20, true);
+		createCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 6, 219, true);
+		createCoarseFineBiasSetting(biasNode, "AdcCompBp", "Normal", "P", 5, 20, true);
+		createCoarseFineBiasSetting(biasNode, "ColSelLowBn", "Normal", "N", 0, 1, true);
+		createCoarseFineBiasSetting(biasNode, "DACBufBp", "Normal", "P", 6, 60, true);
+		createCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 5, 49, true);
+		createCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 6, 91, true);
+		createCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "P", 4, 80, true);
+		createCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "P", 7, 152, true);
+		createCoarseFineBiasSetting(biasNode, "IFRefrBn", "Normal", "N", 5, 255, true);
+		createCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 5, 255, true);
+
+		createCoarseFineBiasSetting(biasNode, "BiasBuffer", "Normal", "N", 5, 254, true);
+
+		createShiftedSourceBiasSetting(biasNode, "SSP", 33, 1, "ShiftedSource", "SplitGate");
+		createShiftedSourceBiasSetting(biasNode, "SSN", 33, 1, "ShiftedSource", "SplitGate");
+	}
+
+	if (devInfo.chipID == DAVIS_CHIP_DAVIS208) {
+		createVDACBiasSetting(biasNode, "ResetHighPass", 7, 63);
+		createVDACBiasSetting(biasNode, "RefSS", 5, 11);
+
+		createCoarseFineBiasSetting(biasNode, "RegBiasBp", "Normal", "P", 5, 20, true);
+		createCoarseFineBiasSetting(biasNode, "RefSSBn", "Normal", "N", 5, 20, true);
+	}
+
+	if (devInfo.chipID == DAVIS_CHIP_DAVISRGB) {
+		createVDACBiasSetting(biasNode, "ApsCas", 4, 21);
+		createVDACBiasSetting(biasNode, "OVG1Lo", 4, 21);
+		createVDACBiasSetting(biasNode, "OVG2Lo", 0, 0);
+		createVDACBiasSetting(biasNode, "TX2OVG2Hi", 0, 63);
+		createVDACBiasSetting(biasNode, "Gnd07", 4, 13);
+		createVDACBiasSetting(biasNode, "AdcTestVoltage", 0, 21);
+		createVDACBiasSetting(biasNode, "AdcRefHigh", 7, 63);
+		createVDACBiasSetting(biasNode, "AdcRefLow", 7, 0);
+
+		createCoarseFineBiasSetting(biasNode, "IFRefrBn", "Normal", "N", 5, 255, false);
+		createCoarseFineBiasSetting(biasNode, "IFThrBn", "Normal", "N", 5, 255, false);
+		createCoarseFineBiasSetting(biasNode, "LocalBufBn", "Normal", "N", 5, 164, false);
+		createCoarseFineBiasSetting(biasNode, "PadFollBn", "Normal", "N", 7, 209, false);
+		createCoarseFineBiasSetting(biasNode, "PixInvBn", "Normal", "N", 4, 164, true);
+		createCoarseFineBiasSetting(biasNode, "DiffBn", "Normal", "N", 4, 54, true);
+		createCoarseFineBiasSetting(biasNode, "OnBn", "Normal", "N", 6, 63, true);
+		createCoarseFineBiasSetting(biasNode, "OffBn", "Normal", "N", 2, 138, true);
+		createCoarseFineBiasSetting(biasNode, "PrBp", "Normal", "P", 1, 108, true);
+		createCoarseFineBiasSetting(biasNode, "PrSFBp", "Normal", "P", 1, 108, true);
+		createCoarseFineBiasSetting(biasNode, "RefrBp", "Normal", "P", 4, 28, true);
+		createCoarseFineBiasSetting(biasNode, "ArrayBiasBufferBn", "Normal", "N", 6, 128, true);
+		createCoarseFineBiasSetting(biasNode, "ArrayLogicBufferBn", "Normal", "N", 5, 255, true);
+		createCoarseFineBiasSetting(biasNode, "FalltimeBn", "Normal", "N", 7, 41, true);
+		createCoarseFineBiasSetting(biasNode, "RisetimeBp", "Normal", "P", 6, 162, true);
+		createCoarseFineBiasSetting(biasNode, "ReadoutBufBp", "Normal", "P", 6, 20, false);
+		createCoarseFineBiasSetting(biasNode, "ApsROSFBn", "Normal", "N", 6, 255, true);
+		createCoarseFineBiasSetting(biasNode, "AdcCompBp", "Normal", "P", 4, 159, true);
+		createCoarseFineBiasSetting(biasNode, "DACBufBp", "Normal", "P", 6, 194, true);
+		createCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", "Normal", "N", 5, 49, true);
+		createCoarseFineBiasSetting(biasNode, "AEPdBn", "Normal", "N", 6, 91, true);
+		createCoarseFineBiasSetting(biasNode, "AEPuXBp", "Normal", "P", 4, 80, true);
+		createCoarseFineBiasSetting(biasNode, "AEPuYBp", "Normal", "P", 7, 152, true);
+
+		createCoarseFineBiasSetting(biasNode, "BiasBuffer", "Normal", "N", 6, 251, true);
+
+		createShiftedSourceBiasSetting(biasNode, "SSP", 33, 1, "TiedToRail", "SplitGate");
+		createShiftedSourceBiasSetting(biasNode, "SSN", 33, 2, "ShiftedSource", "SplitGate");
+	}
+
+	sshsNode chipNode = sshsGetRelativeNode(moduleData->moduleNode, "chip/");
+
+	sshsNodePutByteIfAbsent(chipNode, "DigitalMux0", 0);
+	sshsNodePutByteIfAbsent(chipNode, "DigitalMux1", 0);
+	sshsNodePutByteIfAbsent(chipNode, "DigitalMux2", 0);
+	sshsNodePutByteIfAbsent(chipNode, "DigitalMux3", 0);
+	sshsNodePutByteIfAbsent(chipNode, "AnalogMux0", 0);
+	sshsNodePutByteIfAbsent(chipNode, "AnalogMux1", 0);
+	sshsNodePutByteIfAbsent(chipNode, "AnalogMux2", 0);
+	sshsNodePutByteIfAbsent(chipNode, "BiasMux0", 0);
+
+	sshsNodePutBoolIfAbsent(chipNode, "ResetCalibNeuron", true);
+	sshsNodePutBoolIfAbsent(chipNode, "TypeNCalibNeuron", false);
+	sshsNodePutBoolIfAbsent(chipNode, "ResetTestPixel", true);
+	sshsNodePutBoolIfAbsent(chipNode, "AERnArow", false); // Use nArow in the AER state machine.
+	sshsNodePutBoolIfAbsent(chipNode, "UseAOut", false); // Enable analog pads for aMUX output (testing).
+
+	if (devInfo.chipID == DAVIS_CHIP_DAVIS240A || devInfo.chipID == DAVIS_CHIP_DAVIS240B) {
+		sshsNodePutBoolIfAbsent(chipNode, "SpecialPixelControl", false);
+	}
+
+	if (devInfo.chipID == DAVIS_CHIP_DAVIS128 || devInfo.chipID == DAVIS_CHIP_DAVIS208
+		|| devInfo.chipID == DAVIS_CHIP_DAVIS346A || devInfo.chipID == DAVIS_CHIP_DAVIS346B
+		|| devInfo.chipID == DAVIS_CHIP_DAVIS346C || devInfo.chipID == DAVIS_CHIP_DAVIS640
+		|| devInfo.chipID == DAVIS_CHIP_DAVISRGB) {
+		// Select which grey counter to use with the internal ADC: '0' means the external grey counter is used, which
+		// has to be supplied off-chip. '1' means the on-chip grey counter is used instead.
+		sshsNodePutBoolIfAbsent(chipNode, "SelectGrayCounter", true);
+	}
+
+	if (devInfo.chipID == DAVIS_CHIP_DAVIS346A || devInfo.chipID == DAVIS_CHIP_DAVIS346B
+		|| devInfo.chipID == DAVIS_CHIP_DAVIS346C || devInfo.chipID == DAVIS_CHIP_DAVIS640
+		|| devInfo.chipID == DAVIS_CHIP_DAVISRGB) {
+		// Test ADC functionality: if true, the ADC takes its input voltage not from the pixel, but from the
+		// VDAC 'AdcTestVoltage'. If false, the voltage comes from the pixels.
+		sshsNodePutBoolIfAbsent(chipNode, "TestADC", false);
+	}
+
+	if (devInfo.chipID == DAVIS_CHIP_DAVIS208) {
+		sshsNodePutBoolIfAbsent(chipNode, "SelectPreAmpAvg", false);
+		sshsNodePutBoolIfAbsent(chipNode, "SelectBiasRefSS", false);
+		sshsNodePutBoolIfAbsent(chipNode, "SelectSense", true);
+		sshsNodePutBoolIfAbsent(chipNode, "SelectPosFb", false);
+		sshsNodePutBoolIfAbsent(chipNode, "SelectHighPass", false);
+	}
+
+	if (devInfo.chipID == DAVIS_CHIP_DAVISRGB) {
+		sshsNodePutBoolIfAbsent(chipNode, "AdjustOVG1Lo", true);
+		sshsNodePutBoolIfAbsent(chipNode, "AdjustOVG2Lo", false);
+		sshsNodePutBoolIfAbsent(chipNode, "AdjustTX2OVG2Hi", false);
+	}
+
+	// Subsystem 0: Multiplexer
+	sshsNode muxNode = sshsGetRelativeNode(moduleData->moduleNode, "multiplexer/");
+
+	sshsNodePutBoolIfAbsent(muxNode, "Run", true);
+	sshsNodePutBoolIfAbsent(muxNode, "TimestampRun", true);
+	sshsNodePutBoolIfAbsent(muxNode, "TimestampReset", false);
+	sshsNodePutBoolIfAbsent(muxNode, "ForceChipBiasEnable", false);
+	sshsNodePutBoolIfAbsent(muxNode, "DropDVSOnTransferStall", true);
+	sshsNodePutBoolIfAbsent(muxNode, "DropAPSOnTransferStall", false);
+	sshsNodePutBoolIfAbsent(muxNode, "DropIMUOnTransferStall", false);
+	sshsNodePutBoolIfAbsent(muxNode, "DropExtInputOnTransferStall", true);
+
+	// Subsystem 1: DVS AER
+	sshsNode dvsNode = sshsGetRelativeNode(moduleData->moduleNode, "dvs/");
+
+	sshsNodePutBoolIfAbsent(dvsNode, "Run", true);
+	sshsNodePutByteIfAbsent(dvsNode, "AckDelayRow", 4);
+	sshsNodePutByteIfAbsent(dvsNode, "AckDelayColumn", 0);
+	sshsNodePutByteIfAbsent(dvsNode, "AckExtensionRow", 1);
+	sshsNodePutByteIfAbsent(dvsNode, "AckExtensionColumn", 0);
+	sshsNodePutBoolIfAbsent(dvsNode, "WaitOnTransferStall", false);
+	sshsNodePutBoolIfAbsent(dvsNode, "FilterRowOnlyEvents", true);
+	sshsNodePutBoolIfAbsent(dvsNode, "ExternalAERControl", false);
+
+	// Subsystem 2: APS ADC
+	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
+
+	// Only support GS on chips that have it available.
+
+	if (devInfo.apsHasGlobalShutter) {
+		sshsNodePutBoolIfAbsent(apsNode, "GlobalShutter", true);
+	}
+
+	sshsNodePutBoolIfAbsent(apsNode, "Run", true);
+	sshsNodePutBoolIfAbsent(apsNode, "ResetRead", true);
+	sshsNodePutBoolIfAbsent(apsNode, "WaitOnTransferStall", true);
+	sshsNodePutShortIfAbsent(apsNode, "StartColumn0", 0);
+	sshsNodePutShortIfAbsent(apsNode, "StartRow0", 0);
+	sshsNodePutShortIfAbsent(apsNode, "EndColumn0", U16T(devInfo.apsSizeX - 1));
+	sshsNodePutShortIfAbsent(apsNode, "EndRow0", U16T(devInfo.apsSizeY - 1));
+	sshsNodePutIntIfAbsent(apsNode, "Exposure", 4000); // in µs, converted to cycles later
+	sshsNodePutIntIfAbsent(apsNode, "FrameDelay", 1000); // in µs, converted to cycles later
+	sshsNodePutShortIfAbsent(apsNode, "ResetSettle", 10); // in cycles
+	sshsNodePutShortIfAbsent(apsNode, "ColumnSettle", 30); // in cycles
+	sshsNodePutShortIfAbsent(apsNode, "RowSettle", 8); // in cycles
+	sshsNodePutShortIfAbsent(apsNode, "NullSettle", 3); // in cycles
+
+	if (devInfo.apsHasInternalADC) {
+		sshsNodePutBoolIfAbsent(apsNode, "UseInternalADC", true);
+		sshsNodePutBoolIfAbsent(apsNode, "SampleEnable", true);
+		sshsNodePutShortIfAbsent(apsNode, "SampleSettle", 60); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "RampReset", 10); // in cycles
+		sshsNodePutBoolIfAbsent(apsNode, "RampShortReset", true);
+	}
+
+	// DAVIS RGB has additional timing counters.
+	if (devInfo.chipID == DAVIS_CHIP_DAVISRGB) {
+		sshsNodePutShortIfAbsent(apsNode, "TransferTime", 3000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "RSFDSettleTime", 3000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSPDResetTime", 3000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSResetFallTime", 3000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSTXFallTime", 3000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSFDResetTime", 3000); // in cycles
+	}
+
+	// Subsystem 3: IMU
+	sshsNode imuNode = sshsGetRelativeNode(moduleData->moduleNode, "imu/");
+
+	sshsNodePutBoolIfAbsent(imuNode, "Run", true);
+	sshsNodePutBoolIfAbsent(imuNode, "TempStandby", false);
+	sshsNodePutBoolIfAbsent(imuNode, "AccelXStandby", false);
+	sshsNodePutBoolIfAbsent(imuNode, "AccelYStandby", false);
+	sshsNodePutBoolIfAbsent(imuNode, "AccelZStandby", false);
+	sshsNodePutBoolIfAbsent(imuNode, "GyroXStandby", false);
+	sshsNodePutBoolIfAbsent(imuNode, "GyroYStandby", false);
+	sshsNodePutBoolIfAbsent(imuNode, "GyroZStandby", false);
+	sshsNodePutBoolIfAbsent(imuNode, "LowPowerCycle", false);
+	sshsNodePutByteIfAbsent(imuNode, "LowPowerWakeupFrequency", 1);
+	sshsNodePutByteIfAbsent(imuNode, "SampleRateDivider", 0);
+	sshsNodePutByteIfAbsent(imuNode, "DigitalLowPassFilter", 1);
+	sshsNodePutByteIfAbsent(imuNode, "AccelFullScale", 1);
+	sshsNodePutByteIfAbsent(imuNode, "GyroFullScale", 1);
+
+	// Subsystem 4: External Input
+	sshsNode extNode = sshsGetRelativeNode(moduleData->moduleNode, "externalInput/");
+
+	sshsNodePutBoolIfAbsent(extNode, "RunDetector", false);
+	sshsNodePutBoolIfAbsent(extNode, "DetectRisingEdges", false);
+	sshsNodePutBoolIfAbsent(extNode, "DetectFallingEdges", false);
+	sshsNodePutBoolIfAbsent(extNode, "DetectPulses", true);
+	sshsNodePutBoolIfAbsent(extNode, "DetectPulsePolarity", true);
+	sshsNodePutIntIfAbsent(extNode, "DetectPulseLength", 10);
+
+	// Subsystem 9: FX2/3 USB Configuration
+	sshsNode usbNode = sshsGetRelativeNode(moduleData->moduleNode, "usb/");
+
+	sshsNodePutBoolIfAbsent(usbNode, "Run", true);
+	sshsNodePutShortIfAbsent(usbNode, "EarlyPacketDelay", 8); // 125µs time-slices, so 1ms
+
+	sshsNodePutIntIfAbsent(usbNode, "BufferNumber", 8);
+	sshsNodePutIntIfAbsent(usbNode, "BufferSize", 8192);
+
+	sshsNode sysNode = sshsGetRelativeNode(moduleData->moduleNode, "system/");
+
+	// Packet settings (size (in events) and time interval (in µs)).
+	sshsNodePutIntIfAbsent(sysNode, "PolarityPacketMaxSize", 4096);
+	sshsNodePutIntIfAbsent(sysNode, "PolarityPacketMaxInterval", 5000);
+	sshsNodePutIntIfAbsent(sysNode, "FramePacketMaxSize", 4);
+	sshsNodePutIntIfAbsent(sysNode, "FramePacketMaxInterval", 20000);
+	sshsNodePutIntIfAbsent(sysNode, "IMU6PacketMaxSize", 32);
+	sshsNodePutIntIfAbsent(sysNode, "IMU6PacketMaxInterval", 4000);
+	sshsNodePutIntIfAbsent(sysNode, "SpecialPacketMaxSize", 128);
+	sshsNodePutIntIfAbsent(sysNode, "SpecialPacketMaxInterval", 1000);
+
+	// Ring-buffer setting (only changes value on module init/shutdown cycles).
+	sshsNodePutIntIfAbsent(sysNode, "DataExchangeBufferSize", 64);
+
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel0Row", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel0Column", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel1Row", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel1Column", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel2Row", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel2Column", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel3Row", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel3Column", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel4Row", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel4Column", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel5Row", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel5Column", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel6Row", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel6Column", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel7Row", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(dvsNode, "FilterPixel7Column", cstate->apsSizeX);
+	sshsNodePutBoolIfAbsent(dvsNode, "FilterBackgroundActivity", true);
+	sshsNodePutIntIfAbsent(dvsNode, "FilterBackgroundActivityDeltaTime", 20000);
+	sshsNodePutBoolIfAbsent(dvsNode, "TestEventGeneratorEnable", false);
+
+	// Subsystem 2: APS ADC (Quad-ROI support present only in FX3)
+	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
+
+	sshsNodePutShortIfAbsent(apsNode, "StartColumn1", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(apsNode, "StartRow1", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(apsNode, "EndColumn1", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(apsNode, "EndRow1", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(apsNode, "StartColumn2", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(apsNode, "StartRow2", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(apsNode, "EndColumn2", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(apsNode, "EndRow2", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(apsNode, "StartColumn3", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(apsNode, "StartRow3", cstate->apsSizeY);
+	sshsNodePutShortIfAbsent(apsNode, "EndColumn3", cstate->apsSizeX);
+	sshsNodePutShortIfAbsent(apsNode, "EndRow3", cstate->apsSizeY);
+
+	// Subsystem 4: External Input (Generator module present only in FX3)
+	sshsNode extNode = sshsGetRelativeNode(moduleData->moduleNode, "externalInput/");
+
+	sshsNodePutBoolIfAbsent(extNode, "RunGenerator", false);
+	sshsNodePutBoolIfAbsent(extNode, "GenerateUseCustomSignal", false);
+	sshsNodePutBoolIfAbsent(extNode, "GeneratePulsePolarity", true);
+	sshsNodePutIntIfAbsent(extNode, "GeneratePulseInterval", 10);
+	sshsNodePutIntIfAbsent(extNode, "GeneratePulseLength", 5);
+
+	// Install default listeners to signal configuration updates asynchronously.
+	sshsNodeAddAttrListener(muxNode, cstate->deviceHandle, &MultiplexerConfigListener);
+	sshsNodeAddAttrListener(dvsNode, cstate->deviceHandle, &DVSConfigListener);
+	sshsNodeAddAttrListener(apsNode, moduleData->moduleState, &APSConfigListener);
+	sshsNodeAddAttrListener(imuNode, cstate->deviceHandle, &IMUConfigListener);
+	sshsNodeAddAttrListener(extNode, cstate->deviceHandle, &ExternalInputDetectorConfigListener);
+	sshsNodeAddAttrListener(usbNode, cstate->deviceHandle, &USBConfigListener);
+	sshsNodeAddAttrListener(usbNode, moduleData, &HostConfigListener);
+	sshsNodeAddAttrListener(sysNode, moduleData, &HostConfigListener);
+}
+
+static void sendDefaultConfiguration(caerModuleData moduleData) {
+
+}
+
 static void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8_t currentValue, uint8_t voltageValue) {
 	// Add trailing slash to node name (required!).
 	size_t biasNameLength = strlen(biasName);
@@ -122,385 +608,23 @@ static uint16_t generateShiftedSourceBias(sshsNode biasNode, const char *biasNam
 	return (caerBiasShiftedSourceGenerate(biasValue));
 }
 
-bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t VID, uint16_t PID, uint8_t DID_TYPE) {
-	// USB port/bus/SN settings/restrictions.
-	// These can be used to force connection to one specific device.
-	sshsNode selectorNode = sshsGetRelativeNode(moduleData->moduleNode, "usbDevice/");
+static void mainloopDataNotifyIncrease(void *p) {
+	UNUSED_ARGUMENT(p);
 
-	sshsNodePutByteIfAbsent(selectorNode, "BusNumber", 0);
-	sshsNodePutByteIfAbsent(selectorNode, "DevAddress", 0);
-	sshsNodePutStringIfAbsent(selectorNode, "SerialNumber", "");
-
-	// Try to open a DAVIS device on a specific USB port.
-	cstate->deviceHandle = deviceOpen(cstate->deviceContext, VID, PID, DID_TYPE,
-		sshsNodeGetByte(selectorNode, "BusNumber"), sshsNodeGetByte(selectorNode, "DevAddress"));
-
-	// Update module log string, make it accessible in cstate space.
-	caerModuleSetSubSystemString(moduleData, fullLogString);
-
-	// Now check if the Serial Number matches.
-	char *configSerialNumber = sshsNodeGetString(selectorNode, "SerialNumber");
-
-	free(configSerialNumber);
-
-	// So now we have a working connection to the device we want. Let's get some data!
-	// Put global source information into SSHS, so it's globally available.
-	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
-
-	if (cstate->apsInvertXY) {
-		sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeY);
-		sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->apsSizeX);
-	}
-	else {
-		sshsNodePutShort(sourceInfoNode, "apsSizeX", cstate->apsSizeX);
-		sshsNodePutShort(sourceInfoNode, "apsSizeY", cstate->apsSizeY);
-	}
-	sshsNodePutShort(sourceInfoNode, "apsChannels", cstate->apsChannels);
-
-	if (cstate->dvsInvertXY) {
-		sshsNodePutShort(sourceInfoNode, "dvsSizeX", cstate->dvsSizeY);
-		sshsNodePutShort(sourceInfoNode, "dvsSizeY", cstate->dvsSizeX);
-	}
-	else {
-		sshsNodePutShort(sourceInfoNode, "dvsSizeX", cstate->dvsSizeX);
-		sshsNodePutShort(sourceInfoNode, "dvsSizeY", cstate->dvsSizeY);
-	}
-
-	sshsNodePutShort(sourceInfoNode, "apsOriginalDepth", DAVIS_ADC_DEPTH);
-	sshsNodePutShort(sourceInfoNode, "apsOriginalChannels", DAVIS_COLOR_CHANNELS);
-	sshsNodePutBool(sourceInfoNode, "apsHasGlobalShutter", spiConfigReceive(cstate->deviceHandle, FPGA_APS, 7));
-	sshsNodePutBool(sourceInfoNode, "apsHasExternalADC", spiConfigReceive(cstate->deviceHandle, FPGA_APS, 32));
-	sshsNodePutBool(sourceInfoNode, "apsHasInternalADC", spiConfigReceive(cstate->deviceHandle, FPGA_APS, 33));
-
-	sshsNodePutShort(sourceInfoNode, "logicVersion", U16T(spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 0)));
-	sshsNodePutBool(sourceInfoNode, "deviceIsMaster", spiConfigReceive(cstate->deviceHandle, FPGA_SYSINFO, 2));
-
-	return (true);
+	caerMainloopDataAvailableIncrease();
 }
 
-void createCommonConfiguration(caerModuleData moduleData, davisCommonState cstate) {
-	// First, always create all needed setting nodes, set their default values
-	// and add their listeners.
-	sshsNode biasNode = sshsGetRelativeNode(moduleData->moduleNode, "bias/");
-	biasDescriptor *biases = cstate->chipBiases;
+static void mainloopDataNotifyDecrease(void *p) {
+	UNUSED_ARGUMENT(p);
 
-	if (cstate->chipID == CHIP_DAVIS240A || cstate->chipID == CHIP_DAVIS240B || cstate->chipID == CHIP_DAVIS240C) {
-		createCoarseFineBiasSetting(biases, biasNode, "DiffBn", 0, "Normal", "N", 4, 39, true);
-		createCoarseFineBiasSetting(biases, biasNode, "OnBn", 1, "Normal", "N", 5, 255, true);
-		createCoarseFineBiasSetting(biases, biasNode, "OffBn", 2, "Normal", "N", 4, 0, true);
-		createCoarseFineBiasSetting(biases, biasNode, "ApsCasEpc", 3, "Cascode", "N", 5, 185, true);
-		createCoarseFineBiasSetting(biases, biasNode, "DiffCasBnc", 4, "Cascode", "N", 5, 115, true);
-		createCoarseFineBiasSetting(biases, biasNode, "ApsROSFBn", 5, "Normal", "N", 6, 219, true);
-		createCoarseFineBiasSetting(biases, biasNode, "LocalBufBn", 6, "Normal", "N", 5, 164, true);
-		createCoarseFineBiasSetting(biases, biasNode, "PixInvBn", 7, "Normal", "N", 5, 129, true);
-		createCoarseFineBiasSetting(biases, biasNode, "PrBp", 8, "Normal", "P", 2, 58, true);
-		createCoarseFineBiasSetting(biases, biasNode, "PrSFBp", 9, "Normal", "P", 1, 16, true);
-		createCoarseFineBiasSetting(biases, biasNode, "RefrBp", 10, "Normal", "P", 4, 25, true);
-		createCoarseFineBiasSetting(biases, biasNode, "AEPdBn", 11, "Normal", "N", 6, 91, true);
-		createCoarseFineBiasSetting(biases, biasNode, "LcolTimeoutBn", 12, "Normal", "N", 5, 49, true);
-		createCoarseFineBiasSetting(biases, biasNode, "AEPuXBp", 13, "Normal", "P", 4, 80, true);
-		createCoarseFineBiasSetting(biases, biasNode, "AEPuYBp", 14, "Normal", "P", 7, 152, true);
-		createCoarseFineBiasSetting(biases, biasNode, "IFThrBn", 15, "Normal", "N", 5, 255, true);
-		createCoarseFineBiasSetting(biases, biasNode, "IFRefrBn", 16, "Normal", "N", 5, 255, true);
-		createCoarseFineBiasSetting(biases, biasNode, "PadFollBn", 17, "Normal", "N", 7, 215, true);
-		createCoarseFineBiasSetting(biases, biasNode, "ApsOverflowLevel", 18, "Normal", "N", 6, 253, true);
-
-		createCoarseFineBiasSetting(biases, biasNode, "BiasBuffer", 19, "Normal", "N", 5, 254, true);
-
-		createShiftedSourceBiasSetting(biases, biasNode, "SSP", 20, 33, 1, "ShiftedSource", "SplitGate");
-		createShiftedSourceBiasSetting(biases, biasNode, "SSN", 21, 33, 1, "ShiftedSource", "SplitGate");
-	}
-
-	if (cstate->chipID == CHIP_DAVIS640) {
-		// Slow down pixels for big 640x480 array.
-		createCoarseFineBiasSetting(biases, biasNode, "PrBp", 14, "Normal", "P", 2, 3, true);
-		createCoarseFineBiasSetting(biases, biasNode, "PrSFBp", 15, "Normal", "P", 1, 1, true);
-	}
-
-	if (cstate->chipID == CHIP_DAVIS128 || cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B
-		|| cstate->chipID == CHIP_DAVIS346C || cstate->chipID == CHIP_DAVIS640 || cstate->chipID == CHIP_DAVIS208) {
-		createVDACBiasSetting(biases, biasNode, "ApsOverflowLevel", 0, 6, 27);
-		createVDACBiasSetting(biases, biasNode, "ApsCas", 1, 6, 21);
-		createVDACBiasSetting(biases, biasNode, "AdcRefHigh", 2, 7, 30);
-		createVDACBiasSetting(biases, biasNode, "AdcRefLow", 3, 7, 1);
-		if (cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B || cstate->chipID == CHIP_DAVIS346C
-			|| cstate->chipID == CHIP_DAVIS640) {
-			// Only DAVIS346 and 640 have ADC testing.
-			createVDACBiasSetting(biases, biasNode, "AdcTestVoltage", 4, 7, 21);
-		}
-
-		createCoarseFineBiasSetting(biases, biasNode, "LocalBufBn", 8, "Normal", "N", 5, 164, true);
-		createCoarseFineBiasSetting(biases, biasNode, "PadFollBn", 9, "Normal", "N", 7, 215, true);
-		createCoarseFineBiasSetting(biases, biasNode, "DiffBn", 10, "Normal", "N", 4, 39, true);
-		createCoarseFineBiasSetting(biases, biasNode, "OnBn", 11, "Normal", "N", 5, 255, true);
-		createCoarseFineBiasSetting(biases, biasNode, "OffBn", 12, "Normal", "N", 4, 1, true);
-		createCoarseFineBiasSetting(biases, biasNode, "PixInvBn", 13, "Normal", "N", 5, 129, true);
-		createCoarseFineBiasSetting(biases, biasNode, "PrBp", 14, "Normal", "P", 2, 58, true);
-		createCoarseFineBiasSetting(biases, biasNode, "PrSFBp", 15, "Normal", "P", 1, 16, true);
-		createCoarseFineBiasSetting(biases, biasNode, "RefrBp", 16, "Normal", "P", 4, 25, true);
-		createCoarseFineBiasSetting(biases, biasNode, "ReadoutBufBp", 17, "Normal", "P", 6, 20, true);
-		createCoarseFineBiasSetting(biases, biasNode, "ApsROSFBn", 18, "Normal", "N", 6, 219, true);
-		createCoarseFineBiasSetting(biases, biasNode, "AdcCompBp", 19, "Normal", "P", 5, 20, true);
-		createCoarseFineBiasSetting(biases, biasNode, "ColSelLowBn", 20, "Normal", "N", 0, 1, true);
-		createCoarseFineBiasSetting(biases, biasNode, "DACBufBp", 21, "Normal", "P", 6, 60, true);
-		createCoarseFineBiasSetting(biases, biasNode, "LcolTimeoutBn", 22, "Normal", "N", 5, 49, true);
-		createCoarseFineBiasSetting(biases, biasNode, "AEPdBn", 23, "Normal", "N", 6, 91, true);
-		createCoarseFineBiasSetting(biases, biasNode, "AEPuXBp", 24, "Normal", "P", 4, 80, true);
-		createCoarseFineBiasSetting(biases, biasNode, "AEPuYBp", 25, "Normal", "P", 7, 152, true);
-		createCoarseFineBiasSetting(biases, biasNode, "IFRefrBn", 26, "Normal", "N", 5, 255, true);
-		createCoarseFineBiasSetting(biases, biasNode, "IFThrBn", 27, "Normal", "N", 5, 255, true);
-
-		createCoarseFineBiasSetting(biases, biasNode, "BiasBuffer", 34, "Normal", "N", 5, 254, true);
-
-		createShiftedSourceBiasSetting(biases, biasNode, "SSP", 35, 33, 1, "ShiftedSource", "SplitGate");
-		createShiftedSourceBiasSetting(biases, biasNode, "SSN", 36, 33, 1, "ShiftedSource", "SplitGate");
-	}
-
-	if (cstate->chipID == CHIP_DAVIS208) {
-		createVDACBiasSetting(biases, biasNode, "ResetHighPass", 6, 7, 63);
-		createVDACBiasSetting(biases, biasNode, "RefSS", 7, 5, 11);
-
-		createCoarseFineBiasSetting(biases, biasNode, "RegBiasBp", 28, "Normal", "P", 5, 20, true);
-		createCoarseFineBiasSetting(biases, biasNode, "RefSSBn", 30, "Normal", "N", 5, 20, true);
-	}
-
-	if (cstate->chipID == CHIP_DAVISRGB) {
-		createVDACBiasSetting(biases, biasNode, "ApsCas", 0, 4, 21);
-		createVDACBiasSetting(biases, biasNode, "OVG1Lo", 1, 4, 21);
-		createVDACBiasSetting(biases, biasNode, "OVG2Lo", 2, 0, 0);
-		createVDACBiasSetting(biases, biasNode, "TX2OVG2Hi", 3, 0, 63);
-		createVDACBiasSetting(biases, biasNode, "Gnd07", 4, 4, 13);
-		createVDACBiasSetting(biases, biasNode, "AdcTestVoltage", 5, 0, 21);
-		createVDACBiasSetting(biases, biasNode, "AdcRefHigh", 6, 7, 63);
-		createVDACBiasSetting(biases, biasNode, "AdcRefLow", 7, 7, 0);
-
-		createCoarseFineBiasSetting(biases, biasNode, "IFRefrBn", 8, "Normal", "N", 5, 255, false);
-		createCoarseFineBiasSetting(biases, biasNode, "IFThrBn", 9, "Normal", "N", 5, 255, false);
-		createCoarseFineBiasSetting(biases, biasNode, "LocalBufBn", 10, "Normal", "N", 5, 164, false);
-		createCoarseFineBiasSetting(biases, biasNode, "PadFollBn", 11, "Normal", "N", 7, 209, false);
-		createCoarseFineBiasSetting(biases, biasNode, "PixInvBn", 13, "Normal", "N", 4, 164, true);
-		createCoarseFineBiasSetting(biases, biasNode, "DiffBn", 14, "Normal", "N", 4, 54, true);
-		createCoarseFineBiasSetting(biases, biasNode, "OnBn", 15, "Normal", "N", 6, 63, true);
-		createCoarseFineBiasSetting(biases, biasNode, "OffBn", 16, "Normal", "N", 2, 138, true);
-		createCoarseFineBiasSetting(biases, biasNode, "PrBp", 17, "Normal", "P", 1, 108, true);
-		createCoarseFineBiasSetting(biases, biasNode, "PrSFBp", 18, "Normal", "P", 1, 108, true);
-		createCoarseFineBiasSetting(biases, biasNode, "RefrBp", 19, "Normal", "P", 4, 28, true);
-		createCoarseFineBiasSetting(biases, biasNode, "ArrayBiasBufferBn", 20, "Normal", "N", 6, 128, true);
-		createCoarseFineBiasSetting(biases, biasNode, "ArrayLogicBufferBn", 22, "Normal", "N", 5, 255, true);
-		createCoarseFineBiasSetting(biases, biasNode, "FalltimeBn", 23, "Normal", "N", 7, 41, true);
-		createCoarseFineBiasSetting(biases, biasNode, "RisetimeBp", 24, "Normal", "P", 6, 162, true);
-		createCoarseFineBiasSetting(biases, biasNode, "ReadoutBufBp", 25, "Normal", "P", 6, 20, false);
-		createCoarseFineBiasSetting(biases, biasNode, "ApsROSFBn", 26, "Normal", "N", 6, 255, true);
-		createCoarseFineBiasSetting(biases, biasNode, "AdcCompBp", 27, "Normal", "P", 4, 159, true);
-		createCoarseFineBiasSetting(biases, biasNode, "DACBufBp", 28, "Normal", "P", 6, 194, true);
-		createCoarseFineBiasSetting(biases, biasNode, "LcolTimeoutBn", 30, "Normal", "N", 5, 49, true);
-		createCoarseFineBiasSetting(biases, biasNode, "AEPdBn", 31, "Normal", "N", 6, 91, true);
-		createCoarseFineBiasSetting(biases, biasNode, "AEPuXBp", 32, "Normal", "P", 4, 80, true);
-		createCoarseFineBiasSetting(biases, biasNode, "AEPuYBp", 33, "Normal", "P", 7, 152, true);
-
-		createCoarseFineBiasSetting(biases, biasNode, "BiasBuffer", 34, "Normal", "N", 6, 251, true);
-
-		createShiftedSourceBiasSetting(biases, biasNode, "SSP", 35, 33, 1, "TiedToRail", "SplitGate");
-		createShiftedSourceBiasSetting(biases, biasNode, "SSN", 36, 33, 2, "ShiftedSource", "SplitGate");
-	}
-
-	sshsNode chipNode = sshsGetRelativeNode(moduleData->moduleNode, "chip/");
-	configChainDescriptor *configChain = cstate->chipConfigChain;
-
-	createByteConfigSetting(configChain, chipNode, "DigitalMux0", 128, 0);
-	createByteConfigSetting(configChain, chipNode, "DigitalMux1", 129, 0);
-	createByteConfigSetting(configChain, chipNode, "DigitalMux2", 130, 0);
-	createByteConfigSetting(configChain, chipNode, "DigitalMux3", 131, 0);
-	createByteConfigSetting(configChain, chipNode, "AnalogMux0", 132, 0);
-	createByteConfigSetting(configChain, chipNode, "AnalogMux1", 133, 0);
-	createByteConfigSetting(configChain, chipNode, "AnalogMux2", 134, 0);
-	createByteConfigSetting(configChain, chipNode, "BiasMux0", 135, 0);
-
-	createBoolConfigSetting(configChain, chipNode, "ResetCalibNeuron", 136, true);
-	createBoolConfigSetting(configChain, chipNode, "TypeNCalibNeuron", 137, false);
-	createBoolConfigSetting(configChain, chipNode, "ResetTestPixel", 138, true);
-	createBoolConfigSetting(configChain, chipNode, "AERnArow", 140, false); // Use nArow in the AER state machine.
-	createBoolConfigSetting(configChain, chipNode, "UseAOut", 141, false); // Enable analog pads for aMUX output (testing).
-
-	if (cstate->chipID == CHIP_DAVIS240A || cstate->chipID == CHIP_DAVIS240B) {
-		createBoolConfigSetting(configChain, chipNode, "SpecialPixelControl", 139, false);
-	}
-
-	if (cstate->chipID == CHIP_DAVIS128 || cstate->chipID == CHIP_DAVIS208 || cstate->chipID == CHIP_DAVIS346A
-		|| cstate->chipID == CHIP_DAVIS346B || cstate->chipID == CHIP_DAVIS346C || cstate->chipID == CHIP_DAVIS640
-		|| cstate->chipID == CHIP_DAVISRGB) {
-		// Select which grey counter to use with the internal ADC: '0' means the external grey counter is used, which
-		// has to be supplied off-chip. '1' means the on-chip grey counter is used instead.
-		createBoolConfigSetting(configChain, chipNode, "SelectGrayCounter", 143, true);
-	}
-
-	if (cstate->chipID == CHIP_DAVIS346A || cstate->chipID == CHIP_DAVIS346B || cstate->chipID == CHIP_DAVIS346C
-		|| cstate->chipID == CHIP_DAVIS640 || cstate->chipID == CHIP_DAVISRGB) {
-		// Test ADC functionality: if true, the ADC takes its input voltage not from the pixel, but from the
-		// VDAC 'AdcTestVoltage'. If false, the voltage comes from the pixels.
-		createBoolConfigSetting(configChain, chipNode, "TestADC", 144, false);
-	}
-
-	if (cstate->chipID == CHIP_DAVIS208) {
-		createBoolConfigSetting(configChain, chipNode, "SelectPreAmpAvg", 145, false);
-		createBoolConfigSetting(configChain, chipNode, "SelectBiasRefSS", 146, false);
-		createBoolConfigSetting(configChain, chipNode, "SelectSense", 147, true);
-		createBoolConfigSetting(configChain, chipNode, "SelectPosFb", 148, false);
-		createBoolConfigSetting(configChain, chipNode, "SelectHighPass", 149, false);
-	}
-
-	if (cstate->chipID == CHIP_DAVISRGB) {
-		createBoolConfigSetting(configChain, chipNode, "AdjustOVG1Lo", 145, true);
-		createBoolConfigSetting(configChain, chipNode, "AdjustOVG2Lo", 146, false);
-		createBoolConfigSetting(configChain, chipNode, "AdjustTX2OVG2Hi", 147, false);
-	}
-
-	// Subsystem 0: Multiplexer
-	sshsNode muxNode = sshsGetRelativeNode(moduleData->moduleNode, "multiplexer/");
-
-	sshsNodePutBoolIfAbsent(muxNode, "Run", true);
-	sshsNodePutBoolIfAbsent(muxNode, "TimestampRun", true);
-	sshsNodePutBoolIfAbsent(muxNode, "TimestampReset", false);
-	sshsNodePutBoolIfAbsent(muxNode, "ForceChipBiasEnable", false);
-	sshsNodePutBoolIfAbsent(muxNode, "DropDVSOnTransferStall", true);
-	sshsNodePutBoolIfAbsent(muxNode, "DropAPSOnTransferStall", false);
-	sshsNodePutBoolIfAbsent(muxNode, "DropIMUOnTransferStall", false);
-	sshsNodePutBoolIfAbsent(muxNode, "DropExtInputOnTransferStall", true);
-
-	// Subsystem 1: DVS AER
-	sshsNode dvsNode = sshsGetRelativeNode(moduleData->moduleNode, "dvs/");
-
-	sshsNodePutBoolIfAbsent(dvsNode, "Run", true);
-	sshsNodePutByteIfAbsent(dvsNode, "AckDelayRow", 4);
-	sshsNodePutByteIfAbsent(dvsNode, "AckDelayColumn", 0);
-	sshsNodePutByteIfAbsent(dvsNode, "AckExtensionRow", 1);
-	sshsNodePutByteIfAbsent(dvsNode, "AckExtensionColumn", 0);
-	sshsNodePutBoolIfAbsent(dvsNode, "WaitOnTransferStall", false);
-	sshsNodePutBoolIfAbsent(dvsNode, "FilterRowOnlyEvents", true);
-	sshsNodePutBoolIfAbsent(dvsNode, "ExternalAERControl", false);
-
-	// Subsystem 2: APS ADC
-	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
-
-	// Only support GS on chips that have it available.
-	bool globalShutterSupported = sshsNodeGetBool(sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"),
-		"apsHasGlobalShutter");
-	if (globalShutterSupported) {
-		sshsNodePutBoolIfAbsent(apsNode, "GlobalShutter", globalShutterSupported);
-	}
-
-	sshsNodePutBoolIfAbsent(apsNode, "Run", true);
-	sshsNodePutBoolIfAbsent(apsNode, "ResetRead", true);
-	sshsNodePutBoolIfAbsent(apsNode, "WaitOnTransferStall", true);
-	sshsNodePutShortIfAbsent(apsNode, "StartColumn0", 0);
-	sshsNodePutShortIfAbsent(apsNode, "StartRow0", 0);
-	sshsNodePutShortIfAbsent(apsNode, "EndColumn0", U16T(cstate->apsSizeX - 1));
-	sshsNodePutShortIfAbsent(apsNode, "EndRow0", U16T(cstate->apsSizeY - 1));
-	sshsNodePutIntIfAbsent(apsNode, "Exposure", 4000); // in µs, converted to cycles later
-	sshsNodePutIntIfAbsent(apsNode, "FrameDelay", 1000); // in µs, converted to cycles later
-	sshsNodePutShortIfAbsent(apsNode, "ResetSettle", 10); // in cycles
-	sshsNodePutShortIfAbsent(apsNode, "ColumnSettle", 30); // in cycles
-	sshsNodePutShortIfAbsent(apsNode, "RowSettle", 8); // in cycles
-	sshsNodePutShortIfAbsent(apsNode, "NullSettle", 3); // in cycles
-
-	bool integratedADCSupported = sshsNodeGetBool(sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"),
-		"apsHasInternalADC");
-	if (integratedADCSupported) {
-		sshsNodePutBoolIfAbsent(apsNode, "UseInternalADC", true);
-		sshsNodePutBoolIfAbsent(apsNode, "SampleEnable", true);
-		sshsNodePutShortIfAbsent(apsNode, "SampleSettle", 60); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "RampReset", 10); // in cycles
-		sshsNodePutBoolIfAbsent(apsNode, "RampShortReset", true);
-	}
-
-	// DAVIS RGB has additional timing counters.
-	if (cstate->chipID == CHIP_DAVISRGB) {
-		sshsNodePutShortIfAbsent(apsNode, "TransferTime", 3000); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "RSFDSettleTime", 3000); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSPDResetTime", 3000); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSResetFallTime", 3000); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSTXFallTime", 3000); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSFDResetTime", 3000); // in cycles
-	}
-
-	// Subsystem 3: IMU
-	sshsNode imuNode = sshsGetRelativeNode(moduleData->moduleNode, "imu/");
-
-	sshsNodePutBoolIfAbsent(imuNode, "Run", true);
-	sshsNodePutBoolIfAbsent(imuNode, "TempStandby", false);
-	sshsNodePutBoolIfAbsent(imuNode, "AccelXStandby", false);
-	sshsNodePutBoolIfAbsent(imuNode, "AccelYStandby", false);
-	sshsNodePutBoolIfAbsent(imuNode, "AccelZStandby", false);
-	sshsNodePutBoolIfAbsent(imuNode, "GyroXStandby", false);
-	sshsNodePutBoolIfAbsent(imuNode, "GyroYStandby", false);
-	sshsNodePutBoolIfAbsent(imuNode, "GyroZStandby", false);
-	sshsNodePutBoolIfAbsent(imuNode, "LowPowerCycle", false);
-	sshsNodePutByteIfAbsent(imuNode, "LowPowerWakeupFrequency", 1);
-	sshsNodePutByteIfAbsent(imuNode, "SampleRateDivider", 0);
-	sshsNodePutByteIfAbsent(imuNode, "DigitalLowPassFilter", 1);
-	sshsNodePutByteIfAbsent(imuNode, "AccelFullScale", 1);
-	sshsNodePutByteIfAbsent(imuNode, "GyroFullScale", 1);
-
-	// Subsystem 4: External Input
-	sshsNode extNode = sshsGetRelativeNode(moduleData->moduleNode, "externalInput/");
-
-	sshsNodePutBoolIfAbsent(extNode, "RunDetector", false);
-	sshsNodePutBoolIfAbsent(extNode, "DetectRisingEdges", false);
-	sshsNodePutBoolIfAbsent(extNode, "DetectFallingEdges", false);
-	sshsNodePutBoolIfAbsent(extNode, "DetectPulses", true);
-	sshsNodePutBoolIfAbsent(extNode, "DetectPulsePolarity", true);
-	sshsNodePutIntIfAbsent(extNode, "DetectPulseLength", 10);
-
-	// Subsystem 9: FX2/3 USB Configuration
-	sshsNode usbNode = sshsGetRelativeNode(moduleData->moduleNode, "usb/");
-
-	sshsNodePutBoolIfAbsent(usbNode, "Run", true);
-	sshsNodePutShortIfAbsent(usbNode, "EarlyPacketDelay", 8); // 125µs time-slices, so 1ms
-
-	sshsNodePutIntIfAbsent(usbNode, "BufferNumber", 8);
-	sshsNodePutIntIfAbsent(usbNode, "BufferSize", 8192);
-
-	sshsNode sysNode = sshsGetRelativeNode(moduleData->moduleNode, "system/");
-
-	// Packet settings (size (in events) and time interval (in µs)).
-	sshsNodePutIntIfAbsent(sysNode, "PolarityPacketMaxSize", 4096);
-	sshsNodePutIntIfAbsent(sysNode, "PolarityPacketMaxInterval", 5000);
-	sshsNodePutIntIfAbsent(sysNode, "FramePacketMaxSize", 4);
-	sshsNodePutIntIfAbsent(sysNode, "FramePacketMaxInterval", 20000);
-	sshsNodePutIntIfAbsent(sysNode, "IMU6PacketMaxSize", 32);
-	sshsNodePutIntIfAbsent(sysNode, "IMU6PacketMaxInterval", 4000);
-	sshsNodePutIntIfAbsent(sysNode, "SpecialPacketMaxSize", 128);
-	sshsNodePutIntIfAbsent(sysNode, "SpecialPacketMaxInterval", 1000);
-
-	// Ring-buffer setting (only changes value on module init/shutdown cycles).
-	sshsNodePutIntIfAbsent(sysNode, "DataExchangeBufferSize", 64);
-
-	// Add auto-restart setting.
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "auto-restart", true);
-
-	// Install default listeners to signal configuration updates asynchronously.
-	sshsNodeAddAttrListener(muxNode, cstate->deviceHandle, &MultiplexerConfigListener);
-	sshsNodeAddAttrListener(dvsNode, cstate->deviceHandle, &DVSConfigListener);
-	sshsNodeAddAttrListener(apsNode, moduleData->moduleState, &APSConfigListener);
-	sshsNodeAddAttrListener(imuNode, cstate->deviceHandle, &IMUConfigListener);
-	sshsNodeAddAttrListener(extNode, cstate->deviceHandle, &ExternalInputDetectorConfigListener);
-	sshsNodeAddAttrListener(usbNode, cstate->deviceHandle, &USBConfigListener);
-	sshsNodeAddAttrListener(usbNode, moduleData, &HostConfigListener);
-	sshsNodeAddAttrListener(sysNode, moduleData, &HostConfigListener);
+	caerMainloopDataAvailableDecrease();
 }
 
-void caerInputDAVISCommonExit(caerModuleData moduleData) {
+static void moduleShutdownNotify(void *p) {
+	sshsNode moduleNode = p;
 
-	if (sshsNodeGetBool(moduleData->moduleNode, "auto-restart")) {
-		// Prime input module again so that it will try to restart if new devices detected.
-		sshsNodePutBool(moduleData->moduleNode, "shutdown", false);
-	}
-}
-
-void caerInputDAVISCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
-	UNUSED_ARGUMENT(argsNumber);
-
-	// Interpret variable arguments (same as above in main function).
+	// Ensure parent also shuts down (on disconnected device for example).
+	sshsNodePutBool(moduleNode, "shutdown", true);
 }
 
 static void USBConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
@@ -869,3 +993,193 @@ static void sendExternalInputDetectorConfig(sshsNode moduleNode, libusb_device_h
 	spiConfigSend(devHandle, FPGA_EXTINPUT, 5, sshsNodeGetInt(extNode, "DetectPulseLength"));
 	spiConfigSend(devHandle, FPGA_EXTINPUT, 0, sshsNodeGetBool(extNode, "RunDetector"));
 }
+
+static void DVSFilterConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
+	UNUSED_ARGUMENT(node);
+
+	libusb_device_handle *devHandle = userData;
+
+	if (event == ATTRIBUTE_MODIFIED) {
+		if (changeType == SHORT && str_equals(changeKey, "FilterPixel0Row")) {
+			spiConfigSend(devHandle, FPGA_DVS, 12, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel0Column")) {
+			spiConfigSend(devHandle, FPGA_DVS, 13, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel1Row")) {
+			spiConfigSend(devHandle, FPGA_DVS, 14, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel1Column")) {
+			spiConfigSend(devHandle, FPGA_DVS, 15, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel2Row")) {
+			spiConfigSend(devHandle, FPGA_DVS, 16, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel2Column")) {
+			spiConfigSend(devHandle, FPGA_DVS, 17, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel3Row")) {
+			spiConfigSend(devHandle, FPGA_DVS, 18, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel3Column")) {
+			spiConfigSend(devHandle, FPGA_DVS, 19, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel4Row")) {
+			spiConfigSend(devHandle, FPGA_DVS, 20, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel4Column")) {
+			spiConfigSend(devHandle, FPGA_DVS, 21, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel5Row")) {
+			spiConfigSend(devHandle, FPGA_DVS, 22, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel5Column")) {
+			spiConfigSend(devHandle, FPGA_DVS, 23, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel6Row")) {
+			spiConfigSend(devHandle, FPGA_DVS, 24, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel6Column")) {
+			spiConfigSend(devHandle, FPGA_DVS, 25, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel7Row")) {
+			spiConfigSend(devHandle, FPGA_DVS, 26, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "FilterPixel7Column")) {
+			spiConfigSend(devHandle, FPGA_DVS, 27, changeValue.ushort);
+		}
+		else if (changeType == BOOL && str_equals(changeKey, "FilterBackgroundActivity")) {
+			spiConfigSend(devHandle, FPGA_DVS, 29, changeValue.boolean);
+		}
+		else if (changeType == INT && str_equals(changeKey, "FilterBackgroundActivityDeltaTime")) {
+			spiConfigSend(devHandle, FPGA_DVS, 30, changeValue.uint);
+		}
+		else if (changeType == BOOL && str_equals(changeKey, "TestEventGeneratorEnable")) {
+			spiConfigSend(devHandle, FPGA_DVS, 32, changeValue.boolean);
+		}
+	}
+}
+
+static void sendDVSFilterConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	sshsNode dvsNode = sshsGetRelativeNode(moduleNode, "dvs/");
+
+	spiConfigSend(devHandle, FPGA_DVS, 12, sshsNodeGetShort(dvsNode, "FilterPixel0Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 13, sshsNodeGetShort(dvsNode, "FilterPixel0Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 14, sshsNodeGetShort(dvsNode, "FilterPixel1Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 15, sshsNodeGetShort(dvsNode, "FilterPixel1Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 16, sshsNodeGetShort(dvsNode, "FilterPixel2Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 17, sshsNodeGetShort(dvsNode, "FilterPixel2Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 18, sshsNodeGetShort(dvsNode, "FilterPixel3Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 19, sshsNodeGetShort(dvsNode, "FilterPixel3Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 20, sshsNodeGetShort(dvsNode, "FilterPixel4Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 21, sshsNodeGetShort(dvsNode, "FilterPixel4Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 22, sshsNodeGetShort(dvsNode, "FilterPixel5Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 23, sshsNodeGetShort(dvsNode, "FilterPixel5Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 24, sshsNodeGetShort(dvsNode, "FilterPixel6Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 25, sshsNodeGetShort(dvsNode, "FilterPixel6Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 26, sshsNodeGetShort(dvsNode, "FilterPixel7Row"));
+	spiConfigSend(devHandle, FPGA_DVS, 27, sshsNodeGetShort(dvsNode, "FilterPixel7Column"));
+	spiConfigSend(devHandle, FPGA_DVS, 29, sshsNodeGetBool(dvsNode, "FilterBackgroundActivity"));
+	spiConfigSend(devHandle, FPGA_DVS, 30, sshsNodeGetInt(dvsNode, "FilterBackgroundActivityDeltaTime"));
+	spiConfigSend(devHandle, FPGA_DVS, 32, sshsNodeGetBool(dvsNode, "TestEventGeneratorEnable"));
+}
+
+static void APSQuadROIConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
+	UNUSED_ARGUMENT(node);
+
+	libusb_device_handle *devHandle = userData;
+
+	if (event == ATTRIBUTE_MODIFIED) {
+		if (changeType == SHORT && str_equals(changeKey, "StartColumn1")) {
+			spiConfigSend(devHandle, FPGA_APS, 20, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "StartRow1")) {
+			spiConfigSend(devHandle, FPGA_APS, 21, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "EndColumn1")) {
+			spiConfigSend(devHandle, FPGA_APS, 22, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "EndRow1")) {
+			spiConfigSend(devHandle, FPGA_APS, 23, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "StartColumn2")) {
+			spiConfigSend(devHandle, FPGA_APS, 24, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "StartRow2")) {
+			spiConfigSend(devHandle, FPGA_APS, 25, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "EndColumn2")) {
+			spiConfigSend(devHandle, FPGA_APS, 26, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "EndRow2")) {
+			spiConfigSend(devHandle, FPGA_APS, 27, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "StartColumn3")) {
+			spiConfigSend(devHandle, FPGA_APS, 28, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "StartRow3")) {
+			spiConfigSend(devHandle, FPGA_APS, 29, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "EndColumn3")) {
+			spiConfigSend(devHandle, FPGA_APS, 30, changeValue.ushort);
+		}
+		else if (changeType == SHORT && str_equals(changeKey, "EndRow3")) {
+			spiConfigSend(devHandle, FPGA_APS, 31, changeValue.ushort);
+		}
+	}
+}
+
+static void sendAPSQuadROIConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	sshsNode apsNode = sshsGetRelativeNode(moduleNode, "aps/");
+
+	spiConfigSend(devHandle, FPGA_APS, 20, sshsNodeGetShort(apsNode, "StartColumn1"));
+	spiConfigSend(devHandle, FPGA_APS, 21, sshsNodeGetShort(apsNode, "StartRow1"));
+	spiConfigSend(devHandle, FPGA_APS, 22, sshsNodeGetShort(apsNode, "EndColumn1"));
+	spiConfigSend(devHandle, FPGA_APS, 23, sshsNodeGetShort(apsNode, "EndRow1"));
+	spiConfigSend(devHandle, FPGA_APS, 24, sshsNodeGetShort(apsNode, "StartColumn2"));
+	spiConfigSend(devHandle, FPGA_APS, 25, sshsNodeGetShort(apsNode, "StartRow2"));
+	spiConfigSend(devHandle, FPGA_APS, 26, sshsNodeGetShort(apsNode, "EndColumn2"));
+	spiConfigSend(devHandle, FPGA_APS, 27, sshsNodeGetShort(apsNode, "EndRow2"));
+	spiConfigSend(devHandle, FPGA_APS, 28, sshsNodeGetShort(apsNode, "StartColumn3"));
+	spiConfigSend(devHandle, FPGA_APS, 29, sshsNodeGetShort(apsNode, "StartRow3"));
+	spiConfigSend(devHandle, FPGA_APS, 30, sshsNodeGetShort(apsNode, "EndColumn3"));
+	spiConfigSend(devHandle, FPGA_APS, 31, sshsNodeGetShort(apsNode, "EndRow3"));
+}
+
+static void ExternalInputGeneratorConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
+	UNUSED_ARGUMENT(node);
+
+	libusb_device_handle *devHandle = userData;
+
+	if (event == ATTRIBUTE_MODIFIED) {
+		if (changeType == BOOL && str_equals(changeKey, "RunGenerator")) {
+			spiConfigSend(devHandle, FPGA_EXTINPUT, 7, changeValue.boolean);
+		}
+		else if (changeType == BOOL && str_equals(changeKey, "GenerateUseCustomSignal")) {
+			spiConfigSend(devHandle, FPGA_EXTINPUT, 8, changeValue.boolean);
+		}
+		else if (changeType == BOOL && str_equals(changeKey, "GeneratePulsePolarity")) {
+			spiConfigSend(devHandle, FPGA_EXTINPUT, 9, changeValue.boolean);
+		}
+		else if (changeType == INT && str_equals(changeKey, "GeneratePulseInterval")) {
+			spiConfigSend(devHandle, FPGA_EXTINPUT, 10, changeValue.uint);
+		}
+		else if (changeType == INT && str_equals(changeKey, "GeneratePulseLength")) {
+			spiConfigSend(devHandle, FPGA_EXTINPUT, 11, changeValue.uint);
+		}
+	}
+}
+
+static void sendExternalInputGeneratorConfig(sshsNode moduleNode, libusb_device_handle *devHandle) {
+	sshsNode extNode = sshsGetRelativeNode(moduleNode, "externalInput/");
+
+	spiConfigSend(devHandle, FPGA_EXTINPUT, 8, sshsNodeGetBool(extNode, "GenerateUseCustomSignal"));
+	spiConfigSend(devHandle, FPGA_EXTINPUT, 9, sshsNodeGetBool(extNode, "GeneratePulsePolarity"));
+	spiConfigSend(devHandle, FPGA_EXTINPUT, 10, sshsNodeGetInt(extNode, "GeneratePulseInterval"));
+	spiConfigSend(devHandle, FPGA_EXTINPUT, 11, sshsNodeGetInt(extNode, "GeneratePulseLength"));
+	spiConfigSend(devHandle, FPGA_EXTINPUT, 7, sshsNodeGetBool(extNode, "RunGenerator"));
+}
+

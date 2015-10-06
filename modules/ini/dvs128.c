@@ -30,6 +30,8 @@ caerEventPacketContainer caerInputDVS128(uint16_t moduleID) {
 	return (result);
 }
 
+static void createDefaultConfiguration(caerModuleData moduleData);
+static void sendDefaultConfiguration(caerModuleData moduleData);
 static void mainloopDataNotifyIncrease(void *p);
 static void mainloopDataNotifyDecrease(void *p);
 static void moduleShutdownNotify(void *p);
@@ -49,9 +51,6 @@ static void systemConfigListener(sshsNode node, void *userData, enum sshs_node_a
 static bool caerInputDVS128Init(caerModuleData moduleData) {
 	caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString, "Initializing module ...");
 
-	// First, always create all needed setting nodes, set their default values
-	// and add their listeners.
-
 	// USB port/bus/SN settings/restrictions.
 	// These can be used to force connection to one specific device at startup.
 	sshsNodePutByteIfAbsent(moduleData->moduleNode, "BusNumber", 0);
@@ -60,6 +59,92 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 
 	// Add auto-restart setting.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "Auto-Restart", true);
+
+	// Start data acquisition, and correctly notify mainloop of new data and module of exceptional
+	// shutdown cases (device pulled, ...).
+	char *serialNumber = sshsNodeGetString(moduleData->moduleNode, "SerialNumber");
+	moduleData->moduleState = caerDeviceOpen(moduleData->moduleID, CAER_DEVICE_DVS128,
+		sshsNodeGetByte(moduleData->moduleNode, "BusNumber"), sshsNodeGetByte(moduleData->moduleNode, "DevAddress"),
+		serialNumber);
+	free(serialNumber);
+
+	if (moduleData->moduleState == NULL) {
+		// Failed to open device.
+		return (false);
+	}
+
+	// Put global source information into SSHS.
+	struct caer_dvs128_info devInfo = caerDVS128InfoGet(moduleData->moduleState);
+
+	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
+
+	sshsNodePutShort(sourceInfoNode, "logicVersion", devInfo.logicVersion);
+	sshsNodePutBool(sourceInfoNode, "deviceIsMaster", devInfo.deviceIsMaster);
+
+	sshsNodePutShort(sourceInfoNode, "dvsSizeX", devInfo.dvsSizeX);
+	sshsNodePutShort(sourceInfoNode, "dvsSizeY", devInfo.dvsSizeY);
+
+	// Put source information for "virtual" APS frame that can be used to display and debug filter information.
+	sshsNodePutShort(sourceInfoNode, "apsSizeX", devInfo.dvsSizeX);
+	sshsNodePutShort(sourceInfoNode, "apsSizeY", devInfo.dvsSizeY);
+
+	caerModuleSetSubSystemString(moduleData, devInfo.deviceString);
+
+	// Ensure good defaults for data acquisition settings.
+	// No blocking behavior due to mainloop notification, and no auto-start of
+	// all producers to ensure cAER settings are respected.
+	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_DATAEXCHANGE,
+	CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, false);
+	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_DATAEXCHANGE,
+	CAER_HOST_CONFIG_DATAEXCHANGE_START_PRODUCERS, false);
+	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_DATAEXCHANGE,
+	CAER_HOST_CONFIG_DATAEXCHANGE_STOP_PRODUCERS, true);
+
+	// Create default settings and send them to the device.
+	createDefaultConfiguration(moduleData);
+	sendDefaultConfiguration(moduleData);
+
+	// Start data acquisition.
+	bool ret = caerDeviceDataStart(moduleData->moduleState, &mainloopDataNotifyIncrease, &mainloopDataNotifyDecrease,
+	NULL, &moduleShutdownNotify, moduleData->moduleNode);
+
+	if (!ret) {
+		// Failed to start data acquisition, close device and exit.
+		caerDeviceClose((caerDeviceHandle *) &moduleData->moduleState);
+
+		return (false);
+	}
+
+	return (true);
+}
+
+static void caerInputDVS128Exit(caerModuleData moduleData) {
+	caerDeviceDataStop(moduleData->moduleState);
+
+	caerDeviceClose((caerDeviceHandle *) &moduleData->moduleState);
+
+	if (sshsNodeGetBool(moduleData->moduleNode, "Auto-Restart")) {
+		// Prime input module again so that it will try to restart if new devices detected.
+		sshsNodePutBool(moduleData->moduleNode, "shutdown", false);
+	}
+}
+
+static void caerInputDVS128Run(caerModuleData moduleData, size_t argsNumber, va_list args) {
+	UNUSED_ARGUMENT(argsNumber);
+
+	// Interpret variable arguments (same as above in main function).
+	caerEventPacketContainer *container = va_arg(args, caerEventPacketContainer *);
+
+	*container = caerDeviceDataGet(moduleData->moduleState);
+
+	if (*container != NULL) {
+		caerMainloopFreeAfterLoop((void (*)(void *)) &caerEventPacketContainerFree, *container);
+	}
+}
+
+static void createDefaultConfiguration(caerModuleData moduleData) {
+	// First, always create all needed setting nodes, set their default values
+	// and add their listeners.
 
 	// Set default biases, from DVS128Fast.xml settings.
 	sshsNode biasNode = sshsGetRelativeNode(moduleData->moduleNode, "bias/");
@@ -107,89 +192,14 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(sysNode, "DataExchangeBufferSize", 64);
 
 	sshsNodeAddAttrListener(sysNode, moduleData, &systemConfigListener);
+}
 
-	// Start data acquisition, and correctly notify mainloop of new data and module of exceptional
-	// shutdown cases (device pulled, ...).
-	char *serialNumber = sshsNodeGetString(moduleData->moduleNode, "SerialNumber");
-	moduleData->moduleState = caerDeviceOpen(moduleData->moduleID, CAER_DEVICE_DVS128,
-		sshsNodeGetByte(moduleData->moduleNode, "BusNumber"), sshsNodeGetByte(moduleData->moduleNode, "DevAddress"),
-		serialNumber);
-	free(serialNumber);
-
-	if (moduleData->moduleState == NULL) {
-		// Failed to open device.
-		return (false);
-	}
-
-	// Put global source information into SSHS.
-	struct caer_dvs128_info devInfo = caerDVS128InfoGet(moduleData->moduleState);
-
-	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
-
-	sshsNodePutShort(sourceInfoNode, "logicVersion", devInfo.logicVersion);
-	sshsNodePutBool(sourceInfoNode, "deviceIsMaster", devInfo.deviceIsMaster);
-
-	sshsNodePutShort(sourceInfoNode, "dvsSizeX", devInfo.dvsSizeX);
-	sshsNodePutShort(sourceInfoNode, "dvsSizeY", devInfo.dvsSizeY);
-
-	// Put source information for "virtual" APS frame that can be used to display and debug filter information.
-	sshsNodePutShort(sourceInfoNode, "apsSizeX", devInfo.dvsSizeX);
-	sshsNodePutShort(sourceInfoNode, "apsSizeY", devInfo.dvsSizeY);
-
-	caerModuleSetSubSystemString(moduleData, devInfo.deviceString);
-
-	// Ensure good defaults for data acquisition settings.
-	// No blocking behavior due to mainloop notification, and no auto-start of
-	// all producers to ensure cAER settings are respected.
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_DATAEXCHANGE,
-	CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, false);
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_DATAEXCHANGE,
-	CAER_HOST_CONFIG_DATAEXCHANGE_START_PRODUCERS, false);
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_DATAEXCHANGE,
-	CAER_HOST_CONFIG_DATAEXCHANGE_STOP_PRODUCERS, true);
-
+static void sendDefaultConfiguration(caerModuleData moduleData) {
 	// Send cAER configuration to libcaer and device.
-	biasConfigSend(biasNode, moduleData);
-	systemConfigSend(sysNode, moduleData);
-	usbConfigSend(usbNode, moduleData);
-	dvsConfigSend(dvsNode, moduleData);
-
-	// Start data acquisition.
-	bool ret = caerDeviceDataStart(moduleData->moduleState, &mainloopDataNotifyIncrease, &mainloopDataNotifyDecrease,
-	NULL, &moduleShutdownNotify, moduleData->moduleNode);
-
-	if (!ret) {
-		// Failed to start data acquisition, close device and exit.
-		caerDeviceClose((caerDeviceHandle *) &moduleData->moduleState);
-
-		return (false);
-	}
-
-	return (true);
-}
-
-static void caerInputDVS128Exit(caerModuleData moduleData) {
-	caerDeviceDataStop(moduleData->moduleState);
-
-	caerDeviceClose((caerDeviceHandle *) &moduleData->moduleState);
-
-	if (sshsNodeGetBool(moduleData->moduleNode, "Auto-Restart")) {
-		// Prime input module again so that it will try to restart if new devices detected.
-		sshsNodePutBool(moduleData->moduleNode, "shutdown", false);
-	}
-}
-
-static void caerInputDVS128Run(caerModuleData moduleData, size_t argsNumber, va_list args) {
-	UNUSED_ARGUMENT(argsNumber);
-
-	// Interpret variable arguments (same as above in main function).
-	caerEventPacketContainer *container = va_arg(args, caerEventPacketContainer *);
-
-	*container = caerDeviceDataGet(moduleData->moduleState);
-
-	if (*container != NULL) {
-		caerMainloopFreeAfterLoop((void (*)(void *)) &caerEventPacketContainerFree, *container);
-	}
+	biasConfigSend(sshsGetRelativeNode(moduleData->moduleNode, "bias/"), moduleData);
+	systemConfigSend(sshsGetRelativeNode(moduleData->moduleNode, "system/"), moduleData);
+	usbConfigSend(sshsGetRelativeNode(moduleData->moduleNode, "usb/"), moduleData);
+	dvsConfigSend(sshsGetRelativeNode(moduleData->moduleNode, "dvs/"), moduleData);
 }
 
 static void mainloopDataNotifyIncrease(void *p) {
