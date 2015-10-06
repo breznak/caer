@@ -36,15 +36,15 @@ static void mainloopDataNotifyIncrease(void *p);
 static void mainloopDataNotifyDecrease(void *p);
 static void moduleShutdownNotify(void *p);
 static void biasConfigSend(sshsNode node, caerModuleData moduleData);
-static void dvsConfigSend(sshsNode node, caerModuleData moduleData);
-static void usbConfigSend(sshsNode node, caerModuleData moduleData);
-static void systemConfigSend(sshsNode node, caerModuleData moduleData);
 static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
+static void dvsConfigSend(sshsNode node, caerModuleData moduleData);
 static void dvsConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
+static void usbConfigSend(sshsNode node, caerModuleData moduleData);
 static void usbConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
+static void systemConfigSend(sshsNode node, caerModuleData moduleData);
 static void systemConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
@@ -247,41 +247,6 @@ static void biasConfigSend(sshsNode node, caerModuleData moduleData) {
 	caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_PR, sshsNodeGetInt(node, "pr"));
 }
 
-static void dvsConfigSend(sshsNode node, caerModuleData moduleData) {
-	caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_DVS, DVS128_CONFIG_DVS_ARRAY_RESET,
-		sshsNodeGetBool(node, "ArrayReset"));
-	caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_DVS, DVS128_CONFIG_DVS_TIMESTAMP_RESET,
-		sshsNodeGetBool(node, "TimestampReset"));
-	caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_DVS, DVS128_CONFIG_DVS_RUN,
-		sshsNodeGetBool(node, "Run"));
-}
-
-static void usbConfigSend(sshsNode node, caerModuleData moduleData) {
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_USB, CAER_HOST_CONFIG_USB_BUFFER_NUMBER,
-		sshsNodeGetInt(node, "BufferNumber"));
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_USB, CAER_HOST_CONFIG_USB_BUFFER_SIZE,
-		sshsNodeGetInt(node, "BufferSize"));
-}
-
-static void systemConfigSend(sshsNode node, caerModuleData moduleData) {
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS, CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_SIZE,
-		sshsNodeGetInt(node, "PacketContainerMaxSize"));
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-	CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_INTERVAL, sshsNodeGetInt(node, "PacketContainerMaxInterval"));
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS, CAER_HOST_CONFIG_PACKETS_MAX_POLARITY_SIZE,
-		sshsNodeGetInt(node, "PolarityPacketMaxSize"));
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-	CAER_HOST_CONFIG_PACKETS_MAX_POLARITY_INTERVAL, sshsNodeGetInt(node, "PolarityPacketMaxInterval"));
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS, CAER_HOST_CONFIG_PACKETS_MAX_SPECIAL_SIZE,
-		sshsNodeGetInt(node, "SpecialPacketMaxSize"));
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-	CAER_HOST_CONFIG_PACKETS_MAX_SPECIAL_INTERVAL, sshsNodeGetInt(node, "SpecialPacketMaxInterval"));
-
-	// Changes only take effect on module start!
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_DATAEXCHANGE,
-	CAER_HOST_CONFIG_DATAEXCHANGE_BUFFER_SIZE, sshsNodeGetInt(node, "DataExchangeBufferSize"));
-}
-
 static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
 	UNUSED_ARGUMENT(node);
@@ -332,6 +297,15 @@ static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_att
 	}
 }
 
+static void dvsConfigSend(sshsNode node, caerModuleData moduleData) {
+	caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_DVS, DVS128_CONFIG_DVS_ARRAY_RESET,
+		sshsNodeGetBool(node, "ArrayReset"));
+	caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_DVS, DVS128_CONFIG_DVS_TIMESTAMP_RESET,
+		sshsNodeGetBool(node, "TimestampReset"));
+	caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_DVS, DVS128_CONFIG_DVS_RUN,
+		sshsNodeGetBool(node, "Run"));
+}
+
 static void dvsConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
 	UNUSED_ARGUMENT(node);
@@ -353,6 +327,13 @@ static void dvsConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 	}
 }
 
+static void usbConfigSend(sshsNode node, caerModuleData moduleData) {
+	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_USB, CAER_HOST_CONFIG_USB_BUFFER_NUMBER,
+		sshsNodeGetInt(node, "BufferNumber"));
+	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_USB, CAER_HOST_CONFIG_USB_BUFFER_SIZE,
+		sshsNodeGetInt(node, "BufferSize"));
+}
+
 static void usbConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
 	UNUSED_ARGUMENT(node);
@@ -369,6 +350,25 @@ static void usbConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 				changeValue.uint);
 		}
 	}
+}
+
+static void systemConfigSend(sshsNode node, caerModuleData moduleData) {
+	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS, CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_SIZE,
+		sshsNodeGetInt(node, "PacketContainerMaxSize"));
+	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
+	CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_INTERVAL, sshsNodeGetInt(node, "PacketContainerMaxInterval"));
+	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS, CAER_HOST_CONFIG_PACKETS_MAX_POLARITY_SIZE,
+		sshsNodeGetInt(node, "PolarityPacketMaxSize"));
+	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
+	CAER_HOST_CONFIG_PACKETS_MAX_POLARITY_INTERVAL, sshsNodeGetInt(node, "PolarityPacketMaxInterval"));
+	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS, CAER_HOST_CONFIG_PACKETS_MAX_SPECIAL_SIZE,
+		sshsNodeGetInt(node, "SpecialPacketMaxSize"));
+	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
+	CAER_HOST_CONFIG_PACKETS_MAX_SPECIAL_INTERVAL, sshsNodeGetInt(node, "SpecialPacketMaxInterval"));
+
+	// Changes only take effect on module start!
+	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_DATAEXCHANGE,
+	CAER_HOST_CONFIG_DATAEXCHANGE_BUFFER_SIZE, sshsNodeGetInt(node, "DataExchangeBufferSize"));
 }
 
 static void systemConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
