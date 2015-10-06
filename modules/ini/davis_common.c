@@ -1,33 +1,8 @@
 #include "davis_common.h"
 
-static void createVDACBiasSetting(biasDescriptor *chipBiases, sshsNode biasNode, const char *biasName,
-	uint8_t biasAddress, uint8_t currentValue, uint8_t voltageValue) {
-	size_t biasNameLength = strlen(biasName);
-
-	// Find first free bias descriptor slot.
-	size_t i;
-	for (i = 0; i < BIAS_MAX_NUM_DESC; i++) {
-		if (chipBiases[i] == NULL) {
-			// Found empty slot.
-			break;
-		}
-	}
-
-	// Allocate memory for bias descriptor.
-	chipBiases[i] = calloc(1, sizeof(struct bias_descriptor) + biasNameLength + 1); // +1 for string closing NUL character.
-	if (chipBiases[i] == NULL) {
-		caerLog(LOG_EMERGENCY, "DAVIS VDAC Bias", "Unable to allocate memory for bias configuration.");
-		exit(EXIT_FAILURE);
-	}
-
-	// Setup bias descriptor for dynamic configuration.
-	chipBiases[i]->address = biasAddress;
-	chipBiases[i]->generatorFunction = &generateVDACBias;
-	chipBiases[i]->nameLength = biasNameLength;
-	memcpy(chipBiases[i]->name, biasName, biasNameLength);
-	chipBiases[i]->name[biasNameLength] = '\0';
-
+static void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8_t currentValue, uint8_t voltageValue) {
 	// Add trailing slash to node name (required!).
+	size_t biasNameLength = strlen(biasName);
 	char biasNameFull[biasNameLength + 2];
 	memcpy(biasNameFull, biasName, biasNameLength);
 	biasNameFull[biasNameLength] = '/';
@@ -52,43 +27,17 @@ static uint16_t generateVDACBias(sshsNode biasNode, const char *biasName) {
 	// Get bias configuration node.
 	sshsNode biasConfigNode = sshsGetRelativeNode(biasNode, biasNameFull);
 
-	uint16_t biasValue = 0;
-
 	// Build up bias value from all its components.
-	biasValue |= U16T((sshsNodeGetByte(biasConfigNode, "voltageValue") & 0x3F) << 0);
-	biasValue |= U16T((sshsNodeGetByte(biasConfigNode, "currentValue") & 0x07) << 6);
+	struct caer_bias_vdac biasValue = { .voltageValue = sshsNodeGetByte(biasConfigNode, "voltageValue"), .currentValue =
+		sshsNodeGetByte(biasConfigNode, "currentValue"), };
 
-	return (biasValue);
+	return (caerBiasVDACGenerate(biasValue));
 }
 
-static void createCoarseFineBiasSetting(biasDescriptor *chipBiases, sshsNode biasNode, const char *biasName,
-	uint8_t biasAddress, const char *type, const char *sex, uint8_t coarseValue, uint8_t fineValue, bool enabled) {
-	size_t biasNameLength = strlen(biasName);
-
-	// Find first free bias descriptor slot.
-	size_t i;
-	for (i = 0; i < BIAS_MAX_NUM_DESC; i++) {
-		if (chipBiases[i] == NULL) {
-			// Found empty slot.
-			break;
-		}
-	}
-
-	// Allocate memory for bias descriptor.
-	chipBiases[i] = calloc(1, sizeof(struct bias_descriptor) + biasNameLength + 1); // +1 for string closing NUL character.
-	if (chipBiases[i] == NULL) {
-		caerLog(LOG_EMERGENCY, "DAVIS CF Bias", "Unable to allocate memory for bias configuration.");
-		exit(EXIT_FAILURE);
-	}
-
-	// Setup bias descriptor for dynamic configuration.
-	chipBiases[i]->address = biasAddress;
-	chipBiases[i]->generatorFunction = &generateCoarseFineBias;
-	chipBiases[i]->nameLength = biasNameLength;
-	memcpy(chipBiases[i]->name, biasName, biasNameLength);
-	chipBiases[i]->name[biasNameLength] = '\0';
-
+static void createCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, const char *type, const char *sex,
+	uint8_t coarseValue, uint8_t fineValue, bool enabled) {
 	// Add trailing slash to node name (required!).
+	size_t biasNameLength = strlen(biasName);
 	char biasNameFull[biasNameLength + 2];
 	memcpy(biasNameFull, biasName, biasNameLength);
 	biasNameFull[biasNameLength] = '/';
@@ -117,56 +66,21 @@ static uint16_t generateCoarseFineBias(sshsNode biasNode, const char *biasName) 
 	// Get bias configuration node.
 	sshsNode biasConfigNode = sshsGetRelativeNode(biasNode, biasNameFull);
 
-	uint16_t biasValue = 0;
-
 	// Build up bias value from all its components.
-	if (sshsNodeGetBool(biasConfigNode, "enabled")) {
-		biasValue |= 0x01;
-	}
-	if (str_equals(sshsNodeGetString(biasConfigNode, "sex"), "N")) {
-		biasValue |= 0x02;
-	}
-	if (str_equals(sshsNodeGetString(biasConfigNode, "type"), "Normal")) {
-		biasValue |= 0x04;
-	}
-	if (str_equals(sshsNodeGetString(biasConfigNode, "currentLevel"), "Normal")) {
-		biasValue |= 0x08;
-	}
+	struct caer_bias_coarsefine biasValue = { .coarseValue = sshsNodeGetByte(biasConfigNode, "coarseValue"),
+		.fineValue = sshsNodeGetByte(biasConfigNode, "fineValue"),
+		.enabled = sshsNodeGetBool(biasConfigNode, "enabled"), .sexN = caerStrEquals(
+			sshsNodeGetString(biasConfigNode, "sex"), "N"), .typeNormal = caerStrEquals(
+			sshsNodeGetString(biasConfigNode, "type"), "Normal"), .currentLevelNormal = caerStrEquals(
+			sshsNodeGetString(biasConfigNode, "currentLevel"), "Normal"), };
 
-	biasValue |= U16T((sshsNodeGetByte(biasConfigNode, "fineValue") & 0xFF) << 4);
-	biasValue |= U16T((sshsNodeGetByte(biasConfigNode, "coarseValue") & 0x07) << 12);
-
-	return (biasValue);
+	return (caerBiasCoarseFineGenerate(biasValue));
 }
 
-static void createShiftedSourceBiasSetting(biasDescriptor *chipBiases, sshsNode biasNode, const char *biasName,
-	uint8_t biasAddress, uint8_t regValue, uint8_t refValue, const char *operatingMode, const char *voltageLevel) {
-	size_t biasNameLength = strlen(biasName);
-
-	// Find first free bias descriptor slot.
-	size_t i;
-	for (i = 0; i < BIAS_MAX_NUM_DESC; i++) {
-		if (chipBiases[i] == NULL) {
-			// Found empty slot.
-			break;
-		}
-	}
-
-	// Allocate memory for bias descriptor.
-	chipBiases[i] = calloc(1, sizeof(struct bias_descriptor) + biasNameLength + 1); // +1 for string closing NUL character.
-	if (chipBiases[i] == NULL) {
-		caerLog(LOG_EMERGENCY, "DAVIS SS Bias", "Unable to allocate memory for bias configuration.");
-		exit(EXIT_FAILURE);
-	}
-
-	// Setup bias descriptor for dynamic configuration.
-	chipBiases[i]->address = biasAddress;
-	chipBiases[i]->generatorFunction = &generateShiftedSourceBias;
-	chipBiases[i]->nameLength = biasNameLength;
-	memcpy(chipBiases[i]->name, biasName, biasNameLength);
-	chipBiases[i]->name[biasNameLength] = '\0';
-
+static void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasName, uint8_t regValue, uint8_t refValue,
+	const char *operatingMode, const char *voltageLevel) {
 	// Add trailing slash to node name (required!).
+	size_t biasNameLength = strlen(biasName);
 	char biasNameFull[biasNameLength + 2];
 	memcpy(biasNameFull, biasName, biasNameLength);
 	biasNameFull[biasNameLength] = '/';
@@ -193,26 +107,19 @@ static uint16_t generateShiftedSourceBias(sshsNode biasNode, const char *biasNam
 	// Get bias configuration node.
 	sshsNode biasConfigNode = sshsGetRelativeNode(biasNode, biasNameFull);
 
-	uint16_t biasValue = 0;
+	// Build up bias value from all its components.
+	struct caer_bias_shiftedsource biasValue = { .refValue = sshsNodeGetByte(biasConfigNode, "refValue"), .regValue =
+		sshsNodeGetByte(biasConfigNode, "regValue"), .operatingMode =
+		(caerStrEquals(sshsNodeGetString(biasConfigNode, "operatingMode"), "HiZ")) ?
+			(HI_Z) :
+			((caerStrEquals(sshsNodeGetString(biasConfigNode, "operatingMode"), "TiedToRail")) ?
+				(TIED_TO_RAIL) : (SHIFTED_SOURCE)), .voltageLevel =
+		(caerStrEquals(sshsNodeGetString(biasConfigNode, "voltageLevel"), "SingleDiode")) ?
+			(SINGLE_DIODE) :
+			((caerStrEquals(sshsNodeGetString(biasConfigNode, "voltageLevel"), "DoubleDiode")) ?
+				(DOUBLE_DIODE) : (SPLIT_GATE)), };
 
-	if (str_equals(sshsNodeGetString(biasConfigNode, "operatingMode"), "HiZ")) {
-		biasValue |= 0x01;
-	}
-	else if (str_equals(sshsNodeGetString(biasConfigNode, "operatingMode"), "TiedToRail")) {
-		biasValue |= 0x02;
-	}
-
-	if (str_equals(sshsNodeGetString(biasConfigNode, "voltageLevel"), "SingleDiode")) {
-		biasValue |= (0x01 << 2);
-	}
-	else if (str_equals(sshsNodeGetString(biasConfigNode, "voltageLevel"), "DoubleDiode")) {
-		biasValue |= (0x02 << 2);
-	}
-
-	biasValue |= U16T((sshsNodeGetByte(biasConfigNode, "refValue") & 0x3F) << 4);
-	biasValue |= U16T((sshsNodeGetByte(biasConfigNode, "regValue") & 0x3F) << 10);
-
-	return (biasValue);
+	return (caerBiasShiftedSourceGenerate(biasValue));
 }
 
 bool deviceOpenInfo(caerModuleData moduleData, davisCommonState cstate, uint16_t VID, uint16_t PID, uint8_t DID_TYPE) {
