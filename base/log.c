@@ -45,13 +45,8 @@ void caerLogInit(void) {
 
 	free(logFile);
 
-	// Redirect stderr/caerLog() to the log file.
-	if (dup2(CAER_LOG_FILE_FD, STDERR_FILENO) != STDERR_FILENO) {
-		caerLog(CAER_LOG_EMERGENCY, "Logger", "Failed to redirect stderr to log file.");
-		close(CAER_LOG_FILE_FD);
-
-		exit(EXIT_FAILURE);
-	}
+	// Send log messages to both stderr and the log file.
+	caerLogFileDescriptorsSet(STDERR_FILENO, CAER_LOG_FILE_FD);
 
 	// Make sure log file gets flushed at exit time.
 	atexit(&caerLogShutDownWriteBack);
@@ -73,8 +68,11 @@ void caerLogInit(void) {
 static void caerLogShutDownWriteBack(void) {
 	caerLog(CAER_LOG_DEBUG, "Logger", "Shutting down ...");
 
-	// Ensure proper flushing and closing of the log file at shutdown.
+	// Flush interactive outputs.
+	fflush(stdout);
 	fflush(stderr);
+
+	// Ensure proper flushing and closing of the log file at shutdown.
 	fsync(CAER_LOG_FILE_FD);
 	close(CAER_LOG_FILE_FD);
 }

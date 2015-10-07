@@ -55,11 +55,8 @@ void caerDaemonize(void) {
 		exit(EXIT_FAILURE);
 	}
 
-	// Close stdin and stdout fds, disable console logging.
+	// Redirect stdin to /dev/null, stdout and stderr to the log-file.
 	close(STDIN_FILENO); // stdin
-	close(STDOUT_FILENO); // stdout
-
-	// Redirect stdin to /dev/null and stdout to the log-file, just to be sure.
 	if (open("/dev/null", O_RDONLY) != STDIN_FILENO) {
 		caerLog(CAER_LOG_EMERGENCY, "Daemonize", "Failed to redirect stdin to log file.");
 		exit(EXIT_FAILURE);
@@ -69,6 +66,14 @@ void caerDaemonize(void) {
 		caerLog(CAER_LOG_EMERGENCY, "Daemonize", "Failed to redirect stdout to log file.");
 		exit(EXIT_FAILURE);
 	}
+
+	if (dup2(CAER_LOG_FILE_FD, STDERR_FILENO) != STDERR_FILENO) {
+		caerLog(CAER_LOG_EMERGENCY, "Daemonize", "Failed to redirect stderr to log file.");
+		exit(EXIT_FAILURE);
+	}
+
+	// Disable stderr logging for caerLog(), keep only the direct logging to file there.
+	caerLogFileDescriptorsSet(-1, CAER_LOG_FILE_FD);
 
 	// At this point everything should be ok and we can return!
 }
