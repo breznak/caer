@@ -39,10 +39,6 @@ static bool mainloop_1(void) {
 	container = caerInputDAVISFX3(1);
 #endif
 
-	if (container == NULL) {
-		return (true); // Just skip on empty container.
-	}
-
 	// Typed EventPackets contain events of a certain type.
 	caerSpecialEventPacket special = (caerSpecialEventPacket) caerEventPacketContainerGetEventPacket(container,
 		SPECIAL_EVENT);
@@ -89,10 +85,6 @@ static bool mainloop_2(void) {
 #ifdef DAVISFX3
 	container = caerInputDAVISFX3(1);
 #endif
-
-	if (container == NULL) {
-		return (true); // Just skip on empty container.
-	}
 
 	// Typed EventPackets contain events of a certain type.
 	caerPolarityEventPacket polarity = (caerPolarityEventPacket) caerEventPacketContainerGetEventPacket(container,
