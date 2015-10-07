@@ -171,7 +171,7 @@ static void caerModuleShutdownListener(sshsNode node, void *userData, enum sshs_
 
 	caerModuleData data = userData;
 
-	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && strcmp(changeKey, "shutdown") == 0) {
+	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && caerStrEquals(changeKey, "shutdown")) {
 		// Shutdown changed, let's see.
 		if (changeValue.boolean == true) {
 			atomic_store(&data->running, false);

@@ -105,7 +105,7 @@ static char *getFullFilePath(const char *subSystemString, const char *directory,
 	char currentTimeString[currentTimeStringLength + 1]; // + 1 for terminating NUL byte.
 	strftime(currentTimeString, currentTimeStringLength + 1, "%Y-%m-%d_%H:%M:%S", &currentTime);
 
-	if (strcmp(prefix, "") == 0) {
+	if (caerStrEquals(prefix, "")) {
 		// If the prefix is the empty string, use a minimal one.
 		prefix = DEFAULT_PREFIX;
 	}
@@ -304,16 +304,16 @@ static void caerOutputFileConfigListener(sshsNode node, void *userData, enum ssh
 	// Distinguish changes to the validOnly flag or to the filename, by setting
 	// configUpdate appropriately like a bit-field.
 	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == BOOL && strcmp(changeKey, "validEventsOnly") == 0) {
+		if (changeType == BOOL && caerStrEquals(changeKey, "validEventsOnly")) {
 			atomic_fetch_or(&data->configUpdate, (0x01 << 0));
 		}
 
-		if (changeType == STRING && (strcmp(changeKey, "directory") == 0 || strcmp(changeKey, "prefix") == 0)) {
+		if (changeType == STRING && (caerStrEquals(changeKey, "directory") || caerStrEquals(changeKey, "prefix"))) {
 			atomic_fetch_or(&data->configUpdate, (0x01 << 1));
 		}
 
-		if ((changeType == BOOL && strcmp(changeKey, "excludeHeader") == 0)
-			|| (changeType == INT && strcmp(changeKey, "maxBytesPerPacket") == 0)) {
+		if ((changeType == BOOL && caerStrEquals(changeKey, "excludeHeader"))
+			|| (changeType == INT && caerStrEquals(changeKey, "maxBytesPerPacket"))) {
 			atomic_fetch_or(&data->configUpdate, (0x01 << 2));
 		}
 	}

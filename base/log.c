@@ -90,7 +90,7 @@ static void caerLogLevelListener(sshsNode node, void *userData, enum sshs_node_a
 	UNUSED_ARGUMENT(node);
 	UNUSED_ARGUMENT(userData);
 
-	if (event == ATTRIBUTE_MODIFIED && changeType == BYTE && strcmp(changeKey, "logLevel") == 0) {
+	if (event == ATTRIBUTE_MODIFIED && changeType == BYTE && caerStrEquals(changeKey, "logLevel")) {
 		// Update the global log level asynchronously.
 		caerLogLevelSet(changeValue.ubyte);
 		caerLog(CAER_LOG_DEBUG, "Logger", "Log-level set to %" PRIu8 ".", changeValue.ubyte);

@@ -48,7 +48,7 @@ void caerConfigInit(const char *configFile, int argc, char *argv[]) {
 	if (argc > 1) {
 		// Format: -o node key type value (5 arguments). Equal to caerctl format.
 		for (size_t i = 1; i < (size_t) argc; i += 5) {
-			if ((i + 4) < (size_t) argc && strcmp(argv[i], "-o") == 0) {
+			if ((i + 4) < (size_t) argc && caerStrEquals(argv[i], "-o")) {
 				sshsNode node = sshsGetNode(sshsGetGlobal(), argv[i + 1]);
 				if (node == NULL) {
 					caerLog(CAER_LOG_EMERGENCY, "Config", "SSHS Node %s doesn't exist.", argv[i + 1]);

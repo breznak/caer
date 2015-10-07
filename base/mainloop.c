@@ -287,7 +287,7 @@ static void caerMainloopShutdownListener(sshsNode node, void *userData, enum ssh
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
 	UNUSED_ARGUMENT(node);
 
-	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && strcmp(changeKey, "shutdown") == 0) {
+	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && caerStrEquals(changeKey, "shutdown")) {
 		// Shutdown changed, let's see.
 		if (changeValue.boolean == true) {
 			// Shutdown requested!

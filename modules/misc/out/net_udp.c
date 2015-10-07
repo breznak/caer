@@ -215,17 +215,17 @@ static void caerOutputNetUDPConfigListener(sshsNode node, void *userData, enum s
 	// Distinguish changes to the validOnly flag or to the UDP client, by setting
 	// configUpdate appropriately like a bit-field.
 	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == BOOL && strcmp(changeKey, "validEventsOnly") == 0) {
+		if (changeType == BOOL && caerStrEquals(changeKey, "validEventsOnly")) {
 			atomic_fetch_or(&data->configUpdate, (0x01 << 0));
 		}
 
-		if ((changeType == STRING && strcmp(changeKey, "ipAddress") == 0)
-			|| (changeType == SHORT && strcmp(changeKey, "portNumber") == 0)) {
+		if ((changeType == STRING && caerStrEquals(changeKey, "ipAddress"))
+			|| (changeType == SHORT && caerStrEquals(changeKey, "portNumber"))) {
 			atomic_fetch_or(&data->configUpdate, (0x01 << 1));
 		}
 
-		if ((changeType == BOOL && strcmp(changeKey, "excludeHeader") == 0)
-			|| (changeType == INT && strcmp(changeKey, "maxBytesPerPacket") == 0)) {
+		if ((changeType == BOOL && caerStrEquals(changeKey, "excludeHeader"))
+			|| (changeType == INT && caerStrEquals(changeKey, "maxBytesPerPacket"))) {
 			atomic_fetch_or(&data->configUpdate, (0x01 << 2));
 		}
 	}

@@ -61,7 +61,7 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	state->serverDescriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (state->serverDescriptor < 0) {
 		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create TCP server socket. Error: %d.",
-			errno);
+		errno);
 		return (false);
 	}
 
@@ -88,7 +88,7 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	// Bind socket to above address.
 	if (bind(state->serverDescriptor, (struct sockaddr *) &tcpServer, sizeof(struct sockaddr_in)) < 0) {
 		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not bind TCP server socket. Error: %d.",
-			errno);
+		errno);
 		close(state->serverDescriptor);
 		return (false);
 	}
@@ -296,7 +296,7 @@ static void caerOutputNetTCPServerConfig(caerModuleData moduleData) {
 		int newServerDescriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (newServerDescriptor < 0) {
 			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create TCP socket. Error: %d.",
-				errno);
+			errno);
 			goto configUpdate_2;
 		}
 
@@ -417,21 +417,21 @@ static void caerOutputNetTCPServerConfigListener(sshsNode node, void *userData, 
 	// Distinguish changes to the validOnly flag or to the TCP server, by setting
 	// configUpdate appropriately like a bit-field.
 	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == BOOL && strcmp(changeKey, "validEventsOnly") == 0) {
+		if (changeType == BOOL && caerStrEquals(changeKey, "validEventsOnly")) {
 			atomic_fetch_or(&data->configUpdate, (0x01 << 0));
 		}
 
-		if ((changeType == STRING && strcmp(changeKey, "ipAddress") == 0)
-			|| (changeType == SHORT && strcmp(changeKey, "portNumber") == 0)) {
+		if ((changeType == STRING && caerStrEquals(changeKey, "ipAddress"))
+			|| (changeType == SHORT && caerStrEquals(changeKey, "portNumber"))) {
 			atomic_fetch_or(&data->configUpdate, (0x01 << 1));
 		}
 
-		if (changeType == SHORT && strcmp(changeKey, "concurrentConnections") == 0) {
+		if (changeType == SHORT && caerStrEquals(changeKey, "concurrentConnections")) {
 			atomic_fetch_or(&data->configUpdate, (0x01 << 2));
 		}
 
-		if ((changeType == BOOL && strcmp(changeKey, "excludeHeader") == 0)
-			|| (changeType == INT && strcmp(changeKey, "maxBytesPerPacket") == 0)) {
+		if ((changeType == BOOL && caerStrEquals(changeKey, "excludeHeader"))
+			|| (changeType == INT && caerStrEquals(changeKey, "maxBytesPerPacket"))) {
 			atomic_fetch_or(&data->configUpdate, (0x01 << 3));
 		}
 	}
