@@ -596,7 +596,7 @@ static void biasConfigSend(sshsNode node, caerModuleData moduleData, struct caer
 			generateCoarseFineBias(node, "IFRefrBn"));
 		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_PADFOLLBN,
 			generateCoarseFineBias(node, "PadFollBn"));
-		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_APSOVERFLOWLEVEL,
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_APSOVERFLOWLEVELBN,
 			generateCoarseFineBias(node, "ApsOverflowLevelBn"));
 
 		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_BIASBUFFER,
