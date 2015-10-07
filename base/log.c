@@ -33,7 +33,7 @@ void caerLogInit(void) {
 
 	// Try to open the specified file and error out if not possible.
 	char *logFile = sshsNodeGetString(logNode, "logFile");
-	int logFileFd = open(logFile, O_APPEND | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP);
+	int logFileFd = open(logFile, O_WRONLY | O_APPEND | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP);
 
 	if (logFileFd != CAER_LOG_FILE_FD) {
 		// Must be able to open log file! _REQUIRED_
@@ -46,8 +46,6 @@ void caerLogInit(void) {
 	free(logFile);
 
 	// Redirect stderr/caerLog() to the log file.
-	close(STDERR_FILENO); // stderr
-
 	if (dup2(CAER_LOG_FILE_FD, STDERR_FILENO) != STDERR_FILENO) {
 		caerLog(CAER_LOG_EMERGENCY, "Logger", "Failed to redirect stderr to log file.");
 		close(CAER_LOG_FILE_FD);
@@ -76,6 +74,7 @@ static void caerLogShutDownWriteBack(void) {
 	caerLog(CAER_LOG_DEBUG, "Logger", "Shutting down ...");
 
 	// Ensure proper flushing and closing of the log file at shutdown.
+	fflush(stderr);
 	fsync(CAER_LOG_FILE_FD);
 	close(CAER_LOG_FILE_FD);
 }
