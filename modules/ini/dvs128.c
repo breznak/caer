@@ -106,7 +106,7 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 
 	// Start data acquisition.
 	bool ret = caerDeviceDataStart(moduleData->moduleState, &mainloopDataNotifyIncrease, &mainloopDataNotifyDecrease,
-	NULL, &moduleShutdownNotify, moduleData->moduleNode);
+	caerMainloopGetReference(), &moduleShutdownNotify, moduleData->moduleNode);
 
 	if (!ret) {
 		// Failed to start data acquisition, close device and exit.
@@ -203,15 +203,15 @@ static void sendDefaultConfiguration(caerModuleData moduleData) {
 }
 
 static void mainloopDataNotifyIncrease(void *p) {
-	UNUSED_ARGUMENT(p);
+	caerMainloopData mainloopData = p;
 
-	caerMainloopDataAvailableIncrease();
+	atomic_fetch_add(&mainloopData->dataAvailable, 1);
 }
 
 static void mainloopDataNotifyDecrease(void *p) {
-	UNUSED_ARGUMENT(p);
+	caerMainloopData mainloopData = p;
 
-	caerMainloopDataAvailableDecrease();
+	atomic_fetch_sub(&mainloopData->dataAvailable, 1);
 }
 
 static void moduleShutdownNotify(void *p) {

@@ -238,16 +238,10 @@ void caerMainloopFreeAfterLoop(void (*func)(void *mem), void *memPtr) {
 	utarray_push_back(mainloopData->memoryToFree, &memFree);
 }
 
-void caerMainloopDataAvailableIncrease(void) {
-	caerMainloopData mainloopData = glMainloopData;
-
-	atomic_fetch_add(&mainloopData->dataAvailable, 1);
-}
-
-void caerMainloopDataAvailableDecrease(void) {
-	caerMainloopData mainloopData = glMainloopData;
-
-	atomic_fetch_sub(&mainloopData->dataAvailable, 1);
+// Only use this inside the mainloop-thread, not inside any other thread,
+// like additional data acquisition threads or output threads.
+caerMainloopData caerMainloopGetReference(void) {
+	return (glMainloopData);
 }
 
 static inline caerModuleData findSourceModule(uint16_t source) {

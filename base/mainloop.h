@@ -37,8 +37,7 @@ struct caer_mainloop_definition {
 void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numLoops);
 caerModuleData caerMainloopFindModule(uint16_t moduleID, const char *moduleShortName);
 void caerMainloopFreeAfterLoop(void (*func)(void *mem), void *memPtr);
-void caerMainloopDataAvailableIncrease(void);
-void caerMainloopDataAvailableDecrease(void);
+caerMainloopData caerMainloopGetReference(void);
 sshsNode caerMainloopGetSourceInfo(uint16_t source);
 void *caerMainloopGetSourceState(uint16_t source);
 
