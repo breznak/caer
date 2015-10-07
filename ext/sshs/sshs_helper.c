@@ -123,7 +123,7 @@ char *sshsHelperValueToStringConverter(enum sshs_node_attr_value_type type, unio
 			break;
 
 		case FLOAT:
-			sshsHelperAllocSprintf(&valueString, "%g", value.ffloat);
+			sshsHelperAllocSprintf(&valueString, "%g", (double) value.ffloat);
 			break;
 
 		case DOUBLE:

@@ -71,21 +71,21 @@ int main(int argc, char *argv[]) {
 		// Decode successfully received data.
 		caerEventPacketHeader header = (caerEventPacketHeader) dataBuffer;
 
-		uint16_t eventType = caerEventPacketHeaderGetEventType(header);
-		uint16_t eventSource = caerEventPacketHeaderGetEventSource(header);
-		uint32_t eventSize = caerEventPacketHeaderGetEventSize(header);
-		uint32_t eventTSOffset = caerEventPacketHeaderGetEventTSOffset(header);
-		uint32_t eventCapacity = caerEventPacketHeaderGetEventCapacity(header);
-		uint32_t eventNumber = caerEventPacketHeaderGetEventNumber(header);
-		uint32_t eventValid = caerEventPacketHeaderGetEventValid(header);
+		int16_t eventType = caerEventPacketHeaderGetEventType(header);
+		int16_t eventSource = caerEventPacketHeaderGetEventSource(header);
+		int32_t eventSize = caerEventPacketHeaderGetEventSize(header);
+		int32_t eventTSOffset = caerEventPacketHeaderGetEventTSOffset(header);
+		int32_t eventCapacity = caerEventPacketHeaderGetEventCapacity(header);
+		int32_t eventNumber = caerEventPacketHeaderGetEventNumber(header);
+		int32_t eventValid = caerEventPacketHeaderGetEventValid(header);
 
 		printf(
-			"type = %" PRIu16 ", source = %" PRIu16 ", size = %" PRIu32 ", tsOffset = %" PRIu32 ", capacity = %" PRIu32 ", number = %" PRIu32 ", valid = %" PRIu32 ".\n",
+			"type = %" PRIi16 ", source = %" PRIi16 ", size = %" PRIi32 ", tsOffset = %" PRIi32 ", capacity = %" PRIi32 ", number = %" PRIi32 ", valid = %" PRIi32 ".\n",
 			eventType, eventSource, eventSize, eventTSOffset, eventCapacity, eventNumber, eventValid);
 
 		// Get rest of event packet, the part with the events themselves.
 		if (!recvUntilDone(listenTCPSocket, dataBuffer + sizeof(struct caer_event_packet_header),
-			eventCapacity * eventSize)) {
+			(size_t) (eventCapacity * eventSize))) {
 			fprintf(stderr, "Error in recv() call: %d\n", errno);
 			break;
 		}
@@ -94,12 +94,12 @@ int main(int argc, char *argv[]) {
 			void *firstEvent = caerGenericEventGetEvent(header, 0);
 			void *lastEvent = caerGenericEventGetEvent(header, eventValid - 1);
 
-			uint32_t firstTS = caerGenericEventGetTimestamp(firstEvent, header);
-			uint32_t lastTS = caerGenericEventGetTimestamp(lastEvent, header);
+			int32_t firstTS = caerGenericEventGetTimestamp(firstEvent, header);
+			int32_t lastTS = caerGenericEventGetTimestamp(lastEvent, header);
 
-			uint32_t tsDifference = lastTS - firstTS;
+			int32_t tsDifference = lastTS - firstTS;
 
-			printf("Time difference in packet: %" PRIu32 " (first = %" PRIu32 ", last = %" PRIu32 ").\n", tsDifference,
+			printf("Time difference in packet: %" PRIi32 " (first = %" PRIi32 ", last = %" PRIi32 ").\n", tsDifference,
 				firstTS, lastTS);
 		}
 

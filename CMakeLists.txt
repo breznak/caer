@@ -186,12 +186,15 @@ INSTALL(TARGETS caer-ctl DESTINATION bin)
 
 # Compile UDP stream statistics program
 ADD_EXECUTABLE(udpststat utils/udpststat/udpststat.c)
+TARGET_LINK_LIBRARIES(udpststat ${LIBCAER_LIBRARIES})
 INSTALL(TARGETS udpststat DESTINATION bin)
 
 # Compile TCP stream statistics program
 ADD_EXECUTABLE(tcpststat utils/tcpststat/tcpststat.c)
+TARGET_LINK_LIBRARIES(tcpststat ${LIBCAER_LIBRARIES})
 INSTALL(TARGETS tcpststat DESTINATION bin)
 
 # Compile Unix local stream statistics program
 ADD_EXECUTABLE(unixststat utils/unixststat/unixststat.c)
+TARGET_LINK_LIBRARIES(unixststat ${LIBCAER_LIBRARIES})
 INSTALL(TARGETS unixststat DESTINATION bin)
