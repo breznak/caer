@@ -109,7 +109,7 @@ bool caerInputDAVISInit(caerModuleData moduleData, uint16_t deviceType) {
 
 	// Start data acquisition.
 	bool ret = caerDeviceDataStart(moduleData->moduleState, &mainloopDataNotifyIncrease, &mainloopDataNotifyDecrease,
-	caerMainloopGetReference(), &moduleShutdownNotify, moduleData->moduleNode);
+		caerMainloopGetReference(), &moduleShutdownNotify, moduleData->moduleNode);
 
 	if (!ret) {
 		// Failed to start data acquisition, close device and exit.
@@ -172,7 +172,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 		createCoarseFineBiasSetting(biasNode, "IFThrBn", 5, 255, true, "N", "Normal");
 		createCoarseFineBiasSetting(biasNode, "IFRefrBn", 5, 255, true, "N", "Normal");
 		createCoarseFineBiasSetting(biasNode, "PadFollBn", 7, 215, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "ApsOverflowLevel", 6, 253, true, "N", "Normal");
+		createCoarseFineBiasSetting(biasNode, "ApsOverflowLevelBn", 6, 253, true, "N", "Normal");
 
 		createCoarseFineBiasSetting(biasNode, "BiasBuffer", 5, 254, true, "N", "Normal");
 
@@ -597,7 +597,7 @@ static void biasConfigSend(sshsNode node, caerModuleData moduleData, struct caer
 		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_PADFOLLBN,
 			generateCoarseFineBias(node, "PadFollBn"));
 		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_APSOVERFLOWLEVEL,
-			generateCoarseFineBias(node, "ApsOverflowLevel"));
+			generateCoarseFineBias(node, "ApsOverflowLevelBn"));
 
 		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_BIASBUFFER,
 			generateCoarseFineBias(node, "BiasBuffer"));
