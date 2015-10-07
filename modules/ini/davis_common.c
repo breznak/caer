@@ -32,15 +32,16 @@ static void usbConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 static void systemConfigSend(sshsNode node, caerModuleData moduleData);
 static void systemConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
-static void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8_t voltageValue, uint8_t currentValue);
+static void createVDACBiasSetting(caerModuleData moduleData, sshsNode biasNode, const char *biasName,
+	uint8_t voltageValue, uint8_t currentValue);
 static uint16_t generateVDACBiasParent(sshsNode biasNode, const char *biasName);
 static uint16_t generateVDACBias(sshsNode biasNode);
-static void createCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, uint8_t coarseValue, uint8_t fineValue,
-bool enabled, const char *sex, const char *type);
+static void createCoarseFineBiasSetting(caerModuleData moduleData, sshsNode biasNode, const char *biasName,
+	uint8_t coarseValue, uint8_t fineValue, bool enabled, const char *sex, const char *type);
 static uint16_t generateCoarseFineBiasParent(sshsNode biasNode, const char *biasName);
 static uint16_t generateCoarseFineBias(sshsNode biasNode);
-static void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasName, uint8_t refValue, uint8_t regValue,
-	const char *operatingMode, const char *voltageLevel);
+static void createShiftedSourceBiasSetting(caerModuleData moduleData, sshsNode biasNode, const char *biasName,
+	uint8_t refValue, uint8_t regValue, const char *operatingMode, const char *voltageLevel);
 static uint16_t generateShiftedSourceBiasParent(sshsNode biasNode, const char *biasName);
 static uint16_t generateShiftedSourceBias(sshsNode biasNode);
 
@@ -156,30 +157,30 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 	sshsNode biasNode = sshsGetRelativeNode(moduleData->moduleNode, "bias/");
 
 	if (IS_DAVIS240(devInfo->chipID)) {
-		createCoarseFineBiasSetting(biasNode, "DiffBn", 4, 39, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "OnBn", 5, 255, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "OffBn", 4, 0, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "ApsCasEpc", 5, 185, true, "N", "Cascode");
-		createCoarseFineBiasSetting(biasNode, "DiffCasBnc", 5, 115, true, "N", "Cascode");
-		createCoarseFineBiasSetting(biasNode, "ApsROSFBn", 6, 219, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "LocalBufBn", 5, 164, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "PixInvBn", 5, 129, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "PrBp", 2, 58, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "PrSFBp", 1, 16, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "RefrBp", 4, 25, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "AEPdBn", 6, 91, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", 5, 49, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "AEPuXBp", 4, 80, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "AEPuYBp", 7, 152, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "IFThrBn", 5, 255, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "IFRefrBn", 5, 255, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "PadFollBn", 7, 215, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "ApsOverflowLevelBn", 6, 253, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "DiffBn", 4, 39, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "OnBn", 5, 255, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "OffBn", 4, 0, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "ApsCasEpc", 5, 185, true, "N", "Cascode");
+		createCoarseFineBiasSetting(moduleData, biasNode, "DiffCasBnc", 5, 115, true, "N", "Cascode");
+		createCoarseFineBiasSetting(moduleData, biasNode, "ApsROSFBn", 6, 219, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "LocalBufBn", 5, 164, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "PixInvBn", 5, 129, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "PrBp", 2, 58, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "PrSFBp", 1, 16, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "RefrBp", 4, 25, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "AEPdBn", 6, 91, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "LcolTimeoutBn", 5, 49, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "AEPuXBp", 4, 80, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "AEPuYBp", 7, 152, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "IFThrBn", 5, 255, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "IFRefrBn", 5, 255, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "PadFollBn", 7, 215, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "ApsOverflowLevelBn", 6, 253, true, "N", "Normal");
 
-		createCoarseFineBiasSetting(biasNode, "BiasBuffer", 5, 254, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "BiasBuffer", 5, 254, true, "N", "Normal");
 
-		createShiftedSourceBiasSetting(biasNode, "SSP", 1, 33, "ShiftedSource", "SplitGate");
-		createShiftedSourceBiasSetting(biasNode, "SSN", 1, 33, "ShiftedSource", "SplitGate");
+		createShiftedSourceBiasSetting(moduleData, biasNode, "SSP", 1, 33, "ShiftedSource", "SplitGate");
+		createShiftedSourceBiasSetting(moduleData, biasNode, "SSN", 1, 33, "ShiftedSource", "SplitGate");
 	}
 
 	if (IS_DAVIS128(devInfo->chipID) || IS_DAVIS208(devInfo->chipID) || IS_DAVIS346(devInfo->chipID)
@@ -187,97 +188,94 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 		// This is first so that it takes precedence over later settings for all other chips.
 		if (IS_DAVIS640(devInfo->chipID)) {
 			// Slow down pixels for big 640x480 array, to avoid overwhelming the AER bus.
-			createCoarseFineBiasSetting(biasNode, "PrBp", 2, 3, true, "P", "Normal");
-			createCoarseFineBiasSetting(biasNode, "PrSFBp", 1, 1, true, "P", "Normal");
+			createCoarseFineBiasSetting(moduleData, biasNode, "PrBp", 2, 3, true, "P", "Normal");
+			createCoarseFineBiasSetting(moduleData, biasNode, "PrSFBp", 1, 1, true, "P", "Normal");
 		}
 
-		createVDACBiasSetting(biasNode, "ApsOverflowLevel", 27, 6);
-		createVDACBiasSetting(biasNode, "ApsCas", 21, 6);
-		createVDACBiasSetting(biasNode, "AdcRefHigh", 30, 7);
-		createVDACBiasSetting(biasNode, "AdcRefLow", 1, 7);
+		createVDACBiasSetting(moduleData, biasNode, "ApsOverflowLevel", 27, 6);
+		createVDACBiasSetting(moduleData, biasNode, "ApsCas", 21, 6);
+		createVDACBiasSetting(moduleData, biasNode, "AdcRefHigh", 30, 7);
+		createVDACBiasSetting(moduleData, biasNode, "AdcRefLow", 1, 7);
 
 		if (IS_DAVIS346(devInfo->chipID) || IS_DAVIS640(devInfo->chipID)) {
 			// Only DAVIS346 and 640 have ADC testing.
-			createVDACBiasSetting(biasNode, "AdcTestVoltage", 21, 7);
+			createVDACBiasSetting(moduleData, biasNode, "AdcTestVoltage", 21, 7);
 		}
 
 		if (IS_DAVIS208(devInfo->chipID)) {
-			createVDACBiasSetting(biasNode, "ResetHighPass", 63, 7);
-			createVDACBiasSetting(biasNode, "RefSS", 11, 5);
+			createVDACBiasSetting(moduleData, biasNode, "ResetHighPass", 63, 7);
+			createVDACBiasSetting(moduleData, biasNode, "RefSS", 11, 5);
 
-			createCoarseFineBiasSetting(biasNode, "RegBiasBp", 5, 20, true, "P", "Normal");
-			createCoarseFineBiasSetting(biasNode, "RefSSBn", 5, 20, true, "N", "Normal");
+			createCoarseFineBiasSetting(moduleData, biasNode, "RegBiasBp", 5, 20, true, "P", "Normal");
+			createCoarseFineBiasSetting(moduleData, biasNode, "RefSSBn", 5, 20, true, "N", "Normal");
 		}
 
-		createCoarseFineBiasSetting(biasNode, "LocalBufBn", 5, 164, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "PadFollBn", 7, 215, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "DiffBn", 4, 39, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "OnBn", 5, 255, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "OffBn", 4, 1, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "PixInvBn", 5, 129, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "PrBp", 2, 58, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "PrSFBp", 1, 16, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "RefrBp", 4, 25, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "ReadoutBufBp", 6, 20, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "ApsROSFBn", 6, 219, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "AdcCompBp", 5, 20, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "ColSelLowBn", 0, 1, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "DACBufBp", 6, 60, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", 5, 49, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "AEPdBn", 6, 91, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "AEPuXBp", 4, 80, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "AEPuYBp", 7, 152, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "IFRefrBn", 5, 255, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "IFThrBn", 5, 255, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "LocalBufBn", 5, 164, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "PadFollBn", 7, 215, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "DiffBn", 4, 39, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "OnBn", 5, 255, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "OffBn", 4, 1, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "PixInvBn", 5, 129, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "PrBp", 2, 58, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "PrSFBp", 1, 16, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "RefrBp", 4, 25, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "ReadoutBufBp", 6, 20, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "ApsROSFBn", 6, 219, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "AdcCompBp", 5, 20, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "ColSelLowBn", 0, 1, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "DACBufBp", 6, 60, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "LcolTimeoutBn", 5, 49, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "AEPdBn", 6, 91, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "AEPuXBp", 4, 80, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "AEPuYBp", 7, 152, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "IFRefrBn", 5, 255, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "IFThrBn", 5, 255, true, "N", "Normal");
 
-		createCoarseFineBiasSetting(biasNode, "BiasBuffer", 5, 254, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "BiasBuffer", 5, 254, true, "N", "Normal");
 
-		createShiftedSourceBiasSetting(biasNode, "SSP", 1, 33, "ShiftedSource", "SplitGate");
-		createShiftedSourceBiasSetting(biasNode, "SSN", 1, 33, "ShiftedSource", "SplitGate");
+		createShiftedSourceBiasSetting(moduleData, biasNode, "SSP", 1, 33, "ShiftedSource", "SplitGate");
+		createShiftedSourceBiasSetting(moduleData, biasNode, "SSN", 1, 33, "ShiftedSource", "SplitGate");
 	}
 
 	if (IS_DAVISRGB(devInfo->chipID)) {
-		createVDACBiasSetting(biasNode, "ApsCas", 21, 4);
-		createVDACBiasSetting(biasNode, "OVG1Lo", 21, 4);
-		createVDACBiasSetting(biasNode, "OVG2Lo", 0, 0);
-		createVDACBiasSetting(biasNode, "TX2OVG2Hi", 63, 0);
-		createVDACBiasSetting(biasNode, "Gnd07", 13, 4);
-		createVDACBiasSetting(biasNode, "AdcTestVoltage", 21, 0);
-		createVDACBiasSetting(biasNode, "AdcRefHigh", 63, 7);
-		createVDACBiasSetting(biasNode, "AdcRefLow", 0, 7);
+		createVDACBiasSetting(moduleData, biasNode, "ApsCas", 21, 4);
+		createVDACBiasSetting(moduleData, biasNode, "OVG1Lo", 21, 4);
+		createVDACBiasSetting(moduleData, biasNode, "OVG2Lo", 0, 0);
+		createVDACBiasSetting(moduleData, biasNode, "TX2OVG2Hi", 63, 0);
+		createVDACBiasSetting(moduleData, biasNode, "Gnd07", 13, 4);
+		createVDACBiasSetting(moduleData, biasNode, "AdcTestVoltage", 21, 0);
+		createVDACBiasSetting(moduleData, biasNode, "AdcRefHigh", 63, 7);
+		createVDACBiasSetting(moduleData, biasNode, "AdcRefLow", 0, 7);
 
-		createCoarseFineBiasSetting(biasNode, "IFRefrBn", 5, 255, false, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "IFThrBn", 5, 255, false, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "LocalBufBn", 5, 164, false, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "PadFollBn", 7, 209, false, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "PixInvBn", 4, 164, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "DiffBn", 4, 54, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "OnBn", 6, 63, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "OffBn", 2, 138, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "PrBp", 1, 108, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "PrSFBp", 1, 108, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "RefrBp", 4, 28, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "ArrayBiasBufferBn", 6, 128, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "ArrayLogicBufferBn", 5, 255, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "FalltimeBn", 7, 41, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "RisetimeBp", 6, 162, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "ReadoutBufBp", 6, 20, false, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "ApsROSFBn", 6, 255, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "AdcCompBp", 4, 159, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "DACBufBp", 6, 194, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "LcolTimeoutBn", 5, 49, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "AEPdBn", 6, 91, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "AEPuXBp", 4, 80, true, "P", "Normal");
-		createCoarseFineBiasSetting(biasNode, "AEPuYBp", 7, 152, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "IFRefrBn", 5, 255, false, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "IFThrBn", 5, 255, false, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "LocalBufBn", 5, 164, false, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "PadFollBn", 7, 209, false, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "PixInvBn", 4, 164, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "DiffBn", 4, 54, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "OnBn", 6, 63, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "OffBn", 2, 138, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "PrBp", 1, 108, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "PrSFBp", 1, 108, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "RefrBp", 4, 28, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "ArrayBiasBufferBn", 6, 128, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "ArrayLogicBufferBn", 5, 255, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "FalltimeBn", 7, 41, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "RisetimeBp", 6, 162, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "ReadoutBufBp", 6, 20, false, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "ApsROSFBn", 6, 255, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "AdcCompBp", 4, 159, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "DACBufBp", 6, 194, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "LcolTimeoutBn", 5, 49, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "AEPdBn", 6, 91, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "AEPuXBp", 4, 80, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "AEPuYBp", 7, 152, true, "P", "Normal");
 
-		createCoarseFineBiasSetting(biasNode, "BiasBuffer", 6, 251, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "BiasBuffer", 6, 251, true, "N", "Normal");
 
-		createShiftedSourceBiasSetting(biasNode, "SSP", 1, 33, "TiedToRail", "SplitGate");
-		createShiftedSourceBiasSetting(biasNode, "SSN", 2, 33, "ShiftedSource", "SplitGate");
+		createShiftedSourceBiasSetting(moduleData, biasNode, "SSP", 1, 33, "TiedToRail", "SplitGate");
+		createShiftedSourceBiasSetting(moduleData, biasNode, "SSN", 2, 33, "ShiftedSource", "SplitGate");
 	}
-
-	// The bias listener is added for each sub-node separately in the create*BiasSetting() functions below.
-	// TODO: fix this!
 
 	// Chip configuration shift register.
 	sshsNode chipNode = sshsGetRelativeNode(moduleData->moduleNode, "chip/");
@@ -758,17 +756,377 @@ static void biasConfigSend(sshsNode node, caerModuleData moduleData, struct caer
 
 static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
-	UNUSED_ARGUMENT(node);
+	UNUSED_ARGUMENT(changeKey);
+	UNUSED_ARGUMENT(changeType);
+	UNUSED_ARGUMENT(changeValue);
 
 	caerModuleData moduleData = userData;
 	struct caer_davis_info devInfo = caerDavisInfoGet(moduleData->moduleState);
 
-	// List of all bias nodes in alphabetical order. If any change is detected on them, send the full bias out.
 	if (event == ATTRIBUTE_MODIFIED) {
 		const char *nodeName = sshsNodeGetName(node);
 
-		if (caerStrEquals(nodeName, "AdcCompBp")) {
+		if (IS_DAVIS240(devInfo.chipID)) {
+			if (caerStrEquals(nodeName, "DiffBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_DIFFBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "OnBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_ONBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "OffBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_OFFBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "ApsCasEpc")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_APSCASEPC,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "DiffCasBnc")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_DIFFCASBNC,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "ApsROSFBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_APSROSFBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "LocalBufBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_LOCALBUFBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "PixInvBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_PIXINVBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "PrBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_PRBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "PrSFBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_PRSFBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "RefrBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_REFRBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "AEPdBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_AEPDBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "LcolTimeoutBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_LCOLTIMEOUTBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "AEPuXBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_AEPUXBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "AEPuYBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_AEPUYBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "IFThrBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_IFTHRBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "IFRefrBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_IFREFRBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "PadFollBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_PADFOLLBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "ApsOverflowLevelBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_APSOVERFLOWLEVELBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "BiasBuffer")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_BIASBUFFER,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "SSP")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_SSP,
+					generateShiftedSourceBias(node));
+			}
+			else if (caerStrEquals(nodeName, "SSP")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_SSN,
+					generateShiftedSourceBias(node));
+			}
+		}
 
+		if (IS_DAVIS128(devInfo.chipID) || IS_DAVIS208(devInfo.chipID) || IS_DAVIS346(devInfo.chipID)
+		|| IS_DAVIS640(devInfo.chipID)) {
+			if (caerStrEquals(nodeName, "ApsOverflowLevel")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_APSOVERFLOWLEVEL,
+					generateVDACBias(node));
+			}
+			else if (caerStrEquals(nodeName, "ApsCas")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_APSCAS,
+					generateVDACBias(node));
+			}
+			else if (caerStrEquals(nodeName, "AdcRefHigh")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_ADCREFHIGH,
+					generateVDACBias(node));
+			}
+			else if (caerStrEquals(nodeName, "AdcRefLow")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_ADCREFLOW,
+					generateVDACBias(node));
+			}
+			else if ((IS_DAVIS346(devInfo.chipID) || IS_DAVIS640(devInfo.chipID))
+				&& caerStrEquals(nodeName, "AdcTestVoltage")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS346_CONFIG_BIAS_ADCTESTVOLTAGE,
+					generateVDACBias(node));
+			}
+			else if ((IS_DAVIS208(devInfo.chipID)) && caerStrEquals(nodeName, "ResetHighPass")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS208_CONFIG_BIAS_RESETHIGHPASS,
+					generateVDACBias(node));
+			}
+			else if ((IS_DAVIS208(devInfo.chipID)) && caerStrEquals(nodeName, "RefSS")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS208_CONFIG_BIAS_REFSS,
+					generateVDACBias(node));
+			}
+			else if ((IS_DAVIS208(devInfo.chipID)) && caerStrEquals(nodeName, "RegBiasBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS208_CONFIG_BIAS_REGBIASBP,
+					generateCoarseFineBias(node));
+			}
+			else if ((IS_DAVIS208(devInfo.chipID)) && caerStrEquals(nodeName, "RefSSBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS208_CONFIG_BIAS_REFSSBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "LocalBufBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_LOCALBUFBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "PadFollBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_PADFOLLBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "DiffBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_DIFFBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "OnBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_ONBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "OffBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_OFFBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "PixInvBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_PIXINVBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "PrBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_PRBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "PrSFBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_PRSFBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "RefrBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_REFRBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "ReadoutBufBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_READOUTBUFBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "ApsROSFBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_APSROSFBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "AdcCompBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_ADCCOMPBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "ColSelLowBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_COLSELLOWBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "DACBufBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_DACBUFBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "LcolTimeoutBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_LCOLTIMEOUTBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "AEPdBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_AEPDBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "AEPuXBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_AEPUXBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "AEPuYBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_AEPUYBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "IFRefrBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_IFREFRBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "IFThrBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_IFTHRBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "BiasBuffer")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_BIASBUFFER,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "SSP")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_SSP,
+					generateShiftedSourceBias(node));
+			}
+			else if (caerStrEquals(nodeName, "SSN")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVIS128_CONFIG_BIAS_SSN,
+					generateShiftedSourceBias(node));
+			}
+		}
+
+		if (IS_DAVISRGB(devInfo.chipID)) {
+			if (caerStrEquals(nodeName, "ApsCas")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_APSCAS,
+					generateVDACBias(node));
+			}
+			else if (caerStrEquals(nodeName, "OVG1Lo")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_OVG1LO,
+					generateVDACBias(node));
+			}
+			else if (caerStrEquals(nodeName, "OVG2Lo")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_OVG2LO,
+					generateVDACBias(node));
+			}
+			else if (caerStrEquals(nodeName, "TX2OVG2Hi")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_TX2OVG2HI,
+					generateVDACBias(node));
+			}
+			else if (caerStrEquals(nodeName, "Gnd07")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_GND07,
+					generateVDACBias(node));
+			}
+			else if (caerStrEquals(nodeName, "AdcTestVoltage")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_ADCTESTVOLTAGE,
+					generateVDACBias(node));
+			}
+			else if (caerStrEquals(nodeName, "AdcRefHigh")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_ADCREFHIGH,
+					generateVDACBias(node));
+			}
+			else if (caerStrEquals(nodeName, "AdcRefLow")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_ADCREFLOW,
+					generateVDACBias(node));
+			}
+			else if (caerStrEquals(nodeName, "IFRefrBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_IFREFRBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "IFThrBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_IFTHRBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "LocalBufBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_LOCALBUFBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "PadFollBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_PADFOLLBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "PixInvBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_PIXINVBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "DiffBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_DIFFBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "OnBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_ONBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "OffBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_OFFBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "PrBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_PRBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "PrSFBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_PRSFBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "RefrBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_REFRBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "ArrayBiasBufferBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_ARRAYBIASBUFFERBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "ArrayLogicBufferBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_ARRAYLOGICBUFFERBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "FalltimeBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_FALLTIMEBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "RisetimeBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_RISETIMEBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "ReadoutBufBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_READOUTBUFBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "ApsROSFBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_APSROSFBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "AdcCompBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_ADCCOMPBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "DACBufBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_DACBUFBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "LcolTimeoutBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_LCOLTIMEOUTBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "AEPdBn")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_AEPDBN,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "AEPuXBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_AEPUXBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "AEPuYBp")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_AEPUYBP,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "BiasBuffer")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_BIASBUFFER,
+					generateCoarseFineBias(node));
+			}
+			else if (caerStrEquals(nodeName, "SSP")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_SSP,
+					generateShiftedSourceBias(node));
+			}
+			else if (caerStrEquals(nodeName, "SSN")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_BIAS, DAVISRGB_CONFIG_BIAS_SSN,
+					generateShiftedSourceBias(node));
+			}
 		}
 	}
 }
@@ -847,7 +1205,116 @@ static void chipConfigListener(sshsNode node, void *userData, enum sshs_node_att
 	UNUSED_ARGUMENT(node);
 
 	caerModuleData moduleData = userData;
+	struct caer_davis_info devInfo = caerDavisInfoGet(moduleData->moduleState);
 
+	if (event == ATTRIBUTE_MODIFIED) {
+		if (changeType == BYTE && caerStrEquals(changeKey, "DigitalMux0")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_DIGITALMUX0,
+				changeValue.ubyte);
+		}
+		else if (changeType == BYTE && caerStrEquals(changeKey, "DigitalMux1")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_DIGITALMUX1,
+				changeValue.ubyte);
+		}
+		else if (changeType == BYTE && caerStrEquals(changeKey, "DigitalMux2")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_DIGITALMUX2,
+				changeValue.ubyte);
+		}
+		else if (changeType == BYTE && caerStrEquals(changeKey, "DigitalMux3")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_DIGITALMUX3,
+				changeValue.ubyte);
+		}
+		else if (changeType == BYTE && caerStrEquals(changeKey, "AnalogMux0")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_ANALOGMUX0,
+				changeValue.ubyte);
+		}
+		else if (changeType == BYTE && caerStrEquals(changeKey, "AnalogMux1")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_ANALOGMUX1,
+				changeValue.ubyte);
+		}
+		else if (changeType == BYTE && caerStrEquals(changeKey, "AnalogMux2")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_ANALOGMUX2,
+				changeValue.ubyte);
+		}
+		else if (changeType == BYTE && caerStrEquals(changeKey, "BiasMux0")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_BIASMUX0,
+				changeValue.ubyte);
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "ResetCalibNeuron")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_RESETCALIBNEURON,
+				changeValue.boolean);
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "TypeNCalibNeuron")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_TYPENCALIBNEURON,
+				changeValue.boolean);
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "ResetTestPixel")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_RESETTESTPIXEL,
+				changeValue.boolean);
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "AERnArow")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_AERNAROW,
+				changeValue.boolean);
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "UseAOut")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_USEAOUT,
+				changeValue.boolean);
+		}
+		else if ((IS_DAVIS240A(devInfo.chipID) || IS_DAVIS240B(devInfo.chipID)) && changeType == BOOL
+			&& caerStrEquals(changeKey, "SpecialPixelControl")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS240_CONFIG_CHIP_SPECIALPIXELCONTROL,
+				changeValue.boolean);
+		}
+		else if ((IS_DAVIS128(devInfo.chipID) || IS_DAVIS208(devInfo.chipID) || IS_DAVIS346(devInfo.chipID)
+			|| IS_DAVIS640(devInfo.chipID) || IS_DAVISRGB(devInfo.chipID)) && changeType == BOOL
+			&& caerStrEquals(changeKey, "SelectGrayCounter")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_SELECTGRAYCOUNTER,
+				changeValue.boolean);
+		}
+		else if ((IS_DAVIS346(devInfo.chipID) || IS_DAVIS640(devInfo.chipID) || IS_DAVISRGB(devInfo.chipID))
+			&& changeType == BOOL && caerStrEquals(changeKey, "TestADC")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS346_CONFIG_CHIP_TESTADC,
+				changeValue.boolean);
+		}
+
+		if (IS_DAVIS208(devInfo.chipID)) {
+			if (changeType == BOOL && caerStrEquals(changeKey, "SelectPreAmpAvg")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS208_CONFIG_CHIP_SELECTPREAMPAVG,
+					changeValue.boolean);
+			}
+			else if (changeType == BOOL && caerStrEquals(changeKey, "SelectBiasRefSS")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS208_CONFIG_CHIP_SELECTBIASREFSS,
+					changeValue.boolean);
+			}
+			else if (changeType == BOOL && caerStrEquals(changeKey, "SelectSense")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS208_CONFIG_CHIP_SELECTSENSE,
+					changeValue.boolean);
+			}
+			else if (changeType == BOOL && caerStrEquals(changeKey, "SelectPosFb")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS208_CONFIG_CHIP_SELECTPOSFB,
+					changeValue.boolean);
+			}
+			else if (changeType == BOOL && caerStrEquals(changeKey, "SelectHighPass")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS208_CONFIG_CHIP_SELECTHIGHPASS,
+					changeValue.boolean);
+			}
+		}
+
+		if (IS_DAVISRGB(devInfo.chipID)) {
+			if (changeType == BOOL && caerStrEquals(changeKey, "AdjustOVG1Lo")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVISRGB_CONFIG_CHIP_ADJUSTOVG1LO,
+					changeValue.boolean);
+			}
+			else if (changeType == BOOL && caerStrEquals(changeKey, "AdjustOVG2Lo")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVISRGB_CONFIG_CHIP_ADJUSTOVG2LO,
+					changeValue.boolean);
+			}
+			else if (changeType == BOOL && caerStrEquals(changeKey, "AdjustTX2OVG2Hi")) {
+				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVISRGB_CONFIG_CHIP_ADJUSTTX2OVG2HI,
+					changeValue.boolean);
+			}
+		}
+	}
 }
 
 static void muxConfigSend(sshsNode node, caerModuleData moduleData) {
@@ -1628,7 +2095,8 @@ static void systemConfigListener(sshsNode node, void *userData, enum sshs_node_a
 	}
 }
 
-static void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8_t voltageValue, uint8_t currentValue) {
+static void createVDACBiasSetting(caerModuleData moduleData, sshsNode biasNode, const char *biasName,
+	uint8_t voltageValue, uint8_t currentValue) {
 	// Add trailing slash to node name (required!).
 	size_t biasNameLength = strlen(biasName);
 	char biasNameFull[biasNameLength + 2];
@@ -1642,6 +2110,9 @@ static void createVDACBiasSetting(sshsNode biasNode, const char *biasName, uint8
 	// Add bias settings.
 	sshsNodePutByteIfAbsent(biasConfigNode, "voltageValue", voltageValue);
 	sshsNodePutByteIfAbsent(biasConfigNode, "currentValue", currentValue);
+
+	// Add listener for this particular bias.
+	sshsNodeAddAttrListener(biasConfigNode, moduleData, &biasConfigListener);
 }
 
 static uint16_t generateVDACBiasParent(sshsNode biasNode, const char *biasName) {
@@ -1666,8 +2137,8 @@ static uint16_t generateVDACBias(sshsNode biasNode) {
 	return (caerBiasVDACGenerate(biasValue));
 }
 
-static void createCoarseFineBiasSetting(sshsNode biasNode, const char *biasName, uint8_t coarseValue, uint8_t fineValue,
-bool enabled, const char *sex, const char *type) {
+static void createCoarseFineBiasSetting(caerModuleData moduleData, sshsNode biasNode, const char *biasName,
+	uint8_t coarseValue, uint8_t fineValue, bool enabled, const char *sex, const char *type) {
 	// Add trailing slash to node name (required!).
 	size_t biasNameLength = strlen(biasName);
 	char biasNameFull[biasNameLength + 2];
@@ -1685,6 +2156,9 @@ bool enabled, const char *sex, const char *type) {
 	sshsNodePutStringIfAbsent(biasConfigNode, "sex", sex);
 	sshsNodePutStringIfAbsent(biasConfigNode, "type", type);
 	sshsNodePutStringIfAbsent(biasConfigNode, "currentLevel", "Normal");
+
+	// Add listener for this particular bias.
+	sshsNodeAddAttrListener(biasConfigNode, moduleData, &biasConfigListener);
 }
 
 static uint16_t generateCoarseFineBiasParent(sshsNode biasNode, const char *biasName) {
@@ -1711,8 +2185,8 @@ static uint16_t generateCoarseFineBias(sshsNode biasNode) {
 	return (caerBiasCoarseFineGenerate(biasValue));
 }
 
-static void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasName, uint8_t refValue, uint8_t regValue,
-	const char *operatingMode, const char *voltageLevel) {
+static void createShiftedSourceBiasSetting(caerModuleData moduleData, sshsNode biasNode, const char *biasName,
+	uint8_t refValue, uint8_t regValue, const char *operatingMode, const char *voltageLevel) {
 	// Add trailing slash to node name (required!).
 	size_t biasNameLength = strlen(biasName);
 	char biasNameFull[biasNameLength + 2];
@@ -1728,6 +2202,9 @@ static void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasNa
 	sshsNodePutByteIfAbsent(biasConfigNode, "regValue", regValue);
 	sshsNodePutStringIfAbsent(biasConfigNode, "operatingMode", operatingMode);
 	sshsNodePutStringIfAbsent(biasConfigNode, "voltageLevel", voltageLevel);
+
+	// Add listener for this particular bias.
+	sshsNodeAddAttrListener(biasConfigNode, moduleData, &biasConfigListener);
 }
 
 static uint16_t generateShiftedSourceBiasParent(sshsNode biasNode, const char *biasName) {
