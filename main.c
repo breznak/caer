@@ -39,9 +39,15 @@ static bool mainloop_1(void) {
 	container = caerInputDAVISFX3(1);
 #endif
 
+	if (container == NULL) {
+		return (true); // Just skip on empty container.
+	}
+
 	// Typed EventPackets contain events of a certain type.
-	caerSpecialEventPacket special = (caerSpecialEventPacket) caerEventPacketContainerGetEventPacket(container, SPECIAL_EVENT);
-	caerPolarityEventPacket polarity = (caerPolarityEventPacket) caerEventPacketContainerGetEventPacket(container, POLARITY_EVENT);
+	caerSpecialEventPacket special = (caerSpecialEventPacket) caerEventPacketContainerGetEventPacket(container,
+		SPECIAL_EVENT);
+	caerPolarityEventPacket polarity = (caerPolarityEventPacket) caerEventPacketContainerGetEventPacket(container,
+		POLARITY_EVENT);
 	caerFrameEventPacket frame = (caerFrameEventPacket) caerEventPacketContainerGetEventPacket(container, FRAME_EVENT);
 	caerIMU6EventPacket imu = (caerIMU6EventPacket) caerEventPacketContainerGetEventPacket(container, IMU6_EVENT);
 
@@ -84,8 +90,13 @@ static bool mainloop_2(void) {
 	container = caerInputDAVISFX3(1);
 #endif
 
+	if (container == NULL) {
+		return (true); // Just skip on empty container.
+	}
+
 	// Typed EventPackets contain events of a certain type.
-	caerPolarityEventPacket polarity = (caerPolarityEventPacket) caerEventPacketContainerGetEventPacket(container, POLARITY_EVENT);
+	caerPolarityEventPacket polarity = (caerPolarityEventPacket) caerEventPacketContainerGetEventPacket(container,
+		POLARITY_EVENT);
 	caerFrameEventPacket frame = (caerFrameEventPacket) caerEventPacketContainerGetEventPacket(container, FRAME_EVENT);
 
 	// Filters process event packets: for example to suppress certain events,
