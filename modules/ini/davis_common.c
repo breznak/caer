@@ -438,12 +438,12 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 
 	// DAVIS RGB has additional timing counters.
 	if (IS_DAVISRGB(devInfo->chipID)) {
-		sshsNodePutShortIfAbsent(apsNode, "TransferTime", devInfo->adcClock * 25); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "RSFDSettleTime", devInfo->adcClock * 15); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSPDResetTime", devInfo->adcClock * 15); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSResetFallTime", devInfo->adcClock * 15); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSTXFallTime", devInfo->adcClock * 15); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSFDResetTime", devInfo->adcClock * 15); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "TransferTime", U16T(devInfo->adcClock * 25)); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "RSFDSettleTime", U16T(devInfo->adcClock * 15)); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSPDResetTime", U16T(devInfo->adcClock * 15)); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSResetFallTime", U16T(devInfo->adcClock * 15)); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSTXFallTime", U16T(devInfo->adcClock * 15)); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSFDResetTime", U16T(devInfo->adcClock * 15)); // in cycles
 	}
 
 	sshsNodeAddAttrListener(apsNode, moduleData, &apsConfigListener);
