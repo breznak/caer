@@ -404,13 +404,13 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 	sshsNodePutShortIfAbsent(apsNode, "EndRow0", U16T(devInfo->apsSizeY - 1));
 	sshsNodePutIntIfAbsent(apsNode, "Exposure", 4000); // in µs
 	sshsNodePutIntIfAbsent(apsNode, "FrameDelay", 1000); // in µs
-	sshsNodePutShortIfAbsent(apsNode, "RowSettle", 8); // in cycles
+	sshsNodePutShortIfAbsent(apsNode, "RowSettle", devInfo->adcClock / 3); // in cycles
 
 	// Not supported on DAVIS RGB.
 	if (!IS_DAVISRGB(devInfo->chipID)) {
-		sshsNodePutShortIfAbsent(apsNode, "ResetSettle", 10); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "ColumnSettle", 30); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "NullSettle", 3); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "ResetSettle", devInfo->adcClock / 3); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "ColumnSettle", devInfo->adcClock); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "NullSettle", devInfo->adcClock / 10); // in cycles
 	}
 
 	if (devInfo->apsHasQuadROI) {
@@ -431,19 +431,19 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 	if (devInfo->apsHasInternalADC) {
 		sshsNodePutBoolIfAbsent(apsNode, "UseInternalADC", true);
 		sshsNodePutBoolIfAbsent(apsNode, "SampleEnable", true);
-		sshsNodePutShortIfAbsent(apsNode, "SampleSettle", 60); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "RampReset", 10); // in cycles
-		sshsNodePutBoolIfAbsent(apsNode, "RampShortReset", true);
+		sshsNodePutShortIfAbsent(apsNode, "SampleSettle", devInfo->adcClock); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "RampReset", devInfo->adcClock / 3); // in cycles
+		sshsNodePutBoolIfAbsent(apsNode, "RampShortReset", false);
 	}
 
 	// DAVIS RGB has additional timing counters.
 	if (IS_DAVISRGB(devInfo->chipID)) {
-		sshsNodePutShortIfAbsent(apsNode, "TransferTime", 3000); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "RSFDSettleTime", 3000); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSPDResetTime", 3000); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSResetFallTime", 3000); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSTXFallTime", 3000); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSFDResetTime", 3000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "TransferTime", devInfo->adcClock * 25); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "RSFDSettleTime", devInfo->adcClock * 15); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSPDResetTime", devInfo->adcClock * 15); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSResetFallTime", devInfo->adcClock * 15); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSTXFallTime", devInfo->adcClock * 15); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSFDResetTime", devInfo->adcClock * 15); // in cycles
 	}
 
 	sshsNodeAddAttrListener(apsNode, moduleData, &apsConfigListener);
@@ -476,14 +476,14 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 	sshsNodePutBoolIfAbsent(extNode, "DetectFallingEdges", false);
 	sshsNodePutBoolIfAbsent(extNode, "DetectPulses", true);
 	sshsNodePutBoolIfAbsent(extNode, "DetectPulsePolarity", true);
-	sshsNodePutIntIfAbsent(extNode, "DetectPulseLength", 10);
+	sshsNodePutIntIfAbsent(extNode, "DetectPulseLength", devInfo->logicClock);
 
 	if (devInfo->extInputHasGenerator) {
 		sshsNodePutBoolIfAbsent(extNode, "RunGenerator", false);
 		sshsNodePutBoolIfAbsent(extNode, "GenerateUseCustomSignal", false);
 		sshsNodePutBoolIfAbsent(extNode, "GeneratePulsePolarity", true);
-		sshsNodePutIntIfAbsent(extNode, "GeneratePulseInterval", 10);
-		sshsNodePutIntIfAbsent(extNode, "GeneratePulseLength", 5);
+		sshsNodePutIntIfAbsent(extNode, "GeneratePulseInterval", devInfo->logicClock);
+		sshsNodePutIntIfAbsent(extNode, "GeneratePulseLength", devInfo->logicClock / 2);
 	}
 
 	sshsNodeAddAttrListener(extNode, moduleData, &extInputConfigListener);
