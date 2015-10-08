@@ -10,7 +10,39 @@
 
 #include <libcaer/events/common.h>
 
+#include <signal.h>
+#include <stdatomic.h>
+
+static atomic_bool globalShutdown = ATOMIC_VAR_INIT(false);
+
+static void globalShutdownSignalHandler(int signal) {
+	// Simply set the running flag to false on SIGTERM and SIGINT (CTRL+C) for global shutdown.
+	if (signal == SIGTERM || signal == SIGINT) {
+		atomic_store(&globalShutdown, true);
+	}
+}
+
 int main(int argc, char *argv[]) {
+	// Install signal handler for global shutdown.
+	struct sigaction shutdownAction;
+
+	shutdownAction.sa_handler = &globalShutdownSignalHandler;
+	shutdownAction.sa_flags = 0;
+	shutdownAction.sa_restorer = NULL;
+	sigemptyset(&shutdownAction.sa_mask);
+	sigaddset(&shutdownAction.sa_mask, SIGTERM);
+	sigaddset(&shutdownAction.sa_mask, SIGINT);
+
+	if (sigaction(SIGTERM, &shutdownAction, NULL) == -1) {
+		caerLog(CAER_LOG_CRITICAL, "ShutdownAction", "Failed to set signal handler for SIGTERM. Error: %d.", errno);
+		return (EXIT_FAILURE);
+	}
+
+	if (sigaction(SIGINT, &shutdownAction, NULL) == -1) {
+		caerLog(CAER_LOG_CRITICAL, "ShutdownAction", "Failed to set signal handler for SIGINT. Error: %d.", errno);
+		return (EXIT_FAILURE);
+	}
+
 	// First of all, parse the local path we need to listen on.
 	// That is the only parameter permitted at the moment.
 	// If none passed, attempt to connect to default local path.
@@ -49,11 +81,11 @@ int main(int argc, char *argv[]) {
 	size_t dataBufferLength = 1024 * 64;
 	uint8_t *dataBuffer = malloc(dataBufferLength);
 
-	while (true) {
+	while (!atomic_load(&globalShutdown)) {
 		ssize_t result = recv(listenUnixSocket, dataBuffer, dataBufferLength, 0);
 		if (result <= 0) {
 			fprintf(stderr, "Error in recv() call: %d\n", errno);
-			break;
+			continue;
 		}
 
 		printf("Result of recv() call: %zd\n", result);
