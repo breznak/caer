@@ -77,17 +77,17 @@
  *
  * DSR (Device Status Report)
  *    Sequence: ESC [ 6 n
- *    Effect: reports the current cusor position as ESC [ n ; m R
+ *    Effect: reports the current cursor position as ESC [ n ; m R
  *            where n is the row and m is the column
  *
- * When multi line mode is enabled, we also use an additional escape
- * sequence. However multi line editing is disabled by default.
+ * When multi-line mode is enabled, we also use two additional escape
+ * sequences. However multi-line editing is disabled by default.
  *
- * CUU (Cursor Up)
+ * CUU (CUrsor Up)
  *    Sequence: ESC [ n A
  *    Effect: moves cursor up of n chars.
  *
- * CUD (Cursor Down)
+ * CUD (CUrsor Down)
  *    Sequence: ESC [ n B
  *    Effect: moves cursor down of n chars.
  *
@@ -95,11 +95,11 @@
  * are used in order to clear the screen and position the cursor at home
  * position.
  *
- * CUP (Cursor position)
+ * CUP (CUrsor position)
  *    Sequence: ESC [ H
  *    Effect: moves the cursor to upper left corner
  *
- * ED (Erase display)
+ * ED (Erase Display)
  *    Sequence: ESC [ 2 J
  *    Effect: clear the whole screen
  *
@@ -372,7 +372,13 @@ static int completeLine(struct linenoiseState *ls) {
 	/* CAER CHANGE START */
 	else if (lc.len == 1) {
 		// Update buffer with only possible completion, if only one present.
-		nwritten = snprintf(ls->buf, ls->buflen, "%s", lc.cvec[0]);
+		if ((nwritten = snprintf(ls->buf, ls->buflen, "%s", lc.cvec[0])) < 0) {
+			nwritten = 0; // Just rewrite an empty line.
+		}
+		if (nwritten >= (int) ls->buflen) {
+			nwritten = (int) ls->buflen - 1; // Output was truncated.
+		}
+
 		ls->len = ls->pos = (size_t) nwritten;
 		refreshLine(ls);
 	}
@@ -403,12 +409,12 @@ static int completeLine(struct linenoiseState *ls) {
 			}
 
 			switch (c) {
-				case 9: /* tab */
+				case TAB: /* tab */
 					i = (i + 1) % (lc.len + 1);
 					if (i == lc.len)
 						linenoiseBeep();
 					break;
-				case 27: /* escape */
+				case ESC: /* escape */
 					/* Re-show original buffer */
 					if (i < lc.len)
 						refreshLine(ls);
@@ -423,7 +429,13 @@ static int completeLine(struct linenoiseState *ls) {
 				default:
 					/* Update buffer and return */
 					if (i < lc.len) {
-						nwritten = snprintf(ls->buf, ls->buflen, "%s", lc.cvec[i]);
+						if ((nwritten = snprintf(ls->buf, ls->buflen, "%s", lc.cvec[i])) < 0) {
+							nwritten = 0; // Just rewrite an empty line.
+						}
+						if (nwritten >= (int) ls->buflen) {
+							nwritten = (int) ls->buflen - 1; // Output was truncated.
+						}
+
 						ls->len = ls->pos = (size_t) nwritten;
 					}
 					stop = 1;
@@ -542,7 +554,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 	size_t rows = (plen + l->len + l->cols - 1) / l->cols; /* rows used by current buf. */
 	size_t rpos = (plen + l->oldpos + l->cols) / l->cols; /* cursor relative row. */
 	size_t rpos2; /* rpos after refresh. */
-	size_t col; /* colum position, zero-based. */
+	size_t col; /* column position, zero-based. */
 	size_t old_rows = l->maxrows;
 	size_t j;
 	int fd = l->ofd;
@@ -739,7 +751,7 @@ static void linenoiseEditBackspace(struct linenoiseState *l) {
 	}
 }
 
-/* Delete the previosu word, maintaining the cursor at the start of the
+/* Delete the previous word, maintaining the cursor at the start of the
  * current word. */
 static void linenoiseEditDeletePrevWord(struct linenoiseState *l) {
 	size_t old_pos = l->pos;
@@ -802,7 +814,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		/* Only autocomplete when the callback is set. It returns < 0 when
 		 * there was an error reading from fd. Otherwise it will return the
 		 * character that should be handled next. */
-		if (c == 9 && completionCallback != NULL) {
+		if (c == TAB && completionCallback != NULL) {
 			c = (char) completeLine(&l);
 			/* Return on errors */
 			if (c < 0)
@@ -878,6 +890,14 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 							switch (seq[1]) {
 								case '3': /* Delete key. */
 									linenoiseEditDelete(&l);
+									break;
+
+								case '1': /* Home key. */
+									linenoiseEditMoveHome(&l);
+									break;
+
+								case '4': /* End key. */
+									linenoiseEditMoveEnd(&l);
 									break;
 							}
 						}
@@ -1077,10 +1097,9 @@ int linenoiseHistoryAdd(const char *line) {
 
 	/* Initialization on first call. */
 	if (history == NULL) {
-		history = malloc(sizeof(char*) * history_max_len);
+		history = calloc(history_max_len, sizeof(char*));
 		if (history == NULL)
 			return 0;
-		memset(history, 0, (sizeof(char*) * history_max_len));
 	}
 
 	/* Don't add duplicated lines. */
@@ -1114,7 +1133,7 @@ int linenoiseHistorySetMaxLen(size_t len) {
 	if (history) {
 		size_t tocopy = history_len;
 
-		new = malloc(sizeof(char*) * len);
+		new = calloc(len, sizeof(char*));
 		if (new == NULL)
 			return 0;
 
@@ -1126,7 +1145,6 @@ int linenoiseHistorySetMaxLen(size_t len) {
 				free(history[j]);
 			tocopy = len;
 		}
-		memset(new, 0, sizeof(char*) * len);
 		memcpy(new, history + (history_len - tocopy), sizeof(char*) * tocopy);
 		free(history);
 		history = new;
