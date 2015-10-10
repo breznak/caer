@@ -369,6 +369,14 @@ static int completeLine(struct linenoiseState *ls) {
 	if (lc.len == 0) {
 		linenoiseBeep();
 	}
+	/* CAER CHANGE START */
+	else if (lc.len == 1) {
+		// Update buffer with only possible completion, if only one present.
+		nwritten = snprintf(ls->buf, ls->buflen, "%s", lc.cvec[0]);
+		ls->len = ls->pos = nwritten;
+		refreshLine(ls);
+	}
+	/* CAER CHANGE END */
 	else {
 		size_t stop = 0, i = 0;
 
@@ -406,6 +414,12 @@ static int completeLine(struct linenoiseState *ls) {
 						refreshLine(ls);
 					stop = 1;
 					break;
+					/* CAER CHANGE START */
+				case ' ': // Whitespace
+						  // Use whitespace as a way to confirm the current choice
+						  // and return, but without adding the character!
+					c = 0;
+					/* CAER CHANGE END */
 				default:
 					/* Update buffer and return */
 					if (i < lc.len) {
