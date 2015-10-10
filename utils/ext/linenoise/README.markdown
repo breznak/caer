@@ -3,11 +3,11 @@
 A minimal, zero-config, BSD licensed, readline replacement used in Redis,
 MongoDB, and Android.
 
-* Single line editing mode with the usual key bindings implemented.
-* Experimental multi-line editing mode.
+* Single and multi line editing mode with the usual key bindings implemented.
 * History handling.
 * Completion.
-* Under 1,000 lines of BSD license source code.
+* About 1,100 lines of BSD license source code.
+* Only uses a subset of VT100 escapes (ANSI.SYS compatible).
 
 ## Can a line editing library be 20k lines of code?
 
@@ -24,11 +24,10 @@ So I spent more or less two hours doing a reality check resulting in this little
 
 ## Terminals, in 2010.
 
-Apparently almost every terminal you can happen to use today has some kind of support for VT100 alike escape sequences. So I tried to write a lib using just very basic VT100 features. The resulting library appears to work everywhere I tried to use it.
+Apparently almost every terminal you can happen to use today has some kind of support for basic VT100 escape sequences. So I tried to write a lib using just very basic VT100 features. The resulting library appears to work everywhere I tried to use it, and now can work even on ANSI.SYS compatible terminals, since no
+VT220 specific sequences are used anymore.
 
-Since it's so young I guess there are a few bugs, or the lib may not compile or work with some operating system, but it's a matter of a few weeks and eventually we'll get it right, and there will be no excuses for not shipping command line tools without built-in line editing support.
-
-The library is currently less than 1000 lines of code. In order to use it in your project just look at the *example.c* file in the source distribution, it is trivial. Linenoise is BSD code, so you can use both in free software and commercial software.
+The library is currently about 1100 lines of code. In order to use it in your project just look at the *example.c* file in the source distribution, it is trivial. Linenoise is BSD code, so you can use both in free software and commercial software.
 
 ## Tested with...
 
@@ -41,6 +40,8 @@ The library is currently less than 1000 lines of code. In order to use it in you
  * OpenBSD 4.5 through an OSX Terminal.app ($TERM = screen)
  * IBM AIX 6.1
  * FreeBSD xterm ($TERM = xterm)
+ * ANSI.SYS
+ * Emacs comint mode ($TERM = dumb)
 
 Please test it everywhere you can and report back!
 
