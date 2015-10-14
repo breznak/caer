@@ -25,6 +25,8 @@ struct visualizer_state {
 	uint32_t *frameRenderer;
 	int32_t frameRendererSizeX;
 	int32_t frameRendererSizeY;
+	int32_t frameRendererPositionX;
+	int32_t frameRendererPositionY;
 	uint8_t frameChannels;
 	struct caer_statistics_state frameStatistics;
 };
@@ -199,6 +201,8 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 				// Use frame sizes to correctly support small ROI frames.
 				state->frameRendererSizeX = caerFrameEventGetLengthX(currFrameEvent);
 				state->frameRendererSizeY = caerFrameEventGetLengthY(currFrameEvent);
+				state->frameRendererPositionX = caerFrameEventGetPositionX(currFrameEvent);
+				state->frameRendererPositionY = caerFrameEventGetPositionY(currFrameEvent);
 				state->frameChannels = caerFrameEventGetChannelNumber(currFrameEvent);
 
 				memcpy(state->frameRenderer, caerFrameEventGetPixelArrayUnsafe(currFrameEvent),
@@ -276,7 +280,8 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 					(noFramesTimeout) ? ((const unsigned char *) "NO FRAMES") : ((const unsigned char *) "FRAMES"));
 
 				// Position and draw frames after events.
-				glWindowPos2i(state->eventRendererSizeX * PIXEL_ZOOM, 0);
+				glWindowPos2i((state->eventRendererSizeX * PIXEL_ZOOM) + (state->frameRendererPositionX * PIXEL_ZOOM),
+					(state->frameRendererPositionY * PIXEL_ZOOM));
 			}
 			else {
 				glWindowPos2i(0, (state->frameRendererSizeX * PIXEL_ZOOM) + TEXT_SPACING);
@@ -288,7 +293,8 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 					(noFramesTimeout) ? ((const unsigned char *) "NO FRAMES") : ((const unsigned char *) "FRAMES"));
 
 				// Position and draw frames.
-				glWindowPos2i(0, 0);
+				glWindowPos2i((state->frameRendererPositionX * PIXEL_ZOOM),
+					(state->frameRendererPositionY * PIXEL_ZOOM));
 			}
 
 			switch (state->frameChannels) {
@@ -330,7 +336,7 @@ static bool allocateEventRenderer(visualizerState state, int16_t sourceID) {
 		return (false); // Failure.
 	}
 
-	// Assign max sizes for event renderer.
+	// Assign maximum sizes for event renderer.
 	state->eventRendererSizeX = sizeX;
 	state->eventRendererSizeY = sizeY;
 
@@ -348,9 +354,11 @@ static bool allocateFrameRenderer(visualizerState state, int16_t sourceID) {
 		return (false); // Failure.
 	}
 
-	// Assign max sizes for frame renderer.
+	// Assign maximum sizes and defaults for frame renderer.
 	state->frameRendererSizeX = sizeX;
 	state->frameRendererSizeY = sizeY;
+	state->frameRendererPositionX = 0;
+	state->frameRendererPositionY = 0;
 	state->frameChannels = MAX_CHANNELS;
 
 	return (true);
