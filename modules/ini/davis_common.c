@@ -405,6 +405,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 	sshsNodePutIntIfAbsent(apsNode, "Exposure", 4000); // in µs
 	sshsNodePutIntIfAbsent(apsNode, "FrameDelay", 1000); // in µs
 	sshsNodePutShortIfAbsent(apsNode, "RowSettle", devInfo->adcClock / 3); // in cycles
+	sshsNodePutBoolIfAbsent(apsNode, "TakeSnapShot", false);
 
 	// Not supported on DAVIS RGB.
 	if (!IS_DAVISRGB(devInfo->chipID)) {
@@ -1318,6 +1319,8 @@ static void chipConfigListener(sshsNode node, void *userData, enum sshs_node_att
 }
 
 static void muxConfigSend(sshsNode node, caerModuleData moduleData) {
+	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_MUX, DAVIS_CONFIG_MUX_TIMESTAMP_RESET,
+		sshsNodeGetBool(node, "TimestampReset"));
 	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_MUX, DAVIS_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE,
 		sshsNodeGetBool(node, "ForceChipBiasEnable"));
 	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_MUX, DAVIS_CONFIG_MUX_DROP_DVS_ON_TRANSFER_STALL,
@@ -1649,6 +1652,8 @@ static void apsConfigSend(sshsNode node, caerModuleData moduleData, struct caer_
 	}
 
 	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_RUN, sshsNodeGetBool(node, "Run"));
+	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_SNAPSHOT,
+		sshsNodeGetBool(node, "TakeSnapShot"));
 }
 
 static void apsConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
@@ -1803,6 +1808,10 @@ static void apsConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 		}
 		else if (changeType == BOOL && caerStrEquals(changeKey, "Run")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_RUN, changeValue.boolean);
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "TakeSnapShot")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_SNAPSHOT,
+				changeValue.boolean);
 		}
 	}
 }
