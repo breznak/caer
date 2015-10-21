@@ -535,13 +535,15 @@ static void sendDefaultConfiguration(caerModuleData moduleData, struct caer_davi
 static void mainloopDataNotifyIncrease(void *p) {
 	caerMainloopData mainloopData = p;
 
-	atomic_fetch_add(&mainloopData->dataAvailable, 1);
+	atomic_fetch_add_explicit(&mainloopData->dataAvailable, 1, memory_order_release);
 }
 
 static void mainloopDataNotifyDecrease(void *p) {
 	caerMainloopData mainloopData = p;
 
-	atomic_fetch_sub(&mainloopData->dataAvailable, 1);
+	// No special memory order for decrease, because the acquire load to even start running
+	// through a mainloop already synchronizes with the release store above.
+	atomic_fetch_sub_explicit(&mainloopData->dataAvailable, 1, memory_order_relaxed);
 }
 
 static void moduleShutdownNotify(void *p) {

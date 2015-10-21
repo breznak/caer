@@ -102,7 +102,7 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 	// Wait for someone to toggle the global shutdown flag.
 	struct timespec oneSecondSleep = { .tv_sec = 1, .tv_nsec = 0 };
 
-	while (atomic_load(&mainloopThreads.running)) {
+	while (atomic_load_explicit(&mainloopThreads.running, memory_order_relaxed)) {
 		thrd_sleep(&oneSecondSleep, NULL);
 	}
 
@@ -174,10 +174,10 @@ static int caerMainloopRunner(void *inPtr) {
 	// itself to signal termination.
 	size_t sleepCount = 0;
 
-	while (atomic_load(&mainloopData->running)) {
+	while (atomic_load_explicit(&mainloopData->running, memory_order_relaxed)) {
 		// Run only if data available to consume, else sleep. But make a run
 		// anyway each second, to detect new devices for example.
-		if (atomic_load(&mainloopData->dataAvailable) > 0 || sleepCount > 1000) {
+		if (atomic_load_explicit(&mainloopData->dataAvailable, memory_order_acquire) > 0 || sleepCount > 1000) {
 			sleepCount = 0;
 
 			if (!(*mainloopData->mainloopFunction)()) {
@@ -279,7 +279,7 @@ void *caerMainloopGetSourceState(uint16_t source) {
 static void caerMainloopSignalHandler(int signal) {
 	// Simply set the running flag to false on SIGTERM and SIGINT (CTRL+C) for global shutdown.
 	if (signal == SIGTERM || signal == SIGINT) {
-		atomic_store(&mainloopThreads.running, false);
+		atomic_store_explicit(&mainloopThreads.running, false, memory_order_relaxed);
 	}
 }
 
@@ -291,7 +291,7 @@ static void caerMainloopShutdownListener(sshsNode node, void *userData, enum ssh
 		// Shutdown changed, let's see.
 		if (changeValue.boolean == true) {
 			// Shutdown requested!
-			atomic_store((atomic_bool * ) userData, false);
+			atomic_store_explicit((atomic_bool * ) userData, false, memory_order_relaxed);
 		}
 	}
 }

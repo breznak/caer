@@ -27,7 +27,7 @@ static atomic_bool globalShutdown = ATOMIC_VAR_INIT(false);
 static void globalShutdownSignalHandler(int signal) {
 	// Simply set the running flag to false on SIGTERM and SIGINT (CTRL+C) for global shutdown.
 	if (signal == SIGTERM || signal == SIGINT) {
-		atomic_store(&globalShutdown, true);
+		atomic_store_explicit(&globalShutdown, true, memory_order_relaxed);
 	}
 }
 
@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
 	size_t dataBufferLength = 1024 * 64;
 	uint8_t *dataBuffer = malloc(dataBufferLength);
 
-	while (!atomic_load(&globalShutdown)) {
+	while (!atomic_load_explicit(&globalShutdown, memory_order_relaxed)) {
 		// Get packet header, to calculate packet size.
 		if (!recvUntilDone(listenTCPSocket, dataBuffer, sizeof(struct caer_event_packet_header))) {
 			fprintf(stderr, "Error in header recv() call: %d\n", errno);

@@ -25,10 +25,10 @@ void caerModuleSM(caerModuleFunctions moduleFunctions, caerModuleData moduleData
 
 void caerModuleSMv(caerModuleFunctions moduleFunctions, caerModuleData moduleData, size_t memSize, size_t argsNumber,
 	va_list args) {
-	bool running = atomic_load(&moduleData->running);
+	bool running = atomic_load_explicit(&moduleData->running, memory_order_relaxed);
 
 	if (moduleData->moduleStatus == RUNNING && running) {
-		if (atomic_load(&moduleData->configUpdate) != 0) {
+		if (atomic_load_explicit(&moduleData->configUpdate, memory_order_relaxed) != 0) {
 			if (moduleFunctions->moduleConfig != NULL) {
 				// Call config function, which will have to reset configUpdate.
 				moduleFunctions->moduleConfig(moduleData);
@@ -86,7 +86,7 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 
 	// Put module into startup state.
 	moduleData->moduleStatus = STOPPED;
-	atomic_store(&moduleData->running, true);
+	atomic_store_explicit(&moduleData->running, true, memory_order_relaxed);
 
 	// Determine SSHS module node. Use short name for better human recognition.
 	char sshsString[nameLength + 2];
@@ -161,7 +161,7 @@ void caerModuleConfigDefaultListener(sshsNode node, void *userData, enum sshs_no
 
 	// Simply set the config update flag to 1 on any attribute change.
 	if (event == ATTRIBUTE_MODIFIED) {
-		atomic_store(&data->configUpdate, 1);
+		atomic_store_explicit(&data->configUpdate, 1, memory_order_relaxed);
 	}
 }
 
@@ -174,10 +174,10 @@ static void caerModuleShutdownListener(sshsNode node, void *userData, enum sshs_
 	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && caerStrEquals(changeKey, "shutdown")) {
 		// Shutdown changed, let's see.
 		if (changeValue.boolean == true) {
-			atomic_store(&data->running, false);
+			atomic_store_explicit(&data->running, false, memory_order_relaxed);
 		}
 		else {
-			atomic_store(&data->running, true);
+			atomic_store_explicit(&data->running, true, memory_order_relaxed);
 		}
 	}
 }
