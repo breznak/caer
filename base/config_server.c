@@ -23,7 +23,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 
 void caerConfigServerStart(void) {
 	// Enable the configuration server thread.
-	atomic_store_explicit(&configServerThread.running, true, memory_order_release);
+	atomic_store(&configServerThread.running, true);
 
 	// Start the thread.
 	if ((errno = thrd_create(&configServerThread.thread, &caerConfigServerRunner, NULL)) == thrd_success) {
@@ -44,7 +44,7 @@ void caerConfigServerStop(void) {
 	}
 
 	// Disable the configuration server thread first.
-	atomic_store_explicit(&configServerThread.running, false, memory_order_relaxed);
+	atomic_store(&configServerThread.running, false);
 
 	// Then wait on it to finish.
 	if ((errno = thrd_join(configServerThread.thread, NULL)) == thrd_success) {

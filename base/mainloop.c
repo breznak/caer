@@ -279,7 +279,7 @@ void *caerMainloopGetSourceState(uint16_t source) {
 static void caerMainloopSignalHandler(int signal) {
 	// Simply set the running flag to false on SIGTERM and SIGINT (CTRL+C) for global shutdown.
 	if (signal == SIGTERM || signal == SIGINT) {
-		atomic_store_explicit(&mainloopThreads.running, false, memory_order_relaxed);
+		atomic_store(&mainloopThreads.running, false);
 	}
 }
 
@@ -291,7 +291,7 @@ static void caerMainloopShutdownListener(sshsNode node, void *userData, enum ssh
 		// Shutdown changed, let's see.
 		if (changeValue.boolean == true) {
 			// Shutdown requested!
-			atomic_store_explicit((atomic_bool * ) userData, false, memory_order_relaxed);
+			atomic_store((atomic_bool * ) userData, false);
 		}
 	}
 }

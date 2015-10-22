@@ -114,6 +114,8 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	strncpy(moduleData->moduleSubSystemString, nameString, nameLength);
 	moduleData->moduleSubSystemString[nameLength] = '\0';
 
+	atomic_thread_fence(memory_order_release);
+
 	return (moduleData);
 }
 
@@ -161,7 +163,7 @@ void caerModuleConfigDefaultListener(sshsNode node, void *userData, enum sshs_no
 
 	// Simply set the config update flag to 1 on any attribute change.
 	if (event == ATTRIBUTE_MODIFIED) {
-		atomic_store_explicit(&data->configUpdate, 1, memory_order_relaxed);
+		atomic_store(&data->configUpdate, 1);
 	}
 }
 
@@ -174,10 +176,10 @@ static void caerModuleShutdownListener(sshsNode node, void *userData, enum sshs_
 	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && caerStrEquals(changeKey, "shutdown")) {
 		// Shutdown changed, let's see.
 		if (changeValue.boolean == true) {
-			atomic_store_explicit(&data->running, false, memory_order_relaxed);
+			atomic_store(&data->running, false);
 		}
 		else {
-			atomic_store_explicit(&data->running, true, memory_order_relaxed);
+			atomic_store(&data->running, true);
 		}
 	}
 }
