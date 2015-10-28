@@ -64,7 +64,7 @@ void caerConfigInit(const char *configFile, int argc, char *argv[]) {
 	}
 }
 
-static void caerConfigShutDownWriteBack(void) {
+void caerConfigWriteBack(void) {
 	if (caerConfigFilePath != NULL) {
 		int configFileFd = open(caerConfigFilePath, O_WRONLY | O_TRUNC);
 
@@ -78,6 +78,12 @@ static void caerConfigShutDownWriteBack(void) {
 			caerLog(CAER_LOG_EMERGENCY, "Config", "Could not write to the configuration file '%s'. Error: %d.",
 				caerConfigFilePath, errno);
 		}
+	}
+}
+
+static void caerConfigShutDownWriteBack(void) {
+	if (caerConfigFilePath != NULL) {
+		caerConfigWriteBack();
 
 		// realpath() allocated memory for this above.
 		free(caerConfigFilePath);
