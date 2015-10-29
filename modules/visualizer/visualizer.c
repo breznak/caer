@@ -149,25 +149,18 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 			}
 		}
 
-		caerPolarityEvent currPolarityEvent;
-
-		for (int32_t i = 0; i < caerEventPacketHeaderGetEventNumber(&polarity->packetHeader); i++) {
-			currPolarityEvent = caerPolarityEventPacketGetEvent(polarity, i);
-
-			// Only operate on valid events!
-			if (caerPolarityEventIsValid(currPolarityEvent)) {
-				if (caerPolarityEventGetPolarity(currPolarityEvent)) {
-					// Green.
-					state->eventRenderer[(caerPolarityEventGetY(currPolarityEvent) * state->eventRendererSizeX)
-						+ caerPolarityEventGetX(currPolarityEvent)] = be32toh(U32T(0xFF << 16));
-				}
-				else {
-					// Red.
-					state->eventRenderer[(caerPolarityEventGetY(currPolarityEvent) * state->eventRendererSizeX)
-						+ caerPolarityEventGetX(currPolarityEvent)] = be32toh(U32T(0xFF << 24));
-				}
+		CAER_POLARITY_ITERATOR_VALID_START(polarity)
+			if (caerPolarityEventGetPolarity(caerPolarityIteratorElement)) {
+				// Green.
+				state->eventRenderer[(caerPolarityEventGetY(caerPolarityIteratorElement) * state->eventRendererSizeX)
+					+ caerPolarityEventGetX(caerPolarityIteratorElement)] = be32toh(U32T(0xFF << 16));
 			}
-		}
+			else {
+				// Red.
+				state->eventRenderer[(caerPolarityEventGetY(caerPolarityIteratorElement) * state->eventRendererSizeX)
+					+ caerPolarityEventGetX(caerPolarityIteratorElement)] = be32toh(U32T(0xFF << 24));
+			}
+		CAER_POLARITY_ITERATOR_VALID_END
 
 		// Accumulate events over four polarity packets.
 		if (state->eventRendererSlowDown++ == 4) {

@@ -58,21 +58,19 @@ static inline void caerOutputWriteOldAERHack(int fileDescriptor, void *startAddr
 	}
 
 	// Convert the events to the old format and write them out.
-	for (int32_t i = 0; i < caerEventPacketHeaderGetEventNumber(packetHeader); i++) {
-		caerPolarityEvent polarity = caerPolarityEventPacketGetEvent((caerPolarityEventPacket) packetHeader, i);
-
-		uint32_t data = U32T((caerPolarityEventGetPolarity(polarity) & 0x01) << 11);
-		data |= U32T(((239 - caerPolarityEventGetX(polarity)) & 0x3FF) << 12);
-		data |= U32T((caerPolarityEventGetY(polarity) & 0x1FF) << 22);
+	CAER_POLARITY_ITERATOR_ALL_START((caerPolarityEventPacket) packetHeader)
+		uint32_t data = U32T((caerPolarityEventGetPolarity(caerPolarityIteratorElement) & 0x01) << 11);
+		data |= U32T(((239 - caerPolarityEventGetX(caerPolarityIteratorElement)) & 0x3FF) << 12);
+		data |= U32T((caerPolarityEventGetY(caerPolarityIteratorElement) & 0x1FF) << 22);
 		data = htobe32(data);
 
 		write(fileDescriptor, &data, 4);
 
-		int32_t ts = caerPolarityEventGetTimestamp(polarity);
+		int32_t ts = caerPolarityEventGetTimestamp(caerPolarityIteratorElement);
 		ts = I32T(htobe32(U32T(ts)));
 
 		write(fileDescriptor, &ts, 4);
-	}
+	CAER_POLARITY_ITERATOR_ALL_END
 }
 
 static inline void caerOutputCommonWriteFullSGIO(int fileDescriptor, struct iovec *sgioMemory, size_t sgioLength,

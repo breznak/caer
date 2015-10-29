@@ -74,60 +74,53 @@ static void caerBackgroundActivityFilterRun(caerModuleData moduleData, size_t ar
 
 	// Iterate over events and filter out ones that are not supported by other
 	// events within a certain region in the specified timeframe.
-	caerPolarityEvent currEvent = NULL;
+	CAER_POLARITY_ITERATOR_VALID_START(polarity)
+		// Get values on which to operate.
+		int64_t ts = caerPolarityEventGetTimestamp64(caerPolarityIteratorElement, polarity);
+		uint16_t x = caerPolarityEventGetX(caerPolarityIteratorElement);
+		uint16_t y = caerPolarityEventGetY(caerPolarityIteratorElement);
 
-	for (int32_t i = 0; i < caerEventPacketHeaderGetEventNumber(&polarity->packetHeader); i++) {
-		currEvent = caerPolarityEventPacketGetEvent(polarity, i);
+		// Apply sub-sampling.
+		x = U16T(x >> state->subSampleBy);
+		y = U16T(y >> state->subSampleBy);
 
-		// Only operate on valid events!
-		if (caerPolarityEventIsValid(currEvent)) {
-			// Get values on which to operate.
-			int64_t ts = caerPolarityEventGetTimestamp64(currEvent, polarity);
-			uint16_t x = caerPolarityEventGetX(currEvent);
-			uint16_t y = caerPolarityEventGetY(currEvent);
+		// Get value from map.
+		int64_t lastTS = state->timestampMap[x][y];
 
-			// Apply sub-sampling.
-			x = U16T(x >> state->subSampleBy);
-			y = U16T(y >> state->subSampleBy);
-
-			// Get value from map.
-			int64_t lastTS = state->timestampMap[x][y];
-
-			if ((I64T(ts - lastTS) >= I64T(state->deltaT)) || (lastTS == 0)) {
-				// Filter out invalid.
-				caerPolarityEventInvalidate(currEvent, polarity);
-			}
-
-			// Update neighboring region.
-			if (x > 0) {
-				state->timestampMap[x - 1][y] = ts;
-			}
-			if (x < state->sizeMaxX) {
-				state->timestampMap[x + 1][y] = ts;
-			}
-
-			if (y > 0) {
-				state->timestampMap[x][y - 1] = ts;
-			}
-			if (y < state->sizeMaxY) {
-				state->timestampMap[x][y + 1] = ts;
-			}
-
-			if (x > 0 && y > 0) {
-				state->timestampMap[x - 1][y - 1] = ts;
-			}
-			if (x < state->sizeMaxX && y < state->sizeMaxY) {
-				state->timestampMap[x + 1][y + 1] = ts;
-			}
-
-			if (x > 0 && y < state->sizeMaxY) {
-				state->timestampMap[x - 1][y + 1] = ts;
-			}
-			if (x < state->sizeMaxX && y > 0) {
-				state->timestampMap[x + 1][y - 1] = ts;
-			}
+		if ((I64T(ts - lastTS) >= I64T(state->deltaT)) || (lastTS == 0)) {
+			// Filter out invalid.
+			caerPolarityEventInvalidate(caerPolarityIteratorElement, polarity);
 		}
-	}
+
+		// Update neighboring region.
+		if (x > 0) {
+			state->timestampMap[x - 1][y] = ts;
+		}
+		if (x < state->sizeMaxX) {
+			state->timestampMap[x + 1][y] = ts;
+		}
+
+		if (y > 0) {
+			state->timestampMap[x][y - 1] = ts;
+		}
+		if (y < state->sizeMaxY) {
+			state->timestampMap[x][y + 1] = ts;
+		}
+
+		if (x > 0 && y > 0) {
+			state->timestampMap[x - 1][y - 1] = ts;
+		}
+		if (x < state->sizeMaxX && y < state->sizeMaxY) {
+			state->timestampMap[x + 1][y + 1] = ts;
+		}
+
+		if (x > 0 && y < state->sizeMaxY) {
+			state->timestampMap[x - 1][y + 1] = ts;
+		}
+		if (x < state->sizeMaxX && y > 0) {
+			state->timestampMap[x + 1][y - 1] = ts;
+		}
+	CAER_POLARITY_ITERATOR_VALID_END
 }
 
 static void caerBackgroundActivityFilterConfig(caerModuleData moduleData) {
