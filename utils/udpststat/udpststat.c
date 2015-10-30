@@ -36,7 +36,6 @@ int main(int argc, char *argv[]) {
 
 	shutdownAction.sa_handler = &globalShutdownSignalHandler;
 	shutdownAction.sa_flags = 0;
-	shutdownAction.sa_restorer = NULL;
 	sigemptyset(&shutdownAction.sa_mask);
 	sigaddset(&shutdownAction.sa_mask, SIGTERM);
 	sigaddset(&shutdownAction.sa_mask, SIGINT);

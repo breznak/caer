@@ -37,7 +37,6 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 
 	shutdown.sa_handler = &caerMainloopSignalHandler;
 	shutdown.sa_flags = 0;
-	shutdown.sa_restorer = NULL;
 	sigemptyset(&shutdown.sa_mask);
 	sigaddset(&shutdown.sa_mask, SIGTERM);
 	sigaddset(&shutdown.sa_mask, SIGINT);
