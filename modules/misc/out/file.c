@@ -110,10 +110,10 @@ static char *getFullFilePath(const char *subSystemString, const char *directory,
 		prefix = DEFAULT_PREFIX;
 	}
 
-	// Assemble together: directory/prefix-time.aer2
-	size_t filePathLength = strlen(directory) + strlen(prefix) + currentTimeStringLength + 8;
+	// Assemble together: directory/prefix-time.aedat
+	size_t filePathLength = strlen(directory) + strlen(prefix) + currentTimeStringLength + 9;
 	// 1 for the directory/prefix separating slash, 1 for prefix-time separating
-	// dash, 5 for file extension, 1 for terminating NUL byte = +8.
+	// dash, 6 for file extension, 1 for terminating NUL byte = +9.
 
 	char *filePath = malloc(filePathLength);
 	if (filePath == NULL) {
@@ -121,7 +121,7 @@ static char *getFullFilePath(const char *subSystemString, const char *directory,
 		return (NULL);
 	}
 
-	snprintf(filePath, filePathLength, "%s/%s-%s.aer2", directory, prefix, currentTimeString);
+	snprintf(filePath, filePathLength, "%s/%s-%s.aedat", directory, prefix, currentTimeString);
 
 	return (filePath);
 }
@@ -185,8 +185,13 @@ static bool caerOutputFileInit(caerModuleData moduleData) {
 	}
 
 	if (USE_OLD_AEDAT_FORMAT_HACK) {
-		// Write AEDAT header.
+		// Write AEDAT 2.0 header.
 		write(state->fileDescriptor, "#!AER-DAT2.0\r\n", 14);
+	}
+	else {
+		// Write AEDAT 3.0 header (RAW format).
+		write(state->fileDescriptor, "#!AER-DAT3.0\r\n", 14);
+		write(state->fileDescriptor, "#Format: RAW\r\n", 14);
 	}
 
 	return (true);
