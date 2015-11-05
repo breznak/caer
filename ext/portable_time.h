@@ -2,6 +2,7 @@
 #define PORTABLE_TIME_H_
 
 #if defined(__APPLE__)
+	#include <time.h>
 	#include <sys/time.h>
 	#include <mach/mach.h>
 	#include <mach/mach_time.h>
@@ -10,7 +11,7 @@
 	#include <mach/mach_host.h>
 	#include <mach/mach_port.h>
 
-	static inline bool portable_clock_gettime_monotonic(struct timespec *monoTime)
+	static inline bool portable_clock_gettime_monotonic(struct timespec *monoTime) {
 		kern_return_t kRet;
 		clock_serv_t clockRef;
 		mach_timespec_t machTime;
