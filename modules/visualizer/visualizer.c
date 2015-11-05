@@ -8,7 +8,19 @@
 #define GL_GLEXT_PROTOTYPES 1
 #include <GLFW/glfw3.h>
 
-#include <GL/glut.h>
+#ifdef __APPLE__
+	#include <OpenGL/gl.h>
+	#include <OpenGL/glu.h>
+	#include <GLUT/glut.h>
+#else
+	#ifdef _WIN32
+		#include <windows.h>
+	#endif
+	#include <GL/gl.h>
+	#include <GL/glu.h>
+	#include <GL/glut.h>
+#endif
+
 #include <GL/freeglut_ext.h>
 
 #define TEXT_SPACING 20 // in pixels
