@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <pthread.h>
 #include <time.h>
+#include <sys/time.h>
 #include <sched.h>
 #include <errno.h>
 
@@ -127,21 +128,6 @@ static inline int mtx_lock(mtx_t *mutex) {
 	return (thrd_success);
 }
 
-static inline int mtx_timedlock(mtx_t *restrict mutex, const struct timespec *restrict time_point) {
-	int ret = pthread_mutex_timedlock(mutex, time_point);
-
-	switch (ret) {
-		case 0:
-			return (thrd_success);
-
-		case ETIMEDOUT:
-			return (thrd_timedout);
-
-		default:
-			return (thrd_error);
-	}
-}
-
 static inline int mtx_trylock(mtx_t *mutex) {
 	int ret = pthread_mutex_trylock(mutex);
 
@@ -155,6 +141,40 @@ static inline int mtx_trylock(mtx_t *mutex) {
 		default:
 			return (thrd_error);
 	}
+}
+
+static inline int mtx_timedlock(mtx_t *restrict mutex, const struct timespec *restrict time_point) {
+#if defined(__APPLE__)
+	// Emulate on MacOS X.
+	struct timespec sleepTime = { .tv_sec = 0, .tv_nsec = 1000000 /* 1ms */ };
+	struct timeval currentTime;
+	int ret;
+
+	while ((ret = mtx_trylock(mutex)) == thrd_busy) {
+		gettimeofday(&currentTime, NULL);
+
+		if (currentTime.tv_sec >= time_point->tv_sec && (currentTime.tv_usec * 1000) >= time_point->tv_nsec) {
+			return (thrd_timedout);
+		}
+
+		nanosleep(&sleepTime, NULL);
+	}
+
+	return (ret);
+#elif defined(__unix__) || defined(__UNIX__)
+	int ret = pthread_mutex_timedlock(mutex, time_point);
+
+	switch (ret) {
+		case 0:
+			return (thrd_success);
+
+		case ETIMEDOUT:
+			return (thrd_timedout);
+
+		default:
+			return (thrd_error);
+	}
+#endif
 }
 
 static inline int mtx_unlock(mtx_t *mutex) {
@@ -189,23 +209,6 @@ static inline int mtx_shared_lock_exclusive(mtx_shared_t *mutex) {
 }
 
 // NON STANDARD!
-static inline int mtx_shared_timedlock_exclusive(mtx_shared_t *restrict mutex,
-	const struct timespec *restrict time_point) {
-	int ret = pthread_rwlock_timedwrlock(mutex, time_point);
-
-	switch (ret) {
-		case 0:
-			return (thrd_success);
-
-		case ETIMEDOUT:
-			return (thrd_timedout);
-
-		default:
-			return (thrd_error);
-	}
-}
-
-// NON STANDARD!
 static inline int mtx_shared_trylock_exclusive(mtx_shared_t *mutex) {
 	int ret = pthread_rwlock_trywrlock(mutex);
 
@@ -219,6 +222,42 @@ static inline int mtx_shared_trylock_exclusive(mtx_shared_t *mutex) {
 		default:
 			return (thrd_error);
 	}
+}
+
+// NON STANDARD!
+static inline int mtx_shared_timedlock_exclusive(mtx_shared_t *restrict mutex,
+	const struct timespec *restrict time_point) {
+#if defined(__APPLE__)
+	// Emulate on MacOS X.
+	struct timespec sleepTime = { .tv_sec = 0, .tv_nsec = 1000000 /* 1ms */ };
+	struct timeval currentTime;
+	int ret;
+
+	while ((ret = mtx_shared_trylock_exclusive(mutex)) == thrd_busy) {
+		gettimeofday(&currentTime, NULL);
+
+		if (currentTime.tv_sec >= time_point->tv_sec && (currentTime.tv_usec * 1000) >= time_point->tv_nsec) {
+			return (thrd_timedout);
+		}
+
+		nanosleep(&sleepTime, NULL);
+	}
+
+	return (ret);
+#elif defined(__unix__) || defined(__UNIX__)
+	int ret = pthread_rwlock_timedwrlock(mutex, time_point);
+
+	switch (ret) {
+		case 0:
+			return (thrd_success);
+
+		case ETIMEDOUT:
+			return (thrd_timedout);
+
+		default:
+			return (thrd_error);
+	}
+#endif
 }
 
 // NON STANDARD!
@@ -240,22 +279,6 @@ static inline int mtx_shared_lock_shared(mtx_shared_t *mutex) {
 }
 
 // NON STANDARD!
-static inline int mtx_shared_timedlock_shared(mtx_shared_t *restrict mutex, const struct timespec *restrict time_point) {
-	int ret = pthread_rwlock_timedrdlock(mutex, time_point);
-
-	switch (ret) {
-		case 0:
-			return (thrd_success);
-
-		case ETIMEDOUT:
-			return (thrd_timedout);
-
-		default:
-			return (thrd_error);
-	}
-}
-
-// NON STANDARD!
 static inline int mtx_shared_trylock_shared(mtx_shared_t *mutex) {
 	int ret = pthread_rwlock_tryrdlock(mutex);
 
@@ -269,6 +292,41 @@ static inline int mtx_shared_trylock_shared(mtx_shared_t *mutex) {
 		default:
 			return (thrd_error);
 	}
+}
+
+// NON STANDARD!
+static inline int mtx_shared_timedlock_shared(mtx_shared_t *restrict mutex, const struct timespec *restrict time_point) {
+#if defined(__APPLE__)
+	// Emulate on MacOS X.
+	struct timespec sleepTime = { .tv_sec = 0, .tv_nsec = 1000000 /* 1ms */ };
+	struct timeval currentTime;
+	int ret;
+
+	while ((ret = mtx_shared_trylock_shared(mutex)) == thrd_busy) {
+		gettimeofday(&currentTime, NULL);
+
+		if (currentTime.tv_sec >= time_point->tv_sec && (currentTime.tv_usec * 1000) >= time_point->tv_nsec) {
+			return (thrd_timedout);
+		}
+
+		nanosleep(&sleepTime, NULL);
+	}
+
+	return (ret);
+#elif defined(__unix__) || defined(__UNIX__)
+	int ret = pthread_rwlock_timedrdlock(mutex, time_point);
+
+	switch (ret) {
+		case 0:
+			return (thrd_success);
+
+		case ETIMEDOUT:
+			return (thrd_timedout);
+
+		default:
+			return (thrd_error);
+	}
+#endif
 }
 
 // NON STANDARD!
