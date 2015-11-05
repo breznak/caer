@@ -2,7 +2,7 @@
 #include "base/mainloop.h"
 #include "base/module.h"
 #include "modules/statistics/statistics.h"
-#include <time.h>
+#include "ext/portable_time.h"
 
 #define GLFW_INCLUDE_GLEXT 1
 #define GL_GLEXT_PROTOTYPES 1
@@ -209,7 +209,7 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 
 	// Detect if nothing happened for a long time.
 	struct timespec currentTime;
-	clock_gettime(CLOCK_MONOTONIC, &currentTime);
+	portable_clock_gettime_monotonic(&currentTime);
 
 	uint64_t diffNanoTimeEvents = (uint64_t) (((int64_t) (currentTime.tv_sec - state->eventStatistics.lastTime.tv_sec)
 		* 1000000000LL) + (int64_t) (currentTime.tv_nsec - state->eventStatistics.lastTime.tv_nsec));

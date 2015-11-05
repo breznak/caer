@@ -1,7 +1,7 @@
 #include "statistics.h"
 #include "base/mainloop.h"
 #include "base/module.h"
-#include <time.h>
+#include "ext/portable_time.h"
 
 #define STAT_STRING "Total events/second: %10" PRIu64 " - Valid events/second: %10" PRIu64
 
@@ -67,7 +67,7 @@ void caerStatisticsStringUpdate(caerEventPacketHeader packetHeader, caerStatisti
 
 	// Print up-to-date statistic roughly every second, taking into account possible deviations.
 	struct timespec currentTime;
-	clock_gettime(CLOCK_MONOTONIC, &currentTime);
+	portable_clock_gettime_monotonic(&currentTime);
 
 	uint64_t diffNanoTime = (uint64_t) (((int64_t) (currentTime.tv_sec - state->lastTime.tv_sec) * 1000000000LL)
 		+ (int64_t) (currentTime.tv_nsec - state->lastTime.tv_nsec));
