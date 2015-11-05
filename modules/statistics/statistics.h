@@ -4,6 +4,8 @@
 #include "main.h"
 
 #include <libcaer/events/common.h>
+#include <time.h>
+#include <sys/time.h>
 
 struct caer_statistics_state {
 	uint64_t divisionFactor;

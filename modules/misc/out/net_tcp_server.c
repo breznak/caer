@@ -149,7 +149,7 @@ static void caerOutputNetTCPServerConnectionHandler(caerModuleData moduleData) {
 
 	// First let's check if anybody closed their connection, to free up space
 	// for eventual new connections.
-	int pollResult = poll(state->clientDescriptors, state->clientDescriptorsLength, 0);
+	int pollResult = poll(state->clientDescriptors, (nfds_t) state->clientDescriptorsLength, 0);
 	if (pollResult < 0) {
 		// Poll failure. Log and then continue.
 		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "TCP server poll() failed. Error: %d.", errno);

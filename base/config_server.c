@@ -128,7 +128,7 @@ static int caerConfigServerRunner(void *inPtr) {
 	pollSockets[0].fd = configServerSocket;
 
 	while (atomic_load_explicit(&configServerThread.running, memory_order_relaxed)) {
-		int pollResult = poll(pollSockets, connections, 1000);
+		int pollResult = poll(pollSockets, (nfds_t) connections, 1000);
 
 		if (pollResult > 0) {
 			// First let's check if there's a new connection waiting to be accepted.
