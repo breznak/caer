@@ -9,18 +9,13 @@
 #include <GLFW/glfw3.h>
 
 #ifdef __APPLE__
-	#include <OpenGL/gl.h>
-	#include <OpenGL/glu.h>
 	#include <GLUT/glut.h>
 #else
-	#ifdef _WIN32
-		#include <windows.h>
-	#endif
-	#include <GL/gl.h>
-	#include <GL/glu.h>
 	#include <GL/glut.h>
 #endif
 
+// We include glut.h so we can know which implementation we're using.
+// We only support FreeGLUT currently.
 #ifdef FREEGLUT
 	#include <GL/freeglut_ext.h>
 #endif
@@ -98,7 +93,9 @@ static bool caerVisualizerInit(caerModuleData moduleData) {
 	char *fakeargv[] = { fakeParam, NULL };
 	int fakeargc = 1;
 
+#ifdef FREEGLUT
 	glutInit(&fakeargc, fakeargv);
+#endif
 
 	if (!caerStatisticsStringInit(&state->eventStatistics)) {
 		return (false);
