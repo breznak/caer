@@ -21,7 +21,9 @@
 	#include <GL/glut.h>
 #endif
 
-#include <GL/freeglut_ext.h>
+#ifdef FREEGLUT
+	#include <GL/freeglut_ext.h>
+#endif
 
 #define TEXT_SPACING 20 // in pixels
 
@@ -241,6 +243,8 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 		if (renderPolarity) {
 			// Write statistics text.
 			caerStatisticsStringUpdate((caerEventPacketHeader) polarity, &state->eventStatistics);
+
+#ifdef FREEGLUT
 			if (noEventsTimeout) {
 				glColor4f(1.0f, 0.0f, 0.0f, 1.0f); // RED
 			}
@@ -255,6 +259,7 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 			glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + (2 * TEXT_SPACING));
 			glutBitmapString(GLUT_BITMAP_HELVETICA_18,
 				(noEventsTimeout) ? ((const unsigned char *) "NO EVENTS") : ((const unsigned char *) "EVENTS"));
+#endif
 
 			// Position and draw events.
 			glWindowPos2i(0, 0);
@@ -267,15 +272,19 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 		if (renderFrame) {
 			// Write statistics text.
 			caerStatisticsStringUpdate((caerEventPacketHeader) frame, &state->frameStatistics);
+
+#ifdef FREEGLUT
 			if (noFramesTimeout) {
 				glColor4f(1.0f, 0.0f, 0.0f, 1.0f); // RED
 			}
 			else {
 				glColor4f(1.0f, 1.0f, 1.0f, 1.0f); // WHITE
 			}
+#endif
 
 			// Shift APS frame to the right of the Polarity rendering, if both are enabled.
 			if (renderPolarity) {
+#ifdef FREEGLUT
 				glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + (4 * TEXT_SPACING));
 				glutBitmapString(GLUT_BITMAP_HELVETICA_18,
 					(const unsigned char *) state->frameStatistics.currentStatisticsString);
@@ -283,12 +292,14 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 				glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + (5 * TEXT_SPACING));
 				glutBitmapString(GLUT_BITMAP_HELVETICA_18,
 					(noFramesTimeout) ? ((const unsigned char *) "NO FRAMES") : ((const unsigned char *) "FRAMES"));
+#endif
 
 				// Position and draw frames after events.
 				glWindowPos2i((state->eventRendererSizeX * PIXEL_ZOOM) + (state->frameRendererPositionX * PIXEL_ZOOM),
 					(state->frameRendererPositionY * PIXEL_ZOOM));
 			}
 			else {
+#ifdef FREEGLUT
 				glWindowPos2i(0, (state->frameRendererSizeX * PIXEL_ZOOM) + TEXT_SPACING);
 				glutBitmapString(GLUT_BITMAP_HELVETICA_18,
 					(const unsigned char *) state->frameStatistics.currentStatisticsString);
@@ -296,6 +307,7 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 				glWindowPos2i(0, (state->frameRendererSizeX * PIXEL_ZOOM) + (2 * TEXT_SPACING));
 				glutBitmapString(GLUT_BITMAP_HELVETICA_18,
 					(noFramesTimeout) ? ((const unsigned char *) "NO FRAMES") : ((const unsigned char *) "FRAMES"));
+#endif
 
 				// Position and draw frames.
 				glWindowPos2i((state->frameRendererPositionX * PIXEL_ZOOM),
