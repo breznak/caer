@@ -7,9 +7,9 @@ REQUIREMENTS:
 
 cmake >= 2.6
 gcc >= 4.9 or clang >= 3.6
-libcaer >= 1.0.0
+libcaer >= 1.0.1
 mini-xml (mxml) >= 2.7
-glfw >= 3.0.4 (optional, only if using visualizer module)
+glfw >= 3.0.4 (optional, only if using visualizer module, Linux only!)
 
 INSTALLATION:
 
@@ -24,7 +24,8 @@ One of the following options is required:
 
 Optional options: 
  -DJAER_COMPAT_FORMAT=1 ... use (older) file output format compatible with jAER
- -DENABLE_VISUALIZER=1  ... enable visualizer module
+                            works only for polarity events, not frames or IMU
+ -DENABLE_VISUALIZER=1  ... enable visualizer module (Linux only!)
  -DENABLE_NET_STREAM=1  ... enable tcp server for sending data over network
 
 2) build:
@@ -37,5 +38,5 @@ $ make install
 
 USAGE:
 
-$ caer-bin (see doc/ for more info on how to use cAER)
+$ caer-bin (see docs/ for more info on how to use cAER)
 $ caer-ctl (run-time settings control program, optional)
