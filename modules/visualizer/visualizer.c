@@ -38,6 +38,8 @@ struct visualizer_state {
 	int32_t frameRendererPositionY;
 	uint8_t frameChannels;
 	struct caer_statistics_state frameStatistics;
+	uint16_t subsampleRendering;
+	uint16_t subsampleCount;
 };
 
 typedef struct visualizer_state *visualizerState;
@@ -88,12 +90,18 @@ static bool caerVisualizerInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showFrames", true);
 #endif
 
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "subsampleRendering", 1);
+
+	state->subsampleRendering = (uint16_t)sshsNodeGetInt(moduleData->moduleNode, "subsampleRendering");
+	state->subsampleCount = 1;
+
 	// Statistics text.
 	char fakeParam[] = "cAER Visualizer";
 	char *fakeargv[] = { fakeParam, NULL };
 	int fakeargc = 1;
 
 #ifdef FREEGLUT
+	caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Initialize GLUT");
 	glutInit(&fakeargc, fakeargv);
 #endif
 
@@ -140,202 +148,214 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 
 	visualizerState state = moduleData->moduleState;
 
-	// Polarity events to render.
-	caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
-	bool renderPolarity = sshsNodeGetBool(moduleData->moduleNode, "showEvents");
+	//subsampling
+	if(state->subsampleCount >= state->subsampleRendering){
+		// Polarity events to render.
+		caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
+		bool renderPolarity = sshsNodeGetBool(moduleData->moduleNode, "showEvents");
 
-	// Frames to render.
-	caerFrameEventPacket frame = va_arg(args, caerFrameEventPacket);
-	bool renderFrame = sshsNodeGetBool(moduleData->moduleNode, "showFrames");
+		// Frames to render.
+		caerFrameEventPacket frame = va_arg(args, caerFrameEventPacket);
+		bool renderFrame = sshsNodeGetBool(moduleData->moduleNode, "showFrames");
 
-	// Update polarity event rendering map.
-	if (renderPolarity && polarity != NULL) {
-		// If the event renderer is not allocated yet, do it.
-		if (state->eventRenderer == NULL) {
-			if (!allocateEventRenderer(state, caerEventPacketHeaderGetEventSource(&polarity->packetHeader))) {
-				// Failed to allocate memory, nothing to do.
-				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
-					"Failed to allocate memory for eventRenderer.");
-				return;
+		// Update polarity event rendering map.
+		if (renderPolarity && polarity != NULL) {
+			// If the event renderer is not allocated yet, do it.
+			if (state->eventRenderer == NULL) {
+				if (!allocateEventRenderer(state, caerEventPacketHeaderGetEventSource(&polarity->packetHeader))) {
+					// Failed to allocate memory, nothing to do.
+					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+						"Failed to allocate memory for eventRenderer.");
+					return;
+				}
+			}
+			if (state->subsampleRendering>1) {
+				memset(state->eventRenderer, 0,
+					(size_t) state->eventRendererSizeX * state->eventRendererSizeY * sizeof(uint32_t));
+			}
+
+			CAER_POLARITY_ITERATOR_VALID_START(polarity)
+				if (caerPolarityEventGetPolarity(caerPolarityIteratorElement)) {
+					// Green.
+					state->eventRenderer[(caerPolarityEventGetY(caerPolarityIteratorElement) * state->eventRendererSizeX)
+						+ caerPolarityEventGetX(caerPolarityIteratorElement)] = be32toh(U32T(0xFF << 16));
+				}
+				else {
+					// Red.
+					state->eventRenderer[(caerPolarityEventGetY(caerPolarityIteratorElement) * state->eventRendererSizeX)
+						+ caerPolarityEventGetX(caerPolarityIteratorElement)] = be32toh(U32T(0xFF << 24));
+				}
+			CAER_POLARITY_ITERATOR_VALID_END
+
+			// Accumulate events over four polarity packets.
+			if(state->subsampleRendering <= 1){
+				if (state->eventRendererSlowDown++ == 4) {
+					state->eventRendererSlowDown = 0;
+
+					memset(state->eventRenderer, 0,
+						(size_t) state->eventRendererSizeX * state->eventRendererSizeY * sizeof(uint32_t));
+				}
 			}
 		}
 
-		CAER_POLARITY_ITERATOR_VALID_START(polarity)
-			if (caerPolarityEventGetPolarity(caerPolarityIteratorElement)) {
-				// Green.
-				state->eventRenderer[(caerPolarityEventGetY(caerPolarityIteratorElement) * state->eventRendererSizeX)
-					+ caerPolarityEventGetX(caerPolarityIteratorElement)] = be32toh(U32T(0xFF << 16));
+		// Select latest frame to render.
+		if (renderFrame && frame != NULL) {
+			// If the event renderer is not allocated yet, do it.
+			if (state->frameRenderer == NULL) {
+				if (!allocateFrameRenderer(state, caerEventPacketHeaderGetEventSource(&frame->packetHeader))) {
+					// Failed to allocate memory, nothing to do.
+					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+						"Failed to allocate memory for frameRenderer.");
+					return;
+				}
 			}
-			else {
-				// Red.
-				state->eventRenderer[(caerPolarityEventGetY(caerPolarityIteratorElement) * state->eventRendererSizeX)
-					+ caerPolarityEventGetX(caerPolarityIteratorElement)] = be32toh(U32T(0xFF << 24));
-			}
-		CAER_POLARITY_ITERATOR_VALID_END
 
-		// Accumulate events over four polarity packets.
-		if (state->eventRendererSlowDown++ == 4) {
-			state->eventRendererSlowDown = 0;
+			caerFrameEvent currFrameEvent;
 
-			memset(state->eventRenderer, 0,
-				(size_t) state->eventRendererSizeX * state->eventRendererSizeY * sizeof(uint32_t));
-		}
-	}
+			for (int32_t i = caerEventPacketHeaderGetEventNumber(&frame->packetHeader) - 1; i >= 0; i--) {
+				currFrameEvent = caerFrameEventPacketGetEvent(frame, i);
 
-	// Select latest frame to render.
-	if (renderFrame && frame != NULL) {
-		// If the event renderer is not allocated yet, do it.
-		if (state->frameRenderer == NULL) {
-			if (!allocateFrameRenderer(state, caerEventPacketHeaderGetEventSource(&frame->packetHeader))) {
-				// Failed to allocate memory, nothing to do.
-				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
-					"Failed to allocate memory for frameRenderer.");
-				return;
-			}
-		}
+				// Only operate on the last valid frame.
+				if (caerFrameEventIsValid(currFrameEvent)) {
+					// Copy the frame content to the permanent frameRenderer.
+					// Use frame sizes to correctly support small ROI frames.
+					state->frameRendererSizeX = caerFrameEventGetLengthX(currFrameEvent);
+					state->frameRendererSizeY = caerFrameEventGetLengthY(currFrameEvent);
+					state->frameRendererPositionX = caerFrameEventGetPositionX(currFrameEvent);
+					state->frameRendererPositionY = caerFrameEventGetPositionY(currFrameEvent);
+					state->frameChannels = caerFrameEventGetChannelNumber(currFrameEvent);
 
-		caerFrameEvent currFrameEvent;
+					memcpy(state->frameRenderer, caerFrameEventGetPixelArrayUnsafe(currFrameEvent),
+						((size_t) state->frameRendererSizeX * (size_t) state->frameRendererSizeY
+							* (size_t) state->frameChannels * sizeof(uint16_t)));
 
-		for (int32_t i = caerEventPacketHeaderGetEventNumber(&frame->packetHeader) - 1; i >= 0; i--) {
-			currFrameEvent = caerFrameEventPacketGetEvent(frame, i);
-
-			// Only operate on the last valid frame.
-			if (caerFrameEventIsValid(currFrameEvent)) {
-				// Copy the frame content to the permanent frameRenderer.
-				// Use frame sizes to correctly support small ROI frames.
-				state->frameRendererSizeX = caerFrameEventGetLengthX(currFrameEvent);
-				state->frameRendererSizeY = caerFrameEventGetLengthY(currFrameEvent);
-				state->frameRendererPositionX = caerFrameEventGetPositionX(currFrameEvent);
-				state->frameRendererPositionY = caerFrameEventGetPositionY(currFrameEvent);
-				state->frameChannels = caerFrameEventGetChannelNumber(currFrameEvent);
-
-				memcpy(state->frameRenderer, caerFrameEventGetPixelArrayUnsafe(currFrameEvent),
-					((size_t) state->frameRendererSizeX * (size_t) state->frameRendererSizeY
-						* (size_t) state->frameChannels * sizeof(uint16_t)));
-
-				break;
+					break;
+				}
 			}
 		}
-	}
 
-	// Detect if nothing happened for a long time.
-	struct timespec currentTime;
-	portable_clock_gettime_monotonic(&currentTime);
+		// Detect if nothing happened for a long time.
+		struct timespec currentTime;
+		portable_clock_gettime_monotonic(&currentTime);
 
-	uint64_t diffNanoTimeEvents = (uint64_t) (((int64_t) (currentTime.tv_sec - state->eventStatistics.lastTime.tv_sec)
-		* 1000000000LL) + (int64_t) (currentTime.tv_nsec - state->eventStatistics.lastTime.tv_nsec));
-	bool noEventsTimeout = (diffNanoTimeEvents >= U64T(SYSTEM_TIMEOUT * 1000000000LL));
+		uint64_t diffNanoTimeEvents = (uint64_t) (((int64_t) (currentTime.tv_sec - state->eventStatistics.lastTime.tv_sec)
+			* 1000000000LL) + (int64_t) (currentTime.tv_nsec - state->eventStatistics.lastTime.tv_nsec));
+		bool noEventsTimeout = (diffNanoTimeEvents >= U64T(SYSTEM_TIMEOUT * 1000000000LL));
 
-	uint64_t diffNanoTimeFrames = (uint64_t) (((int64_t) (currentTime.tv_sec - state->frameStatistics.lastTime.tv_sec)
-		* 1000000000LL) + (int64_t) (currentTime.tv_nsec - state->frameStatistics.lastTime.tv_nsec));
-	bool noFramesTimeout = (diffNanoTimeFrames >= U64T(SYSTEM_TIMEOUT * 1000000000LL));
+		uint64_t diffNanoTimeFrames = (uint64_t) (((int64_t) (currentTime.tv_sec - state->frameStatistics.lastTime.tv_sec)
+			* 1000000000LL) + (int64_t) (currentTime.tv_nsec - state->frameStatistics.lastTime.tv_nsec));
+		bool noFramesTimeout = (diffNanoTimeFrames >= U64T(SYSTEM_TIMEOUT * 1000000000LL));
 
-	// All rendering calls at the end.
-	// Only execute if something actually changed (packets not null).
-	if ((renderPolarity && (polarity != NULL || noEventsTimeout))
-		|| (renderFrame && (frame != NULL || noFramesTimeout))) {
-		glClear(GL_COLOR_BUFFER_BIT);
+		// All rendering calls at the end.
+		// Only execute if something actually changed (packets not null).
+		if ((renderPolarity && (polarity != NULL || noEventsTimeout))
+			|| (renderFrame && (frame != NULL || noFramesTimeout))) {
+			glClear(GL_COLOR_BUFFER_BIT);
 
-		// Render polarity events.
-		if (renderPolarity) {
-			// Write statistics text.
-			caerStatisticsStringUpdate((caerEventPacketHeader) polarity, &state->eventStatistics);
-
-#ifdef FREEGLUT
-			if (noEventsTimeout) {
-				glColor4f(1.0f, 0.0f, 0.0f, 1.0f); // RED
-			}
-			else {
-				glColor4f(1.0f, 1.0f, 1.0f, 1.0f); // WHITE
-			}
-
-			glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + TEXT_SPACING);
-			glutBitmapString(GLUT_BITMAP_HELVETICA_18,
-				(const unsigned char *) state->eventStatistics.currentStatisticsString);
-
-			glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + (2 * TEXT_SPACING));
-			glutBitmapString(GLUT_BITMAP_HELVETICA_18,
-				(noEventsTimeout) ? ((const unsigned char *) "NO EVENTS") : ((const unsigned char *) "EVENTS"));
-#endif
-
-			// Position and draw events.
-			glWindowPos2i(0, 0);
-
-			glDrawPixels(state->eventRendererSizeX, state->eventRendererSizeY, GL_RGBA, GL_UNSIGNED_BYTE,
-				state->eventRenderer);
-		}
-
-		// Render latest frame.
-		if (renderFrame) {
-			// Write statistics text.
-			caerStatisticsStringUpdate((caerEventPacketHeader) frame, &state->frameStatistics);
-
-#ifdef FREEGLUT
-			if (noFramesTimeout) {
-				glColor4f(1.0f, 0.0f, 0.0f, 1.0f); // RED
-			}
-			else {
-				glColor4f(1.0f, 1.0f, 1.0f, 1.0f); // WHITE
-			}
-#endif
-
-			// Shift APS frame to the right of the Polarity rendering, if both are enabled.
+			// Render polarity events.
 			if (renderPolarity) {
-#ifdef FREEGLUT
-				glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + (4 * TEXT_SPACING));
-				glutBitmapString(GLUT_BITMAP_HELVETICA_18,
-					(const unsigned char *) state->frameStatistics.currentStatisticsString);
+				// Write statistics text.
+				caerStatisticsStringUpdate((caerEventPacketHeader) polarity, &state->eventStatistics);
 
-				glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + (5 * TEXT_SPACING));
-				glutBitmapString(GLUT_BITMAP_HELVETICA_18,
-					(noFramesTimeout) ? ((const unsigned char *) "NO FRAMES") : ((const unsigned char *) "FRAMES"));
-#endif
+	#ifdef FREEGLUT
+				if (noEventsTimeout) {
+					glColor4f(1.0f, 0.0f, 0.0f, 1.0f); // RED
+				}
+				else {
+					glColor4f(1.0f, 1.0f, 1.0f, 1.0f); // WHITE
+				}
 
-				// Position and draw frames after events.
-				glWindowPos2i((state->eventRendererSizeX * PIXEL_ZOOM) + (state->frameRendererPositionX * PIXEL_ZOOM),
-					(state->frameRendererPositionY * PIXEL_ZOOM));
-			}
-			else {
-#ifdef FREEGLUT
-				glWindowPos2i(0, (state->frameRendererSizeX * PIXEL_ZOOM) + TEXT_SPACING);
+				glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + TEXT_SPACING);
 				glutBitmapString(GLUT_BITMAP_HELVETICA_18,
-					(const unsigned char *) state->frameStatistics.currentStatisticsString);
+					(const unsigned char *) state->eventStatistics.currentStatisticsString);
 
-				glWindowPos2i(0, (state->frameRendererSizeX * PIXEL_ZOOM) + (2 * TEXT_SPACING));
+				glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + (2 * TEXT_SPACING));
 				glutBitmapString(GLUT_BITMAP_HELVETICA_18,
-					(noFramesTimeout) ? ((const unsigned char *) "NO FRAMES") : ((const unsigned char *) "FRAMES"));
-#endif
+					(noEventsTimeout) ? ((const unsigned char *) "NO EVENTS") : ((const unsigned char *) "EVENTS"));
+	#endif
 
-				// Position and draw frames.
-				glWindowPos2i((state->frameRendererPositionX * PIXEL_ZOOM),
-					(state->frameRendererPositionY * PIXEL_ZOOM));
+				// Position and draw events.
+				glWindowPos2i(0, 0);
+
+				glDrawPixels(state->eventRendererSizeX, state->eventRendererSizeY, GL_RGBA, GL_UNSIGNED_BYTE,
+					state->eventRenderer);
 			}
 
-			switch (state->frameChannels) {
-				case 3:
-					glDrawPixels(state->frameRendererSizeX, state->frameRendererSizeY, GL_RGB, GL_UNSIGNED_SHORT,
-						state->frameRenderer);
-					break;
+			// Render latest frame.
+			if (renderFrame) {
+				// Write statistics text.
+				caerStatisticsStringUpdate((caerEventPacketHeader) frame, &state->frameStatistics);
 
-				case 4:
-					glDrawPixels(state->frameRendererSizeX, state->frameRendererSizeY, GL_RGBA, GL_UNSIGNED_SHORT,
-						state->frameRenderer);
-					break;
+	#ifdef FREEGLUT
+				if (noFramesTimeout) {
+					glColor4f(1.0f, 0.0f, 0.0f, 1.0f); // RED
+				}
+				else {
+					glColor4f(1.0f, 1.0f, 1.0f, 1.0f); // WHITE
+				}
+	#endif
 
-				case 1:
-				default:
-					glDrawPixels(state->frameRendererSizeX, state->frameRendererSizeY, GL_LUMINANCE,
-					GL_UNSIGNED_SHORT, state->frameRenderer);
-					break;
+				// Shift APS frame to the right of the Polarity rendering, if both are enabled.
+				if (renderPolarity) {
+	#ifdef FREEGLUT
+					glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + (4 * TEXT_SPACING));
+					glutBitmapString(GLUT_BITMAP_HELVETICA_18,
+						(const unsigned char *) state->frameStatistics.currentStatisticsString);
+
+					glWindowPos2i(0, (state->eventRendererSizeY * PIXEL_ZOOM) + (5 * TEXT_SPACING));
+					glutBitmapString(GLUT_BITMAP_HELVETICA_18,
+						(noFramesTimeout) ? ((const unsigned char *) "NO FRAMES") : ((const unsigned char *) "FRAMES"));
+	#endif
+
+					// Position and draw frames after events.
+					glWindowPos2i((state->eventRendererSizeX * PIXEL_ZOOM) + (state->frameRendererPositionX * PIXEL_ZOOM),
+						(state->frameRendererPositionY * PIXEL_ZOOM));
+				}
+				else {
+	#ifdef FREEGLUT
+					glWindowPos2i(0, (state->frameRendererSizeX * PIXEL_ZOOM) + TEXT_SPACING);
+					glutBitmapString(GLUT_BITMAP_HELVETICA_18,
+						(const unsigned char *) state->frameStatistics.currentStatisticsString);
+
+					glWindowPos2i(0, (state->frameRendererSizeX * PIXEL_ZOOM) + (2 * TEXT_SPACING));
+					glutBitmapString(GLUT_BITMAP_HELVETICA_18,
+						(noFramesTimeout) ? ((const unsigned char *) "NO FRAMES") : ((const unsigned char *) "FRAMES"));
+	#endif
+
+					// Position and draw frames.
+					glWindowPos2i((state->frameRendererPositionX * PIXEL_ZOOM),
+						(state->frameRendererPositionY * PIXEL_ZOOM));
+				}
+
+				switch (state->frameChannels) {
+					case 3:
+						glDrawPixels(state->frameRendererSizeX, state->frameRendererSizeY, GL_RGB, GL_UNSIGNED_SHORT,
+							state->frameRenderer);
+						break;
+
+					case 4:
+						glDrawPixels(state->frameRendererSizeX, state->frameRendererSizeY, GL_RGBA, GL_UNSIGNED_SHORT,
+							state->frameRenderer);
+						break;
+
+					case 1:
+					default:
+						glDrawPixels(state->frameRendererSizeX, state->frameRendererSizeY, GL_LUMINANCE,
+						GL_UNSIGNED_SHORT, state->frameRenderer);
+						break;
+				}
 			}
+
+			// Apply zoom factor.
+			glPixelZoom(PIXEL_ZOOM, PIXEL_ZOOM);
+
+			// Do glfw update.
+			glfwSwapBuffers(state->window);
+			glfwPollEvents();
 		}
-
-		// Apply zoom factor.
-		glPixelZoom(PIXEL_ZOOM, PIXEL_ZOOM);
-
-		// Do glfw update.
-		glfwSwapBuffers(state->window);
-		glfwPollEvents();
+		state->subsampleCount = 1;
+	}else{
+		state->subsampleCount++;
 	}
 }
 
