@@ -16,7 +16,6 @@
 #include "base/module.h"
 
 #include "in_common.h"
-#include "modules/insightness/events/iness_common.h"
 
 struct in_netTCP_state {
 	int serverDescriptor;
