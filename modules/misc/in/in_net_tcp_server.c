@@ -6,16 +6,12 @@
  */
 
 #include "in_net_tcp_server.h"
+#include "base/module.h"
 #include <poll.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include "ext/nets.h"
-
-#include "base/mainloop.h"
-#include "base/module.h"
-
-#include "in_common.h"
 
 struct in_netTCP_state {
 	int serverDescriptor;
@@ -115,10 +111,11 @@ static bool caerInputNetTCPServerInit(caerModuleData moduleData) {
 	state->dataNotifyIncrease = &mainloopDataNotifyIncrease;
 	state->dataNotifyUserPtr = caerMainloopGetReference();
 	// start thread
-	if ((errno = thrd_create(&state->inputReadThread, &inputFromSocketThread, moduleData)) != thrd_success){
+	if ((errno = thrd_create(&state->inputReadThread, &inputFromSocketThread, moduleData)) != thrd_success) {
 		free(state->currentContainer);
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to start data acquisition thread. Error: %d.",
-		errno);
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+			"Failed to start data acquisition thread. Error: %d.",
+			errno);
 	}
 
 	return (true);
@@ -129,21 +126,23 @@ static void caerInputNetTCPServerRun(caerModuleData moduleData, size_t argsNumbe
 
 //	caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "in caerInputNetTCPServerRun");
 
-
 	// Update the current connections on which to receive data.
 	netTCPState state = moduleData->moduleState;
 
 	//check whether the thread is stopped because the connection is broken and restart thread if this is the case
-	if(atomic_load(&state->stopInput) && !atomic_load(&state->stop)){
-		if(state->connected){
-			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "TCP input interface in strange state with connected socket but stopped data acquisition thread");
-		}else{
+	if (atomic_load(&state->stopInput) && !atomic_load(&state->stop)) {
+		if (state->connected) {
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"TCP input interface in strange state with connected socket but stopped data acquisition thread");
+		}
+		else {
 			caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Reconnecting");
-			atomic_store(&state->stopInput,false);
-			if ((errno = thrd_create(&state->inputReadThread, &inputFromSocketThread, moduleData)) != thrd_success){
+			atomic_store(&state->stopInput, false);
+			if ((errno = thrd_create(&state->inputReadThread, &inputFromSocketThread, moduleData)) != thrd_success) {
 				free(state->currentContainer);
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to start data acquisition thread. Error: %d.",
-				errno);
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+					"Failed to start data acquisition thread. Error: %d.",
+					errno);
 			}
 		}
 	}
@@ -153,12 +152,12 @@ static void caerInputNetTCPServerRun(caerModuleData moduleData, size_t argsNumbe
 
 	*container = atomic_load(&state->currentContainer);
 
-	if (*container != NULL){
-		if(state->notifyMainLoop){
+	if (*container != NULL) {
+		if (state->notifyMainLoop) {
 			state->dataNotifyDecrease(state->dataNotifyUserPtr);
 		}
-		if(!state->keepLatestContainer){
-			atomic_store(&state->currentContainer,NULL);
+		if (!state->keepLatestContainer) {
+			atomic_store(&state->currentContainer, NULL);
 			caerMainloopFreeAfterLoop((void (*)(void*)) &caerEventPacketContainerFree, *container);
 		}
 	}
@@ -179,18 +178,19 @@ static void caerInputNetTCPServerConfig(caerModuleData moduleData) {
 		// the server IP address or its port.
 
 		// Tell the input thread to stop. Main thread waits until it stopped
-		atomic_store(&state->stopInput,true);
+		atomic_store(&state->stopInput, true);
 		int* res = malloc(sizeof(int));
-		thrd_join(state->inputReadThread,res);
-		atomic_store(&state->stopInput,false);
+		thrd_join(state->inputReadThread, res);
+		atomic_store(&state->stopInput, false);
 
 		close(state->serverDescriptor);
 
 		// start thread
-		if ((errno = thrd_create(&state->inputReadThread, &inputFromSocketThread, moduleData)) != thrd_success){
+		if ((errno = thrd_create(&state->inputReadThread, &inputFromSocketThread, moduleData)) != thrd_success) {
 			free(state->currentContainer);
-			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to start data acquisition thread. Error: %d.",
-			errno);
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"Failed to start data acquisition thread. Error: %d.",
+				errno);
 		}
 	}
 }
@@ -199,11 +199,11 @@ static void caerInputNetTCPServerExit(caerModuleData moduleData) {
 	netTCPState state = moduleData->moduleState;
 
 	// Tell the input thread to stop. Main thread waits until it stopped
-	atomic_store(&state->stopInput,true);
+	atomic_store(&state->stopInput, true);
 	int* res = malloc(sizeof(int));
-	thrd_join(state->inputReadThread,res);
-	atomic_store(&state->stop,true);
-	atomic_store(&state->stopInput,false);
+	thrd_join(state->inputReadThread, res);
+	atomic_store(&state->stop, true);
+	atomic_store(&state->stopInput, false);
 
 	// Close all open connections to clients.
 	if (state->clientDescriptor->fd >= 0) {
@@ -227,20 +227,20 @@ static void caerInputNetTCPServerExit(caerModuleData moduleData) {
 	state->currentContainer = NULL;
 }
 
-static int inputFromSocketThread(void* ptr){
+static int inputFromSocketThread(void* ptr) {
 	caerLog(CAER_LOG_INFO, "caerInputNetTCPServerThread", "Socket thread started");
 
 	caerModuleData moduleData = ptr;
 	netTCPState state = moduleData->moduleState;
-	int16_t IDSource = (int16_t)moduleData->moduleID;
+	int16_t IDSource = (int16_t) moduleData->moduleID;
 	bool notifyMain = sshsNodeGetBool(moduleData->moduleNode, "notifyMainLoop");
 
-	if(!createTcpInputServer(moduleData)){
+	if (!createTcpInputServer(moduleData)) {
 
 	}
 	caerLog(CAER_LOG_INFO, "caerInputNetTCPServerThread", "Socket created ... waiting for connection");
-	while(!state->connected){
-		if (atomic_load(&state->stopInput)){
+	while (!state->connected) {
+		if (atomic_load(&state->stopInput)) {
 			caerLog(CAER_LOG_INFO, "caerInputNetTCPServerThread", "Input thread stopped");
 			close(state->serverDescriptor);
 			state->connected = false;
@@ -258,10 +258,10 @@ static int inputFromSocketThread(void* ptr){
 	// useful variables
 	int16_t currType;
 
-	while (1){
+	while (1) {
 		// read next packet
 		// make sure thread should still be running
-		if (atomic_load(&state->stopInput)){
+		if (atomic_load(&state->stopInput)) {
 			free(packetHeader);
 			caerEventPacketContainerFree(inputContainer);
 			caerLog(CAER_LOG_INFO, "caerInputNetTCPServerThread", "Input thread stopped");
@@ -271,54 +271,54 @@ static int inputFromSocketThread(void* ptr){
 		}
 		int fid = state->clientDescriptor->fd;
 		packetHeader = caerInputCommonReadPacket(fid);
-		if(packetHeader == NULL){
+		if (packetHeader == NULL) {
 			//connection broken -> kill thread and restart from run
 			state->connected = false;
 			caerEventPacketContainerFree(inputContainer);
-			atomic_store(&state->stopInput,true);
+			atomic_store(&state->stopInput, true);
 			caerLog(CAER_LOG_INFO, "caerInputNetTCPServerThread", "Input thread stopped");
 			close(state->serverDescriptor);
 			state->connected = false;
 			thrd_exit(thrd_success);
 		}
 		caerLog(CAER_LOG_INFO, "caerInputNetTCPServer", "Packet received. Size: %d", packetHeader->eventNumber);
-		caerEventPacketHeaderSetEventSource(packetHeader,IDSource);
+		caerEventPacketHeaderSetEventSource(packetHeader, IDSource);
 
 		currType = caerEventPacketHeaderGetEventType(packetHeader);
 
 		//make sure container is big enough for packet type
-		if(currType >= maxSizeContainer){
+		if (currType >= maxSizeContainer) {
 			// new container and transfer the content, adding the new packet
 			caerEventPacketContainer newContainer = caerEventPacketContainerAllocate(currType + 1);
-			for (int16_t i = 0; i < maxSizeContainer; ++i){
-				caerEventPacketContainerSetEventPacket(newContainer,i,
-					caerEventPacketContainerGetEventPacket(inputContainer,i));
+			for (int16_t i = 0; i < maxSizeContainer; ++i) {
+				caerEventPacketContainerSetEventPacket(newContainer, i,
+					caerEventPacketContainerGetEventPacket(inputContainer, i));
 			}
 			free(inputContainer);
 			inputContainer = newContainer;
 			// update max size
-			maxSizeContainer = currType + 1;
+			maxSizeContainer = I16T(currType + 1);
 		}
-		if(!state->waitForFullContainer){
-			caerEventPacketContainerSetEventPacket(inputContainer,currType,packetHeader);
+		if (!state->waitForFullContainer) {
+			caerEventPacketContainerSetEventPacket(inputContainer, currType, packetHeader);
 			packetHeader = NULL;
 		}
-		if (!state->waitForFullContainer || caerEventPacketContainerGetEventPacket(inputContainer,currType)!= NULL){
+		if (!state->waitForFullContainer || caerEventPacketContainerGetEventPacket(inputContainer, currType) != NULL) {
 			//container needs to be pushed to main loop
 			//remove old container
-			if(atomic_load(&state->currentContainer) != NULL){
+			if (atomic_load(&state->currentContainer) != NULL) {
 				free(state->currentContainer);
 			}
-			atomic_store(&state->currentContainer,inputContainer);
-			if(notifyMain){
+			atomic_store(&state->currentContainer, inputContainer);
+			if (notifyMain) {
 				state->dataNotifyIncrease(state->dataNotifyUserPtr);
 			}
 			// create new container
 			inputContainer = caerEventPacketContainerAllocate(maxSizeContainer);
 		}
-		if(state->waitForFullContainer){
+		if (state->waitForFullContainer) {
 			// if only full containers can be sent out, the packet can only be added once it is sure that it should not be sent out before
-			caerEventPacketContainerSetEventPacket(inputContainer,currType,packetHeader);
+			caerEventPacketContainerSetEventPacket(inputContainer, currType, packetHeader);
 			packetHeader = NULL;
 		}
 	}
@@ -329,7 +329,7 @@ static int inputFromSocketThread(void* ptr){
 	thrd_exit(thrd_success);
 }
 
-static bool createTcpInputServer(caerModuleData moduleData){
+static bool createTcpInputServer(caerModuleData moduleData) {
 	netTCPState state = moduleData->moduleState;
 
 	// Open a TCP server socket for others to connect to.
@@ -341,9 +341,8 @@ static bool createTcpInputServer(caerModuleData moduleData){
 	}
 
 	// Make socket address reusable right away.
-	if(!socketReuseAddr(state->serverDescriptor, true)){
-		caerLog(CAER_LOG_CRITICAL, "caerInputNetTCPServerThread",
-			"Could not set TCP server socket to reusable.");
+	if (!socketReuseAddr(state->serverDescriptor, true)) {
+		caerLog(CAER_LOG_CRITICAL, "caerInputNetTCPServerThread", "Could not set TCP server socket to reusable.");
 		close(state->serverDescriptor);
 		return (false);
 	}
@@ -396,10 +395,10 @@ static bool createTcpInputServer(caerModuleData moduleData){
 	caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "TCP input server socket connected to %s:%" PRIu16 ".",
 		inet_ntoa(tcpServer.sin_addr), ntohs(tcpServer.sin_port));
 
-	return(true);
+	return (true);
 }
 
-static bool checkTcpInputConnections(caerModuleData moduleData){
+static bool checkTcpInputConnections(caerModuleData moduleData) {
 	netTCPState state = moduleData->moduleState;
 	int pollResult = poll(state->clientDescriptor, 1, 0);
 	if (pollResult < 0) {
@@ -417,10 +416,11 @@ static bool checkTcpInputConnections(caerModuleData moduleData){
 	// New connection present!
 	if (acceptResult >= 0) {
 		state->clientDescriptor->fd = acceptResult;
-		caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString,
-				"Accepted new TCP connection from client (fd %d).", acceptResult);
-		return(true);
-	}else{
-		return(false);
+		caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString, "Accepted new TCP connection from client (fd %d).",
+			acceptResult);
+		return (true);
+	}
+	else {
+		return (false);
 	}
 }

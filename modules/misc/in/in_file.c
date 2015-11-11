@@ -1,34 +1,22 @@
 /*
- * file.c (input) 
+ * file.c (input)
  *
  *  Created on: Okt 29, 2015
  *      Author: phineasng
  */
 
 #include "in_file.h"
-#include "in_common.h"
-#include "base/mainloop.h"
 #include "base/module.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/time.h>
+#include <fcntl.h>
 #include <pwd.h>
-
+#include <time.h>
+#include <unistd.h>
+#include "ext/ringbuffer/ringbuffer.h"
 #include <libcaer/devices/dvs128.h>
 #include <libcaer/devices/davis.h>
 #include <libcaer/events/packetContainer.h>
-#include <ext/sshs/sshs.h>
-#include <ext/ringbuffer/ringbuffer.h> // TODO: fix this -> reinstall libcaer so that also this header gets installed in the INCLUDE_PATH 
-
-#ifdef HAVE_PTHREADS
-	#include <ext/c11threads_posix.h>
-#endif
-
 
 static int inputFromFileThread(void* ptr);
 
@@ -36,7 +24,7 @@ struct input_file_state {
 	// io params
 	int fileDescriptor;
 	// playback params
-	atomic_bool play; 
+	atomic_bool play;
 	atomic_bool stop; // equivalent to: pause (i.e. play = false) and reset (close and reopen the file)
 	// ringbuffer parameters
 	RingBuffer rBuf;
@@ -55,8 +43,6 @@ static void caerInputFileRun(caerModuleData moduleData, size_t argsNumber, va_li
 static void caerInputFileConfig(caerModuleData moduleData);
 static void caerInputFileExit(caerModuleData moduleData);
 static caerEventPacketContainer packetsFromFileToContainer(caerModuleData moduleData);
-static void mainloopDataNotifyIncrease(void *p);
-static void mainloopDataNotifyDecrease(void *p);
 static void resetBuffer(caerModuleData);
 
 static struct caer_module_functions caerInputFileFunctions = { .moduleInit = &caerInputFileInit, .moduleRun =
@@ -69,11 +55,11 @@ caerEventPacketContainer caerInputFile(uint16_t moduleID) {
 
 	caerModuleSM(&caerInputFileFunctions, moduleData, sizeof(struct input_file_state), 1, &result);
 
-	return (caerEventPacketContainer)result;
+	return ((caerEventPacketContainer) result);
 }
 
 static char *getUserHomeDirectory(const char *subSystemString);
-static char *getFullFilePath(const char * subSystemString,const char *directory, const char *fileName);
+static char *getFullFilePath(const char * subSystemString, const char *directory, const char *fileName);
 static void caerInputFileConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
@@ -119,7 +105,7 @@ static char *getUserHomeDirectory(const char *subSystemString) {
 }
 
 // Remember to free strings returned by this.
-static char *getFullFilePath(const char * subSystemString,const char *directory, const char *fileName) {
+static char *getFullFilePath(const char * subSystemString, const char *directory, const char *fileName) {
 
 	// Assemble together: directory/fileName
 	size_t filePathLength = strlen(directory) + strlen(fileName) + 2;
@@ -136,7 +122,7 @@ static char *getFullFilePath(const char * subSystemString,const char *directory,
 	return (filePath);
 }
 
-static bool caerInputFileInit(caerModuleData moduleData){
+static bool caerInputFileInit(caerModuleData moduleData) {
 	inputFileState state = moduleData->moduleState;
 
 	// setup SSHS nodes
@@ -149,16 +135,16 @@ static bool caerInputFileInit(caerModuleData moduleData){
 	free(userHomeDir);
 	free(fileName);
 	// -- playback boolean (false = pause); always setting initial value to false
-	sshsNodePutBool(moduleData->moduleNode,"StartPlayback",false);
-	state->play = false; 
-	sshsNodePutBool(moduleData->moduleNode,"StopPlayback",false);
-	state->stop = false; 
-	// -- ring buffer size 
-	sshsNodePutShortIfAbsent(moduleData->moduleNode,"RingBufferSize",128);
+	sshsNodePutBool(moduleData->moduleNode, "StartPlayback", false);
+	state->play = false;
+	sshsNodePutBool(moduleData->moduleNode, "StopPlayback", false);
+	state->stop = false;
+	// -- ring buffer size
+	sshsNodePutShortIfAbsent(moduleData->moduleNode, "RingBufferSize", 128);
 	// -- process_all flag (not modifiable at runtime)
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode,"ProcessAll",false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "ProcessAll", false);
 	// -- if relative node "sourceInfo/" does not exist, add it (so file can be used with the visualization module)
-	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode,"sourceInfo/");
+	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
 	// -- -- array(frame) size of the original device (added so it works with the visualizer module)
 	sshsNodePutShortIfAbsent(sourceInfoNode, "dvsSizeX", 240);
 	sshsNodePutShortIfAbsent(sourceInfoNode, "dvsSizeY", 180);
@@ -175,16 +161,16 @@ static bool caerInputFileInit(caerModuleData moduleData){
 	fileName = sshsNodeGetString(moduleData->moduleNode, "filename");
 
 	// Generate filename and open it
-	char *filePath = getFullFilePath(moduleData->moduleSubSystemString,userHomeDir,fileName);
+	char *filePath = getFullFilePath(moduleData->moduleSubSystemString, userHomeDir, fileName);
 	free(userHomeDir);
 	free(fileName);
-	state->fileDescriptor = open(filePath, O_RDONLY );
+	state->fileDescriptor = open(filePath, O_RDONLY);
 	if (state->fileDescriptor < 0) {
 		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
 			"Could not open input file '%s' for reading. Error: %d.", filePath, errno);
 		free(filePath);
 
-		return (false); 
+		return (false);
 	}
 
 	// log successful opening of the file
@@ -193,48 +179,51 @@ static bool caerInputFileInit(caerModuleData moduleData){
 	free(filePath);
 
 	// initialize ringbuffer
-	state->rBuf = ringBufferInit(sshsNodeGetShort(moduleData->moduleNode,"RingBufferSize"));
+	state->rBuf = ringBufferInit(sshsNodeGetShort(moduleData->moduleNode, "RingBufferSize"));
 	// set notifier
 	state->dataNotifyDecrease = &mainloopDataNotifyDecrease;
 	state->dataNotifyIncrease = &mainloopDataNotifyIncrease;
 	state->dataNotifyUserPtr = caerMainloopGetReference();
 	// start thread
-	if ((errno = thrd_create(&state->inputReadThread, &inputFromFileThread, moduleData)) != thrd_success){
+	if ((errno = thrd_create(&state->inputReadThread, &inputFromFileThread, moduleData)) != thrd_success) {
 		ringBufferFree(state->rBuf);
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to start data acquisition thread. Error: %d.",
-		errno);
-		return false;
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+			"Failed to start data acquisition thread. Error: %d.",
+			errno);
+		return (false);
 	}
-	// TODO: add code for old AEDAT format (??)
-	return true;
+
+	return (true);
 }
 
-static void caerInputFileRun(caerModuleData moduleData, size_t argsNumber, va_list args){
+static void caerInputFileRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
 	inputFileState state = moduleData->moduleState;
 	UNUSED_ARGUMENT(argsNumber);
 
-	// Wait for play command 
-	if (!atomic_load(&state->play)){ return; }
+	// Wait for play command
+	if (!atomic_load(&state->play)) {
+		return;
+	}
 
-	// Interpret variable arguments 
+	// Interpret variable arguments
 	caerEventPacketContainer* container = va_arg(args, caerEventPacketContainer*);
 
 	*container = ringBufferGet(state->rBuf);
 
-	if (*container != NULL){
+	if (*container != NULL) {
 		state->dataNotifyDecrease(state->dataNotifyUserPtr);
 		caerMainloopFreeAfterLoop((void (*)(void*)) &caerEventPacketContainerFree, *container);
 	}
 	return;
 }
 
-static void caerInputFileExit(caerModuleData moduleData){
+static void caerInputFileExit(caerModuleData moduleData) {
 	inputFileState state = moduleData->moduleState;
 
 	// Tell the input thread to stop. Main thread waits until it stopped
-	atomic_store(&state->stop,true);
+	atomic_store(&state->stop, true);
 	int* res = malloc(sizeof(int));
-	thrd_join(state->inputReadThread,res);
+	thrd_join(state->inputReadThread, res);
 	// Reset and Free RingBuffer
 	resetBuffer(moduleData);
 	ringBufferFree(state->rBuf);
@@ -242,7 +231,7 @@ static void caerInputFileExit(caerModuleData moduleData){
 	close(state->fileDescriptor);
 }
 
-static void caerInputFileConfig(caerModuleData moduleData){
+static void caerInputFileConfig(caerModuleData moduleData) {
 	inputFileState state = moduleData->moduleState;
 	sshsNode node = moduleData->moduleNode;
 
@@ -251,27 +240,27 @@ static void caerInputFileConfig(caerModuleData moduleData){
 	// NOTE: configUpdate treated as a bit field, cf. caerInputFileConfigListener()
 	uintptr_t configUpdate = atomic_exchange(&moduleData->configUpdate, 0);
 	if (configUpdate & (0x01 << 0)) {
-		sshsNodePutBool(node,"StopPlayback",true);
+		sshsNodePutBool(node, "StopPlayback", true);
 	}
 
 	if (configUpdate & (0x01 << 1)) {
 		// wait for the thread to correctly exit
 		int* res = malloc(sizeof(int));
-		thrd_join(state->inputReadThread,res);
-		if ((*res)>thrd_success){
+		thrd_join(state->inputReadThread, res);
+		if ((*res) > thrd_success) {
 			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
 				"Something bad happened while waiting for the input thread. Error: %d.", *res);
 		}
 		// reset buffer
 		resetBuffer(moduleData);
 		// set everything to false
-		sshsNodePutBool(node,"StopPlayback",false);
-		sshsNodePutBool(node,"StartPlayback",false);
+		sshsNodePutBool(node, "StopPlayback", false);
+		sshsNodePutBool(node, "StartPlayback", false);
 		// Filename related settings changed.
 		// Generate new file name and open it.
 		char *directory = sshsNodeGetString(moduleData->moduleNode, "directory");
 		char *fileName = sshsNodeGetString(moduleData->moduleNode, "filename");
-		char *filePath = getFullFilePath(moduleData->moduleSubSystemString,directory, fileName);
+		char *filePath = getFullFilePath(moduleData->moduleSubSystemString, directory, fileName);
 		free(directory);
 		free(fileName);
 
@@ -293,10 +282,11 @@ static void caerInputFileConfig(caerModuleData moduleData){
 		state->fileDescriptor = newFileDescriptor;
 
 		// start a new thread
-		if ((errno = thrd_create(&state->inputReadThread, &inputFromFileThread, moduleData)) != thrd_success){
+		if ((errno = thrd_create(&state->inputReadThread, &inputFromFileThread, moduleData)) != thrd_success) {
 			ringBufferFree(state->rBuf);
-			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Failed to start data acquisition thread. Error: %d.",
-			errno);
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"Failed to start data acquisition thread. Error: %d.",
+				errno);
 
 			return;
 		}
@@ -304,7 +294,7 @@ static void caerInputFileConfig(caerModuleData moduleData){
 }
 
 static void caerInputFileConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
-	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue){
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
 	UNUSED_ARGUMENT(changeValue);
 
 	caerModuleData data = userData;
@@ -317,13 +307,13 @@ static void caerInputFileConfigListener(sshsNode node, void *userData, enum sshs
 			atomic_fetch_or(&data->configUpdate, (0x01 << 0));
 		}
 		if (changeType == BOOL && caerStrEquals(changeKey, "StartPlayback")) {
-			bool newVal = sshsNodeGetBool(node,"StartPlayback");
-			atomic_store(&state->play,newVal);
+			bool newVal = sshsNodeGetBool(node, "StartPlayback");
+			atomic_store(&state->play, newVal);
 		}
 		if (changeType == BOOL && caerStrEquals(changeKey, "StopPlayback")) { // stop playback is equivalent to change file and pause
-			bool newVal = sshsNodeGetBool(node,"StopPlayback");
-			atomic_store(&state->stop,newVal);
-			if (newVal){
+			bool newVal = sshsNodeGetBool(node, "StopPlayback");
+			atomic_store(&state->stop, newVal);
+			if (newVal) {
 				atomic_fetch_or(&data->configUpdate, (0x01 << 1));
 			}
 		}
@@ -331,92 +321,96 @@ static void caerInputFileConfigListener(sshsNode node, void *userData, enum sshs
 
 }
 
-static caerEventPacketContainer packetsFromFileToContainer(caerModuleData moduleData){
+static caerEventPacketContainer packetsFromFileToContainer(caerModuleData moduleData) {
 	inputFileState state = moduleData->moduleState;
 
-	// allocate new container 		    
+	// allocate new container
 	caerEventPacketContainer newContainer = caerEventPacketContainerAllocate(1);
 
-	for (int i = 0; i < 1; ++i){
+	for (int i = 0; i < 1; ++i) {
 		caerEventPacketHeader packet = caerInputCommonReadPacket(state->fileDescriptor);
-		if ( packet == NULL ){
+		if (packet == NULL) {
 			caerEventPacketContainerFree(newContainer);
 			return NULL;
-		}else{
-			caerEventPacketHeaderSetEventSource(packet,moduleData->moduleID);
-			caerEventPacketContainerSetEventPacket(newContainer,i,packet);
+		}
+		else {
+			caerEventPacketHeaderSetEventSource(packet, I16T(moduleData->moduleID));
+			caerEventPacketContainerSetEventPacket(newContainer, i, packet);
 		}
 	}
 
-	//
-	return newContainer;
+	return (newContainer);
 }
 
-static int inputFromFileThread(void* ptr){
+static int inputFromFileThread(void* ptr) {
 	caerModuleData data = ptr;
 	inputFileState state = data->moduleState;
-	int16_t IDSource = data->moduleID; 
+	int16_t IDSource = I16T(data->moduleID);
 
 	// create local copy of the file descriptor
 	int fid = state->fileDescriptor;
 	// remainder packet, used to identify the moment to send a container. Read in first packet.
 	caerEventPacketHeader packetHeader = caerInputCommonReadPacket(fid);
-	if ( packetHeader == NULL ) thrd_exit(thrd_success);
-	caerEventPacketHeaderSetEventSource(packetHeader,IDSource);
-	// keep track of the greatest event_type to appropriately allocate the container 		    
-	int16_t maxSizeContainer = caerEventPacketHeaderGetEventType(packetHeader) + 1;
+	if (packetHeader == NULL)
+		thrd_exit(thrd_success);
+	caerEventPacketHeaderSetEventSource(packetHeader, IDSource);
+	// keep track of the greatest event_type to appropriately allocate the container
+	int16_t maxSizeContainer = I16T(caerEventPacketHeaderGetEventType(packetHeader) + 1);
 	// allocate container
 	caerEventPacketContainer container = caerEventPacketContainerAllocate(maxSizeContainer);
 	// useful variables
 	int16_t currType;
 
-	while (1){
-		if (atomic_load(&state->stop)){
+	while (1) {
+		if (atomic_load(&state->stop)) {
 			free(packetHeader);
 			caerEventPacketContainerFree(container);
 			thrd_exit(thrd_success);
 		}
 		currType = caerEventPacketHeaderGetEventType(packetHeader);
 		// if currType is too big, reallocate container
-		if ( currType >= maxSizeContainer ){
+		if (currType >= maxSizeContainer) {
 			// new container and transfer the content, adding the new packet
 			caerEventPacketContainer newContainer = caerEventPacketContainerAllocate(currType + 1);
-			for (int16_t i = 0; i < maxSizeContainer; ++i){
-				caerEventPacketContainerSetEventPacket(newContainer,i,
-					caerEventPacketContainerGetEventPacket(container,i));
+			for (int16_t i = 0; i < maxSizeContainer; ++i) {
+				caerEventPacketContainerSetEventPacket(newContainer, i,
+					caerEventPacketContainerGetEventPacket(container, i));
 			}
 			free(container);
 			container = newContainer;
 			// update max size
-			maxSizeContainer = currType + 1;
+			maxSizeContainer = I16T(currType + 1);
 		}
 		// if currType is already set, commit container to ring buffer ...
-		if ( caerEventPacketContainerGetEventPacket(container,currType) != NULL ){
-			while (!ringBufferPut(state->rBuf,container) && !atomic_load(&state->stop)){} // keep try to put, until succeed
+		if (caerEventPacketContainerGetEventPacket(container, currType) != NULL) {
+			while (!ringBufferPut(state->rBuf, container) && !atomic_load(&state->stop)) {
+			} // keep try to put, until succeed
 			state->dataNotifyIncrease(state->dataNotifyUserPtr);
-		
+
 			// create new container
 			container = caerEventPacketContainerAllocate(maxSizeContainer);
 			continue; // last packet was not added to the container -> avoid reading a new one
-		}else{	// ... else, add the packet to the container 
-			caerEventPacketContainerSetEventPacket(container,currType,packetHeader);
+		}
+		else {	// ... else, add the packet to the container
+			caerEventPacketContainerSetEventPacket(container, currType, packetHeader);
 		}
 		// read next packet
 		packetHeader = caerInputCommonReadPacket(fid);
-		if ( packetHeader == NULL ) thrd_exit(thrd_success);
-		caerEventPacketHeaderSetEventSource(packetHeader,IDSource);
+		if (packetHeader == NULL)
+			thrd_exit(thrd_success);
+		caerEventPacketHeaderSetEventSource(packetHeader, IDSource);
 	}
-	fflush(stdout);
+
 	// push the new container to the ringbuffer
 	thrd_exit(thrd_success);
 }
 
-static void resetBuffer(caerModuleData data){
+static void resetBuffer(caerModuleData data) {
 	inputFileState state = data->moduleState;
 	RingBuffer rBuf = state->rBuf;
 
 	void* ptr = ringBufferGet(rBuf);
-	while(ptr != NULL){
+	while (ptr != NULL) {
 		state->dataNotifyDecrease(state->dataNotifyUserPtr);
 		free(ptr);
 		ptr = ringBufferGet(rBuf);

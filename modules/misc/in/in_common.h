@@ -11,47 +11,56 @@
 #include "main.h"
 #include <unistd.h>
 #include <sys/uio.h>
- #include <stdio.h>
 
 #include <libcaer/events/common.h>
-#include "base/mainloop.h"
-
-#ifdef HAVE_PTHREADS
-	#include <ext/c11threads_posix.h>
-#endif
+#include "base/mainloop.h" // For caerMainloopData definition.
 
 /*
-*  Reads a single packets - remember to free the packet
-*/
+ *  Reads a single packets - remember to free the packet
+ */
 static inline caerEventPacketHeader caerInputCommonReadPacket(int fileDescriptor) {
 	caerLog(CAER_LOG_DEBUG, "caerInputCommonReadPacket", "Inside reading function (FileDescriptor: %d)",
-			fileDescriptor);
+		fileDescriptor);
+
 	// if for some reason, the fileDescriptor is not valid, return NULL
-	if (fileDescriptor < 0) return NULL;
+	if (fileDescriptor < 0) {
+		return (NULL);
+	}
+
 	// allocate space for packet header
 	caerEventPacketHeader header = malloc(CAER_EVENT_PACKET_HEADER_SIZE);
 	ssize_t bytes_read = read(fileDescriptor, header, CAER_EVENT_PACKET_HEADER_SIZE);
+
 	// if nothing has been read, or there was an error, return NULL
-	if ( bytes_read <= 0 ) { 
-		caerLog(CAER_LOG_WARNING, "caerInputCommonReadPacket", "Error while reading packet header: %d", bytes_read);
+	if (bytes_read <= 0) {
+		caerLog(CAER_LOG_WARNING, "caerInputCommonReadPacket", "Error while reading packet header: %zd", bytes_read);
 		free(header);
-		return NULL; 
+
+		return (NULL);
 	}
+
 	// else, realloc to read the rest of the packet
-	int32_t event_number = caerEventPacketHeaderGetEventNumber(header); 
+	int32_t event_number = caerEventPacketHeaderGetEventNumber(header);
 	int32_t event_size = caerEventPacketHeaderGetEventSize(header);
-	// The total number of events written to file is assumed to be equal to the number of 
-	// events (i.e. no zeros written, cf. "misc/out/out_common.h") 
-	int32_t total_size_events = event_number*event_size;
-	header = realloc( header, CAER_EVENT_PACKET_HEADER_SIZE + total_size_events );
-	bytes_read = read(fileDescriptor, (void*)(((uint8_t *) header) + (CAER_EVENT_PACKET_HEADER_SIZE)), total_size_events);
+
+	// The total number of events written to file is assumed to be equal to the number of
+	// events (i.e. no zeros written, cf. "misc/out/out_common.h")
+	int32_t total_size_events = event_number * event_size;
+
+	header = realloc(header, (size_t) (CAER_EVENT_PACKET_HEADER_SIZE + total_size_events));
+	bytes_read = read(fileDescriptor, (void *) (((uint8_t *) header) + CAER_EVENT_PACKET_HEADER_SIZE),
+		(size_t) total_size_events);
+
 	// if nothing has been read, or there was an error, return NULL
-	if ( bytes_read <= 0 ) { 
-		caerLog(CAER_LOG_WARNING, "caerInputCommonReadPacket", "Error while reading packet: %d", bytes_read);
+	if (bytes_read <= 0) {
+		caerLog(CAER_LOG_WARNING, "caerInputCommonReadPacket", "Error while reading packet: %zd", bytes_read);
 		free(header);
-		return NULL; 
+
+		return (NULL);
 	}
-	return header;
+
+	// Remeber to free it later on!
+	return (header);
 }
 
 static inline void mainloopDataNotifyIncrease(void *p) {
@@ -67,6 +76,5 @@ static inline void mainloopDataNotifyDecrease(void *p) {
 	// through a mainloop already synchronizes with the release store above.
 	atomic_fetch_sub_explicit(&mainloopData->dataAvailable, 1, memory_order_relaxed);
 }
-
 
 #endif /* IN_COMMON_H_ */
