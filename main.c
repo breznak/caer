@@ -45,8 +45,12 @@ static bool mainloop_1(void) {
 		SPECIAL_EVENT);
 	caerPolarityEventPacket polarity = (caerPolarityEventPacket) caerEventPacketContainerGetEventPacket(container,
 		POLARITY_EVENT);
+
+#if defined(DAVISFX2) || defined(DAVISFX3)
+	// Frame and IMU events exist only with DAVIS cameras.
 	caerFrameEventPacket frame = (caerFrameEventPacket) caerEventPacketContainerGetEventPacket(container, FRAME_EVENT);
 	caerIMU6EventPacket imu = (caerIMU6EventPacket) caerEventPacketContainerGetEventPacket(container, IMU6_EVENT);
+#endif
 
 	// Filters process event packets: for example to suppress certain events,
 	// like with the Background Activity Filter, which suppresses events that
@@ -59,7 +63,11 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_VISUALIZER
 	// A small OpenGL visualizer exists to show what the output looks like.
-	caerVisualizer(4, polarity, frame);
+	#if defined(DAVISFX2) || defined(DAVISFX3)
+		caerVisualizer(4, polarity, frame);
+	#else
+		caerVisualizer(4, polarity, NULL);
+	#endif
 #endif
 
 #ifdef ENABLE_NET_STREAM
@@ -96,7 +104,6 @@ static bool mainloop_2(void) {
 	// Typed EventPackets contain events of a certain type.
 	caerPolarityEventPacket polarity = (caerPolarityEventPacket) caerEventPacketContainerGetEventPacket(container,
 		POLARITY_EVENT);
-	caerFrameEventPacket frame = (caerFrameEventPacket) caerEventPacketContainerGetEventPacket(container, FRAME_EVENT);
 
 	// Filters process event packets: for example to suppress certain events,
 	// like with the Background Activity Filter, which suppresses events that
