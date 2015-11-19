@@ -10,10 +10,6 @@ IF (NOT ENABLE_VISUALIZER)
 	SET(ENABLE_VISUALIZER 0 CACHE BOOL "Enable compiling and linking the Visualizer module.")
 ENDIF()
 
-IF (NOT JAER_COMPAT_FORMAT)
-	SET(JAER_COMPAT_FORMAT 0 CACHE BOOL "Write files in a format compatible with jAER.")
-ENDIF()
-
 IF (NOT ENABLE_NET_STREAM)
 	SET(ENABLE_NET_STREAM 0 CACHE BOOL "Enable TCP server module for sending data over the network.")
 ENDIF()
@@ -100,10 +96,6 @@ ENDIF()
 # Forward settings as defines
 IF (ENABLE_VISUALIZER)
 	ADD_DEFINITIONS(-DENABLE_VISUALIZER=1)
-ENDIF()
-
-IF (JAER_COMPAT_FORMAT)
-	ADD_DEFINITIONS(-DJAER_COMPAT_FORMAT=1)
 ENDIF()
 
 IF (ENABLE_NET_STREAM)

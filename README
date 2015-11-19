@@ -23,8 +23,6 @@ One of the following options is required:
  -DDAVISFX3=1           ... set davisfx3 (for FX3 platform models)
 
 Optional options: 
- -DJAER_COMPAT_FORMAT=1 ... use (older) file output format compatible with jAER
-                            works only for polarity events, not frames or IMU
  -DENABLE_VISUALIZER=1  ... enable visualizer module (Linux only!)
  -DENABLE_NET_STREAM=1  ... enable tcp server for sending data over network
 
