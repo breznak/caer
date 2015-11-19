@@ -12,7 +12,7 @@
 typedef struct sshs_node *sshsNode;
 
 enum sshs_node_attr_value_type {
-	BOOL = 0, BYTE = 1, SHORT = 2, INT = 3, LONG = 4, FLOAT = 5, DOUBLE = 6, STRING = 7,
+	UNKNOWN = -1, BOOL = 0, BYTE = 1, SHORT = 2, INT = 3, LONG = 4, FLOAT = 5, DOUBLE = 6, STRING = 7,
 };
 
 union sshs_node_attr_value {

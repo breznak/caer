@@ -18,8 +18,8 @@ struct in_netTCP_state {
 	struct pollfd *clientDescriptor;
 	struct iovec *sgioMemory;
 	bool connected;
-	bool stop; // stop flag for input module
-	bool stopInput; // stop flag for input thread - can be toggled multiple times during the lifetime of the input module
+	atomic_bool stop; // stop flag for input module
+	atomic_bool stopInput; // stop flag for input thread - can be toggled multiple times during the lifetime of the input module
 	thrd_t inputReadThread;
 	bool keepLatestContainer; //if true: every time the main loop is executed, the network input module "publishes" the latest container it received
 	bool waitForFullContainer; //if true: the input module waits with publishing a container until it received two packets of the same type (= buffer depth 1)
@@ -150,14 +150,14 @@ static void caerInputNetTCPServerRun(caerModuleData moduleData, size_t argsNumbe
 	// Interpret variable arguments (same as above in main function).
 	caerEventPacketContainer* container = va_arg(args, caerEventPacketContainer*);
 
-	*container = atomic_load(&state->currentContainer);
+	*container = state->currentContainer;
 
 	if (*container != NULL) {
 		if (state->notifyMainLoop) {
 			state->dataNotifyDecrease(state->dataNotifyUserPtr);
 		}
 		if (!state->keepLatestContainer) {
-			atomic_store(&state->currentContainer, NULL);
+			state->currentContainer = NULL;
 			caerMainloopFreeAfterLoop((void (*)(void*)) &caerEventPacketContainerFree, *container);
 		}
 	}
@@ -306,10 +306,10 @@ static int inputFromSocketThread(void* ptr) {
 		if (!state->waitForFullContainer || caerEventPacketContainerGetEventPacket(inputContainer, currType) != NULL) {
 			//container needs to be pushed to main loop
 			//remove old container
-			if (atomic_load(&state->currentContainer) != NULL) {
+			if (state->currentContainer != NULL) {
 				free(state->currentContainer);
 			}
-			atomic_store(&state->currentContainer, inputContainer);
+			state->currentContainer = inputContainer;
 			if (notifyMain) {
 				state->dataNotifyIncrease(state->dataNotifyUserPtr);
 			}

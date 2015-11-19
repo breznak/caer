@@ -56,7 +56,7 @@ const char *sshsHelperTypeToStringConverter(enum sshs_node_attr_value_type type)
 // Return -1 on unknown type.
 enum sshs_node_attr_value_type sshsHelperStringToTypeConverter(const char *typeString) {
 	if (typeString == NULL) {
-		return (-1); // NULL STRING.
+		return (UNKNOWN); // NULL STRING.
 	}
 
 	// Convert the value string back into the internal type representation.
@@ -85,7 +85,7 @@ enum sshs_node_attr_value_type sshsHelperStringToTypeConverter(const char *typeS
 		return (STRING);
 	}
 
-	return (-1); // UNKNOWN TYPE.
+	return (UNKNOWN); // UNKNOWN TYPE.
 }
 
 // Return NULL on failure (either memory allocation or unknown type / faulty conversion).

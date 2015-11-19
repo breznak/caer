@@ -114,7 +114,7 @@ sshsNode sshsNodeAddChild(sshsNode node, const char *childName) {
 
 	// Atomic putIfAbsent: returns null if nothing was there before and the
 	// node is the new one, or it returns the old node if already present.
-	sshsNode child, newChild;
+	sshsNode child = NULL, newChild = NULL;
 	HASH_FIND_STR(node->children, childName, child);
 
 	if (child == NULL) {
@@ -420,7 +420,7 @@ static void sshsNodePutAttribute(sshsNode node, const char *key, enum sshs_node_
 	mtx_shared_lock_exclusive(&node->node_lock);
 
 	sshsNodeAttr oldAttr;
-	union sshs_node_attr_value oldAttrValue;
+	union sshs_node_attr_value oldAttrValue = { .uint = 0 };
 
 	HASH_FIND(hh, node->attributes, &newAttr->value_type, fullKeyLength, oldAttr);
 
@@ -528,7 +528,7 @@ union sshs_node_attr_value sshsNodeGetAttribute(sshsNode node, const char *key, 
 
 	// Copy the value while still holding the lock, to ensure accessing it is
 	// still possible and the value behind it valid.
-	union sshs_node_attr_value value;
+	union sshs_node_attr_value value = { .uint = 0 };
 	if (attr != NULL) {
 		value = attr->value;
 

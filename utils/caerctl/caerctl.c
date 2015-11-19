@@ -275,14 +275,14 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 			size_t nodeLength = strlen(commandParts[CMD_PART_NODE]) + 1; // +1 for terminating NUL byte.
 			size_t keyLength = strlen(commandParts[CMD_PART_KEY]) + 1; // +1 for terminating NUL byte.
 
-			uint8_t type = sshsHelperStringToTypeConverter(commandParts[CMD_PART_TYPE]);
-			if (type == (uint8_t) -1) {
+			enum sshs_node_attr_value_type type = sshsHelperStringToTypeConverter(commandParts[CMD_PART_TYPE]);
+			if (type == UNKNOWN) {
 				fprintf(stderr, "Error: invalid type parameter.\n");
 				return;
 			}
 
 			dataBuffer[0] = actionCode;
-			dataBuffer[1] = type;
+			dataBuffer[1] = (uint8_t) type;
 			setExtraLen(dataBuffer, 0); // UNUSED.
 			setNodeLen(dataBuffer, (uint16_t) nodeLength);
 			setKeyLen(dataBuffer, (uint16_t) keyLength);
@@ -323,14 +323,14 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 			size_t keyLength = strlen(commandParts[CMD_PART_KEY]) + 1; // +1 for terminating NUL byte.
 			size_t valueLength = strlen(commandParts[CMD_PART_VALUE]) + 1; // +1 for terminating NUL byte.
 
-			uint8_t type = sshsHelperStringToTypeConverter(commandParts[CMD_PART_TYPE]);
-			if (type == (uint8_t) -1) {
+			enum sshs_node_attr_value_type type = sshsHelperStringToTypeConverter(commandParts[CMD_PART_TYPE]);
+			if (type == UNKNOWN) {
 				fprintf(stderr, "Error: invalid type parameter.\n");
 				return;
 			}
 
 			dataBuffer[0] = actionCode;
-			dataBuffer[1] = type;
+			dataBuffer[1] = (uint8_t) type;
 			setExtraLen(dataBuffer, 0); // UNUSED.
 			setNodeLen(dataBuffer, (uint16_t) nodeLength);
 			setKeyLen(dataBuffer, (uint16_t) keyLength);
@@ -754,8 +754,8 @@ static void valueCompletion(const char *buf, size_t bufLength, linenoiseCompleti
 	UNUSED_ARGUMENT(actionCode);
 	UNUSED_ARGUMENT(typeStringLength);
 
-	uint8_t type = sshsHelperStringToTypeConverter(typeString);
-	if (type == (uint8_t) -1) {
+	enum sshs_node_attr_value_type type = sshsHelperStringToTypeConverter(typeString);
+	if (type == UNKNOWN) {
 		// Invalid type, no auto-completion.
 		return;
 	}
@@ -780,7 +780,7 @@ static void valueCompletion(const char *buf, size_t bufLength, linenoiseCompleti
 
 	// Send request for the current value, so we can auto-complete with it as default.
 	dataBuffer[0] = GET;
-	dataBuffer[1] = type;
+	dataBuffer[1] = (uint8_t) type;
 	setExtraLen(dataBuffer, 0); // UNUSED.
 	setNodeLen(dataBuffer, (uint16_t) (nodeStringLength + 1)); // +1 for terminating NUL byte.
 	setKeyLen(dataBuffer, (uint16_t) (keyStringLength + 1)); // +1 for terminating NUL byte.

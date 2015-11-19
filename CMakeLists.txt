@@ -117,16 +117,22 @@ ENDIF()
 # Enable all warnings for GCC / Clang
 IF (CC_GCC OR CC_CLANG)
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic -Wall -Wextra")
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused -Wundef -Wformat=2 -Winit-self -Wuninitialized")
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wpointer-arith -Wcast-qual -Wcast-align -Wwrite-strings")
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wstrict-prototypes -Wmissing-prototypes -Wredundant-decls")
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wmissing-declarations -Wnested-externs -Wstack-protector")
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wshadow -Wbad-function-cast -Wfloat-equal")
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wconversion -Wstrict-overflow=2")
 
-	# Warnings supported by GCC only
 	IF (CC_GCC)
+		# Enable all useful warnings manually in GCC.
+		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused -Wundef -Wformat=2 -Winit-self -Wuninitialized")
+		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wpointer-arith -Wcast-qual -Wcast-align -Wwrite-strings")
+		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wstrict-prototypes -Wmissing-prototypes -Wredundant-decls")
+		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wmissing-declarations -Wnested-externs -Wstack-protector")
+		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wshadow -Wbad-function-cast -Wfloat-equal")
+		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wconversion -Wstrict-overflow=2")
 		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wjump-misses-init -Wunsuffixed-float-constants -Wdouble-promotion")
+	ENDIF()
+
+	IF (CC_CLANG)
+		# Enable all warnings in Clang easily.
+		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Weverything -Wno-packed -Wno-padded -Wno-unreachable-code-break")
+		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-disabled-macro-expansion")
 	ENDIF()
 ENDIF()
 

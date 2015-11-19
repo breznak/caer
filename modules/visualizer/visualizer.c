@@ -179,12 +179,12 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 				if (caerPolarityEventGetPolarity(caerPolarityIteratorElement)) {
 					// Green.
 					state->eventRenderer[(caerPolarityEventGetY(caerPolarityIteratorElement) * state->eventRendererSizeX)
-						+ caerPolarityEventGetX(caerPolarityIteratorElement)] = be32toh(U32T(0xFF << 16));
+						+ caerPolarityEventGetX(caerPolarityIteratorElement)] = be32toh(U32T(0x00FFUL << 16));
 				}
 				else {
 					// Red.
 					state->eventRenderer[(caerPolarityEventGetY(caerPolarityIteratorElement) * state->eventRendererSizeX)
-						+ caerPolarityEventGetX(caerPolarityIteratorElement)] = be32toh(U32T(0xFF << 24));
+						+ caerPolarityEventGetX(caerPolarityIteratorElement)] = be32toh(U32T(0x00FFUL << 24));
 				}
 			CAER_POLARITY_ITERATOR_VALID_END
 

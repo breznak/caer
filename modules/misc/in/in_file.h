@@ -13,4 +13,4 @@
 
 caerEventPacketContainer caerInputFile(uint16_t moduleID);
 
-#endif /* FILE_INPUT_H_ */ 
+#endif /* FILE_INPUT_H_ */
