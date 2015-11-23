@@ -36,7 +36,7 @@ struct visualizer_state {
 	int32_t frameRendererSizeY;
 	int32_t frameRendererPositionX;
 	int32_t frameRendererPositionY;
-	uint8_t frameChannels;
+	enum caer_frame_event_color_channels frameChannels;
 	struct caer_statistics_state frameStatistics;
 	uint16_t subsampleRendering;
 	uint16_t subsampleCount;
@@ -332,20 +332,19 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 				}
 
 				switch (state->frameChannels) {
-					case 3:
+					case GRAYSCALE:
+						glDrawPixels(state->frameRendererSizeX, state->frameRendererSizeY, GL_LUMINANCE,
+						GL_UNSIGNED_SHORT, state->frameRenderer);
+						break;
+
+					case RGB:
 						glDrawPixels(state->frameRendererSizeX, state->frameRendererSizeY, GL_RGB, GL_UNSIGNED_SHORT,
 							state->frameRenderer);
 						break;
 
-					case 4:
+					case RGBA:
 						glDrawPixels(state->frameRendererSizeX, state->frameRendererSizeY, GL_RGBA, GL_UNSIGNED_SHORT,
 							state->frameRenderer);
-						break;
-
-					case 1:
-					default:
-						glDrawPixels(state->frameRendererSizeX, state->frameRendererSizeY, GL_LUMINANCE,
-						GL_UNSIGNED_SHORT, state->frameRenderer);
 						break;
 				}
 			}
