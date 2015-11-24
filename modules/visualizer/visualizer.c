@@ -95,12 +95,12 @@ static bool caerVisualizerInit(caerModuleData moduleData) {
 	state->subsampleRendering = sshsNodeGetShort(moduleData->moduleNode, "subsampleRendering");
 	state->subsampleCount = 1;
 
+#ifdef FREEGLUT
 	// Statistics text.
 	char fakeParam[] = "cAER Visualizer";
 	char *fakeargv[] = { fakeParam, NULL };
 	int fakeargc = 1;
 
-#ifdef FREEGLUT
 	caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Initializing GLUT.");
 	glutInit(&fakeargc, fakeargv);
 #endif
@@ -122,6 +122,10 @@ static bool caerVisualizerInit(caerModuleData moduleData) {
 
 static void caerVisualizerExit(caerModuleData moduleData) {
 	visualizerState state = moduleData->moduleState;
+
+#ifdef FREEGLUT
+	glutExit();
+#endif
 
 	glfwDestroyWindow(state->window);
 
