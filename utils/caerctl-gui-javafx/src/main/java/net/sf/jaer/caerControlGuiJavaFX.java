@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.SocketChannel;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -31,6 +32,8 @@ import javafx.scene.paint.Color;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
+import net.sf.jaer.Numbers.NumberFormat;
+import net.sf.jaer.Numbers.NumberOptions;
 
 public final class caerControlGuiJavaFX extends Application {
 	public static enum caerControlConfigAction {
@@ -380,19 +383,71 @@ public final class caerControlGuiJavaFX extends Application {
 				break;
 
 			case BYTE:
-
+				GUISupport
+					.addTextNumberField(configBox, Integer.parseInt(value), 3, 0, 255, NumberFormat.DECIMAL,
+						EnumSet.of(NumberOptions.UNSIGNED), null)
+					.textProperty().addListener(new ChangeListener<String>() {
+						@SuppressWarnings("unused")
+						@Override
+						public void changed(ObservableValue<? extends String> observable, String oldValue,
+							String newValue) {
+							// Send new value to cAER control server.
+							sendCommand(caerControlConfigAction.PUT, node, key,
+								caerControlConfigType.getTypeByName(type), newValue);
+							readResponse();
+						}
+					});
 				break;
 
 			case SHORT:
-
+				GUISupport
+					.addTextNumberField(configBox, Integer.parseInt(value), 5, 0, 65535, NumberFormat.DECIMAL,
+						EnumSet.of(NumberOptions.UNSIGNED), null)
+					.textProperty().addListener(new ChangeListener<String>() {
+						@SuppressWarnings("unused")
+						@Override
+						public void changed(ObservableValue<? extends String> observable, String oldValue,
+							String newValue) {
+							// Send new value to cAER control server.
+							sendCommand(caerControlConfigAction.PUT, node, key,
+								caerControlConfigType.getTypeByName(type), newValue);
+							readResponse();
+						}
+					});
 				break;
 
 			case INT:
-
+				GUISupport
+					.addTextNumberField(configBox, Long.parseLong(value), 10, 0, 4294967295L, NumberFormat.DECIMAL,
+						EnumSet.of(NumberOptions.UNSIGNED), null)
+					.textProperty().addListener(new ChangeListener<String>() {
+						@SuppressWarnings("unused")
+						@Override
+						public void changed(ObservableValue<? extends String> observable, String oldValue,
+							String newValue) {
+							// Send new value to cAER control server.
+							sendCommand(caerControlConfigAction.PUT, node, key,
+								caerControlConfigType.getTypeByName(type), newValue);
+							readResponse();
+						}
+					});
 				break;
 
 			case LONG:
-
+				GUISupport
+					.addTextNumberField(configBox, Long.parseLong(value), 19, 0, Long.MAX_VALUE, NumberFormat.DECIMAL,
+						EnumSet.of(NumberOptions.UNSIGNED), null)
+					.textProperty().addListener(new ChangeListener<String>() {
+						@SuppressWarnings("unused")
+						@Override
+						public void changed(ObservableValue<? extends String> observable, String oldValue,
+							String newValue) {
+							// Send new value to cAER control server.
+							sendCommand(caerControlConfigAction.PUT, node, key,
+								caerControlConfigType.getTypeByName(type), newValue);
+							readResponse();
+						}
+					});
 				break;
 
 			case FLOAT:
@@ -404,7 +459,18 @@ public final class caerControlGuiJavaFX extends Application {
 				break;
 
 			case STRING:
-
+				GUISupport.addTextField(configBox, value, null).textProperty()
+					.addListener(new ChangeListener<String>() {
+						@SuppressWarnings("unused")
+						@Override
+						public void changed(ObservableValue<? extends String> observable, String oldValue,
+							String newValue) {
+							// Send new value to cAER control server.
+							sendCommand(caerControlConfigAction.PUT, node, key,
+								caerControlConfigType.getTypeByName(type), newValue);
+							readResponse();
+						}
+					});
 				break;
 
 			default:

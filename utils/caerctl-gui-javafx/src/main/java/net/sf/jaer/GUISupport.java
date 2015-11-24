@@ -2,6 +2,7 @@ package net.sf.jaer;
 
 import java.io.File;
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -11,6 +12,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javafx.application.Platform;
+import javafx.beans.property.SimpleIntegerProperty;
+import javafx.beans.property.SimpleLongProperty;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.ObservableValue;
 import javafx.concurrent.Worker;
 import javafx.event.EventHandler;
 import javafx.geometry.Pos;
@@ -43,6 +48,8 @@ import javafx.scene.text.Font;
 import javafx.stage.FileChooser;
 import javafx.stage.FileChooser.ExtensionFilter;
 import javafx.stage.Stage;
+import net.sf.jaer.Numbers.NumberFormat;
+import net.sf.jaer.Numbers.NumberOptions;
 
 public final class GUISupport {
 	/** Local logger for log messages. */
@@ -233,6 +240,156 @@ public final class GUISupport {
 		return txt;
 	}
 
+	private static String formatIntegerStringForTextfield(final int value, final int displayLength,
+		final NumberFormat fmt, final EnumSet<NumberOptions> opts) {
+		final String str = Numbers.integerToString(value, fmt, opts);
+
+		if (opts.contains(NumberOptions.LEFT_PADDING)) {
+			return str.substring(Integer.SIZE - displayLength, Integer.SIZE);
+		}
+
+		return str;
+	}
+
+	public static TextField addTextNumberField(final Pane parentPane, final int defaultValue, final int displayLength,
+		final int min, final int max, final NumberFormat fmt, final EnumSet<NumberOptions> opts, final Font font) {
+		final TextField txt = new TextField(
+			GUISupport.formatIntegerStringForTextfield(defaultValue, displayLength, fmt, opts));
+		final SimpleIntegerProperty backendValue = new SimpleIntegerProperty(defaultValue);
+
+		if (font != null) {
+			txt.setFont(font);
+		}
+
+		txt.setPrefColumnCount(displayLength);
+
+		txt.textProperty().addListener(new ChangeListener<String>() {
+			@SuppressWarnings("unused")
+			@Override
+			public void changed(final ObservableValue<? extends String> val, final String oldVal, final String newVal) {
+				backendValue.setValue(Numbers.stringToInteger(newVal, fmt, opts));
+			}
+		});
+
+		backendValue.addListener(new ChangeListener<Number>() {
+			@SuppressWarnings("unused")
+			@Override
+			public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
+				final Number newValue) {
+				txt.setText(GUISupport.formatIntegerStringForTextfield(newValue.intValue(), displayLength, fmt, opts));
+			}
+		});
+
+		txt.setOnMouseEntered(new EventHandler<MouseEvent>() {
+			@Override
+			public void handle(@SuppressWarnings("unused") final MouseEvent mouse) {
+				txt.requestFocus();
+			}
+		});
+
+		txt.setOnScroll(new EventHandler<ScrollEvent>() {
+			@Override
+			public void handle(final ScrollEvent scroll) {
+				int i = backendValue.getValue();
+
+				if (scroll.getDeltaY() > 0) {
+					i++;
+				}
+
+				if (scroll.getDeltaY() < 0) {
+					i--;
+				}
+
+				if ((i >= min) && (i <= max)) {
+					backendValue.setValue(i);
+				}
+
+				scroll.consume();
+			}
+		});
+
+		if (parentPane != null) {
+			parentPane.getChildren().add(txt);
+		}
+
+		return txt;
+	}
+
+	private static String formatLongStringForTextfield(final long value, final int displayLength,
+		final NumberFormat fmt, final EnumSet<NumberOptions> opts) {
+		final String str = Numbers.longToString(value, fmt, opts);
+
+		if (opts.contains(NumberOptions.LEFT_PADDING)) {
+			return str.substring(Long.SIZE - displayLength, Long.SIZE);
+		}
+
+		return str;
+	}
+
+	public static TextField addTextNumberField(final Pane parentPane, final long defaultValue, final int displayLength,
+		final long min, final long max, final NumberFormat fmt, final EnumSet<NumberOptions> opts, final Font font) {
+		final TextField txt = new TextField(
+			GUISupport.formatLongStringForTextfield(defaultValue, displayLength, fmt, opts));
+		final SimpleLongProperty backendValue = new SimpleLongProperty(defaultValue);
+
+		if (font != null) {
+			txt.setFont(font);
+		}
+
+		txt.setPrefColumnCount(displayLength);
+
+		txt.textProperty().addListener(new ChangeListener<String>() {
+			@SuppressWarnings("unused")
+			@Override
+			public void changed(final ObservableValue<? extends String> val, final String oldVal, final String newVal) {
+				backendValue.setValue(Numbers.stringToLong(newVal, fmt, opts));
+			}
+		});
+
+		backendValue.addListener(new ChangeListener<Number>() {
+			@SuppressWarnings("unused")
+			@Override
+			public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
+				final Number newValue) {
+				txt.setText(GUISupport.formatLongStringForTextfield(newValue.longValue(), displayLength, fmt, opts));
+			}
+		});
+
+		txt.setOnMouseEntered(new EventHandler<MouseEvent>() {
+			@Override
+			public void handle(@SuppressWarnings("unused") final MouseEvent mouse) {
+				txt.requestFocus();
+			}
+		});
+
+		txt.setOnScroll(new EventHandler<ScrollEvent>() {
+			@Override
+			public void handle(final ScrollEvent scroll) {
+				long i = backendValue.getValue();
+
+				if (scroll.getDeltaY() > 0) {
+					i++;
+				}
+
+				if (scroll.getDeltaY() < 0) {
+					i--;
+				}
+
+				if ((i >= min) && (i <= max)) {
+					backendValue.setValue(i);
+				}
+
+				scroll.consume();
+			}
+		});
+
+		if (parentPane != null) {
+			parentPane.getChildren().add(txt);
+		}
+
+		return txt;
+	}
+
 	public static Slider addSlider(final Pane parentPane, final double min, final double max, final double defaultValue,
 		final int ticks) {
 		final Slider slider = new Slider();
@@ -331,7 +488,7 @@ public final class GUISupport {
 		alert.setTitle(title);
 		alert.getDialogPane().setContent(content);
 
-		Optional<ButtonType> result = alert.showAndWait();
+		final Optional<ButtonType> result = alert.showAndWait();
 
 		GUISupport.logger.debug("Dialog: clicked on {}.", result.get());
 
