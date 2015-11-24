@@ -329,13 +329,8 @@ public final class caerControlGuiJavaFX extends Application {
 						if ((valueResponse.getAction() != caerControlConfigAction.ERROR)
 							&& (valueResponse.getType() != caerControlConfigType.UNKNOWN)) {
 							// This is the current value. We have everything.
-							GUISupport.addLabel(contentPane, String.format("%s (%s):", key, type), null, null, null);
-
-							switch (caerControlConfigType.getTypeByName(type)) {
-								default:
-									GUISupport.addLabel(contentPane, valueResponse.getMessage(), null, null, null);
-									break;
-							}
+							contentPane.getChildren()
+								.add(generateConfigGUI(node, key, type, valueResponse.getMessage()));
 						}
 					}
 				}
@@ -361,6 +356,64 @@ public final class caerControlGuiJavaFX extends Application {
 		}
 
 		return (contentPane);
+	}
+
+	private Pane generateConfigGUI(final String node, final String key, final String type, final String value) {
+		final HBox configBox = new HBox(20);
+
+		GUISupport.addLabel(configBox, String.format("%s (%s):", key, type), null, null, null);
+
+		switch (caerControlConfigType.getTypeByName(type)) {
+			case BOOL:
+				GUISupport.addCheckBox(configBox, null, value.equals("true")).selectedProperty()
+					.addListener(new ChangeListener<Boolean>() {
+						@SuppressWarnings("unused")
+						@Override
+						public void changed(final ObservableValue<? extends Boolean> observable, final Boolean oldValue,
+							final Boolean newValue) {
+							// Send new value to cAER control server.
+							sendCommand(caerControlConfigAction.PUT, node, key,
+								caerControlConfigType.getTypeByName(type), (newValue) ? ("true") : ("false"));
+							readResponse();
+						}
+					});
+				break;
+
+			case BYTE:
+
+				break;
+
+			case SHORT:
+
+				break;
+
+			case INT:
+
+				break;
+
+			case LONG:
+
+				break;
+
+			case FLOAT:
+
+				break;
+
+			case DOUBLE:
+
+				break;
+
+			case STRING:
+
+				break;
+
+			default:
+				// Unknown value type, just display the returned string.
+				GUISupport.addLabel(configBox, value, null, null, null);
+				break;
+		}
+
+		return (configBox);
 	}
 
 	public static boolean writeBuffer(final ByteBuffer buf, final SocketChannel chan) {
