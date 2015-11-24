@@ -51,7 +51,7 @@ static bool caerOutputUnixSInit(caerModuleData moduleData) {
 	state->unixSocketDescriptor = socket(AF_UNIX, SOCK_DGRAM, 0);
 	if (state->unixSocketDescriptor < 0) {
 		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create local Unix socket. Error: %d.",
-			errno);
+		errno);
 		return (false);
 	}
 
@@ -74,7 +74,7 @@ static bool caerOutputUnixSInit(caerModuleData moduleData) {
 	// Set valid events flag, and allocate memory for scatter/gather IO for it.
 	state->validOnly = sshsNodeGetBool(moduleData->moduleNode, "validEventsOnly");
 	state->excludeHeader = sshsNodeGetBool(moduleData->moduleNode, "excludeHeader");
-	state->maxBytesPerPacket = sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
+	state->maxBytesPerPacket = (size_t) sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
 
 	if (state->validOnly) {
 		state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
@@ -156,7 +156,7 @@ static void caerOutputUnixSConfig(caerModuleData moduleData) {
 
 	if (configUpdate & (0x01 << 2)) {
 		state->excludeHeader = sshsNodeGetBool(moduleData->moduleNode, "excludeHeader");
-		state->maxBytesPerPacket = sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
+		state->maxBytesPerPacket = (size_t) sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
 	}
 
 	if (configUpdate & (0x01 << 1)) {

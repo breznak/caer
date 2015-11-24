@@ -179,7 +179,7 @@ static bool caerInputFileInit(caerModuleData moduleData) {
 	free(filePath);
 
 	// initialize ringbuffer
-	state->rBuf = ringBufferInit(sshsNodeGetShort(moduleData->moduleNode, "RingBufferSize"));
+	state->rBuf = ringBufferInit((size_t) sshsNodeGetShort(moduleData->moduleNode, "RingBufferSize"));
 	// set notifier
 	state->dataNotifyDecrease = &mainloopDataNotifyDecrease;
 	state->dataNotifyIncrease = &mainloopDataNotifyIncrease;

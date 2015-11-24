@@ -11,10 +11,10 @@
 
 struct BAFilter_state {
 	int64_t **timestampMap;
-	uint32_t deltaT;
-	uint16_t sizeMaxX;
-	uint16_t sizeMaxY;
-	uint8_t subSampleBy;
+	int32_t deltaT;
+	int16_t sizeMaxX;
+	int16_t sizeMaxY;
+	int8_t subSampleBy;
 };
 
 typedef struct BAFilter_state *BAFilterState;
@@ -146,12 +146,12 @@ static void caerBackgroundActivityFilterExit(caerModuleData moduleData) {
 static bool allocateTimestampMap(BAFilterState state, int16_t sourceID) {
 	// Get size information from source.
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
-	uint16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-	uint16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
+	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
+	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
 	// Initialize double-indirection contiguous 2D array, so that array[x][y]
 	// is possible, see http://c-faq.com/aryptr/dynmuldimary.html for info.
-	state->timestampMap = calloc(sizeX, sizeof(int64_t *));
+	state->timestampMap = calloc((size_t) sizeX, sizeof(int64_t *));
 	if (state->timestampMap == NULL) {
 		return (false); // Failure.
 	}
@@ -164,13 +164,13 @@ static bool allocateTimestampMap(BAFilterState state, int16_t sourceID) {
 		return (false); // Failure.
 	}
 
-	for (size_t i = 1; i < sizeX; i++) {
-		state->timestampMap[i] = state->timestampMap[0] + (i * sizeY);
+	for (size_t i = 1; i < (size_t) sizeX; i++) {
+		state->timestampMap[i] = state->timestampMap[0] + (i * (size_t) sizeY);
 	}
 
 	// Assign max ranges for arrays (0 to MAX-1).
-	state->sizeMaxX = (uint16_t) (sizeX - 1);
-	state->sizeMaxY = (uint16_t) (sizeY - 1);
+	state->sizeMaxX = (sizeX - 1);
+	state->sizeMaxY = (sizeY - 1);
 
 	// TODO: size the map differently if subSampleBy is set!
 	return (true);

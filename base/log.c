@@ -52,7 +52,7 @@ void caerLogInit(void) {
 	atexit(&caerLogShutDownWriteBack);
 
 	// Set global log level and install listener for its update.
-	uint8_t logLevel = sshsNodeGetByte(logNode, "logLevel");
+	uint8_t logLevel = (uint8_t) sshsNodeGetByte(logNode, "logLevel");
 	caerLogLevelSet(logLevel);
 
 	sshsNodeAddAttrListener(logNode, NULL, &caerLogLevelListener);
@@ -89,7 +89,7 @@ static void caerLogLevelListener(sshsNode node, void *userData, enum sshs_node_a
 
 	if (event == ATTRIBUTE_MODIFIED && changeType == BYTE && caerStrEquals(changeKey, "logLevel")) {
 		// Update the global log level asynchronously.
-		caerLogLevelSet(changeValue.ubyte);
-		caerLog(CAER_LOG_DEBUG, "Logger", "Log-level set to %" PRIu8 ".", changeValue.ubyte);
+		caerLogLevelSet((uint8_t) changeValue.ibyte);
+		caerLog(CAER_LOG_DEBUG, "Logger", "Log-level set to %" PRIi8 ".", changeValue.ibyte);
 	}
 }

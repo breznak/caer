@@ -76,7 +76,7 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	// Set valid events flag, and allocate memory for scatter/gather IO for it.
 	state->validOnly = sshsNodeGetBool(moduleData->moduleNode, "validEventsOnly");
 	state->excludeHeader = sshsNodeGetBool(moduleData->moduleNode, "excludeHeader");
-	state->maxBytesPerPacket = sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
+	state->maxBytesPerPacket = (size_t) sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
 
 	if (state->validOnly) {
 		state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
@@ -158,7 +158,7 @@ static void caerOutputNetUDPConfig(caerModuleData moduleData) {
 
 	if (configUpdate & (0x01 << 2)) {
 		state->excludeHeader = sshsNodeGetBool(moduleData->moduleNode, "excludeHeader");
-		state->maxBytesPerPacket = sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
+		state->maxBytesPerPacket = (size_t) sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
 	}
 
 	if (configUpdate & (0x01 << 1)) {
@@ -167,7 +167,7 @@ static void caerOutputNetUDPConfig(caerModuleData moduleData) {
 		int newNetUDPDescriptor = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 		if (newNetUDPDescriptor < 0) {
 			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create UDP socket. Error: %d.",
-				errno);
+			errno);
 			return;
 		}
 

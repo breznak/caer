@@ -17,10 +17,10 @@ enum sshs_node_attr_value_type {
 
 union sshs_node_attr_value {
 	bool boolean;
-	uint8_t ubyte;
-	uint16_t ushort;
-	uint32_t uint;
-	uint64_t ulong;
+	int8_t ibyte;
+	int16_t ishort;
+	int32_t iint;
+	int64_t ilong;
 	float ffloat;
 	double ddouble;
 	char *string;
@@ -54,18 +54,18 @@ union sshs_node_attr_value sshsNodeGetAttribute(sshsNode node, const char *key, 
 bool sshsNodePutBoolIfAbsent(sshsNode node, const char *key, bool value);
 void sshsNodePutBool(sshsNode node, const char *key, bool value);
 bool sshsNodeGetBool(sshsNode node, const char *key);
-bool sshsNodePutByteIfAbsent(sshsNode node, const char *key, uint8_t value);
-void sshsNodePutByte(sshsNode node, const char *key, uint8_t value);
-uint8_t sshsNodeGetByte(sshsNode node, const char *key);
-bool sshsNodePutShortIfAbsent(sshsNode node, const char *key, uint16_t value);
-void sshsNodePutShort(sshsNode node, const char *key, uint16_t value);
-uint16_t sshsNodeGetShort(sshsNode node, const char *key);
-bool sshsNodePutIntIfAbsent(sshsNode node, const char *key, uint32_t value);
-void sshsNodePutInt(sshsNode node, const char *key, uint32_t value);
-uint32_t sshsNodeGetInt(sshsNode node, const char *key);
-bool sshsNodePutLongIfAbsent(sshsNode node, const char *key, uint64_t value);
-void sshsNodePutLong(sshsNode node, const char *key, uint64_t value);
-uint64_t sshsNodeGetLong(sshsNode node, const char *key);
+bool sshsNodePutByteIfAbsent(sshsNode node, const char *key, int8_t value);
+void sshsNodePutByte(sshsNode node, const char *key, int8_t value);
+int8_t sshsNodeGetByte(sshsNode node, const char *key);
+bool sshsNodePutShortIfAbsent(sshsNode node, const char *key, int16_t value);
+void sshsNodePutShort(sshsNode node, const char *key, int16_t value);
+int16_t sshsNodeGetShort(sshsNode node, const char *key);
+bool sshsNodePutIntIfAbsent(sshsNode node, const char *key, int32_t value);
+void sshsNodePutInt(sshsNode node, const char *key, int32_t value);
+int32_t sshsNodeGetInt(sshsNode node, const char *key);
+bool sshsNodePutLongIfAbsent(sshsNode node, const char *key, int64_t value);
+void sshsNodePutLong(sshsNode node, const char *key, int64_t value);
+int64_t sshsNodeGetLong(sshsNode node, const char *key);
 bool sshsNodePutFloatIfAbsent(sshsNode node, const char *key, float value);
 void sshsNodePutFloat(sshsNode node, const char *key, float value);
 float sshsNodeGetFloat(sshsNode node, const char *key);

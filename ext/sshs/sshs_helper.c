@@ -107,19 +107,19 @@ char *sshsHelperValueToStringConverter(enum sshs_node_attr_value_type type, unio
 			break;
 
 		case BYTE:
-			sshsHelperAllocSprintf(&valueString, "%" PRIu8, value.ubyte);
+			sshsHelperAllocSprintf(&valueString, "%" PRIi8, value.ibyte);
 			break;
 
 		case SHORT:
-			sshsHelperAllocSprintf(&valueString, "%" PRIu16, value.ushort);
+			sshsHelperAllocSprintf(&valueString, "%" PRIi16, value.ishort);
 			break;
 
 		case INT:
-			sshsHelperAllocSprintf(&valueString, "%" PRIu32, value.uint);
+			sshsHelperAllocSprintf(&valueString, "%" PRIi32, value.iint);
 			break;
 
 		case LONG:
-			sshsHelperAllocSprintf(&valueString, "%" PRIu64, value.ulong);
+			sshsHelperAllocSprintf(&valueString, "%" PRIi64, value.ilong);
 			break;
 
 		case FLOAT:
@@ -175,28 +175,28 @@ bool sshsHelperStringToValueConverter(enum sshs_node_attr_value_type type, const
 			break;
 
 		case BYTE:
-			if (sscanf(valueString, "%" SCNu8, &value->ubyte) != 1) {
+			if (sscanf(valueString, "%" SCNi8, &value->ibyte) != 1) {
 				return (false); // CONVERSION FAILURE.
 			}
 
 			break;
 
 		case SHORT:
-			if (sscanf(valueString, "%" SCNu16, &value->ushort) != 1) {
+			if (sscanf(valueString, "%" SCNi16, &value->ishort) != 1) {
 				return (false); // CONVERSION FAILURE.
 			}
 
 			break;
 
 		case INT:
-			if (sscanf(valueString, "%" SCNu32, &value->uint) != 1) {
+			if (sscanf(valueString, "%" SCNi32, &value->iint) != 1) {
 				return (false); // CONVERSION FAILURE.
 			}
 
 			break;
 
 		case LONG:
-			if (sscanf(valueString, "%" SCNu64, &value->ulong) != 1) {
+			if (sscanf(valueString, "%" SCNi64, &value->ilong) != 1) {
 				return (false); // CONVERSION FAILURE.
 			}
 

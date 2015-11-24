@@ -420,7 +420,7 @@ static void sshsNodePutAttribute(sshsNode node, const char *key, enum sshs_node_
 	mtx_shared_lock_exclusive(&node->node_lock);
 
 	sshsNodeAttr oldAttr;
-	union sshs_node_attr_value oldAttrValue = { .uint = 0 };
+	union sshs_node_attr_value oldAttrValue = { .ilong = 0 };
 
 	HASH_FIND(hh, node->attributes, &newAttr->value_type, fullKeyLength, oldAttr);
 
@@ -484,16 +484,16 @@ static bool sshsNodeCheckAttributeValueChanged(enum sshs_node_attr_value_type ty
 			return (oldValue.boolean != newValue.boolean);
 
 		case BYTE:
-			return (oldValue.ubyte != newValue.ubyte);
+			return (oldValue.ibyte != newValue.ibyte);
 
 		case SHORT:
-			return (oldValue.ushort != newValue.ushort);
+			return (oldValue.ishort != newValue.ishort);
 
 		case INT:
-			return (oldValue.uint != newValue.uint);
+			return (oldValue.iint != newValue.iint);
 
 		case LONG:
-			return (oldValue.ulong != newValue.ulong);
+			return (oldValue.ilong != newValue.ilong);
 
 		case FLOAT:
 			return (oldValue.ffloat != newValue.ffloat);
@@ -528,7 +528,7 @@ union sshs_node_attr_value sshsNodeGetAttribute(sshsNode node, const char *key, 
 
 	// Copy the value while still holding the lock, to ensure accessing it is
 	// still possible and the value behind it valid.
-	union sshs_node_attr_value value = { .uint = 0 };
+	union sshs_node_attr_value value = { .ilong = 0 };
 	if (attr != NULL) {
 		value = attr->value;
 
@@ -614,52 +614,52 @@ bool sshsNodeGetBool(sshsNode node, const char *key) {
 	return (sshsNodeGetAttribute(node, key, BOOL).boolean);
 }
 
-bool sshsNodePutByteIfAbsent(sshsNode node, const char *key, uint8_t value) {
-	return (sshsNodePutAttributeIfAbsent(node, key, BYTE, (union sshs_node_attr_value ) { .ubyte = value }));
+bool sshsNodePutByteIfAbsent(sshsNode node, const char *key, int8_t value) {
+	return (sshsNodePutAttributeIfAbsent(node, key, BYTE, (union sshs_node_attr_value ) { .ibyte = value }));
 }
 
-void sshsNodePutByte(sshsNode node, const char *key, uint8_t value) {
-	sshsNodePutAttribute(node, key, BYTE, (union sshs_node_attr_value ) { .ubyte = value });
+void sshsNodePutByte(sshsNode node, const char *key, int8_t value) {
+	sshsNodePutAttribute(node, key, BYTE, (union sshs_node_attr_value ) { .ibyte = value });
 }
 
-uint8_t sshsNodeGetByte(sshsNode node, const char *key) {
-	return (sshsNodeGetAttribute(node, key, BYTE).ubyte);
+int8_t sshsNodeGetByte(sshsNode node, const char *key) {
+	return (sshsNodeGetAttribute(node, key, BYTE).ibyte);
 }
 
-bool sshsNodePutShortIfAbsent(sshsNode node, const char *key, uint16_t value) {
-	return (sshsNodePutAttributeIfAbsent(node, key, SHORT, (union sshs_node_attr_value ) { .ushort = value }));
+bool sshsNodePutShortIfAbsent(sshsNode node, const char *key, int16_t value) {
+	return (sshsNodePutAttributeIfAbsent(node, key, SHORT, (union sshs_node_attr_value ) { .ishort = value }));
 }
 
-void sshsNodePutShort(sshsNode node, const char *key, uint16_t value) {
-	sshsNodePutAttribute(node, key, SHORT, (union sshs_node_attr_value ) { .ushort = value });
+void sshsNodePutShort(sshsNode node, const char *key, int16_t value) {
+	sshsNodePutAttribute(node, key, SHORT, (union sshs_node_attr_value ) { .ishort = value });
 }
 
-uint16_t sshsNodeGetShort(sshsNode node, const char *key) {
-	return (sshsNodeGetAttribute(node, key, SHORT).ushort);
+int16_t sshsNodeGetShort(sshsNode node, const char *key) {
+	return (sshsNodeGetAttribute(node, key, SHORT).ishort);
 }
 
-bool sshsNodePutIntIfAbsent(sshsNode node, const char *key, uint32_t value) {
-	return (sshsNodePutAttributeIfAbsent(node, key, INT, (union sshs_node_attr_value ) { .uint = value }));
+bool sshsNodePutIntIfAbsent(sshsNode node, const char *key, int32_t value) {
+	return (sshsNodePutAttributeIfAbsent(node, key, INT, (union sshs_node_attr_value ) { .iint = value }));
 }
 
-void sshsNodePutInt(sshsNode node, const char *key, uint32_t value) {
-	sshsNodePutAttribute(node, key, INT, (union sshs_node_attr_value ) { .uint = value });
+void sshsNodePutInt(sshsNode node, const char *key, int32_t value) {
+	sshsNodePutAttribute(node, key, INT, (union sshs_node_attr_value ) { .iint = value });
 }
 
-uint32_t sshsNodeGetInt(sshsNode node, const char *key) {
-	return (sshsNodeGetAttribute(node, key, INT).uint);
+int32_t sshsNodeGetInt(sshsNode node, const char *key) {
+	return (sshsNodeGetAttribute(node, key, INT).iint);
 }
 
-bool sshsNodePutLongIfAbsent(sshsNode node, const char *key, uint64_t value) {
-	return (sshsNodePutAttributeIfAbsent(node, key, LONG, (union sshs_node_attr_value ) { .ulong = value }));
+bool sshsNodePutLongIfAbsent(sshsNode node, const char *key, int64_t value) {
+	return (sshsNodePutAttributeIfAbsent(node, key, LONG, (union sshs_node_attr_value ) { .ilong = value }));
 }
 
-void sshsNodePutLong(sshsNode node, const char *key, uint64_t value) {
-	sshsNodePutAttribute(node, key, LONG, (union sshs_node_attr_value ) { .ulong = value });
+void sshsNodePutLong(sshsNode node, const char *key, int64_t value) {
+	sshsNodePutAttribute(node, key, LONG, (union sshs_node_attr_value ) { .ilong = value });
 }
 
-uint64_t sshsNodeGetLong(sshsNode node, const char *key) {
-	return (sshsNodeGetAttribute(node, key, LONG).ulong);
+int64_t sshsNodeGetLong(sshsNode node, const char *key) {
+	return (sshsNodeGetAttribute(node, key, LONG).ilong);
 }
 
 bool sshsNodePutFloatIfAbsent(sshsNode node, const char *key, float value) {

@@ -9,15 +9,15 @@
 #include <GLFW/glfw3.h>
 
 #ifdef __APPLE__
-	#include <GLUT/glut.h>
+#include <GLUT/glut.h>
 #else
-	#include <GL/glut.h>
+#include <GL/glut.h>
 #endif
 
 // We include glut.h so we can know which implementation we're using.
 // We only support FreeGLUT currently.
 #ifdef FREEGLUT
-	#include <GL/freeglut_ext.h>
+#include <GL/freeglut_ext.h>
 #endif
 
 #define TEXT_SPACING 20 // in pixels
@@ -27,8 +27,8 @@
 struct visualizer_state {
 	GLFWwindow* window;
 	uint32_t *eventRenderer;
-	uint16_t eventRendererSizeX;
-	uint16_t eventRendererSizeY;
+	int16_t eventRendererSizeX;
+	int16_t eventRendererSizeY;
 	size_t eventRendererSlowDown;
 	struct caer_statistics_state eventStatistics;
 	uint32_t *frameRenderer;
@@ -38,8 +38,8 @@ struct visualizer_state {
 	int32_t frameRendererPositionY;
 	enum caer_frame_event_color_channels frameChannels;
 	struct caer_statistics_state frameStatistics;
-	uint16_t subsampleRendering;
-	uint16_t subsampleCount;
+	int16_t subsampleRendering;
+	int16_t subsampleCount;
 };
 
 typedef struct visualizer_state *visualizerState;
@@ -176,7 +176,7 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 
 			if (state->subsampleRendering > 1) {
 				memset(state->eventRenderer, 0,
-					(size_t) state->eventRendererSizeX * state->eventRendererSizeY * sizeof(uint32_t));
+					(size_t) (state->eventRendererSizeX * state->eventRendererSizeY) * sizeof(uint32_t));
 			}
 
 			CAER_POLARITY_ITERATOR_VALID_START(polarity)
@@ -189,8 +189,7 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 					// Red.
 					state->eventRenderer[(caerPolarityEventGetY(caerPolarityIteratorElement) * state->eventRendererSizeX)
 						+ caerPolarityEventGetX(caerPolarityIteratorElement)] = be32toh(U32T(0x00FFUL << 24));
-				}
-			CAER_POLARITY_ITERATOR_VALID_END
+				}CAER_POLARITY_ITERATOR_VALID_END
 
 			// Accumulate events over four polarity packets.
 			if (state->subsampleRendering <= 1) {
@@ -198,7 +197,7 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 					state->eventRendererSlowDown = 0;
 
 					memset(state->eventRenderer, 0,
-						(size_t) state->eventRendererSizeX * state->eventRendererSizeY * sizeof(uint32_t));
+						(size_t) (state->eventRendererSizeX * state->eventRendererSizeY) * sizeof(uint32_t));
 				}
 			}
 		}
@@ -371,8 +370,8 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 static bool allocateEventRenderer(visualizerState state, int16_t sourceID) {
 	// Get size information from source.
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
-	uint16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-	uint16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
+	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
+	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
 	state->eventRenderer = calloc((size_t) (sizeX * sizeY), sizeof(uint32_t));
 	if (state->eventRenderer == NULL) {
@@ -389,8 +388,8 @@ static bool allocateEventRenderer(visualizerState state, int16_t sourceID) {
 static bool allocateFrameRenderer(visualizerState state, int16_t sourceID) {
 	// Get size information from source.
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
-	uint16_t sizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
-	uint16_t sizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
+	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
+	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
 
 	state->frameRenderer = calloc((size_t) (sizeX * sizeY * MAX_CHANNELS), sizeof(uint16_t));
 	if (state->frameRenderer == NULL) {

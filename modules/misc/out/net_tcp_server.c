@@ -102,7 +102,7 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	}
 
 	// Prepare memory to hold connected clients fds.
-	state->clientDescriptorsLength = sshsNodeGetShort(moduleData->moduleNode, "concurrentConnections");
+	state->clientDescriptorsLength = (size_t) sshsNodeGetShort(moduleData->moduleNode, "concurrentConnections");
 	state->clientDescriptors = malloc(state->clientDescriptorsLength * sizeof(*(state->clientDescriptors)));
 	if (state->clientDescriptors == NULL) {
 		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
@@ -121,7 +121,7 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	// Set valid events flag, and allocate memory for scatter/gather IO for it.
 	state->validOnly = sshsNodeGetBool(moduleData->moduleNode, "validEventsOnly");
 	state->excludeHeader = sshsNodeGetBool(moduleData->moduleNode, "excludeHeader");
-	state->maxBytesPerPacket = sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
+	state->maxBytesPerPacket = (size_t) sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
 
 	if (state->validOnly) {
 		state->sgioMemory = calloc(IOVEC_SIZE, sizeof(struct iovec));
@@ -283,7 +283,7 @@ static void caerOutputNetTCPServerConfig(caerModuleData moduleData) {
 
 	if (configUpdate & (0x01 << 3)) {
 		state->excludeHeader = sshsNodeGetBool(moduleData->moduleNode, "excludeHeader");
-		state->maxBytesPerPacket = sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
+		state->maxBytesPerPacket = (size_t) sshsNodeGetInt(moduleData->moduleNode, "maxBytesPerPacket");
 	}
 
 	if (configUpdate & (0x01 << 1)) {
@@ -343,7 +343,7 @@ static void caerOutputNetTCPServerConfig(caerModuleData moduleData) {
 
 	configUpdate_2: if (configUpdate & (0x01 << 2)) {
 		// Number of allowed connections just changed.
-		size_t newConnectionsLimit = sshsNodeGetShort(moduleData->moduleNode, "concurrentConnections");
+		size_t newConnectionsLimit = (size_t) sshsNodeGetShort(moduleData->moduleNode, "concurrentConnections");
 
 		// Prepare memory to hold connected clients fds.
 		struct pollfd *newConnectionsArray = malloc(newConnectionsLimit * sizeof(*newConnectionsArray));
