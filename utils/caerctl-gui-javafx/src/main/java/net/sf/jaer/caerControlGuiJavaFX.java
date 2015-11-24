@@ -3,7 +3,11 @@ package net.sf.jaer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.SocketChannel;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.apache.commons.validator.routines.InetAddressValidator;
 import org.apache.commons.validator.routines.IntegerValidator;
@@ -41,53 +45,115 @@ public final class caerControlGuiJavaFX extends Application {
 
 		private final byte code;
 
-		caerControlConfigAction(int code) {
-			this.code = (byte) code;
+		private static final Map<Byte, caerControlConfigAction> codeToEnumMap = Collections
+			.unmodifiableMap(caerControlConfigAction.initCodeToEnumMap());
+
+		private static Map<Byte, caerControlConfigAction> initCodeToEnumMap() {
+			final Map<Byte, caerControlConfigAction> initCodeToEnumMap = new HashMap<>();
+			for (final caerControlConfigAction type : caerControlConfigAction.values()) {
+				initCodeToEnumMap.put(type.code, type);
+			}
+			return (initCodeToEnumMap);
 		}
 
-		public byte getCode() {
-			return (this.code);
-		}
-	}
-
-	public static enum caerControlConfigType {
-		UNKNOWN(-1),
-		BOOL(0),
-		BYTE(1),
-		SHORT(2),
-		INT(3),
-		LONG(4),
-		FLOAT(5),
-		DOUBLE(6),
-		STRING(7);
-
-		private final byte code;
-
-		caerControlConfigType(int code) {
+		caerControlConfigAction(final int code) {
 			this.code = (byte) code;
 		}
 
 		public byte getCode() {
 			return (code);
 		}
+
+		public static caerControlConfigAction getActionByCode(final byte code) {
+			if (caerControlConfigAction.codeToEnumMap.containsKey(code)) {
+				return (caerControlConfigAction.codeToEnumMap.get(code));
+			}
+
+			return (null);
+		}
+	}
+
+	public static enum caerControlConfigType {
+		UNKNOWN(-1, null),
+		BOOL(0, "bool"),
+		BYTE(1, "byte"),
+		SHORT(2, "short"),
+		INT(3, "int"),
+		LONG(4, "long"),
+		FLOAT(5, "float"),
+		DOUBLE(6, "double"),
+		STRING(7, "string");
+
+		private final byte code;
+		private final String name;
+
+		private static final Map<String, caerControlConfigType> nameToEnumMap = Collections
+			.unmodifiableMap(caerControlConfigType.initNameToEnumMap());
+		private static final Map<Byte, caerControlConfigType> codeToEnumMap = Collections
+			.unmodifiableMap(caerControlConfigType.initCodeToEnumMap());
+
+		private static Map<String, caerControlConfigType> initNameToEnumMap() {
+			final Map<String, caerControlConfigType> initNameToEnumMap = new HashMap<>();
+			for (final caerControlConfigType type : caerControlConfigType.values()) {
+				initNameToEnumMap.put(type.name, type);
+			}
+			return (initNameToEnumMap);
+		}
+
+		private static Map<Byte, caerControlConfigType> initCodeToEnumMap() {
+			final Map<Byte, caerControlConfigType> initCodeToEnumMap = new HashMap<>();
+			for (final caerControlConfigType type : caerControlConfigType.values()) {
+				initCodeToEnumMap.put(type.code, type);
+			}
+			return (initCodeToEnumMap);
+		}
+
+		caerControlConfigType(final int code, final String name) {
+			this.code = (byte) code;
+			this.name = name;
+		}
+
+		public byte getCode() {
+			return (code);
+		}
+
+		public String getName() {
+			return (name);
+		}
+
+		public static caerControlConfigType getTypeByName(final String name) {
+			if (caerControlConfigType.nameToEnumMap.containsKey(name)) {
+				return (caerControlConfigType.nameToEnumMap.get(name));
+			}
+
+			return (null);
+		}
+
+		public static caerControlConfigType getTypeByCode(final byte code) {
+			if (caerControlConfigType.codeToEnumMap.containsKey(code)) {
+				return (caerControlConfigType.codeToEnumMap.get(code));
+			}
+
+			return (null);
+		}
 	}
 
 	public static class caerControlResponse {
-		private final byte action;
-		private final byte type;
+		private final caerControlConfigAction action;
+		private final caerControlConfigType type;
 		private final String message;
 
-		public caerControlResponse(byte action, byte type, String message) {
-			this.action = action;
-			this.type = type;
+		public caerControlResponse(final byte action, final byte type, final String message) {
+			this.action = caerControlConfigAction.getActionByCode(action);
+			this.type = caerControlConfigType.getTypeByCode(type);
 			this.message = message;
 		}
 
-		public byte getAction() {
+		public caerControlConfigAction getAction() {
 			return (action);
 		}
 
-		public byte getType() {
+		public caerControlConfigType getType() {
 			return (type);
 		}
 
@@ -96,9 +162,9 @@ public final class caerControlGuiJavaFX extends Application {
 		}
 	}
 
-	private final TabPane tabLayout = new TabPane();
+	private final VBox mainGUI = new VBox(20);
 	private SocketChannel controlSocket = null;
-	private final ByteBuffer netBuf = ByteBuffer.allocateDirect(1024);
+	private final ByteBuffer netBuf = ByteBuffer.allocateDirect(1024).order(ByteOrder.LITTLE_ENDIAN);
 
 	public static void main(final String[] args) {
 		// Launch the JavaFX application: do initialization and call start()
@@ -107,15 +173,18 @@ public final class caerControlGuiJavaFX extends Application {
 	}
 
 	private static void addToTab(final TabPane tabPane, final Pane content, final String name) {
-		final ScrollPane p = new ScrollPane(content);
-
-		p.setFitToWidth(true);
-		p.setPrefHeight(Screen.getPrimary().getVisualBounds().getHeight());
-		// TODO: is there a better way to maximize the ScrollPane content?
-
 		final Tab t = new Tab(name);
 
-		t.setContent(p);
+		if (content != null) {
+			final ScrollPane p = new ScrollPane(content);
+
+			p.setFitToWidth(true);
+			p.setPrefHeight(Screen.getPrimary().getVisualBounds().getHeight());
+			// TODO: is there a better way to maximize the ScrollPane content?
+
+			t.setContent(p);
+		}
+
 		t.setClosable(false);
 
 		tabPane.getTabs().add(t);
@@ -126,10 +195,8 @@ public final class caerControlGuiJavaFX extends Application {
 		GUISupport.checkJavaVersion(primaryStage);
 
 		final VBox gui = new VBox(20);
-
 		gui.getChildren().add(connectToCaerControlServerGUI());
-
-		gui.getChildren().add(tabLayout);
+		gui.getChildren().add(mainGUI);
 
 		final BorderPane main = new BorderPane();
 		main.setCenter(gui);
@@ -146,7 +213,7 @@ public final class caerControlGuiJavaFX extends Application {
 				try {
 					cleanupConnection();
 				}
-				catch (IOException e) {
+				catch (final IOException e) {
 					// Ignore this on closing.
 				}
 			}
@@ -166,9 +233,10 @@ public final class caerControlGuiJavaFX extends Application {
 		ipAddress.textProperty().addListener(new ChangeListener<String>() {
 			@SuppressWarnings("unused")
 			@Override
-			public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
+			public void changed(final ObservableValue<? extends String> observable, final String oldValue,
+				final String newValue) {
 				// Validate IP address.
-				InetAddressValidator ipValidator = InetAddressValidator.getInstance();
+				final InetAddressValidator ipValidator = InetAddressValidator.getInstance();
 
 				if (ipValidator.isValidInet4Address(newValue)) {
 					ipAddress.setStyle("");
@@ -187,9 +255,10 @@ public final class caerControlGuiJavaFX extends Application {
 		port.textProperty().addListener(new ChangeListener<String>() {
 			@SuppressWarnings("unused")
 			@Override
-			public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
+			public void changed(final ObservableValue<? extends String> observable, final String oldValue,
+				final String newValue) {
 				// Validate port.
-				IntegerValidator portValidator = IntegerValidator.getInstance();
+				final IntegerValidator portValidator = IntegerValidator.getInstance();
 
 				if (portValidator.isInRange(Integer.parseInt(newValue), 1, 65535)) {
 					port.setStyle("");
@@ -205,14 +274,14 @@ public final class caerControlGuiJavaFX extends Application {
 			new EventHandler<MouseEvent>() {
 				@SuppressWarnings("unused")
 				@Override
-				public void handle(MouseEvent event) {
+				public void handle(final MouseEvent event) {
 					try {
 						cleanupConnection();
 
 						controlSocket = SocketChannel
 							.open(new InetSocketAddress(ipAddress.getText(), Integer.parseInt(port.getText())));
 
-						populateTabs();
+						mainGUI.getChildren().add(populateInterface("/"));
 					}
 					catch (NumberFormatException | IOException e) {
 						GUISupport.showDialogException(e);
@@ -224,22 +293,85 @@ public final class caerControlGuiJavaFX extends Application {
 	}
 
 	// Add tabs recursively with configuration values to explore.
-	private void populateTabs() {
-		// First query available nodes under the root.
-		sendCommand(caerControlConfigAction.GET_CHILDREN, "/", null, null, null);
+	private Pane populateInterface(final String node) {
+		final VBox contentPane = new VBox(20);
 
-		readResponse();
+		// Add all keys at this level.
+		// First query what they are.
+		sendCommand(caerControlConfigAction.GET_ATTRIBUTES, node, null, null, null);
+
+		// Read and parse response.
+		final caerControlResponse keyResponse = readResponse();
+
+		if ((keyResponse.getAction() != caerControlConfigAction.ERROR)
+			&& (keyResponse.getType() == caerControlConfigType.STRING)) {
+			// For each key, query its value type and then its actual value, and
+			// build up the proper configuration control knob.
+			for (final String key : keyResponse.getMessage().split("\0")) {
+				// Query type.
+				sendCommand(caerControlConfigAction.GET_TYPES, node, key, null, null);
+
+				// Read and parse response.
+				final caerControlResponse typeResponse = readResponse();
+
+				if ((typeResponse.getAction() != caerControlConfigAction.ERROR)
+					&& (typeResponse.getType() == caerControlConfigType.STRING)) {
+					// For each key and type, we get the current value and then
+					// build the configuration control knob.
+					for (final String type : typeResponse.getMessage().split("\0")) {
+						// Query current value.
+						sendCommand(caerControlConfigAction.GET, node, key, caerControlConfigType.getTypeByName(type),
+							null);
+
+						// Read and parse response.
+						final caerControlResponse valueResponse = readResponse();
+
+						if ((valueResponse.getAction() != caerControlConfigAction.ERROR)
+							&& (valueResponse.getType() != caerControlConfigType.UNKNOWN)) {
+							// This is the current value. We have everything.
+							GUISupport.addLabel(contentPane, String.format("%s (%s):", key, type), null, null, null);
+
+							switch (caerControlConfigType.getTypeByName(type)) {
+								default:
+									GUISupport.addLabel(contentPane, valueResponse.getMessage(), null, null, null);
+									break;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Then query available sub-nodes.
+		sendCommand(caerControlConfigAction.GET_CHILDREN, node, null, null, null);
+
+		// Read and parse response.
+		final caerControlResponse childResponse = readResponse();
+
+		if ((childResponse.getAction() != caerControlConfigAction.ERROR)
+			&& (childResponse.getType() == caerControlConfigType.STRING)) {
+			// Split up message containing child nodes by using the NUL
+			// terminator as separator.
+			final TabPane tabPane = new TabPane();
+			contentPane.getChildren().add(tabPane);
+
+			for (final String childNode : childResponse.getMessage().split("\0")) {
+				caerControlGuiJavaFX.addToTab(tabPane, populateInterface(node + childNode + "/"), childNode);
+			}
+		}
+
+		return (contentPane);
 	}
 
-	public static boolean writeBuffer(ByteBuffer buf, SocketChannel chan) {
-		int toWrite = buf.limit();
+	public static boolean writeBuffer(final ByteBuffer buf, final SocketChannel chan) {
+		final int toWrite = buf.remaining();
 		int written = 0;
 
 		while (written < toWrite) {
 			try {
 				written += chan.write(buf);
 			}
-			catch (IOException e) {
+			catch (final IOException e) {
 				GUISupport.showDialogException(e);
 				return (false);
 			}
@@ -248,15 +380,15 @@ public final class caerControlGuiJavaFX extends Application {
 		return (true);
 	}
 
-	public static boolean readBuffer(ByteBuffer buf, SocketChannel chan) {
-		int toRead = buf.limit();
+	public static boolean readBuffer(final ByteBuffer buf, final SocketChannel chan) {
+		final int toRead = buf.remaining();
 		int read = 0;
 
 		while (read < toRead) {
 			try {
 				read += chan.read(buf);
 			}
-			catch (IOException e) {
+			catch (final IOException e) {
 				GUISupport.showDialogException(e);
 				return (false);
 			}
@@ -266,7 +398,7 @@ public final class caerControlGuiJavaFX extends Application {
 	}
 
 	private void cleanupConnection() throws IOException {
-		tabLayout.getTabs().clear();
+		mainGUI.getChildren().clear();
 
 		if (controlSocket != null) {
 			controlSocket.close();
@@ -274,8 +406,8 @@ public final class caerControlGuiJavaFX extends Application {
 		}
 	}
 
-	private void sendCommand(caerControlConfigAction action, String node, String key, caerControlConfigType type,
-		String value) {
+	private void sendCommand(final caerControlConfigAction action, final String node, final String key,
+		final caerControlConfigType type, final String value) {
 		netBuf.clear();
 
 		// Fill buffer with values.
@@ -341,7 +473,7 @@ public final class caerControlGuiJavaFX extends Application {
 
 		netBuf.flip();
 
-		writeBuffer(netBuf, controlSocket);
+		caerControlGuiJavaFX.writeBuffer(netBuf, controlSocket);
 	}
 
 	private caerControlResponse readResponse() {
@@ -349,27 +481,28 @@ public final class caerControlGuiJavaFX extends Application {
 
 		// Get response header.
 		netBuf.limit(4);
-		readBuffer(netBuf, controlSocket);
+		caerControlGuiJavaFX.readBuffer(netBuf, controlSocket);
 
 		// Get response message part.
-		short messageLength = netBuf.getShort(2);
+		final short messageLength = netBuf.getShort(2);
 
 		netBuf.limit(4 + messageLength);
-		readBuffer(netBuf, controlSocket);
+		caerControlGuiJavaFX.readBuffer(netBuf, controlSocket);
 
 		netBuf.flip();
 
 		// Parse header.
-		byte action = netBuf.get();
-		byte type = netBuf.get();
+		final byte action = netBuf.get();
+		final byte type = netBuf.get();
 
 		// Parse message.
-		byte[] messageBytes = new byte[messageLength];
+		final byte[] messageBytes = new byte[messageLength - 1];
+		// -1 because we don't care about the last NUL terminator.
 
 		netBuf.position(4);
 		netBuf.get(messageBytes);
 
-		String message = new String(messageBytes);
+		final String message = new String(messageBytes);
 
 		return (new caerControlResponse(action, type, message));
 	}
