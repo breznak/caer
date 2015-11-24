@@ -7,7 +7,7 @@ REQUIREMENTS:
 
 cmake >= 2.6
 gcc >= 4.9 or clang >= 3.6
-libcaer >= 1.0.1
+libcaer >= 1.0.2
 mini-xml (mxml) >= 2.7
 glfw >= 3.0.4 (optional, only if using visualizer module, Linux only!)
 
