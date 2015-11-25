@@ -1006,7 +1006,7 @@ bool sshsNodeStringToNodeConverter(sshsNode node, const char *key, const char *t
 	union sshs_node_attr_value value;
 	bool conversionSuccess = sshsHelperStringToValueConverter(type, valueStr, &value);
 
-	if (type == (enum sshs_node_attr_value_type) -1 || conversionSuccess == false) {
+	if ((type == UNKNOWN) || !conversionSuccess) {
 		return (false);
 	}
 

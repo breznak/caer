@@ -127,7 +127,7 @@ char *sshsHelperValueToStringConverter(enum sshs_node_attr_value_type type, unio
 			break;
 
 		case DOUBLE:
-			sshsHelperAllocSprintf(&valueString, "%lg", value.ddouble);
+			sshsHelperAllocSprintf(&valueString, "%g", value.ddouble);
 			break;
 
 		case STRING:
