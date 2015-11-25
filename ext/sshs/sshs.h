@@ -34,7 +34,6 @@ enum sshs_node_attribute_events {
 	ATTRIBUTE_ADDED = 0, ATTRIBUTE_MODIFIED = 1,
 };
 
-sshsNode sshsNodeNew(const char *nodeName, sshsNode parent);
 const char *sshsNodeGetName(sshsNode node);
 const char *sshsNodeGetPath(sshsNode node);
 sshsNode sshsNodeGetParent(sshsNode node);

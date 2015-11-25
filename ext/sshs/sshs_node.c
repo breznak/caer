@@ -549,13 +549,11 @@ union sshs_node_attr_value sshsNodeGetAttribute(sshsNode node, const char *key, 
 	// Verify that we're getting values from a valid attribute.
 	// Valid means it already exists and has a well-defined default.
 	if (attr == NULL) {
-		size_t printLength = (size_t) snprintf(NULL, 0,
-			"Attribute %s of type %d not present, please initialize it first.", key, type);
-		char errorString[printLength + 1];
-		snprintf(errorString, printLength + 1, "Attribute %s of type %d not present, please initialize it first.", key,
-			type);
+		char errorMsg[1024];
+		snprintf(errorMsg, 1024, "Attribute '%s' of type '%s' not present, please initialize it first.", key,
+			sshsHelperTypeToStringConverter(type));
 
-		(*sshsGetGlobalErrorLogCallback())(errorString);
+		(*sshsGetGlobalErrorLogCallback())(errorMsg);
 
 		// This is a critical usage error that *must* be fixed!
 		exit(EXIT_FAILURE);
@@ -962,7 +960,8 @@ static void sshsNodeConsumeXML(sshsNode node, mxml_node_t *content, bool recursi
 
 		if (!sshsNodeStringToNodeConverter(node, key, type, value)) {
 			char errorMsg[1024];
-			snprintf(errorMsg, 1024, "Failed to convert attribute %s of type %s with value %s.", key, type, value);
+			snprintf(errorMsg, 1024, "Failed to convert attribute '%s' of type '%s' with value '%s' from XML.", key,
+				type, value);
 
 			(*sshsGetGlobalErrorLogCallback())(errorMsg);
 		}

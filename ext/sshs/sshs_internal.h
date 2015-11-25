@@ -23,6 +23,7 @@ typedef struct sshs_node_attr *sshsNodeAttr;
 typedef struct sshs_node_listener *sshsNodeListener;
 typedef struct sshs_node_attr_listener *sshsNodeAttrListener;
 
+sshsNode sshsNodeNew(const char *nodeName, sshsNode parent);
 sshsNode sshsNodeAddChild(sshsNode node, const char *childName);
 sshsNode sshsNodeGetChild(sshsNode node, const char* childName);
 void sshsNodeTransactionLock(sshsNode node);
