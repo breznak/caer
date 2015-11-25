@@ -97,7 +97,7 @@ static bool caerInputNetTCPServerInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "waitForFullContainer", false);
 
 	// Install default listener to signal configuration updates asynchronously.
-	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerInputNetTCPServerConfigListener);
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerInputNetTCPServerConfigListener);
 
 	state->stop = false;
 	state->connected = false;

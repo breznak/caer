@@ -243,7 +243,7 @@ void sshsNodeRemoveNodeListener(sshsNode node, void *userData,
 	mtx_shared_unlock_exclusive(&node->node_lock);
 }
 
-void sshsNodeAddAttrListener(sshsNode node, void *userData,
+void sshsNodeAddAttributeListener(sshsNode node, void *userData,
 	void (*attribute_changed)(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 		const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue)) {
 	sshsNodeAttrListener listener = malloc(sizeof(*listener));
@@ -275,7 +275,7 @@ void sshsNodeAddAttrListener(sshsNode node, void *userData,
 	mtx_shared_unlock_exclusive(&node->node_lock);
 }
 
-void sshsNodeRemoveAttrListener(sshsNode node, void *userData,
+void sshsNodeRemoveAttributeListener(sshsNode node, void *userData,
 	void (*attribute_changed)(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 		const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue)) {
 	mtx_shared_lock_exclusive(&node->node_lock);
@@ -300,7 +300,7 @@ void sshsNodeTransactionUnlock(sshsNode node) {
 	mtx_shared_unlock_exclusive(&node->node_lock);
 }
 
-bool sshsNodeAttrExists(sshsNode node, const char *key, enum sshs_node_attr_value_type type) {
+bool sshsNodeAttributeExists(sshsNode node, const char *key, enum sshs_node_attr_value_type type) {
 	size_t keyLength = strlen(key);
 	sshsNodeAttr lookupAttr = malloc(sizeof(*lookupAttr) + keyLength + 1);
 	SSHS_MALLOC_CHECK_EXIT(lookupAttr);

@@ -161,7 +161,7 @@ static void createDefaultConfiguration(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(biasNode, "foll", 271);
 	sshsNodePutIntIfAbsent(biasNode, "pr", 217);
 
-	sshsNodeAddAttrListener(biasNode, moduleData, &biasConfigListener);
+	sshsNodeAddAttributeListener(biasNode, moduleData, &biasConfigListener);
 
 	// DVS settings.
 	sshsNode dvsNode = sshsGetRelativeNode(moduleData->moduleNode, "dvs/");
@@ -169,14 +169,14 @@ static void createDefaultConfiguration(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(dvsNode, "TimestampReset", false);
 	sshsNodePutBoolIfAbsent(dvsNode, "ArrayReset", false);
 
-	sshsNodeAddAttrListener(dvsNode, moduleData, &dvsConfigListener);
+	sshsNodeAddAttributeListener(dvsNode, moduleData, &dvsConfigListener);
 
 	// USB buffer settings.
 	sshsNode usbNode = sshsGetRelativeNode(moduleData->moduleNode, "usb/");
 	sshsNodePutIntIfAbsent(usbNode, "BufferNumber", 8);
 	sshsNodePutIntIfAbsent(usbNode, "BufferSize", 4096);
 
-	sshsNodeAddAttrListener(usbNode, moduleData, &usbConfigListener);
+	sshsNodeAddAttributeListener(usbNode, moduleData, &usbConfigListener);
 
 	sshsNode sysNode = sshsGetRelativeNode(moduleData->moduleNode, "system/");
 
@@ -191,7 +191,7 @@ static void createDefaultConfiguration(caerModuleData moduleData) {
 	// Ring-buffer setting (only changes value on module init/shutdown cycles).
 	sshsNodePutIntIfAbsent(sysNode, "DataExchangeBufferSize", 64);
 
-	sshsNodeAddAttrListener(sysNode, moduleData, &systemConfigListener);
+	sshsNodeAddAttributeListener(sysNode, moduleData, &systemConfigListener);
 }
 
 static void sendDefaultConfiguration(caerModuleData moduleData) {

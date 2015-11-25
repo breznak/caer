@@ -138,7 +138,7 @@ static bool caerOutputFileInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "maxBytesPerPacket", 0);
 
 	// Install default listener to signal configuration updates asynchronously.
-	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerOutputFileConfigListener);
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerOutputFileConfigListener);
 
 	// Generate current file name and open it.
 	char *directory = sshsNodeGetString(moduleData->moduleNode, "directory");

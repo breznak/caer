@@ -47,7 +47,7 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "maxBytesPerPacket", 0);
 
 	// Install default listener to signal configuration updates asynchronously.
-	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerOutputNetUDPConfigListener);
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerOutputNetUDPConfigListener);
 
 	// Open a UDP socket to the remote client, to which we'll send data packets.
 	state->netUDPDescriptor = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);

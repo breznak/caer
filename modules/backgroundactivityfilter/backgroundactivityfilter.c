@@ -39,7 +39,7 @@ static bool caerBackgroundActivityFilterInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "deltaT", 30000);
 	sshsNodePutByteIfAbsent(moduleData->moduleNode, "subSampleBy", 0);
 
-	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
 	BAFilterState state = moduleData->moduleState;
 

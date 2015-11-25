@@ -154,7 +154,7 @@ static bool caerInputFileInit(caerModuleData moduleData) {
 	// NOTE: add here other fields that seem reasonable for input control (playback param, time window)
 
 	// Install default listener to signal configuration updates asynchronously.
-	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerInputFileConfigListener);
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerInputFileConfigListener);
 
 	// Take actual values
 	userHomeDir = sshsNodeGetString(moduleData->moduleNode, "directory");

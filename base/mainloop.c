@@ -58,7 +58,7 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 
 	// Add shutdown hook to SSHS for external control.
 	sshsNodePutBool(rootNode, "shutdown", false); // Always reset to false.
-	sshsNodeAddAttrListener(rootNode, &mainloopThreads.running, &caerMainloopShutdownListener);
+	sshsNodeAddAttributeListener(rootNode, &mainloopThreads.running, &caerMainloopShutdownListener);
 
 	// Allocate memory for main-loops.
 	mainloopThreads.loopThreadsLength = numLoops;
@@ -85,7 +85,7 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 
 		// Add per-mainloop shutdown hooks to SSHS for external control.
 		sshsNodePutBool(mainloopThreads.loopThreads[i].mainloopNode, "shutdown", false); // Always reset to false.
-		sshsNodeAddAttrListener(mainloopThreads.loopThreads[i].mainloopNode, &mainloopThreads.loopThreads[i].running,
+		sshsNodeAddAttributeListener(mainloopThreads.loopThreads[i].mainloopNode, &mainloopThreads.loopThreads[i].running,
 			&caerMainloopShutdownListener);
 
 		if ((errno = thrd_create(&mainloopThreads.loopThreads[i].mainloop, &caerMainloopRunner,

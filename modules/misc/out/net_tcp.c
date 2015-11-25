@@ -47,7 +47,7 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "maxBytesPerPacket", 0);
 
 	// Install default listener to signal configuration updates asynchronously.
-	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerOutputNetTCPConfigListener);
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerOutputNetTCPConfigListener);
 
 	// Open a TCP socket to the remote client, to which we'll send data packets.
 	state->netTCPDescriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);

@@ -312,7 +312,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			sshsNode wantedNode = sshsGetNode(configStore, (const char *) node);
 
 			// Check if attribute exists.
-			bool result = sshsNodeAttrExists(wantedNode, (const char *) key, type);
+			bool result = sshsNodeAttributeExists(wantedNode, (const char *) key, type);
 
 			// Send back result to client. Format is the same as incoming data.
 			const uint8_t *sendResult = (const uint8_t *) ((result) ? ("true") : ("false"));
@@ -339,7 +339,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			sshsNode wantedNode = sshsGetNode(configStore, (const char *) node);
 
 			// Check if attribute exists. Only allow operations on existing attributes!
-			bool attrExists = sshsNodeAttrExists(wantedNode, (const char *) key, type);
+			bool attrExists = sshsNodeAttributeExists(wantedNode, (const char *) key, type);
 
 			if (!attrExists) {
 				// Send back error message to client.
@@ -390,7 +390,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			sshsNode wantedNode = sshsGetNode(configStore, (const char *) node);
 
 			// Check if attribute exists. Only allow operations on existing attributes!
-			bool attrExists = sshsNodeAttrExists(wantedNode, (const char *) key, type);
+			bool attrExists = sshsNodeAttributeExists(wantedNode, (const char *) key, type);
 
 			if (!attrExists) {
 				// Send back error message to client.

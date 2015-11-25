@@ -102,7 +102,7 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	}
 
 	sshsNodePutBool(moduleData->moduleNode, "shutdown", false); // Always reset to false.
-	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerModuleShutdownListener);
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleShutdownListener);
 
 	// Setup default full log string name.
 	moduleData->moduleSubSystemString = malloc(nameLength + 1);

@@ -43,13 +43,13 @@ void sshsNodeAddNodeListener(sshsNode node, void *userData,
 	void (*node_changed)(sshsNode node, void *userData, enum sshs_node_node_events event, sshsNode changeNode));
 void sshsNodeRemoveNodeListener(sshsNode node, void *userData,
 	void (*node_changed)(sshsNode node, void *userData, enum sshs_node_node_events event, sshsNode changeNode));
-void sshsNodeAddAttrListener(sshsNode node, void *userData,
+void sshsNodeAddAttributeListener(sshsNode node, void *userData,
 	void (*attribute_changed)(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 		const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue));
-void sshsNodeRemoveAttrListener(sshsNode node, void *userData,
+void sshsNodeRemoveAttributeListener(sshsNode node, void *userData,
 	void (*attribute_changed)(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 		const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue));
-bool sshsNodeAttrExists(sshsNode node, const char *key, enum sshs_node_attr_value_type type);
+bool sshsNodeAttributeExists(sshsNode node, const char *key, enum sshs_node_attr_value_type type);
 union sshs_node_attr_value sshsNodeGetAttribute(sshsNode node, const char *key, enum sshs_node_attr_value_type type);
 bool sshsNodePutBoolIfAbsent(sshsNode node, const char *key, bool value);
 void sshsNodePutBool(sshsNode node, const char *key, bool value);

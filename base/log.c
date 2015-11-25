@@ -55,7 +55,7 @@ void caerLogInit(void) {
 	uint8_t logLevel = (uint8_t) sshsNodeGetByte(logNode, "logLevel");
 	caerLogLevelSet(logLevel);
 
-	sshsNodeAddAttrListener(logNode, NULL, &caerLogLevelListener);
+	sshsNodeAddAttributeListener(logNode, NULL, &caerLogLevelListener);
 
 	// Now that config is initialized (has to be!) and logging too, we can
 	// set the SSHS logger to use our internal logger too.

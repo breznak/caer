@@ -329,7 +329,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 		sshsNodePutBoolIfAbsent(chipNode, "AdjustTX2OVG2Hi", false);
 	}
 
-	sshsNodeAddAttrListener(chipNode, moduleData, &chipConfigListener);
+	sshsNodeAddAttributeListener(chipNode, moduleData, &chipConfigListener);
 
 	// Subsystem 0: Multiplexer
 	sshsNode muxNode = sshsGetRelativeNode(moduleData->moduleNode, "multiplexer/");
@@ -343,7 +343,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 	sshsNodePutBoolIfAbsent(muxNode, "DropIMUOnTransferStall", false);
 	sshsNodePutBoolIfAbsent(muxNode, "DropExtInputOnTransferStall", true);
 
-	sshsNodeAddAttrListener(muxNode, moduleData, &muxConfigListener);
+	sshsNodeAddAttributeListener(muxNode, moduleData, &muxConfigListener);
 
 	// Subsystem 1: DVS AER
 	sshsNode dvsNode = sshsGetRelativeNode(moduleData->moduleNode, "dvs/");
@@ -385,7 +385,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 		sshsNodePutBoolIfAbsent(dvsNode, "TestEventGeneratorEnable", false);
 	}
 
-	sshsNodeAddAttrListener(dvsNode, moduleData, &dvsConfigListener);
+	sshsNodeAddAttributeListener(dvsNode, moduleData, &dvsConfigListener);
 
 	// Subsystem 2: APS ADC
 	sshsNode apsNode = sshsGetRelativeNode(moduleData->moduleNode, "aps/");
@@ -447,7 +447,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 		sshsNodePutShortIfAbsent(apsNode, "GSFDResetTime", (devInfo->adcClock * 15)); // in cycles
 	}
 
-	sshsNodeAddAttrListener(apsNode, moduleData, &apsConfigListener);
+	sshsNodeAddAttributeListener(apsNode, moduleData, &apsConfigListener);
 
 	// Subsystem 3: IMU
 	sshsNode imuNode = sshsGetRelativeNode(moduleData->moduleNode, "imu/");
@@ -467,7 +467,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 	sshsNodePutByteIfAbsent(imuNode, "AccelFullScale", 1);
 	sshsNodePutByteIfAbsent(imuNode, "GyroFullScale", 1);
 
-	sshsNodeAddAttrListener(imuNode, moduleData, &imuConfigListener);
+	sshsNodeAddAttributeListener(imuNode, moduleData, &imuConfigListener);
 
 	// Subsystem 4: External Input
 	sshsNode extNode = sshsGetRelativeNode(moduleData->moduleNode, "externalInput/");
@@ -487,7 +487,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 		sshsNodePutIntIfAbsent(extNode, "GeneratePulseLength", devInfo->logicClock / 2);
 	}
 
-	sshsNodeAddAttrListener(extNode, moduleData, &extInputConfigListener);
+	sshsNodeAddAttributeListener(extNode, moduleData, &extInputConfigListener);
 
 	// Subsystem 9: FX2/3 USB Configuration and USB buffer settings.
 	sshsNode usbNode = sshsGetRelativeNode(moduleData->moduleNode, "usb/");
@@ -497,7 +497,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 	sshsNodePutIntIfAbsent(usbNode, "BufferNumber", 8);
 	sshsNodePutIntIfAbsent(usbNode, "BufferSize", 8192);
 
-	sshsNodeAddAttrListener(usbNode, moduleData, &usbConfigListener);
+	sshsNodeAddAttributeListener(usbNode, moduleData, &usbConfigListener);
 
 	sshsNode sysNode = sshsGetRelativeNode(moduleData->moduleNode, "system/");
 
@@ -516,7 +516,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 	// Ring-buffer setting (only changes value on module init/shutdown cycles).
 	sshsNodePutIntIfAbsent(sysNode, "DataExchangeBufferSize", 64);
 
-	sshsNodeAddAttrListener(sysNode, moduleData, &systemConfigListener);
+	sshsNodeAddAttributeListener(sysNode, moduleData, &systemConfigListener);
 }
 
 static void sendDefaultConfiguration(caerModuleData moduleData, struct caer_davis_info *devInfo) {
@@ -2125,7 +2125,7 @@ static void createVDACBiasSetting(caerModuleData moduleData, sshsNode biasNode, 
 	sshsNodePutByteIfAbsent(biasConfigNode, "currentValue", I8T(currentValue));
 
 	// Add listener for this particular bias.
-	sshsNodeAddAttrListener(biasConfigNode, moduleData, &biasConfigListener);
+	sshsNodeAddAttributeListener(biasConfigNode, moduleData, &biasConfigListener);
 }
 
 static uint16_t generateVDACBiasParent(sshsNode biasNode, const char *biasName) {
@@ -2171,7 +2171,7 @@ static void createCoarseFineBiasSetting(caerModuleData moduleData, sshsNode bias
 	sshsNodePutStringIfAbsent(biasConfigNode, "currentLevel", "Normal");
 
 	// Add listener for this particular bias.
-	sshsNodeAddAttrListener(biasConfigNode, moduleData, &biasConfigListener);
+	sshsNodeAddAttributeListener(biasConfigNode, moduleData, &biasConfigListener);
 }
 
 static uint16_t generateCoarseFineBiasParent(sshsNode biasNode, const char *biasName) {
@@ -2218,7 +2218,7 @@ static void createShiftedSourceBiasSetting(caerModuleData moduleData, sshsNode b
 	sshsNodePutStringIfAbsent(biasConfigNode, "voltageLevel", voltageLevel);
 
 	// Add listener for this particular bias.
-	sshsNodeAddAttrListener(biasConfigNode, moduleData, &biasConfigListener);
+	sshsNodeAddAttributeListener(biasConfigNode, moduleData, &biasConfigListener);
 }
 
 static uint16_t generateShiftedSourceBiasParent(sshsNode biasNode, const char *biasName) {

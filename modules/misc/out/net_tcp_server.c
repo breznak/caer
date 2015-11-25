@@ -55,7 +55,7 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "maxBytesPerPacket", 0);
 
 	// Install default listener to signal configuration updates asynchronously.
-	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerOutputNetTCPServerConfigListener);
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerOutputNetTCPServerConfigListener);
 
 	// Open a TCP server socket for others to connect to.
 	state->serverDescriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);

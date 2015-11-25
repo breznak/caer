@@ -45,7 +45,7 @@ static bool caerOutputUnixSInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "maxBytesPerPacket", 0);
 
 	// Install default listener to signal configuration updates asynchronously.
-	sshsNodeAddAttrListener(moduleData->moduleNode, moduleData, &caerOutputUnixSConfigListener);
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerOutputUnixSConfigListener);
 
 	// Open a Unix local socket on a known path, to be accessed by other processes.
 	state->unixSocketDescriptor = socket(AF_UNIX, SOCK_DGRAM, 0);
