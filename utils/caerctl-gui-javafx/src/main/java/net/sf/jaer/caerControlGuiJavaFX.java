@@ -6,7 +6,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.SocketChannel;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -32,8 +31,6 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
 import net.sf.jaer.jaerfx2.GUISupport;
-import net.sf.jaer.jaerfx2.Numbers.NumberFormat;
-import net.sf.jaer.jaerfx2.Numbers.NumberOptions;
 import net.sf.jaer.jaerfx2.SSHS.SSHSType;
 
 public final class caerControlGuiJavaFX extends Application {
@@ -137,7 +134,7 @@ public final class caerControlGuiJavaFX extends Application {
 		final HBox connectToCaerControlServerGUI = new HBox(10);
 
 		// IP address to connect to.
-		final TextField ipAddress = GUISupport.addTextField(null, "127.0.0.1", null);
+		final TextField ipAddress = GUISupport.addTextField(null, "127.0.0.1");
 		GUISupport.addLabelWithControlsHorizontal(connectToCaerControlServerGUI, "IP address:",
 			"Enter the IP address of the cAER control server.", ipAddress);
 
@@ -159,7 +156,7 @@ public final class caerControlGuiJavaFX extends Application {
 		});
 
 		// Port to connect to.
-		final TextField port = GUISupport.addTextField(null, "4040", null);
+		final TextField port = GUISupport.addTextField(null, "4040");
 		GUISupport.addLabelWithControlsHorizontal(connectToCaerControlServerGUI, "Port:",
 			"Enter the port of the cAER control server.", port);
 
@@ -270,7 +267,7 @@ public final class caerControlGuiJavaFX extends Application {
 	private Pane generateConfigGUI(final String node, final String key, final String type, final String value) {
 		final HBox configBox = new HBox(20);
 
-		GUISupport.addLabel(configBox, String.format("%s (%s):", key, type), null, null, null);
+		GUISupport.addLabel(configBox, String.format("%s (%s):", key, type), null);
 
 		switch (SSHSType.getTypeByName(type)) {
 			case BOOL:
@@ -281,7 +278,7 @@ public final class caerControlGuiJavaFX extends Application {
 						public void changed(final ObservableValue<? extends Boolean> observable, final Boolean oldValue,
 							final Boolean newValue) {
 							// Send new value to cAER control server.
-							sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.getTypeByName(type),
+							sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.BOOL,
 								(newValue) ? ("true") : ("false"));
 							readResponse();
 						}
@@ -290,127 +287,134 @@ public final class caerControlGuiJavaFX extends Application {
 
 			case BYTE: {
 				final IntegerProperty backendValue = new SimpleIntegerProperty(Byte.parseByte(value));
-				GUISupport.addTextNumberField(configBox, backendValue, 3, 0, Byte.MAX_VALUE, NumberFormat.DECIMAL,
-					EnumSet.of(NumberOptions.UNSIGNED), null);
+				GUISupport.addTextNumberField(configBox, backendValue, 0, Byte.MAX_VALUE);
 				backendValue.addListener(new ChangeListener<Number>() {
 					@SuppressWarnings("unused")
 					@Override
 					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
 						final Number newValue) {
 						// Send new value to cAER control server.
-						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.getTypeByName(type),
+						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.BYTE,
 							Byte.toString(newValue.byteValue()));
 						readResponse();
 					}
 				});
+				GUISupport.addSlider(configBox, backendValue.get(), 0, Byte.MAX_VALUE).valueProperty()
+					.bindBidirectional(backendValue);
 				break;
 			}
 
 			case SHORT: {
 				final IntegerProperty backendValue = new SimpleIntegerProperty(Short.parseShort(value));
-				GUISupport.addTextNumberField(configBox, backendValue, 5, 0, Short.MAX_VALUE, NumberFormat.DECIMAL,
-					EnumSet.of(NumberOptions.UNSIGNED), null);
+				GUISupport.addTextNumberField(configBox, backendValue, 0, Short.MAX_VALUE);
 				backendValue.addListener(new ChangeListener<Number>() {
 					@SuppressWarnings("unused")
 					@Override
 					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
 						final Number newValue) {
 						// Send new value to cAER control server.
-						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.getTypeByName(type),
+						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.SHORT,
 							Short.toString(newValue.shortValue()));
 						readResponse();
 					}
 				});
+				GUISupport.addSlider(configBox, backendValue.get(), 0, Short.MAX_VALUE).valueProperty()
+					.bindBidirectional(backendValue);
 				break;
 			}
 
 			case INT: {
 				final IntegerProperty backendValue = new SimpleIntegerProperty(Integer.parseInt(value));
-				GUISupport.addTextNumberField(configBox, backendValue, 10, 0, Integer.MAX_VALUE, NumberFormat.DECIMAL,
-					EnumSet.of(NumberOptions.UNSIGNED), null);
+				GUISupport.addTextNumberField(configBox, backendValue, 0, Integer.MAX_VALUE);
 				backendValue.addListener(new ChangeListener<Number>() {
 					@SuppressWarnings("unused")
 					@Override
 					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
 						final Number newValue) {
 						// Send new value to cAER control server.
-						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.getTypeByName(type),
+						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.INT,
 							Integer.toString(newValue.intValue()));
 						readResponse();
 					}
 				});
+				GUISupport.addSlider(configBox, backendValue.get(), 0, Integer.MAX_VALUE).valueProperty()
+					.bindBidirectional(backendValue);
 				break;
 			}
 
 			case LONG: {
 				final LongProperty backendValue = new SimpleLongProperty(Long.parseLong(value));
-				GUISupport.addTextNumberField(configBox, backendValue, 19, 0, Long.MAX_VALUE, NumberFormat.DECIMAL,
-					EnumSet.of(NumberOptions.UNSIGNED), null);
+				GUISupport.addTextNumberField(configBox, backendValue, 0, Long.MAX_VALUE);
 				backendValue.addListener(new ChangeListener<Number>() {
 					@SuppressWarnings("unused")
 					@Override
 					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
 						final Number newValue) {
 						// Send new value to cAER control server.
-						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.getTypeByName(type),
+						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.LONG,
 							Long.toString(newValue.longValue()));
 						readResponse();
 					}
 				});
+				GUISupport.addSlider(configBox, backendValue.get(), 0, Long.MAX_VALUE).valueProperty()
+					.bindBidirectional(backendValue);
 				break;
 			}
 
 			case FLOAT: {
 				final DoubleProperty backendValue = new SimpleDoubleProperty(Float.parseFloat(value));
-				GUISupport.addTextNumberField(configBox, backendValue, 0, Float.MAX_VALUE, null);
+				GUISupport.addTextNumberField(configBox, backendValue, Float.MIN_VALUE, Float.MAX_VALUE);
 				backendValue.addListener(new ChangeListener<Number>() {
 					@SuppressWarnings("unused")
 					@Override
 					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
 						final Number newValue) {
 						// Send new value to cAER control server.
-						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.getTypeByName(type),
+						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.FLOAT,
 							Float.toString(newValue.floatValue()));
 						readResponse();
 					}
 				});
+				GUISupport.addSlider(configBox, backendValue.get(), Float.MIN_VALUE, Float.MAX_VALUE).valueProperty()
+					.bindBidirectional(backendValue);
 				break;
 			}
 
 			case DOUBLE: {
 				final DoubleProperty backendValue = new SimpleDoubleProperty(Double.parseDouble(value));
-				GUISupport.addTextNumberField(configBox, backendValue, 0, Double.MAX_VALUE, null);
+				GUISupport.addTextNumberField(configBox, backendValue, Double.MIN_VALUE, Double.MAX_VALUE);
 				backendValue.addListener(new ChangeListener<Number>() {
 					@SuppressWarnings("unused")
 					@Override
 					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
 						final Number newValue) {
 						// Send new value to cAER control server.
-						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.getTypeByName(type),
+						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.DOUBLE,
 							Double.toString(newValue.doubleValue()));
 						readResponse();
 					}
 				});
+				GUISupport.addSlider(configBox, backendValue.get(), Double.MIN_VALUE, Double.MAX_VALUE).valueProperty()
+					.bindBidirectional(backendValue);
 				break;
 			}
 
 			case STRING:
-				GUISupport.addTextField(configBox, value, null).textProperty()
-					.addListener(new ChangeListener<String>() {
-						@SuppressWarnings("unused")
-						@Override
-						public void changed(final ObservableValue<? extends String> observable, final String oldValue,
-							final String newValue) {
-							// Send new value to cAER control server.
-							sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.getTypeByName(type), newValue);
-							readResponse();
-						}
-					});
+				GUISupport.addTextField(configBox, value).textProperty().addListener(new ChangeListener<String>() {
+					@SuppressWarnings("unused")
+					@Override
+					public void changed(final ObservableValue<? extends String> observable, final String oldValue,
+						final String newValue) {
+						// Send new value to cAER control server.
+						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.STRING, newValue);
+						readResponse();
+					}
+				});
 				break;
 
 			default:
 				// Unknown value type, just display the returned string.
-				GUISupport.addLabel(configBox, value, null, null, null);
+				GUISupport.addLabel(configBox, value, null);
 				break;
 		}
 
