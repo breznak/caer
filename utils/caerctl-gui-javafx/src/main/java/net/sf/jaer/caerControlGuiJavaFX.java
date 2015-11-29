@@ -14,26 +14,27 @@ import org.apache.commons.validator.routines.InetAddressValidator;
 import org.apache.commons.validator.routines.IntegerValidator;
 
 import javafx.application.Application;
+import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.IntegerProperty;
+import javafx.beans.property.LongProperty;
+import javafx.beans.property.SimpleDoubleProperty;
+import javafx.beans.property.SimpleIntegerProperty;
+import javafx.beans.property.SimpleLongProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.event.EventHandler;
-import javafx.geometry.Rectangle2D;
-import javafx.scene.Scene;
-import javafx.scene.control.ScrollPane;
-import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
 import javafx.scene.input.MouseEvent;
-import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
-import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
-import net.sf.jaer.Numbers.NumberFormat;
-import net.sf.jaer.Numbers.NumberOptions;
+import net.sf.jaer.jaerfx2.GUISupport;
+import net.sf.jaer.jaerfx2.Numbers.NumberFormat;
+import net.sf.jaer.jaerfx2.Numbers.NumberOptions;
+import net.sf.jaer.jaerfx2.SSHS.SSHSType;
 
 public final class caerControlGuiJavaFX extends Application {
 	public static enum caerControlConfigAction {
@@ -76,79 +77,14 @@ public final class caerControlGuiJavaFX extends Application {
 		}
 	}
 
-	public static enum caerControlConfigType {
-		UNKNOWN(-1, null),
-		BOOL(0, "bool"),
-		BYTE(1, "byte"),
-		SHORT(2, "short"),
-		INT(3, "int"),
-		LONG(4, "long"),
-		FLOAT(5, "float"),
-		DOUBLE(6, "double"),
-		STRING(7, "string");
-
-		private final byte code;
-		private final String name;
-
-		private static final Map<String, caerControlConfigType> nameToEnumMap = Collections
-			.unmodifiableMap(caerControlConfigType.initNameToEnumMap());
-		private static final Map<Byte, caerControlConfigType> codeToEnumMap = Collections
-			.unmodifiableMap(caerControlConfigType.initCodeToEnumMap());
-
-		private static Map<String, caerControlConfigType> initNameToEnumMap() {
-			final Map<String, caerControlConfigType> initNameToEnumMap = new HashMap<>();
-			for (final caerControlConfigType type : caerControlConfigType.values()) {
-				initNameToEnumMap.put(type.name, type);
-			}
-			return (initNameToEnumMap);
-		}
-
-		private static Map<Byte, caerControlConfigType> initCodeToEnumMap() {
-			final Map<Byte, caerControlConfigType> initCodeToEnumMap = new HashMap<>();
-			for (final caerControlConfigType type : caerControlConfigType.values()) {
-				initCodeToEnumMap.put(type.code, type);
-			}
-			return (initCodeToEnumMap);
-		}
-
-		caerControlConfigType(final int code, final String name) {
-			this.code = (byte) code;
-			this.name = name;
-		}
-
-		public byte getCode() {
-			return (code);
-		}
-
-		public String getName() {
-			return (name);
-		}
-
-		public static caerControlConfigType getTypeByName(final String name) {
-			if (caerControlConfigType.nameToEnumMap.containsKey(name)) {
-				return (caerControlConfigType.nameToEnumMap.get(name));
-			}
-
-			return (null);
-		}
-
-		public static caerControlConfigType getTypeByCode(final byte code) {
-			if (caerControlConfigType.codeToEnumMap.containsKey(code)) {
-				return (caerControlConfigType.codeToEnumMap.get(code));
-			}
-
-			return (null);
-		}
-	}
-
 	public static class caerControlResponse {
 		private final caerControlConfigAction action;
-		private final caerControlConfigType type;
+		private final SSHSType type;
 		private final String message;
 
 		public caerControlResponse(final byte action, final byte type, final String message) {
 			this.action = caerControlConfigAction.getActionByCode(action);
-			this.type = caerControlConfigType.getTypeByCode(type);
+			this.type = SSHSType.getTypeByCode(type);
 			this.message = message;
 		}
 
@@ -156,7 +92,7 @@ public final class caerControlGuiJavaFX extends Application {
 			return (action);
 		}
 
-		public caerControlConfigType getType() {
+		public SSHSType getType() {
 			return (type);
 		}
 
@@ -175,54 +111,26 @@ public final class caerControlGuiJavaFX extends Application {
 		Application.launch(args);
 	}
 
-	private static void addToTab(final TabPane tabPane, final Pane content, final String name) {
-		final Tab t = new Tab(name);
-
-		if (content != null) {
-			final ScrollPane p = new ScrollPane(content);
-
-			p.setFitToWidth(true);
-			p.setPrefHeight(Screen.getPrimary().getVisualBounds().getHeight());
-			// TODO: is there a better way to maximize the ScrollPane content?
-
-			t.setContent(p);
-		}
-
-		t.setClosable(false);
-
-		tabPane.getTabs().add(t);
-	}
-
 	@Override
 	public void start(final Stage primaryStage) {
-		GUISupport.checkJavaVersion(primaryStage);
+		if (GUISupport.checkJavaVersion(primaryStage)) {
+			final VBox gui = new VBox(20);
+			gui.getChildren().add(connectToCaerControlServerGUI());
+			gui.getChildren().add(mainGUI);
 
-		final VBox gui = new VBox(20);
-		gui.getChildren().add(connectToCaerControlServerGUI());
-		gui.getChildren().add(mainGUI);
-
-		final BorderPane main = new BorderPane();
-		main.setCenter(gui);
-
-		final Rectangle2D screen = Screen.getPrimary().getVisualBounds();
-		final Scene rootScene = new Scene(main, screen.getWidth(), screen.getHeight(), Color.GRAY);
-
-		primaryStage.setTitle("cAER Control Utility (JavaFX GUI)");
-		primaryStage.setScene(rootScene);
-
-		primaryStage.setOnCloseRequest(new EventHandler<WindowEvent>() {
-			@Override
-			public void handle(@SuppressWarnings("unused") final WindowEvent evt) {
-				try {
-					cleanupConnection();
-				}
-				catch (final IOException e) {
-					// Ignore this on closing.
-				}
-			}
-		});
-
-		primaryStage.show();
+			GUISupport.startGUI(primaryStage, gui, "cAER Control Utility (JavaFX GUI)",
+				new EventHandler<WindowEvent>() {
+					@Override
+					public void handle(@SuppressWarnings("unused") final WindowEvent evt) {
+						try {
+							cleanupConnection();
+						}
+						catch (final IOException e) {
+							// Ignore this on closing.
+						}
+					}
+				});
+		}
 	}
 
 	private HBox connectToCaerControlServerGUI() {
@@ -306,8 +214,7 @@ public final class caerControlGuiJavaFX extends Application {
 		// Read and parse response.
 		final caerControlResponse keyResponse = readResponse();
 
-		if ((keyResponse.getAction() != caerControlConfigAction.ERROR)
-			&& (keyResponse.getType() == caerControlConfigType.STRING)) {
+		if ((keyResponse.getAction() != caerControlConfigAction.ERROR) && (keyResponse.getType() == SSHSType.STRING)) {
 			// For each key, query its value type and then its actual value, and
 			// build up the proper configuration control knob.
 			for (final String key : keyResponse.getMessage().split("\0")) {
@@ -318,19 +225,18 @@ public final class caerControlGuiJavaFX extends Application {
 				final caerControlResponse typeResponse = readResponse();
 
 				if ((typeResponse.getAction() != caerControlConfigAction.ERROR)
-					&& (typeResponse.getType() == caerControlConfigType.STRING)) {
+					&& (typeResponse.getType() == SSHSType.STRING)) {
 					// For each key and type, we get the current value and then
 					// build the configuration control knob.
 					for (final String type : typeResponse.getMessage().split("\0")) {
 						// Query current value.
-						sendCommand(caerControlConfigAction.GET, node, key, caerControlConfigType.getTypeByName(type),
-							null);
+						sendCommand(caerControlConfigAction.GET, node, key, SSHSType.getTypeByName(type), null);
 
 						// Read and parse response.
 						final caerControlResponse valueResponse = readResponse();
 
 						if ((valueResponse.getAction() != caerControlConfigAction.ERROR)
-							&& (valueResponse.getType() != caerControlConfigType.UNKNOWN)) {
+							&& (valueResponse.getType() != SSHSType.UNKNOWN)) {
 							// This is the current value. We have everything.
 							contentPane.getChildren()
 								.add(generateConfigGUI(node, key, type, valueResponse.getMessage()));
@@ -347,14 +253,14 @@ public final class caerControlGuiJavaFX extends Application {
 		final caerControlResponse childResponse = readResponse();
 
 		if ((childResponse.getAction() != caerControlConfigAction.ERROR)
-			&& (childResponse.getType() == caerControlConfigType.STRING)) {
+			&& (childResponse.getType() == SSHSType.STRING)) {
 			// Split up message containing child nodes by using the NUL
 			// terminator as separator.
 			final TabPane tabPane = new TabPane();
 			contentPane.getChildren().add(tabPane);
 
 			for (final String childNode : childResponse.getMessage().split("\0")) {
-				caerControlGuiJavaFX.addToTab(tabPane, populateInterface(node + childNode + "/"), childNode);
+				GUISupport.addTab(tabPane, populateInterface(node + childNode + "/"), childNode);
 			}
 		}
 
@@ -366,7 +272,7 @@ public final class caerControlGuiJavaFX extends Application {
 
 		GUISupport.addLabel(configBox, String.format("%s (%s):", key, type), null, null, null);
 
-		switch (caerControlConfigType.getTypeByName(type)) {
+		switch (SSHSType.getTypeByName(type)) {
 			case BOOL:
 				GUISupport.addCheckBox(configBox, null, value.equals("true")).selectedProperty()
 					.addListener(new ChangeListener<Boolean>() {
@@ -375,99 +281,128 @@ public final class caerControlGuiJavaFX extends Application {
 						public void changed(final ObservableValue<? extends Boolean> observable, final Boolean oldValue,
 							final Boolean newValue) {
 							// Send new value to cAER control server.
-							sendCommand(caerControlConfigAction.PUT, node, key,
-								caerControlConfigType.getTypeByName(type), (newValue) ? ("true") : ("false"));
+							sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.getTypeByName(type),
+								(newValue) ? ("true") : ("false"));
 							readResponse();
 						}
 					});
 				break;
 
-			case BYTE:
-				GUISupport
-					.addTextNumberField(configBox, Integer.parseInt(value), 3, 0, 255, NumberFormat.DECIMAL,
-						EnumSet.of(NumberOptions.UNSIGNED), null)
-					.textProperty().addListener(new ChangeListener<String>() {
-						@SuppressWarnings("unused")
-						@Override
-						public void changed(ObservableValue<? extends String> observable, String oldValue,
-							String newValue) {
-							// Send new value to cAER control server.
-							sendCommand(caerControlConfigAction.PUT, node, key,
-								caerControlConfigType.getTypeByName(type), newValue);
-							readResponse();
-						}
-					});
+			case BYTE: {
+				final IntegerProperty backendValue = new SimpleIntegerProperty(Byte.parseByte(value));
+				GUISupport.addTextNumberField(configBox, backendValue, 3, 0, Byte.MAX_VALUE, NumberFormat.DECIMAL,
+					EnumSet.of(NumberOptions.UNSIGNED), null);
+				backendValue.addListener(new ChangeListener<Number>() {
+					@SuppressWarnings("unused")
+					@Override
+					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
+						final Number newValue) {
+						// Send new value to cAER control server.
+						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.getTypeByName(type),
+							Byte.toString(newValue.byteValue()));
+						readResponse();
+					}
+				});
 				break;
+			}
 
-			case SHORT:
-				GUISupport
-					.addTextNumberField(configBox, Integer.parseInt(value), 5, 0, 65535, NumberFormat.DECIMAL,
-						EnumSet.of(NumberOptions.UNSIGNED), null)
-					.textProperty().addListener(new ChangeListener<String>() {
-						@SuppressWarnings("unused")
-						@Override
-						public void changed(ObservableValue<? extends String> observable, String oldValue,
-							String newValue) {
-							// Send new value to cAER control server.
-							sendCommand(caerControlConfigAction.PUT, node, key,
-								caerControlConfigType.getTypeByName(type), newValue);
-							readResponse();
-						}
-					});
+			case SHORT: {
+				final IntegerProperty backendValue = new SimpleIntegerProperty(Short.parseShort(value));
+				GUISupport.addTextNumberField(configBox, backendValue, 5, 0, Short.MAX_VALUE, NumberFormat.DECIMAL,
+					EnumSet.of(NumberOptions.UNSIGNED), null);
+				backendValue.addListener(new ChangeListener<Number>() {
+					@SuppressWarnings("unused")
+					@Override
+					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
+						final Number newValue) {
+						// Send new value to cAER control server.
+						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.getTypeByName(type),
+							Short.toString(newValue.shortValue()));
+						readResponse();
+					}
+				});
 				break;
+			}
 
-			case INT:
-				GUISupport
-					.addTextNumberField(configBox, Long.parseLong(value), 10, 0, 4294967295L, NumberFormat.DECIMAL,
-						EnumSet.of(NumberOptions.UNSIGNED), null)
-					.textProperty().addListener(new ChangeListener<String>() {
-						@SuppressWarnings("unused")
-						@Override
-						public void changed(ObservableValue<? extends String> observable, String oldValue,
-							String newValue) {
-							// Send new value to cAER control server.
-							sendCommand(caerControlConfigAction.PUT, node, key,
-								caerControlConfigType.getTypeByName(type), newValue);
-							readResponse();
-						}
-					});
+			case INT: {
+				final IntegerProperty backendValue = new SimpleIntegerProperty(Integer.parseInt(value));
+				GUISupport.addTextNumberField(configBox, backendValue, 10, 0, Integer.MAX_VALUE, NumberFormat.DECIMAL,
+					EnumSet.of(NumberOptions.UNSIGNED), null);
+				backendValue.addListener(new ChangeListener<Number>() {
+					@SuppressWarnings("unused")
+					@Override
+					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
+						final Number newValue) {
+						// Send new value to cAER control server.
+						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.getTypeByName(type),
+							Integer.toString(newValue.intValue()));
+						readResponse();
+					}
+				});
 				break;
+			}
 
-			case LONG:
-				GUISupport
-					.addTextNumberField(configBox, Long.parseLong(value), 19, 0, Long.MAX_VALUE, NumberFormat.DECIMAL,
-						EnumSet.of(NumberOptions.UNSIGNED), null)
-					.textProperty().addListener(new ChangeListener<String>() {
-						@SuppressWarnings("unused")
-						@Override
-						public void changed(ObservableValue<? extends String> observable, String oldValue,
-							String newValue) {
-							// Send new value to cAER control server.
-							sendCommand(caerControlConfigAction.PUT, node, key,
-								caerControlConfigType.getTypeByName(type), newValue);
-							readResponse();
-						}
-					});
+			case LONG: {
+				final LongProperty backendValue = new SimpleLongProperty(Long.parseLong(value));
+				GUISupport.addTextNumberField(configBox, backendValue, 19, 0, Long.MAX_VALUE, NumberFormat.DECIMAL,
+					EnumSet.of(NumberOptions.UNSIGNED), null);
+				backendValue.addListener(new ChangeListener<Number>() {
+					@SuppressWarnings("unused")
+					@Override
+					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
+						final Number newValue) {
+						// Send new value to cAER control server.
+						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.getTypeByName(type),
+							Long.toString(newValue.longValue()));
+						readResponse();
+					}
+				});
 				break;
+			}
 
-			case FLOAT:
-
+			case FLOAT: {
+				final DoubleProperty backendValue = new SimpleDoubleProperty(Float.parseFloat(value));
+				GUISupport.addTextNumberField(configBox, backendValue, 0, Float.MAX_VALUE, null);
+				backendValue.addListener(new ChangeListener<Number>() {
+					@SuppressWarnings("unused")
+					@Override
+					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
+						final Number newValue) {
+						// Send new value to cAER control server.
+						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.getTypeByName(type),
+							Float.toString(newValue.floatValue()));
+						readResponse();
+					}
+				});
 				break;
+			}
 
-			case DOUBLE:
-
+			case DOUBLE: {
+				final DoubleProperty backendValue = new SimpleDoubleProperty(Double.parseDouble(value));
+				GUISupport.addTextNumberField(configBox, backendValue, 0, Double.MAX_VALUE, null);
+				backendValue.addListener(new ChangeListener<Number>() {
+					@SuppressWarnings("unused")
+					@Override
+					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
+						final Number newValue) {
+						// Send new value to cAER control server.
+						sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.getTypeByName(type),
+							Double.toString(newValue.doubleValue()));
+						readResponse();
+					}
+				});
 				break;
+			}
 
 			case STRING:
 				GUISupport.addTextField(configBox, value, null).textProperty()
 					.addListener(new ChangeListener<String>() {
 						@SuppressWarnings("unused")
 						@Override
-						public void changed(ObservableValue<? extends String> observable, String oldValue,
-							String newValue) {
+						public void changed(final ObservableValue<? extends String> observable, final String oldValue,
+							final String newValue) {
 							// Send new value to cAER control server.
-							sendCommand(caerControlConfigAction.PUT, node, key,
-								caerControlConfigType.getTypeByName(type), newValue);
+							sendCommand(caerControlConfigAction.PUT, node, key, SSHSType.getTypeByName(type), newValue);
 							readResponse();
 						}
 					});
@@ -526,7 +461,7 @@ public final class caerControlGuiJavaFX extends Application {
 	}
 
 	private void sendCommand(final caerControlConfigAction action, final String node, final String key,
-		final caerControlConfigType type, final String value) {
+		final SSHSType type, final String value) {
 		netBuf.clear();
 
 		// Fill buffer with values.
