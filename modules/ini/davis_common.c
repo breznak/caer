@@ -2164,7 +2164,7 @@ static void createCoarseFineBiasSetting(caerModuleData moduleData, sshsNode bias
 
 	// Add bias settings.
 	sshsNodePutByteIfAbsent(biasConfigNode, "coarseValue", I8T(coarseValue));
-	sshsNodePutByteIfAbsent(biasConfigNode, "fineValue", I8T(fineValue));
+	sshsNodePutShortIfAbsent(biasConfigNode, "fineValue", I16T(fineValue));
 	sshsNodePutBoolIfAbsent(biasConfigNode, "enabled", enabled);
 	sshsNodePutStringIfAbsent(biasConfigNode, "sex", sex);
 	sshsNodePutStringIfAbsent(biasConfigNode, "type", type);
@@ -2191,7 +2191,7 @@ static uint16_t generateCoarseFineBiasParent(sshsNode biasNode, const char *bias
 static uint16_t generateCoarseFineBias(sshsNode biasNode) {
 	// Build up bias value from all its components.
 	struct caer_bias_coarsefine biasValue = { .coarseValue = U8T(sshsNodeGetByte(biasNode, "coarseValue")), .fineValue =
-		U8T(sshsNodeGetByte(biasNode, "fineValue")), .enabled = sshsNodeGetBool(biasNode, "enabled"), .sexN =
+		U8T(sshsNodeGetShort(biasNode, "fineValue")), .enabled = sshsNodeGetBool(biasNode, "enabled"), .sexN =
 		caerStrEquals(sshsNodeGetString(biasNode, "sex"), "N"), .typeNormal = caerStrEquals(
 		sshsNodeGetString(biasNode, "type"), "Normal"), .currentLevelNormal = caerStrEquals(
 		sshsNodeGetString(biasNode, "currentLevel"), "Normal"), };
