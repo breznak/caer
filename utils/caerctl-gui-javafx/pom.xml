@@ -4,7 +4,7 @@
 
 	<groupId>net.sf.jaer</groupId>
 	<artifactId>caerctl-gui-javafx</artifactId>
-	<version>0.2</version>
+	<version>0.5</version>
 	<packaging>jar</packaging>
 
 	<name>caerctl-gui-javafx</name>
@@ -45,12 +45,12 @@
 		<dependency>
 			<groupId>commons-validator</groupId>
 			<artifactId>commons-validator</artifactId>
-			<version>1.4.1</version>
+			<version>1.5.0</version>
 		</dependency>
 		<dependency>
 			<groupId>net.sf.jaer</groupId>
 			<artifactId>jaerfx2</artifactId>
-			<version>0.7</version>
+			<version>0.8</version>
 		</dependency>
 	</dependencies>
 

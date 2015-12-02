@@ -1,5 +1,8 @@
 package net.sf.jaer;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -9,27 +12,30 @@ import java.nio.channels.SocketChannel;
 import org.apache.commons.validator.routines.InetAddressValidator;
 import org.apache.commons.validator.routines.IntegerValidator;
 
+import com.google.common.collect.ImmutableList;
+
 import javafx.application.Application;
+import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.FloatProperty;
 import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.LongProperty;
-import javafx.beans.value.ChangeListener;
-import javafx.beans.value.ObservableValue;
-import javafx.event.EventHandler;
+import javafx.beans.property.StringProperty;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
-import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
-import javafx.stage.WindowEvent;
 import net.sf.jaer.jaerfx2.CAERCommunication;
 import net.sf.jaer.jaerfx2.GUISupport;
-import net.sf.jaer.jaerfx2.SSHS.SSHSAttributeValue;
+import net.sf.jaer.jaerfx2.SSHS;
 import net.sf.jaer.jaerfx2.SSHS.SSHSType;
+import net.sf.jaer.jaerfx2.SSHSJavaFX;
+import net.sf.jaer.jaerfx2.SSHSNode;
+import net.sf.jaer.jaerfx2.SSHSNode.SSHSAttrListener.AttributeEvents;
 
 public final class caerControlGuiJavaFX extends Application {
 	private final VBox mainGUI = new VBox(20);
@@ -49,18 +55,14 @@ public final class caerControlGuiJavaFX extends Application {
 			gui.getChildren().add(connectToCaerControlServerGUI());
 			gui.getChildren().add(mainGUI);
 
-			GUISupport.startGUI(primaryStage, gui, "cAER Control Utility (JavaFX GUI)",
-				new EventHandler<WindowEvent>() {
-					@Override
-					public void handle(@SuppressWarnings("unused") final WindowEvent evt) {
-						try {
-							cleanupConnection();
-						}
-						catch (final IOException e) {
-							// Ignore this on closing.
-						}
-					}
-				});
+			GUISupport.startGUI(primaryStage, gui, "cAER Control Utility (JavaFX GUI)", (event) -> {
+				try {
+					cleanupConnection();
+				}
+				catch (final IOException e) {
+					// Ignore this on closing.
+				}
+			});
 		}
 	}
 
@@ -72,20 +74,15 @@ public final class caerControlGuiJavaFX extends Application {
 		GUISupport.addLabelWithControlsHorizontal(connectToCaerControlServerGUI, "IP address:",
 			"Enter the IP address of the cAER control server.", ipAddress);
 
-		ipAddress.textProperty().addListener(new ChangeListener<String>() {
-			@SuppressWarnings("unused")
-			@Override
-			public void changed(final ObservableValue<? extends String> observable, final String oldValue,
-				final String newValue) {
-				// Validate IP address.
-				final InetAddressValidator ipValidator = InetAddressValidator.getInstance();
+		ipAddress.textProperty().addListener((valueRef, oldValue, newValue) -> {
+			// Validate IP address.
+			final InetAddressValidator ipValidator = InetAddressValidator.getInstance();
 
-				if (ipValidator.isValidInet4Address(newValue)) {
-					ipAddress.setStyle("");
-				}
-				else {
-					ipAddress.setStyle("-fx-background-color: #FF5757");
-				}
+			if (ipValidator.isValidInet4Address(newValue)) {
+				ipAddress.setStyle("");
+			}
+			else {
+				ipAddress.setStyle("-fx-background-color: #FF5757");
 			}
 		});
 
@@ -94,44 +91,71 @@ public final class caerControlGuiJavaFX extends Application {
 		GUISupport.addLabelWithControlsHorizontal(connectToCaerControlServerGUI, "Port:",
 			"Enter the port of the cAER control server.", port);
 
-		port.textProperty().addListener(new ChangeListener<String>() {
-			@SuppressWarnings("unused")
-			@Override
-			public void changed(final ObservableValue<? extends String> observable, final String oldValue,
-				final String newValue) {
-				// Validate port.
-				final IntegerValidator portValidator = IntegerValidator.getInstance();
+		port.textProperty().addListener((valueRef, oldValue, newValue) -> {
+			// Validate port.
+			final IntegerValidator portValidator = IntegerValidator.getInstance();
 
-				if (portValidator.isInRange(Integer.parseInt(newValue), 1, 65535)) {
-					port.setStyle("");
-				}
-				else {
-					port.setStyle("-fx-background-color: #FF5757");
-				}
+			if (portValidator.isInRange(Integer.parseInt(newValue), 1, 65535)) {
+				port.setStyle("");
+			}
+			else {
+				port.setStyle("-fx-background-color: #FF5757");
 			}
 		});
 
 		// Connect button.
-		GUISupport.addButtonWithMouseClickedHandler(connectToCaerControlServerGUI, "Connect", true, null,
-			new EventHandler<MouseEvent>() {
-				@SuppressWarnings("unused")
-				@Override
-				public void handle(final MouseEvent event) {
-					try {
-						cleanupConnection();
+		GUISupport.addButtonWithMouseClickedHandler(connectToCaerControlServerGUI, "Connect", true, null, (event) -> {
+			try {
+				cleanupConnection();
 
-						controlSocket = SocketChannel
-							.open(new InetSocketAddress(ipAddress.getText(), Integer.parseInt(port.getText())));
+				controlSocket = SocketChannel
+					.open(new InetSocketAddress(ipAddress.getText(), Integer.parseInt(port.getText())));
 
-						mainGUI.getChildren().add(populateInterface("/"));
-					}
-					catch (NumberFormatException | IOException e) {
-						GUISupport.showDialogException(e);
-					}
-				}
-			});
+				mainGUI.getChildren().add(caerControlGuiJavaFX.saveLoadInterface());
+				mainGUI.getChildren().add(populateInterface("/"));
+			}
+			catch (NumberFormatException | IOException e) {
+				GUISupport.showDialogException(e);
+			}
+		});
 
 		return (connectToCaerControlServerGUI);
+	}
+
+	private static Pane saveLoadInterface() {
+		final HBox contentPane = new HBox(20);
+
+		// Save current configuration button.
+		GUISupport.addButtonWithMouseClickedHandler(contentPane, "Save Configuration", true, null, (event) -> {
+			final File save = GUISupport.showDialogSaveFile("XML Config File", ImmutableList.of("*.xml"));
+			if (save != null) {
+				try (FileOutputStream saveOS = new FileOutputStream(save)) {
+					SSHS.GLOBAL.getNode("/").exportSubTreeToXML(saveOS, ImmutableList.of("shutdown"));
+				}
+				catch (final Exception e) {
+					// Ignore, no file exceptions realistically possible at this
+					// point, due to checks performed in the GUISupport dialog.
+					e.printStackTrace();
+				}
+			}
+		});
+
+		// Load new configuration button.
+		GUISupport.addButtonWithMouseClickedHandler(contentPane, "Load Configuration", true, null, (event) -> {
+			final File load = GUISupport.showDialogLoadFile("XML Config File", ImmutableList.of("*.xml"), null);
+			if (load != null) {
+				try (FileInputStream loadOS = new FileInputStream(load)) {
+					SSHS.GLOBAL.getNode("/").importSubTreeFromXML(loadOS, true);
+				}
+				catch (final Exception e) {
+					// Ignore, no file exceptions realistically possible at this
+					// point, due to checks performed in the GUISupport dialog.
+					e.printStackTrace();
+				}
+			}
+		});
+
+		return (contentPane);
 	}
 
 	// Add tabs recursively with configuration values to explore.
@@ -215,145 +239,215 @@ public final class caerControlGuiJavaFX extends Application {
 		l.setPrefWidth(200);
 		l.setAlignment(Pos.CENTER_RIGHT);
 
-		switch (SSHSType.getTypeByName(type)) {
-			case BOOL:
-				GUISupport.addCheckBox(configBox, null, value.equals("true")).selectedProperty()
-					.addListener(new ChangeListener<Boolean>() {
-						@SuppressWarnings("unused")
-						@Override
-						public void changed(final ObservableValue<? extends Boolean> observable, final Boolean oldValue,
-							final Boolean newValue) {
-							// Send new value to cAER control server.
-							CAERCommunication.sendCommand(controlSocket, netBuf,
-								CAERCommunication.caerControlConfigAction.PUT, node, key, null,
-								new SSHSAttributeValue(newValue));
-							CAERCommunication.readResponse(controlSocket, netBuf);
-						}
-					});
-				break;
+		final SSHSNode nnode = SSHS.GLOBAL.getNode(node);
 
-			case BYTE: {
-				final IntegerProperty backendValue = GUISupport.addTextNumberFieldWithSlider(configBox,
-					Byte.parseByte(value), 0, Byte.MAX_VALUE);
-				backendValue.addListener(new ChangeListener<Number>() {
-					@SuppressWarnings("unused")
-					@Override
-					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
-						final Number newValue) {
-						// Send new value to cAER control server.
+		switch (SSHSType.getTypeByName(type)) {
+			case BOOL: {
+				// Create SSHS attribute and initialize it.
+				nnode.putBool(key, value.equals("true"));
+
+				// Create GUI element and initialize it, get its backing value
+				// property.
+				final BooleanProperty backendValue = GUISupport.addCheckBox(configBox, null, value.equals("true"))
+					.selectedProperty();
+
+				// Connect the GUI value property to the SSHS attribute.
+				SSHSJavaFX.booleanConnector(backendValue, nnode, key);
+
+				// Add listener to SSHS attribute to send changes back to cAER
+				// control server.
+				nnode.addAttributeListener(null, (cnode, userData, event, changeKey, changeType, changeValue) -> {
+					if ((event == AttributeEvents.ATTRIBUTE_MODIFIED) && (changeType == SSHSType.BOOL)
+						&& changeKey.equals(key)) {
 						CAERCommunication.sendCommand(controlSocket, netBuf,
-							CAERCommunication.caerControlConfigAction.PUT, node, key, null,
-							new SSHSAttributeValue(newValue.byteValue()));
+							CAERCommunication.caerControlConfigAction.PUT, node, key, null, changeValue);
 						CAERCommunication.readResponse(controlSocket, netBuf);
 					}
 				});
+
+				break;
+			}
+
+			case BYTE: {
+				// Create SSHS attribute and initialize it.
+				nnode.putByte(key, Byte.parseByte(value));
+
+				// Create GUI element and initialize it, get its backing value
+				// property.
+				final IntegerProperty backendValue = GUISupport.addTextNumberFieldWithSlider(configBox,
+					Byte.parseByte(value), 0, Byte.MAX_VALUE);
+
+				// Connect the GUI value property to the SSHS attribute.
+				SSHSJavaFX.byteConnector(backendValue, nnode, key);
+
+				// Add listener to SSHS attribute to send changes back to cAER
+				// control server.
+				nnode.addAttributeListener(null, (cnode, userData, event, changeKey, changeType, changeValue) -> {
+					if ((event == AttributeEvents.ATTRIBUTE_MODIFIED) && (changeType == SSHSType.BYTE)
+						&& changeKey.equals(key)) {
+						CAERCommunication.sendCommand(controlSocket, netBuf,
+							CAERCommunication.caerControlConfigAction.PUT, node, key, null, changeValue);
+						CAERCommunication.readResponse(controlSocket, netBuf);
+					}
+				});
+
 				break;
 			}
 
 			case SHORT: {
+				// Create SSHS attribute and initialize it.
+				nnode.putShort(key, Short.parseShort(value));
+
+				// Create GUI element and initialize it, get its backing value
+				// property.
 				final IntegerProperty backendValue = GUISupport.addTextNumberFieldWithSlider(configBox,
 					Short.parseShort(value), 0, Short.MAX_VALUE);
-				backendValue.addListener(new ChangeListener<Number>() {
-					@SuppressWarnings("unused")
-					@Override
-					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
-						final Number newValue) {
-						// Send new value to cAER control server.
+
+				// Connect the GUI value property to the SSHS attribute.
+				SSHSJavaFX.shortConnector(backendValue, nnode, key);
+
+				// Add listener to SSHS attribute to send changes back to cAER
+				// control server.
+				nnode.addAttributeListener(null, (cnode, userData, event, changeKey, changeType, changeValue) -> {
+					if ((event == AttributeEvents.ATTRIBUTE_MODIFIED) && (changeType == SSHSType.SHORT)
+						&& changeKey.equals(key)) {
 						CAERCommunication.sendCommand(controlSocket, netBuf,
-							CAERCommunication.caerControlConfigAction.PUT, node, key, null,
-							new SSHSAttributeValue(newValue.shortValue()));
+							CAERCommunication.caerControlConfigAction.PUT, node, key, null, changeValue);
 						CAERCommunication.readResponse(controlSocket, netBuf);
 					}
 				});
+
 				break;
 			}
 
 			case INT: {
+				// Create SSHS attribute and initialize it.
+				nnode.putInt(key, Integer.parseInt(value));
+
+				// Create GUI element and initialize it, get its backing value
+				// property.
 				final IntegerProperty backendValue = GUISupport.addTextNumberFieldWithSlider(configBox,
 					Integer.parseInt(value), 0, Integer.MAX_VALUE);
-				backendValue.addListener(new ChangeListener<Number>() {
-					@SuppressWarnings("unused")
-					@Override
-					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
-						final Number newValue) {
-						// Send new value to cAER control server.
+
+				// Connect the GUI value property to the SSHS attribute.
+				SSHSJavaFX.integerConnector(backendValue, nnode, key);
+
+				// Add listener to SSHS attribute to send changes back to cAER
+				// control server.
+				nnode.addAttributeListener(null, (cnode, userData, event, changeKey, changeType, changeValue) -> {
+					if ((event == AttributeEvents.ATTRIBUTE_MODIFIED) && (changeType == SSHSType.INT)
+						&& changeKey.equals(key)) {
 						CAERCommunication.sendCommand(controlSocket, netBuf,
-							CAERCommunication.caerControlConfigAction.PUT, node, key, null,
-							new SSHSAttributeValue(newValue.intValue()));
+							CAERCommunication.caerControlConfigAction.PUT, node, key, null, changeValue);
 						CAERCommunication.readResponse(controlSocket, netBuf);
 					}
 				});
+
 				break;
 			}
 
 			case LONG: {
+				// Create SSHS attribute and initialize it.
+				nnode.putLong(key, Long.parseLong(value));
+
+				// Create GUI element and initialize it, get its backing value
+				// property.
 				final LongProperty backendValue = GUISupport.addTextNumberFieldWithSlider(configBox,
 					Long.parseLong(value), 0, Long.MAX_VALUE);
-				backendValue.addListener(new ChangeListener<Number>() {
-					@SuppressWarnings("unused")
-					@Override
-					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
-						final Number newValue) {
-						// Send new value to cAER control server.
+
+				// Connect the GUI value property to the SSHS attribute.
+				SSHSJavaFX.longConnector(backendValue, nnode, key);
+
+				// Add listener to SSHS attribute to send changes back to cAER
+				// control server.
+				nnode.addAttributeListener(null, (cnode, userData, event, changeKey, changeType, changeValue) -> {
+					if ((event == AttributeEvents.ATTRIBUTE_MODIFIED) && (changeType == SSHSType.LONG)
+						&& changeKey.equals(key)) {
 						CAERCommunication.sendCommand(controlSocket, netBuf,
-							CAERCommunication.caerControlConfigAction.PUT, node, key, null,
-							new SSHSAttributeValue(newValue.longValue()));
+							CAERCommunication.caerControlConfigAction.PUT, node, key, null, changeValue);
 						CAERCommunication.readResponse(controlSocket, netBuf);
 					}
 				});
+
 				break;
 			}
 
 			case FLOAT: {
-				final DoubleProperty backendValue = GUISupport.addTextNumberFieldWithSlider(configBox,
+				// Create SSHS attribute and initialize it.
+				nnode.putFloat(key, Float.parseFloat(value));
+
+				// Create GUI element and initialize it, get its backing value
+				// property.
+				final FloatProperty backendValue = GUISupport.addTextNumberFieldWithSlider(configBox,
 					Float.parseFloat(value), Float.MIN_VALUE, Float.MAX_VALUE);
-				backendValue.addListener(new ChangeListener<Number>() {
-					@SuppressWarnings("unused")
-					@Override
-					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
-						final Number newValue) {
-						// Send new value to cAER control server.
+
+				// Connect the GUI value property to the SSHS attribute.
+				SSHSJavaFX.floatConnector(backendValue, nnode, key);
+
+				// Add listener to SSHS attribute to send changes back to cAER
+				// control server.
+				nnode.addAttributeListener(null, (cnode, userData, event, changeKey, changeType, changeValue) -> {
+					if ((event == AttributeEvents.ATTRIBUTE_MODIFIED) && (changeType == SSHSType.FLOAT)
+						&& changeKey.equals(key)) {
 						CAERCommunication.sendCommand(controlSocket, netBuf,
-							CAERCommunication.caerControlConfigAction.PUT, node, key, null,
-							new SSHSAttributeValue(newValue.floatValue()));
+							CAERCommunication.caerControlConfigAction.PUT, node, key, null, changeValue);
 						CAERCommunication.readResponse(controlSocket, netBuf);
 					}
 				});
+
 				break;
 			}
 
 			case DOUBLE: {
+				// Create SSHS attribute and initialize it.
+				nnode.putDouble(key, Double.parseDouble(value));
+
+				// Create GUI element and initialize it, get its backing value
+				// property.
 				final DoubleProperty backendValue = GUISupport.addTextNumberFieldWithSlider(configBox,
 					Double.parseDouble(value), Double.MIN_VALUE, Double.MAX_VALUE);
-				backendValue.addListener(new ChangeListener<Number>() {
-					@SuppressWarnings("unused")
-					@Override
-					public void changed(final ObservableValue<? extends Number> observable, final Number oldValue,
-						final Number newValue) {
-						// Send new value to cAER control server.
+
+				// Connect the GUI value property to the SSHS attribute.
+				SSHSJavaFX.doubleConnector(backendValue, nnode, key);
+
+				// Add listener to SSHS attribute to send changes back to cAER
+				// control server.
+				nnode.addAttributeListener(null, (cnode, userData, event, changeKey, changeType, changeValue) -> {
+					if ((event == AttributeEvents.ATTRIBUTE_MODIFIED) && (changeType == SSHSType.DOUBLE)
+						&& changeKey.equals(key)) {
 						CAERCommunication.sendCommand(controlSocket, netBuf,
-							CAERCommunication.caerControlConfigAction.PUT, node, key, null,
-							new SSHSAttributeValue(newValue.doubleValue()));
+							CAERCommunication.caerControlConfigAction.PUT, node, key, null, changeValue);
 						CAERCommunication.readResponse(controlSocket, netBuf);
 					}
 				});
+
 				break;
 			}
 
-			case STRING:
-				GUISupport.addTextField(configBox, value).textProperty().addListener(new ChangeListener<String>() {
-					@SuppressWarnings("unused")
-					@Override
-					public void changed(final ObservableValue<? extends String> observable, final String oldValue,
-						final String newValue) {
-						// Send new value to cAER control server.
+			case STRING: {
+				// Create SSHS attribute and initialize it.
+				nnode.putString(key, value);
+
+				// Create GUI element and initialize it, get its backing value
+				// property.
+				final StringProperty backendValue = GUISupport.addTextField(configBox, value).textProperty();
+
+				// Connect the GUI value property to the SSHS attribute.
+				SSHSJavaFX.stringConnector(backendValue, nnode, key);
+
+				// Add listener to SSHS attribute to send changes back to cAER
+				// control server.
+				nnode.addAttributeListener(null, (cnode, userData, event, changeKey, changeType, changeValue) -> {
+					if ((event == AttributeEvents.ATTRIBUTE_MODIFIED) && (changeType == SSHSType.STRING)
+						&& changeKey.equals(key)) {
 						CAERCommunication.sendCommand(controlSocket, netBuf,
-							CAERCommunication.caerControlConfigAction.PUT, node, key, null,
-							new SSHSAttributeValue(newValue));
+							CAERCommunication.caerControlConfigAction.PUT, node, key, null, changeValue);
 						CAERCommunication.readResponse(controlSocket, netBuf);
 					}
 				});
+
 				break;
+			}
 
 			default:
 				// Unknown value type, just display the returned string.
