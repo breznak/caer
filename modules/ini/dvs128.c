@@ -53,8 +53,8 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 
 	// USB port/bus/SN settings/restrictions.
 	// These can be used to force connection to one specific device at startup.
-	sshsNodePutByteIfAbsent(moduleData->moduleNode, "BusNumber", 0);
-	sshsNodePutByteIfAbsent(moduleData->moduleNode, "DevAddress", 0);
+	sshsNodePutShortIfAbsent(moduleData->moduleNode, "BusNumber", 0);
+	sshsNodePutShortIfAbsent(moduleData->moduleNode, "DevAddress", 0);
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "SerialNumber", "");
 
 	// Add auto-restart setting.
@@ -64,8 +64,8 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 	// shutdown cases (device pulled, ...).
 	char *serialNumber = sshsNodeGetString(moduleData->moduleNode, "SerialNumber");
 	moduleData->moduleState = caerDeviceOpen(moduleData->moduleID, CAER_DEVICE_DVS128,
-		U8T(sshsNodeGetByte(moduleData->moduleNode, "BusNumber")),
-		U8T(sshsNodeGetByte(moduleData->moduleNode, "DevAddress")), serialNumber);
+		U8T(sshsNodeGetShort(moduleData->moduleNode, "BusNumber")),
+		U8T(sshsNodeGetShort(moduleData->moduleNode, "DevAddress")), serialNumber);
 	free(serialNumber);
 
 	if (moduleData->moduleState == NULL) {

@@ -50,8 +50,8 @@ bool caerInputDAVISInit(caerModuleData moduleData, uint16_t deviceType) {
 
 	// USB port/bus/SN settings/restrictions.
 	// These can be used to force connection to one specific device at startup.
-	sshsNodePutByteIfAbsent(moduleData->moduleNode, "BusNumber", 0);
-	sshsNodePutByteIfAbsent(moduleData->moduleNode, "DevAddress", 0);
+	sshsNodePutShortIfAbsent(moduleData->moduleNode, "BusNumber", 0);
+	sshsNodePutShortIfAbsent(moduleData->moduleNode, "DevAddress", 0);
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "SerialNumber", "");
 
 	// Add auto-restart setting.
@@ -61,8 +61,8 @@ bool caerInputDAVISInit(caerModuleData moduleData, uint16_t deviceType) {
 	// shutdown cases (device pulled, ...).
 	char *serialNumber = sshsNodeGetString(moduleData->moduleNode, "SerialNumber");
 	moduleData->moduleState = caerDeviceOpen(moduleData->moduleID, deviceType,
-		U8T(sshsNodeGetByte(moduleData->moduleNode, "BusNumber")),
-		U8T(sshsNodeGetByte(moduleData->moduleNode, "DevAddress")), serialNumber);
+		U8T(sshsNodeGetShort(moduleData->moduleNode, "BusNumber")),
+		U8T(sshsNodeGetShort(moduleData->moduleNode, "DevAddress")), serialNumber);
 	free(serialNumber);
 
 	if (moduleData->moduleState == NULL) {
@@ -462,7 +462,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 	sshsNodePutBoolIfAbsent(imuNode, "GyroZStandby", false);
 	sshsNodePutBoolIfAbsent(imuNode, "LowPowerCycle", false);
 	sshsNodePutByteIfAbsent(imuNode, "LowPowerWakeupFrequency", 1);
-	sshsNodePutByteIfAbsent(imuNode, "SampleRateDivider", 0);
+	sshsNodePutShortIfAbsent(imuNode, "SampleRateDivider", 0);
 	sshsNodePutByteIfAbsent(imuNode, "DigitalLowPassFilter", 1);
 	sshsNodePutByteIfAbsent(imuNode, "AccelFullScale", 1);
 	sshsNodePutByteIfAbsent(imuNode, "GyroFullScale", 1);
@@ -1841,7 +1841,7 @@ static void imuConfigSend(sshsNode node, caerModuleData moduleData) {
 	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_LP_WAKEUP,
 		U32T(sshsNodeGetByte(node, "LowPowerWakeupFrequency")));
 	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_SAMPLE_RATE_DIVIDER,
-		U32T(sshsNodeGetByte(node, "SampleRateDivider")));
+		U32T(sshsNodeGetShort(node, "SampleRateDivider")));
 	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_DIGITAL_LOW_PASS_FILTER,
 		U32T(sshsNodeGetByte(node, "DigitalLowPassFilter")));
 	caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_ACCEL_FULL_SCALE,
@@ -1891,7 +1891,7 @@ static void imuConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_LP_WAKEUP,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == BYTE && caerStrEquals(changeKey, "SampleRateDivider")) {
+		else if (changeType == SHORT && caerStrEquals(changeKey, "SampleRateDivider")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_SAMPLE_RATE_DIVIDER,
 				U32T(changeValue.ibyte));
 		}
