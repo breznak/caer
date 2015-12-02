@@ -66,7 +66,7 @@ static int caerConfigServerRunner(void *inPtr) {
 
 	// Ensure default values are present.
 	sshsNodePutStringIfAbsent(serverNode, "ipAddress", "127.0.0.1");
-	sshsNodePutShortIfAbsent(serverNode, "portNumber", 4040);
+	sshsNodePutIntIfAbsent(serverNode, "portNumber", 4040);
 	sshsNodePutShortIfAbsent(serverNode, "backlogSize", 5);
 	sshsNodePutShortIfAbsent(serverNode, "concurrentConnections", 5);
 
@@ -85,7 +85,7 @@ static int caerConfigServerRunner(void *inPtr) {
 	memset(&configServerAddress, 0, sizeof(struct sockaddr_in));
 
 	configServerAddress.sin_family = AF_INET;
-	configServerAddress.sin_port = htons(sshsNodeGetShort(serverNode, "portNumber"));
+	configServerAddress.sin_port = htons(sshsNodeGetInt(serverNode, "portNumber"));
 	char *ipAddress = sshsNodeGetString(serverNode, "ipAddress");
 	inet_aton(ipAddress, &configServerAddress.sin_addr); // htonl() is implicit here.
 	free(ipAddress);
