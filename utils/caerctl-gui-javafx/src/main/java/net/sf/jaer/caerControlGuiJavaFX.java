@@ -142,7 +142,7 @@ public final class caerControlGuiJavaFX extends Application {
 
 		// Load new configuration button.
 		GUISupport.addButtonWithMouseClickedHandler(contentPane, "Load Configuration", true, null, (event) -> {
-			final File load = GUISupport.showDialogLoadFile("XML Config File", ImmutableList.of("*.xml"), null);
+			final File load = GUISupport.showDialogLoadFile("XML Config File", ImmutableList.of("*.xml"));
 			if (load != null) {
 				try (FileInputStream loadOS = new FileInputStream(load)) {
 					SSHS.GLOBAL.getNode("/").importSubTreeFromXML(loadOS, true);
