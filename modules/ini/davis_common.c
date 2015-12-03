@@ -174,10 +174,10 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 		createCoarseFineBiasSetting(moduleData, biasNode, "AEPuYBp", 7, 152, true, "P", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "IFThrBn", 5, 255, true, "N", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "IFRefrBn", 5, 255, true, "N", "Normal");
-		createCoarseFineBiasSetting(moduleData, biasNode, "PadFollBn", 7, 215, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "PadFollBn", 7, 215, true, "N", "Normal"); // TODO: check if needed.
 		createCoarseFineBiasSetting(moduleData, biasNode, "ApsOverflowLevelBn", 6, 253, true, "N", "Normal");
 
-		createCoarseFineBiasSetting(moduleData, biasNode, "BiasBuffer", 5, 254, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "BiasBuffer", 6, 255, true, "N", "Normal");
 
 		createShiftedSourceBiasSetting(moduleData, biasNode, "SSP", 1, 33, "ShiftedSource", "SplitGate");
 		createShiftedSourceBiasSetting(moduleData, biasNode, "SSN", 1, 33, "ShiftedSource", "SplitGate");
@@ -211,7 +211,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 		}
 
 		createCoarseFineBiasSetting(moduleData, biasNode, "LocalBufBn", 5, 164, true, "N", "Normal");
-		createCoarseFineBiasSetting(moduleData, biasNode, "PadFollBn", 7, 215, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "PadFollBn", 7, 215, false, "N", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "DiffBn", 4, 39, true, "N", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "OnBn", 5, 255, true, "N", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "OffBn", 4, 1, true, "N", "Normal");
@@ -231,7 +231,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 		createCoarseFineBiasSetting(moduleData, biasNode, "IFRefrBn", 5, 255, true, "N", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "IFThrBn", 5, 255, true, "N", "Normal");
 
-		createCoarseFineBiasSetting(moduleData, biasNode, "BiasBuffer", 5, 254, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "BiasBuffer", 7, 255, true, "N", "Normal");
 
 		createShiftedSourceBiasSetting(moduleData, biasNode, "SSP", 1, 33, "ShiftedSource", "SplitGate");
 		createShiftedSourceBiasSetting(moduleData, biasNode, "SSN", 1, 33, "ShiftedSource", "SplitGate");
@@ -271,7 +271,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 		createCoarseFineBiasSetting(moduleData, biasNode, "AEPuXBp", 4, 80, true, "P", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "AEPuYBp", 7, 152, true, "P", "Normal");
 
-		createCoarseFineBiasSetting(moduleData, biasNode, "BiasBuffer", 6, 251, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "BiasBuffer", 7, 255, true, "N", "Normal");
 
 		createShiftedSourceBiasSetting(moduleData, biasNode, "SSP", 1, 33, "TiedToRail", "SplitGate");
 		createShiftedSourceBiasSetting(moduleData, biasNode, "SSN", 2, 33, "ShiftedSource", "SplitGate");
