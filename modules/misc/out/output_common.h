@@ -1,12 +1,5 @@
-/*
- * out_common.h
- *
- *  Created on: Jan 9, 2014
- *      Author: chtekk
- */
-
-#ifndef OUT_COMMON_H_
-#define OUT_COMMON_H_
+#ifndef OUTPUT_COMMON_H_
+#define OUTPUT_COMMON_H_
 
 #include "main.h"
 #include "base/mainloop.h"
@@ -23,4 +16,4 @@ void caerOutputCommonExit(caerModuleData moduleData);
 void caerOutputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 void caerOutputCommonConfig(caerModuleData moduleData);
 
-#endif /* OUT_COMMON_H_ */
+#endif /* OUTPUT_COMMON_H_ */
