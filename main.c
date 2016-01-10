@@ -15,6 +15,7 @@
 #include "modules/ini/davis_fx2.h"
 #include "modules/ini/davis_fx3.h"
 #include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
+//#include "modules/imagestreamerfilter/imagestreamerfilter.h" //experimental
 #include "modules/statistics/statistics.h"
 #include "modules/visualizer/visualizer.h"
 #include "modules/misc/out/net_tcp_server.h"
