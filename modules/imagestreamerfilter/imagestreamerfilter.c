@@ -141,7 +141,7 @@ static void caerImageStreamerFilterRun(caerModuleData moduleData, size_t argsNum
 			FILE *f = fopen(filename, "wb");
 			for(x_loop = 0; x_loop < state->sizeMaxY*state->sizeMaxX*1; ++x_loop) { //*1 gray scale, *4 rbg + alpha
 			        img_coor->index = x_loop;
-				calculateCoordinates(img_coor, x_loop, state->sizeMaxX,state->sizeMaxY); 
+				calculateCoordinates(img_coor, x_loop, state->sizeMaxX, state->sizeMaxY); 
 				img_coor->image_data[x_loop] = state->ImageMap[img_coor->x][img_coor->y];
 				//printf("data[%d] : %u x:%d y:%d\n" , x_loop, (unsigned int)img_coor->image_data[x_loop], img_coor->x, img_coor->y );
             		}

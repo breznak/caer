@@ -32,9 +32,8 @@ void ImageCoordinateInit(ImageCoordinate *ts, int sizeX, int sizeY, int channel)
     ts->image_data = (unsigned char*)malloc(sizeX*sizeY*channel);
 }
 
-
 void calculateIndex(ImageCoordinate *ar, int columns,int x,int  y){
-    ar->index = y * columns + x;
+    ar->index = x * columns + y;
     return;
 }
 
@@ -54,18 +53,25 @@ void calculateCoordinates(ImageCoordinate *ar, int index,int columns, int rows){
 
 void normalizeImage(ImageCoordinate *ar){
     int sum,i,j = 0;
+    double max = -1.0;
+    double min = 255.0;
     double tmp = 0.0;
-    //printf("size X %d size Y %d\n", ar->sizeX, ar->sizeY);
     for(i=0; i<ar->sizeX; i++){
     	for(j=0; j<ar->sizeY; j++){
     		calculateIndex(ar, ar->sizeY, i, j); 
 		sum = sum + ar->image_data[ar->index]; 	
+		if( ar->image_data[ar->index] < min ){
+			min = ar->image_data[ar->index];
+		}
+		if( ar->image_data[ar->index] > max){
+			max = ar->image_data[ar->index];
+		}
         }
     }
     for(i=0; i<ar->sizeX; i++){
 	for(j=0; j<ar->sizeY; j++){
 		calculateIndex(ar, ar->sizeY, i, j);
-		tmp = (double)(ar->image_data[ar->index]);
+		tmp = (double)((ar->image_data[ar->index]) - min) / (max - min)  ;
 	 	ar->image_data[ar->index] = (int) (tmp * (255));
 	        //printf("data[%d] : %u x:%d y:%d\n" , ar->index, (unsigned char)ar->image_data[ar->index], i, j );
 	}
