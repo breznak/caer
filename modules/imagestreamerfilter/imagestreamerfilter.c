@@ -153,8 +153,8 @@ static void caerImageStreamerFilterRun(caerModuleData moduleData, size_t argsNum
 			//close image and reset imagemap
 			state->counter = 0;
 			printf("\nImage Streamer: \t\t generated image number %d\n", state->counterImg);	
-			for(x_loop=1; x_loop<= state->sizeMaxX; x_loop++){
-				for(y_loop=1; y_loop<= state->sizeMaxY; y_loop++){
+			for(x_loop=0; x_loop<= state->sizeMaxX; x_loop++){
+				for(y_loop=0; y_loop<= state->sizeMaxY; y_loop++){
 					state->ImageMap[x_loop][y_loop] = 0 ;
 				}
 			}		
