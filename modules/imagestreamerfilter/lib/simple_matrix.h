@@ -53,7 +53,7 @@ void calculateCoordinates(ImageCoordinate *ar, int index,int columns, int rows){
 
 void normalizeImage(ImageCoordinate *ar){
     int sum,i,j = 0;
-    double max = -1.0;
+    double max = -1; 
     double min = 255.0;
     double tmp = 0.0;
     for(i=0; i<ar->sizeX; i++){

@@ -10,6 +10,10 @@
 #include "base/module.h"
 
 /* inlude std image library */
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#define STB_IMAGE_RESIZE_STATIC
+#include "lib/stb_image_resize.h"
+
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "lib/stb_image_write.h"
 
@@ -27,9 +31,13 @@
 /* settings directories etc...*/
 #include "settings.h"
 
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
 struct ISFilter_state {
-	int64_t **ImageMap;
+	int **ImageMap;
 	int32_t numSpikes;
+	int8_t  scaleImg;
 	int32_t counter;
 	int32_t counterImg;
 	int16_t sizeMaxX;
@@ -51,7 +59,6 @@ static struct caer_module_functions caerImageStreamerFilterFunctions = { .module
 
 void caerImageStreamerFilter(uint16_t moduleID, caerPolarityEventPacket polarity) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ISFilter");
-
 	caerModuleSM(&caerImageStreamerFilterFunctions, moduleData, sizeof(struct ISFilter_state), 1, polarity);
 }
 
@@ -67,12 +74,14 @@ void dummy_write(void *context, void *data, int len)
 
 static bool caerImageStreamerFilterInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "numSpikes", 10000);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "scaleImg", 1);
 	sshsNodePutByteIfAbsent(moduleData->moduleNode, "subSampleBy", 0);
 
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 	ISFilterState state = moduleData->moduleState;
 
 	state->numSpikes = sshsNodeGetInt(moduleData->moduleNode, "numSpikes");
+	state->scaleImg = sshsNodeGetInt(moduleData->moduleNode, "scaleImg");
 	state->subSampleBy = sshsNodeGetByte(moduleData->moduleNode, "subSampleBy");
 
 	// Nothing that can fail here.
@@ -112,16 +121,19 @@ static void caerImageStreamerFilterRun(caerModuleData moduleData, size_t argsNum
 		int pol = caerPolarityEventGetPolarity(caerPolarityIteratorElement);
 		int x_loop = 0;
 		int y_loop = 0;
+		int scale_x = state->sizeMaxX*state->scaleImg;
+		int scale_y = state->sizeMaxY*state->scaleImg;		
 
 		// Apply sub-sampling.
 		x = U16T(x >> state->subSampleBy);
 		y = U16T(y >> state->subSampleBy);
 
-		// Get value from map.
-		int64_t current_value = state->ImageMap[x][y];
-
 		//Update Map
-	 	state->ImageMap[x][y] = current_value + pol;	
+		if(pol == 0){
+	 		state->ImageMap[x][y] = state->ImageMap[x][y] - 1.0;
+		}else{
+			state->ImageMap[x][y] = state->ImageMap[x][y] + 1.0;
+		}	
 		state->counter += 1;
 
 		//Generate Image from ImageMap
@@ -139,16 +151,33 @@ static void caerImageStreamerFilterRun(caerModuleData moduleData, size_t argsNum
 			strcat(filename, id_img); //append id_img
 			strcat(filename, ext); //append extension 
 			FILE *f = fopen(filename, "wb");
+			int max_a = -1;
+			int min_a = 255;
 			for(x_loop = 0; x_loop < state->sizeMaxY*state->sizeMaxX*1; ++x_loop) { //*1 gray scale, *4 rbg + alpha
 			        img_coor->index = x_loop;
 				calculateCoordinates(img_coor, x_loop, state->sizeMaxX, state->sizeMaxY); 
-				img_coor->image_data[x_loop] = state->ImageMap[img_coor->x][state->sizeMaxY - img_coor->y];
+				max_a = MAX(max_a,state->ImageMap[img_coor->x][state->sizeMaxY - img_coor->y]);
+				min_a = MIN(min_a,state->ImageMap[img_coor->x][state->sizeMaxY - img_coor->y]);
+				//img_coor->image_data[x_loop] = state->ImageMap[img_coor->x][state->sizeMaxY - img_coor->y];
 				//printf("data[%d] : %u x:%d y:%d\n" , x_loop, (unsigned int)img_coor->image_data[x_loop], img_coor->x, img_coor->y );
+				//printf("data %d\n", state->ImageMap[img_coor->x][state->sizeMaxY - img_coor->y]);
             		}
+			for(x_loop = 0; x_loop < state->sizeMaxY*state->sizeMaxX*1; ++x_loop) {
+				img_coor->index = x_loop;
+				calculateCoordinates(img_coor, x_loop, state->sizeMaxX, state->sizeMaxY);
+				img_coor->image_data[x_loop] = (255.0)/(max_a-min_a)*(state->ImageMap[img_coor->x][state->sizeMaxY - img_coor->y] - max_a)+255.0;
+				//printf("data[%d] : %u x:%d y:%d\n" , x_loop, (unsigned int)img_coor->image_data[x_loop], img_coor->x, img_coor->y );
+			}
+			//printf("MAX %d", max_a);
+			//printf("MIN %d", min_a);
 			//normalize image 0..255
-		        normalizeImage(img_coor);
+		        //normalizeImage(img_coor);
+			//scale image of an integer factor
+			unsigned char *output_pixels;
+			output_pixels= (unsigned char*) malloc(scale_x*scale_y*1);
+			stbir_resize_uint8(img_coor->image_data, img_coor->sizeX, img_coor->sizeY, 0, output_pixels, scale_x, scale_y, 0, 1);
 			// write image to png 
-			stbi_write_png(filename, img_coor->sizeX, img_coor->sizeY, 1, img_coor->image_data, img_coor->sizeX);
+			stbi_write_png(filename, scale_x, scale_y, 1, output_pixels, scale_x);
 			fclose(f);
 			//close image and reset imagemap
 			state->counter = 0;
@@ -159,6 +188,7 @@ static void caerImageStreamerFilterRun(caerModuleData moduleData, size_t argsNum
 				}
 			}		
 			free(img_coor);
+			free(output_pixels);
 		}
 
 	CAER_POLARITY_ITERATOR_VALID_END
@@ -170,6 +200,7 @@ static void caerImageStreamerFilterConfig(caerModuleData moduleData) {
 	ISFilterState state = moduleData->moduleState;
 
 	state->numSpikes = sshsNodeGetInt(moduleData->moduleNode, "numSpikes");
+	state->scaleImg = sshsNodeGetInt(moduleData->moduleNode, "scaleImg");
 	state->subSampleBy = sshsNodeGetByte(moduleData->moduleNode, "subSampleBy");
 }
 
