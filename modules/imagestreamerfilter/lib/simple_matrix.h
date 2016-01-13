@@ -7,11 +7,15 @@
 #include <stdlib.h>
 #include <math.h>
 
+/* simple macro definitions*/
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
 typedef struct ImageCoordinate {
    int x;
    int y;
    int index;
-   unsigned char* image_data;   
+   unsigned char * image_data;   
    int sizeX;
    int sizeY;
 }ImageCoordinate;
@@ -52,20 +56,15 @@ void calculateCoordinates(ImageCoordinate *ar, int index,int columns, int rows){
 }
 
 void normalizeImage(ImageCoordinate *ar){
-    int sum,i,j = 0;
+    int i,j = 0;
     double max = -1; 
     double min = 255.0;
     double tmp = 0.0;
     for(i=0; i<ar->sizeX; i++){
     	for(j=0; j<ar->sizeY; j++){
     		calculateIndex(ar, ar->sizeY, i, j); 
-		sum = sum + ar->image_data[ar->index]; 	
-		if( ar->image_data[ar->index] < min ){
-			min = ar->image_data[ar->index];
-		}
-		if( ar->image_data[ar->index] > max){
-			max = ar->image_data[ar->index];
-		}
+		min = MIN(min,ar->image_data[ar->index]);
+		max = MAX(max,ar->image_data[ar->index]);
         }
     }
     for(i=0; i<ar->sizeX; i++){

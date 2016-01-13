@@ -26,13 +26,10 @@
 #define PNGSUITE_PRIMARY
 /* end std image library */
 
-/* federico's tools lib */
+/* federico's tools/lib */
 #include "lib/simple_matrix.h"
 /* settings directories etc...*/
 #include "settings.h"
-
-#define MIN(a,b) (((a)<(b))?(a):(b))
-#define MAX(a,b) (((a)>(b))?(a):(b))
 
 struct ISFilter_state {
 	int **ImageMap;
@@ -138,15 +135,16 @@ static void caerImageStreamerFilterRun(caerModuleData moduleData, size_t argsNum
 
 		//Generate Image from ImageMap
 		if(state->counter >= state->numSpikes ){
+			double tmp;
 			//we accumulated enough spikes..
 			state->counterImg += 1;
 			// init img/data/index coord
 			ImageCoordinate *img_coor = malloc(sizeof(ImageCoordinate));
 			ImageCoordinateInit(img_coor, state->sizeMaxX, state->sizeMaxY, 1); // 1 gray scale, 4 red green alpha
-			//save to disk this image 
+			//save current image (of accumulated numSpikes) to disk 
 			char id_img[15];
-			char ext[] =".png"; //we produce png output (possibles other formats supported by the library are bmp, ppm, TGA, psd, pnm, hdr, gif,..)
-			char filename[255] = DIRECTORY_IMG ;
+			char ext[] =".png"; // png output (possibles other formats supported by the library are bmp, ppm, TGA, psd, pnm, hdr, gif,..)
+			char filename[255] = DIRECTORY_IMG ; //from settings.h
 			sprintf(id_img, "%d", state->counterImg);
 			strcat(filename, id_img); //append id_img
 			strcat(filename, ext); //append extension 
@@ -154,8 +152,8 @@ static void caerImageStreamerFilterRun(caerModuleData moduleData, size_t argsNum
 			int max_a = -1;
 			int min_a = 255;
 			for(x_loop = 0; x_loop < state->sizeMaxY*state->sizeMaxX*1; ++x_loop) { //*1 gray scale, *4 rbg + alpha
-			        img_coor->index = x_loop;
-				calculateCoordinates(img_coor, x_loop, state->sizeMaxX, state->sizeMaxY); 
+			        img_coor->index = x_loop; 
+				calculateCoordinates(img_coor, x_loop, state->sizeMaxX, state->sizeMaxY); //from linear array index to 2d x,y map 
 				max_a = MAX(max_a,state->ImageMap[img_coor->x][state->sizeMaxY - img_coor->y]);
 				min_a = MIN(min_a,state->ImageMap[img_coor->x][state->sizeMaxY - img_coor->y]);
 				//img_coor->image_data[x_loop] = state->ImageMap[img_coor->x][state->sizeMaxY - img_coor->y];
@@ -165,8 +163,8 @@ static void caerImageStreamerFilterRun(caerModuleData moduleData, size_t argsNum
 			for(x_loop = 0; x_loop < state->sizeMaxY*state->sizeMaxX*1; ++x_loop) {
 				img_coor->index = x_loop;
 				calculateCoordinates(img_coor, x_loop, state->sizeMaxX, state->sizeMaxY);
-				img_coor->image_data[x_loop] = (255.0)/(max_a-min_a)*(state->ImageMap[img_coor->x][state->sizeMaxY - img_coor->y] - max_a)+255.0;
-				//printf("data[%d] : %u x:%d y:%d\n" , x_loop, (unsigned int)img_coor->image_data[x_loop], img_coor->x, img_coor->y );
+				img_coor->image_data[x_loop] = (unsigned char) round(((state->ImageMap[img_coor->x][state->sizeMaxY - img_coor->y] - min_a)/(max_a - min_a))*254.0);
+				//printf("data[%d] : %u x:%d y:%d\n" , x_loop, img_coor->image_data[x_loop], img_coor->x, img_coor->y );
 			}
 			//printf("MAX %d", max_a);
 			//printf("MIN %d", min_a);
