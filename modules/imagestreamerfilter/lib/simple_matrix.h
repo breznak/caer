@@ -15,7 +15,7 @@ typedef struct ImageCoordinate {
    int x;
    int y;
    int index;
-   unsigned char * image_data;   
+   float * image_data;   
    int sizeX;
    int sizeY;
 }ImageCoordinate;
@@ -33,7 +33,7 @@ void ImageCoordinateInit(ImageCoordinate *ts, int sizeX, int sizeY, int channel)
     ts->index = NULL;
     ts->sizeX = sizeX;
     ts->sizeY = sizeY;
-    ts->image_data = (unsigned char*)malloc(sizeX*sizeY*channel);
+    ts->image_data = (float*)malloc(sizeX*sizeY*channel);
 }
 
 void calculateIndex(ImageCoordinate *ar, int columns,int x,int  y){
@@ -70,8 +70,8 @@ void normalizeImage(ImageCoordinate *ar){
     for(i=0; i<ar->sizeX; i++){
 	for(j=0; j<ar->sizeY; j++){
 		calculateIndex(ar, ar->sizeY, i, j);
-		tmp = (double)((ar->image_data[ar->index]) - min) / (max - min)  ;
-	 	ar->image_data[ar->index] = (int) (tmp * (255));
+		tmp = ((ar->image_data[ar->index]) - min) / (max - min)  ;
+	 	ar->image_data[ar->index] = (tmp * (255));
 	        //printf("data[%d] : %u x:%d y:%d\n" , ar->index, (unsigned char)ar->image_data[ar->index], i, j );
 	}
     }
