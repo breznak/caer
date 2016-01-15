@@ -191,7 +191,9 @@ static void caerImageStreamerFilterRun(caerModuleData moduleData, size_t argsNum
 			unsigned char *small_img;
 			small_img = (unsigned char*) malloc(SIZE_IMG*SIZE_IMG*1);
 			//resize
+			printf("resize");
 			stbir_resize_uint8(image_map, state->sizeMaxX, state->sizeMaxY, 0, small_img, SIZE_IMG, SIZE_IMG, 0, 1);
+			printf("done.");
 			min_a = 255;
 			max_a = -1;
 			for(x_loop = 0; x_loop < SIZE_IMG*SIZE_IMG*1; ++x_loop) {
@@ -212,10 +214,10 @@ static void caerImageStreamerFilterRun(caerModuleData moduleData, size_t argsNum
 					state->ImageMap[x_loop][y_loop] = 0 ;
 				}
 			}		
+			//free memory
 			free(img_coor);
 			free(small_img);
 			free(image_map);
-			free(f);
 		}
 
 	CAER_POLARITY_ITERATOR_VALID_END
