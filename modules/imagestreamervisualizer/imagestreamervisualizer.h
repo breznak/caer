@@ -13,7 +13,8 @@
 #define TEXT_SPACING 20 // in pixels
 #define SYSTEM_TIMEOUT 10 // in seconds
 #define DIRECTORY_IMG "/home/hyo/caffe/examples/images/retina/"
-#define SIZE_IMG 128 
+#define SIZE_IMG_W 64 
+#define SIZE_IMG_H 64 
 
 void caerImagestreamerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame);
 

@@ -178,7 +178,7 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 	}
 	// Iterate over events and accumulate them 
 	CAER_POLARITY_ITERATOR_VALID_START(polarity)
-      // Get values on which to operate.
+        // Get values on which to operate.
 		//int64_t ts = caerPolarityEventGetTimestamp64(caerPolarityIteratorElement, polarity);
 		uint16_t x = caerPolarityEventGetX(caerPolarityIteratorElement);
 		uint16_t y = caerPolarityEventGetY(caerPolarityIteratorElement);
@@ -226,7 +226,7 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 			int max_a = -1;
 			int min_a = 2555;
 
-			//get max min of imageMap sum min to make it unsigned integer compatible, then resize
+			//normalize image vector, convert it to 0..255, resize to SIZE_IMG*SIZE_IMG and update/save png 
 			for(x_loop = 0; x_loop < state->sizeMaxX*state->sizeMaxY*1; ++x_loop) {
 				img_coor->index = x_loop;
 				calculateCoordinates(img_coor, x_loop, state->sizeMaxX, state->sizeMaxY);	
@@ -256,21 +256,21 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 				image_map[x_loop] =  tmp & 0xFF; //uchar
 			}
 			unsigned char *small_img;
-			small_img = (unsigned char*) malloc(SIZE_IMG*SIZE_IMG*1);
+			small_img = (unsigned char*) malloc(SIZE_IMG_W*SIZE_IMG_H*1);
 			//resize
-			stbir_resize_uint8(image_map, state->sizeMaxX, state->sizeMaxY, 0, small_img, SIZE_IMG, SIZE_IMG, 0, 1);
+			stbir_resize_uint8(image_map, state->sizeMaxX, state->sizeMaxY, 0, small_img, SIZE_IMG_W, SIZE_IMG_H, 0, 1);
 			min_a = 255;
 			max_a = -1;
-			for(x_loop = 0; x_loop < SIZE_IMG*SIZE_IMG*1; ++x_loop) {
+			for(x_loop = 0; x_loop < SIZE_IMG_W*SIZE_IMG_H*1; ++x_loop) {
 				max_a = MAX(max_a,small_img[x_loop]);	
 				min_a = MIN(min_a,small_img[x_loop]);
 			}
 			//normalize
-			for(x_loop = 0; x_loop < SIZE_IMG*SIZE_IMG*1; ++x_loop) {
+			for(x_loop = 0; x_loop < SIZE_IMG_W*SIZE_IMG_H*1; ++x_loop) {
 				small_img[x_loop] = (unsigned char) round(((((float)small_img[x_loop]-min_a))/(max_a-min_a))*254);
 			}
 			//write image
-			stbi_write_png(filename, SIZE_IMG, SIZE_IMG, 1, small_img, SIZE_IMG*1);
+			stbi_write_png(filename, SIZE_IMG_W, SIZE_IMG_H, 1, small_img, SIZE_IMG_W*1);
 			fclose(f);
 			state->counter = 0;
 			printf("\nImage Streamer: \t\t generated image number %d\n", state->counterImg);	
@@ -280,22 +280,23 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 				}
 			}		
 		
-      free(img_coor);
-      free(image_map);
+	   // free chunks of memory
+      	   free(img_coor);
+      	   free(image_map);
       
 	   //select context/window
 	   glfwMakeContextCurrent(state->window);
 
-	   #define checkImageWidth SIZE_IMG
-	   #define checkImageHeight SIZE_IMG
+	   #define checkImageWidth SIZE_IMG_W
+	   #define checkImageHeight SIZE_IMG_H
 	   static GLubyte checkImage[checkImageHeight][checkImageWidth][4];
 	   static GLuint texName;
-      //init image for glfw
+      	   //init image for viewer 
 	   int i, j, c;
 	      for (i = 0; i < checkImageHeight; i++) {
 	         for (j = 0; j < checkImageWidth; j++) {
-	       c = i * checkImageHeight + j;
-	       //printf("%d", small_img[c]);
+	       	    c = j * checkImageHeight + i;
+	       	    //printf("%d", small_img[c]);
 		    //c = ((((i&0x8)==0)^((j&0x8))==0))*255; 	//checkboard texture opengl
 		    checkImage[i][j][0] = (GLubyte) small_img[c];
 		    checkImage[i][j][1] = (GLubyte) small_img[c];
@@ -320,18 +321,17 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 	   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, checkImageWidth, 
 			   checkImageHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
 			   checkImage);
-
+	   
 	   //display
-    	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    	   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	   glEnable(GL_TEXTURE_2D);
 	   glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL);
 	   glBindTexture(GL_TEXTURE_2D, texName);
 	   glBegin(GL_QUADS);
-	   glTexCoord2f(0.0, 0.0); glVertex2f(0.0, 0.0); //glVertex3f(-2.0, -1.0, 0.0);
-	   glTexCoord2f(0.0, 1.0); glVertex2f(0.0, 1.0); //glVertex3f(-2.0, 1.0, 0.0);
-	   glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0); //glVertex3f(0.0, 1.0, 0.0);
-	   glTexCoord2f(1.0, 0.0); glVertex2f(1.0, 0.0); //glVertex3f(0.0, -1.0, 0.0);
-
+	   glTexCoord2f(0.0, 0.0); glVertex3f(-1.0f, 1.0f, 0.0f); // Top Left 
+	   glTexCoord2f(0.0, 1.0); glVertex3f( 1.0f, 1.0f, 0.0f); // Top Right
+	   glTexCoord2f(1.0, 1.0); glVertex3f( 1.0f,-1.0f, 0.0f); // Bottom Right
+	   glTexCoord2f(1.0, 0.0); glVertex3f(-1.0f,-1.0f, 0.0f); // Bottom Left
 	   glEnd();
 	   glPopMatrix();
 	   glFlush();
