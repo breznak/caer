@@ -22,10 +22,16 @@ One of the following options is required:
  -DDAVISFX2=1           ... set davisfx2 (for DAVIS240A/B/C models)
  -DDAVISFX3=1           ... set davisfx3 (for FX3 platform models)
 
-Optional options: 
+Options (non required): 
  -DENABLE_VISUALIZER=1  ... enable visualizer module (Linux only!)
  -DENABLE_NET_STREAM=1  ... enable tcp server for sending data over network
- -DENABLE_IMAGESTREAMERVISUALIZER=1 ... enable image streamer module (produces images by accumulating a fixed number of spikes/it requires visualizer module to be enable, check settings in imagescreamervisualizer.h)
+
+Extra modules:
+ -DENABLE_IMAGESTREAMERVISUALIZER=1 ... This module produces images by accumulating a fixed number 
+					of spikes. (press "R" to start recording png and "S" to stop)
+					This module depends on the visualizer module (ie. it requires -DENABLE_VISUALIZER=1)
+					This module can be configured by editing the file: 
+					 "module/imagescreamervisualizer/imagescreamervisualizer.h"
 
 2) build:
 

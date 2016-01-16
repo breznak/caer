@@ -25,9 +25,7 @@
 #include <GL/freeglut_ext.h>
 #endif
 
-
 #include "main.h"
-
 #include <libcaer/events/polarity.h>
 
 /* federico's matrix minimal lib */
@@ -50,7 +48,10 @@
 #define PNGSUITE_PRIMARY
 /* end std image library */
 
+#define TITLE_WINDOW "cAER Image Streamer Visualizer"
+#define TITLE_WINDOW_RECORDING "cAER Image Streamer Visualizer: Recordings png.."
 
+extern int8_t savepng_state = 0;
 
 struct imagestreamervisualizer_state {
 	GLFWwindow* window;
@@ -68,8 +69,10 @@ struct imagestreamervisualizer_state {
 	struct caer_statistics_state frameStatistics;
 	int16_t subsampleRendering;
 	int16_t subsampleCount;
-   //image matrix	
-   int64_t **ImageMap;
+	//save output files
+	int8_t savepng;
+        //image matrix	
+        int64_t **ImageMap;
 	int32_t numSpikes;
 	int32_t counter;
 	int32_t counterImg;
@@ -89,6 +92,7 @@ static bool allocateFrameRenderer(imagestreamervisualizerState state, int16_t so
 static bool allocateImageMap(imagestreamervisualizerState state, int16_t sourceID);
 
 void framebuffer_size_callback(GLFWwindow* window);
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 
 static struct caer_module_functions caerImagestreamerVisualizerFunctions = { .moduleInit = &caerImagestreamerVisualizerInit, .moduleRun =
 	&caerImagestreamerVisualizerRun, .moduleConfig =
@@ -104,12 +108,14 @@ void caerImagestreamerVisualizer(uint16_t moduleID, caerPolarityEventPacket pola
 static bool caerImagestreamerVisualizerInit(caerModuleData moduleData) {
 	imagestreamervisualizerState state = moduleData->moduleState;
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "numSpikes", 7000);
-   sshsNodePutByteIfAbsent(moduleData->moduleNode, "subSampleBy", 0);
+   	sshsNodePutByteIfAbsent(moduleData->moduleNode, "subSampleBy", 0);
+	sshsNodePutByteIfAbsent(moduleData->moduleNode, "savepng", 0);
    
 	state->numSpikes = sshsNodeGetInt(moduleData->moduleNode, "numSpikes");
 	state->subSampleBy = sshsNodeGetByte(moduleData->moduleNode, "subSampleBy");
+	state->savepng = sshsNodeGetByte(moduleData->moduleNode, "savepng");
 
-	state->window = glfwCreateWindow(IMAGESTREAMERVISUALIZER_SCREEN_WIDTH, IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT, "cAER Image Streamer Visualizer", NULL, NULL);
+	state->window = glfwCreateWindow(IMAGESTREAMERVISUALIZER_SCREEN_WIDTH, IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT, TITLE_WINDOW, NULL, NULL);
 	if (state->window == NULL) {
 		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to create GLFW window for image streamer visualizer.");
 		return (false);
@@ -122,6 +128,8 @@ static bool caerImagestreamerVisualizerInit(caerModuleData moduleData) {
 
 	//make the window resizeable
 	glfwSetFramebufferSizeCallback(state->window, framebuffer_size_callback);
+	//key control save image
+	glfwSetKeyCallback(state->window, key_callback);
 	
 	return (true);
 }
@@ -146,13 +154,28 @@ static void caerImagestreamerVisualizerExit(caerModuleData moduleData) {
 
 }
 
-void framebuffer_size_callback(GLFWwindow* window)
-{
+void framebuffer_size_callback(GLFWwindow* window){
 	int width, height;
 	glfwGetFramebufferSize(window, &width, &height);
 	glViewport(0, 0, width, height);
 
 }
+
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods){
+
+    // R start recrding png files
+    if (key == GLFW_KEY_R  && action == GLFW_PRESS){
+	printf("\nImage Streamer Filter: start saving png files to hw\n");
+	glfwSetWindowTitle(window, TITLE_WINDOW_RECORDING);
+	savepng_state = 1;
+    }
+    if (key == GLFW_KEY_S  && action == GLFW_PRESS){
+	printf("\nImage Streamer Filter: stop saving png files\n");
+	glfwSetWindowTitle(window, TITLE_WINDOW);
+	savepng_state = 0;
+    }
+}
+
 
 static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
 	UNUSED_ARGUMENT(argsNumber);
@@ -176,6 +199,10 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 			return;
 		}
 	}
+
+	//update saving state
+	state->savepng = savepng_state;
+
 	// Iterate over events and accumulate them 
 	CAER_POLARITY_ITERATOR_VALID_START(polarity)
         // Get values on which to operate.
@@ -215,14 +242,6 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 			// init img/data/index coord
 			ImageCoordinate *img_coor = malloc(sizeof(ImageCoordinate));
 			ImageCoordinateInit(img_coor, state->sizeMaxX, state->sizeMaxY, 1); // 1 gray scale, 4 red green alpha
-			//save current image (of accumulated numSpikes) to disk 
-			char id_img[15];
-			char ext[] =".png"; // png output (possibles other formats supported by the library are bmp, ppm, TGA, psd, pnm, hdr, gif,..)
-			char filename[255] = DIRECTORY_IMG ; //from settings.h
-			sprintf(id_img, "%d", state->counterImg);
-			strcat(filename, id_img); //append id_img
-			strcat(filename, ext); //append extension 
-			FILE *f = fopen(filename, "wb");
 			int max_a = -1;
 			int min_a = 2555;
 
@@ -269,9 +288,19 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 			for(x_loop = 0; x_loop < SIZE_IMG_W*SIZE_IMG_H*1; ++x_loop) {
 				small_img[x_loop] = (unsigned char) round(((((float)small_img[x_loop]-min_a))/(max_a-min_a))*254);
 			}
-			//write image
-			stbi_write_png(filename, SIZE_IMG_W, SIZE_IMG_H, 1, small_img, SIZE_IMG_W*1);
-			fclose(f);
+			// if Recording key pressed (R), write image to disk
+			if(state->savepng == 1){
+				//save current image (of accumulated numSpikes) to disk 
+				char id_img[15];
+				char ext[] =".png"; // png output (possibles other formats supported by the library are bmp, ppm, TGA, psd, pnm, hdr, gif,..)
+				char filename[255] = DIRECTORY_IMG ; //from settings.h
+				sprintf(id_img, "%d", state->counterImg);
+				strcat(filename, id_img); //append id_img
+				strcat(filename, ext); //append extension 
+				FILE *f = fopen(filename, "wb");
+				stbi_write_png(filename, SIZE_IMG_W, SIZE_IMG_H, 1, small_img, SIZE_IMG_W*1);
+				fclose(f);
+			}
 			state->counter = 0;
 			printf("\nImage Streamer: \t\t generated image number %d\n", state->counterImg);	
 			for(x_loop=0; x_loop<= state->sizeMaxX; x_loop++){
