@@ -152,6 +152,9 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 
 	visualizerState state = moduleData->moduleState;
 
+	//select current windows, other modules might also produce glfw windows..
+	glfwMakeContextCurrent(state->window);
+
 	// Subsampling, only render every Nth packet.
 	if (state->subsampleCount >= state->subsampleRendering) {
 		// Polarity events to render.
@@ -169,7 +172,7 @@ static void caerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_l
 				if (!allocateEventRenderer(state, caerEventPacketHeaderGetEventSource(&polarity->packetHeader))) {
 					// Failed to allocate memory, nothing to do.
 					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
-						"Failed to allocate memory for eventRenderer.");
+						"Failed to allocate memory for eventRenderer in image streamer visualizer.");
 					return;
 				}
 			}
