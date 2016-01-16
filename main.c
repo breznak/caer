@@ -15,7 +15,6 @@
 #include "modules/ini/davis_fx2.h"
 #include "modules/ini/davis_fx3.h"
 #include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
-//#include "modules/imagestreamerfilter/imagestreamerfilter.h" //experimental
 #include "modules/statistics/statistics.h"
 #include "modules/visualizer/visualizer.h"
 #include "modules/misc/out/net_tcp_server.h"
@@ -71,15 +70,24 @@ static bool mainloop_1(void) {
 	#endif
 #endif
 
+#ifdef ENABLE_IMAGESTREAMERVISUALIZER
+	// A small OpenGL visualizer exists to show what the output looks like.
+	#if defined(DAVISFX2) || defined(DAVISFX3)
+		caerImagestreamerVisualizer(5, polarity, frame);
+	#else
+		caerImagestreamerVisualizer(5, polarity, NULL);
+	#endif
+#endif
+
 #ifdef ENABLE_NET_STREAM
 	// Send polarity packets out via TCP. This is the server mode!
 	// External clients connect to cAER, and we send them the data.
 	// WARNING: slow clients can dramatically slow this and the whole
 	// processing pipeline down!
-	caerOutputNetTCPServer(5, 1, polarity); // or (5, 2, polarity, frame) for polarity and frames
+	caerOutputNetTCPServer(6, 1, polarity); // or (5, 2, polarity, frame) for polarity and frames
 
 	// And also send them via UDP. This is fast, as it doesn't care what is on the other side.
-	caerOutputNetUDP(6, 1, polarity); // or (6, 2, polarity, frame) for polarity and frames
+	caerOutputNetUDP(7, 1, polarity); // or (6, 2, polarity, frame) for polarity and frames
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.

@@ -25,6 +25,7 @@ One of the following options is required:
 Optional options: 
  -DENABLE_VISUALIZER=1  ... enable visualizer module (Linux only!)
  -DENABLE_NET_STREAM=1  ... enable tcp server for sending data over network
+ -DENABLE_IMAGESTREAMERVISUALIZER=1 ... enable image streamer module (produces images by accumulating a fixed number of spikes/it requires visualizer module to be enable, check settings in imagescreamervisualizer.h)
 
 2) build:
 
