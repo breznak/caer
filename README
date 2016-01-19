@@ -32,7 +32,8 @@ Extra modules:
 					This module depends on the visualizer module (ie. it requires -DENABLE_VISUALIZER=1)
 					This module can be configured by editing the file: 
 					 "module/imagescreamervisualizer/imagescreamervisualizer.h"
-
+					parameters:
+						numSpikes 7000 //number of spikes that are accumulated per image
 2) build:
 
 $ make

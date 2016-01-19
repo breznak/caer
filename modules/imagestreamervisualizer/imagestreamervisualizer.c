@@ -29,15 +29,13 @@
 #include <libcaer/events/polarity.h>
 
 /* federico's matrix minimal lib */
-#include "lib/simple_matrix.h"
+#include "ext/simplematrix/simple_matrix.h"
 
 /* inlude std image library */
-#define STB_IMAGE_RESIZE_IMPLEMENTATION
-#define STB_IMAGE_RESIZE_STATIC
-#include "lib/stb_image_resize.h"
+#include "ext/stblib/stb_image_write.h"
+#include "ext/stblib/stb_image_resize.h"
 
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "lib/stb_image_write.h"
+//#include "lib/stb_image_resize.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "lib/stb_image.h"
