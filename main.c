@@ -72,11 +72,7 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_IMAGESTREAMERVISUALIZER
 	// A small OpenGL visualizer exists to show what the output looks like.
-	#if defined(DAVISFX2) || defined(DAVISFX3)
-		caerImagestreamerVisualizer(5, polarity, frame);
-	#else
-		caerImagestreamerVisualizer(5, polarity, NULL);
-	#endif
+	caerImagestreamerVisualizer(5, polarity);
 #endif
 
 #ifdef ENABLE_NET_STREAM

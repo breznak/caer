@@ -58,13 +58,6 @@ struct imagestreamervisualizer_state {
 	int16_t eventRendererSizeY;
 	size_t eventRendererSlowDown;
 	struct caer_statistics_state eventStatistics;
-	uint32_t *frameRenderer;
-	int32_t frameRendererSizeX;
-	int32_t frameRendererSizeY;
-	int32_t frameRendererPositionX;
-	int32_t frameRendererPositionY;
-	enum caer_frame_event_color_channels frameChannels;
-	struct caer_statistics_state frameStatistics;
 	int16_t subsampleRendering;
 	int16_t subsampleCount;
 	//save output files
@@ -86,7 +79,6 @@ static bool caerImagestreamerVisualizerInit(caerModuleData moduleData);
 static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerImagestreamerVisualizerExit(caerModuleData moduleData);
 static bool allocateEventRenderer(imagestreamervisualizerState state, int16_t sourceID);
-static bool allocateFrameRenderer(imagestreamervisualizerState state, int16_t sourceID);
 static bool allocateImageMap(imagestreamervisualizerState state, int16_t sourceID);
 
 void framebuffer_size_callback(GLFWwindow* window);
@@ -96,10 +88,10 @@ static struct caer_module_functions caerImagestreamerVisualizerFunctions = { .mo
 	&caerImagestreamerVisualizerRun, .moduleConfig =
 NULL, .moduleExit = &caerImagestreamerVisualizerExit };
 
-void caerImagestreamerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame) {
+void caerImagestreamerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageStreamerVisualizer");
 
-	caerModuleSM(&caerImagestreamerVisualizerFunctions, moduleData, sizeof(struct imagestreamervisualizer_state), 2, polarity, frame);
+	caerModuleSM(&caerImagestreamerVisualizerFunctions, moduleData, sizeof(struct imagestreamervisualizer_state), 2, polarity);
 }
 
 
@@ -143,11 +135,6 @@ static void caerImagestreamerVisualizerExit(caerModuleData moduleData) {
 	if (state->eventRenderer != NULL) {
 		free(state->eventRenderer);
 		state->eventRenderer = NULL;
-	}
-
-	if (state->frameRenderer != NULL) {
-		free(state->frameRenderer);
-		state->frameRenderer = NULL;
 	}
 
 }
@@ -430,23 +417,3 @@ static bool allocateEventRenderer(imagestreamervisualizerState state, int16_t so
 	return (true);
 }
 
-static bool allocateFrameRenderer(imagestreamervisualizerState state, int16_t sourceID) {
-	// Get size information from source.
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
-	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
-	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
-
-	state->frameRenderer = calloc((size_t) (sizeX * sizeY ), sizeof(uint16_t));
-	if (state->frameRenderer == NULL) {
-		return (false); // Failure.
-	}
-
-	// Assign maximum sizes and defaults for frame renderer.
-	state->frameRendererSizeX = sizeX;
-	state->frameRendererSizeY = sizeY;
-	state->frameRendererPositionX = 0;
-	state->frameRendererPositionY = 0;
-	state->frameChannels = 1;
-
-	return (true);
-}

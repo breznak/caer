@@ -14,6 +14,6 @@
 #define SIZE_IMG_W 64 
 #define SIZE_IMG_H 64 
 
-void caerImagestreamerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame);
+void caerImagestreamerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity);
 
 #endif /* IMAGESTREAMERVISUALIZER_H_ */
