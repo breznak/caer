@@ -38,10 +38,10 @@
 //#include "lib/stb_image_resize.h"
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "lib/stb_image.h"
+#include "ext/stblib/stb_image.h"
 
 #define STB_DEFINE
-#include "lib/stb.h"
+#include "ext/stblib/stb.h"
 
 #define PNGSUITE_PRIMARY
 /* end std image library */
