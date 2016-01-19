@@ -84,10 +84,10 @@ static bool mainloop_1(void) {
 	// External clients connect to cAER, and we send them the data.
 	// WARNING: slow clients can dramatically slow this and the whole
 	// processing pipeline down!
-	caerOutputNetTCPServer(6, 1, polarity); // or (5, 2, polarity, frame) for polarity and frames
+	caerOutputNetTCPServer(6, 1, polarity); // or (6, 2, polarity, frame) for polarity and frames
 
 	// And also send them via UDP. This is fast, as it doesn't care what is on the other side.
-	caerOutputNetUDP(7, 1, polarity); // or (6, 2, polarity, frame) for polarity and frames
+	caerOutputNetUDP(7, 1, polarity); // or (7, 2, polarity, frame) for polarity and frames
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.
