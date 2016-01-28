@@ -10,7 +10,7 @@
 
 #include "main.h"
 
-#define CAER_LOG_FILE_FD 3
+extern int CAER_LOG_FILE_FD;
 
 void caerLogInit(void);
 void caerLogDisableConsole(void);

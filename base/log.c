@@ -4,6 +4,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+int CAER_LOG_FILE_FD = -1;
+
 static void caerLogShutDownWriteBack(void);
 static void caerLogSSHSLogger(const char *msg);
 static void caerLogLevelListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
@@ -33,9 +35,9 @@ void caerLogInit(void) {
 
 	// Try to open the specified file and error out if not possible.
 	char *logFile = sshsNodeGetString(logNode, "logFile");
-	int logFileFd = open(logFile, O_WRONLY | O_APPEND | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP);
+	CAER_LOG_FILE_FD = open(logFile, O_WRONLY | O_APPEND | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP);
 
-	if (logFileFd != CAER_LOG_FILE_FD) {
+	if (CAER_LOG_FILE_FD < 0) {
 		// Must be able to open log file! _REQUIRED_
 		caerLog(CAER_LOG_EMERGENCY, "Logger", "Failed to open log file '%s'. Error: %d.", logFile, errno);
 		free(logFile);
