@@ -28,12 +28,17 @@ Options (non required):
 
 Extra modules:
  -DENABLE_IMAGESTREAMERVISUALIZER=1 ... This module produces images by accumulating a fixed number 
-					of spikes. (press "R" to start recording png and "S" to stop)
+					of spikes. (press "r" to start recording png and "s" to stop)
 					This module depends on the visualizer module (ie. it requires -DENABLE_VISUALIZER=1)
 					This module can be configured by editing the file: 
 					 "module/imagescreamervisualizer/imagescreamervisualizer.h"
 					parameters:
 						numSpikes 7000 //number of spikes that are accumulated per image
+				        control keys: "p" to save images as _pos_id.png
+					              "n" to save images as _neg_id.png
+					              "t" to save iamges as _testing_id.png
+					              "s" stop recording images, but keep displaying them
+						
  -DENABLE_CAFFEINTERFACE=1          ... Caffe Interface to cAER, deep learning framework - https://github.com/BVLC/caffe - 
 					This module depends on the visualizer module and on the imagestreamer 
 					(ie. it requires -DENABLE_VISUALIZER=1 and -DENABLE_IMAGESTREAMERVISUALIZER=1)

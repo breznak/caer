@@ -49,8 +49,13 @@
 
 #define TITLE_WINDOW "cAER Image Streamer Visualizer"
 #define TITLE_WINDOW_RECORDING "cAER Image Streamer Visualizer: Recordings png.."
+#define TESTING 0		// keyboard "r" or "t" (recording or testing) "s" (stop) real-time test network, stores images in /tmp/ as defined in header file .h
+#define TRAINING_POSITIVES 1	// keyboard "p" (positives) record pngs and store them in positive folder
+#define TRAINING_NEGATIVES 2	// keyboard "n" (negatives) record pngs and store them in negative folder
+				// keyboard "s" stop saving png, generations on visualizer keeps going
 
-extern int8_t savepng_state = 0;
+extern int8_t savepng_state = 0; //default state -> do not save png
+extern int8_t mode = 0;		 //default mode -> do nothing 
 
 struct imagestreamervisualizer_state {
 	GLFWwindow* window;
@@ -63,6 +68,7 @@ struct imagestreamervisualizer_state {
 	int16_t subsampleCount;
 	//save output files
 	int8_t savepng;
+	int8_t mode;
         //image matrix	
         int64_t **ImageMap;
 	int32_t numSpikes;
@@ -152,17 +158,36 @@ void framebuffer_size_callback(GLFWwindow* window){
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods){
 
-    // R start recrding png files
-    if (key == GLFW_KEY_R  && action == GLFW_PRESS){
+    // R start recording or T start testing  
+    if ((key == GLFW_KEY_R || key == GLFW_KEY_T) && action == GLFW_PRESS){
 	printf("\nImage Streamer Filter: start saving png files to hw\n");
 	glfwSetWindowTitle(window, TITLE_WINDOW_RECORDING);
 	savepng_state = 1;
+	mode = TESTING; //testing
     }
+    // S stop recording
     if (key == GLFW_KEY_S  && action == GLFW_PRESS){
 	printf("\nImage Streamer Filter: stop saving png files\n");
 	glfwSetWindowTitle(window, TITLE_WINDOW);
-	savepng_state = 0;
+	savepng_state = 0; //stop testing
+	mode = TESTING;
     }
+    // P start recording positive examples
+    if (key == GLFW_KEY_N  && action == GLFW_PRESS){
+	printf("\nImage Streamer Filter: start capturing positive png in /yourpath/pos/ \n");
+	glfwSetWindowTitle(window, TITLE_WINDOW);
+	savepng_state = 1;
+	mode = TRAINING_NEGATIVES; //training positives examples
+    }
+    // N start recording negative examples
+    if (key == GLFW_KEY_P  && action == GLFW_PRESS){
+	printf("\nImage Streamer Filter: start capturing positive png in /yourpath/pos/ \n");
+	glfwSetWindowTitle(window, TITLE_WINDOW);
+	savepng_state = 1;
+	mode = TRAINING_POSITIVES; //training negative examples 
+    }
+ 
+    
 }
 
 
@@ -192,6 +217,7 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 
 	//update saving state
 	state->savepng = savepng_state;
+	state->mode = mode;
 
 	// Iterate over events and accumulate them 
 	CAER_POLARITY_ITERATOR_VALID_START(polarity)
@@ -283,7 +309,18 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 				//save current image (of accumulated numSpikes) to disk 
 				char id_img[15];
 				char ext[] =".png"; // png output (possibles other formats supported by the library are bmp, ppm, TGA, psd, pnm, hdr, gif,..)
-				char filename[255] = DIRECTORY_IMG ; //from settings.h
+				//check in which mode we are (testing/training/none)
+				char filename[255] = DIRECTORY_IMG;	
+				if(state->mode == TESTING){
+					strcat(filename,"_testing_"); 
+				}
+				if(state->mode == TRAINING_POSITIVES){
+					strcat(filename,"_pos_"); 
+				}
+				if(state->mode == TRAINING_NEGATIVES){
+					strcat(filename,"_neg_");
+				}
+				//char filename[255] = DIRECTORY_IMG ; //from settings.h
 				sprintf(id_img, "%d", state->counterImg);
 				strcat(filename, id_img); //append id_img
 				strcat(filename, ext); //append extension 
