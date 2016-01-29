@@ -19,6 +19,9 @@
 #include "modules/visualizer/visualizer.h"
 #include "modules/misc/out/net_tcp_server.h"
 #include "modules/misc/out/net_udp.h"
+#ifdef ENABLE_CAFFEINTERFACE
+        #include "modules/caffeinterface/wrapper.h"
+#endif
 
 static bool mainloop_1(void);
 static bool mainloop_2(void);
@@ -72,7 +75,10 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_IMAGESTREAMERVISUALIZER
 	// A small OpenGL visualizer exists to show what the output looks like.
-	caerImagestreamerVisualizer(5, polarity);
+	// if an image is generated it return the file_string , ie path of the image
+	char * file_string = NULL;
+	caerImagestreamerVisualizer(5, polarity, &file_string);
+	//printf("\n AAAAA %s\n", file_string);
 #endif
 
 #ifdef ENABLE_NET_STREAM
@@ -81,11 +87,17 @@ static bool mainloop_1(void) {
 	// WARNING: slow clients can dramatically slow this and the whole
 	// processing pipeline down!
 	caerOutputNetTCPServer(6, 1, polarity); // or (6, 2, polarity, frame) for polarity and frames
-
 	// And also send them via UDP. This is fast, as it doesn't care what is on the other side.
 	caerOutputNetUDP(7, 1, polarity); // or (7, 2, polarity, frame) for polarity and frames
 #endif
 
+#ifdef ENABLE_CAFFEINTERFACE
+	//it also requires imagestreamer visualizer
+	#ifdef ENABLE_IMAGESTREAMERVISUALIZER
+		// caffe deep learning framework interface
+		caerCaffeWrapper(8, &file_string);
+	#endif
+#endif
 	return (true); // If false is returned, processing of this loop stops.
 }
 

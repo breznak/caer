@@ -34,6 +34,14 @@ Extra modules:
 					 "module/imagescreamervisualizer/imagescreamervisualizer.h"
 					parameters:
 						numSpikes 7000 //number of spikes that are accumulated per image
+ -DENABLE_CAFFEINTERFACE=1          ... Caffe Interface to cAER, deep learning framework - https://github.com/BVLC/caffe - 
+					This module depends on the visualizer module and on the imagestreamer 
+					(ie. it requires -DENABLE_VISUALIZER=1 and -DENABLE_IMAGESTREAMERVISUALIZER=1)
+					It also requires caffe installed as well as boost/opencv/protobuffer (same as caffe)
+					You can load deep networks that have been trained with caffe (as alexnet/caffenet/vgg etc.)
+					This module can be configured by editing the file: 
+					 "module/caffeinterface/settings.h" 
+
 2) build:
 
 $ make

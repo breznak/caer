@@ -10,10 +10,10 @@
 #define IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT 400 
 
 #define PIXEL_ZOOM 1 
-#define DIRECTORY_IMG "/home/ubuntu/caffe/examples/images/retina/"
-#define SIZE_IMG_W 64 
-#define SIZE_IMG_H 64 
+#define DIRECTORY_IMG "/tmp/"
+#define SIZE_IMG_W 128 
+#define SIZE_IMG_H 128
 
-void caerImagestreamerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity);
+void caerImagestreamerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity, char ** file_string);
 
 #endif /* IMAGESTREAMERVISUALIZER_H_ */

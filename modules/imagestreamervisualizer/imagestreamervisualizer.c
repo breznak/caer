@@ -8,6 +8,7 @@
 #include "base/module.h"
 #include "modules/statistics/statistics.h"
 #include "ext/portable_time.h"
+#include <string.h>
 
 #define GLFW_INCLUDE_GLEXT 1
 #define GL_GLEXT_PROTOTYPES 1
@@ -88,10 +89,13 @@ static struct caer_module_functions caerImagestreamerVisualizerFunctions = { .mo
 	&caerImagestreamerVisualizerRun, .moduleConfig =
 NULL, .moduleExit = &caerImagestreamerVisualizerExit };
 
-void caerImagestreamerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity) {
+void caerImagestreamerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity, char ** file_string) {
+	
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageStreamerVisualizer");
 
-	caerModuleSM(&caerImagestreamerVisualizerFunctions, moduleData, sizeof(struct imagestreamervisualizer_state), 2, polarity);
+	caerModuleSM(&caerImagestreamerVisualizerFunctions, moduleData, sizeof(struct imagestreamervisualizer_state), 2, polarity, file_string);
+
+	return;
 }
 
 
@@ -167,6 +171,7 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 
 	// Interpret variable arguments (same as above in main function).
 	caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
+	char ** file_string = va_arg(args, char **);
 
 	// Only process packets with content.
 	// what if content is not a polarity event?
@@ -285,6 +290,12 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 				FILE *f = fopen(filename, "wb");
 				stbi_write_png(filename, SIZE_IMG_W, SIZE_IMG_H, 1, small_img, SIZE_IMG_W*1);
 				fclose(f);
+				*file_string = strdup(filename);
+				printf("File copied %s\n", *file_string);
+				if(*file_string ==  NULL){
+					caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString, "Error file name for png image not valid..");
+					return;
+				} 
 			}
 			state->counter = 0;
 			printf("\nImage Streamer: \t\t generated image number %d\n", state->counterImg);	
@@ -292,8 +303,9 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 				for(y_loop=0; y_loop<= state->sizeMaxY; y_loop++){
 					state->ImageMap[x_loop][y_loop] = 0 ;
 				}
-			}		
-		
+			}				
+
+
 	   // free chunks of memory
       	   free(img_coor);
       	   free(image_map);
