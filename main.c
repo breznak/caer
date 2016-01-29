@@ -74,11 +74,10 @@ static bool mainloop_1(void) {
 #endif
 
 #ifdef ENABLE_IMAGESTREAMERVISUALIZER
-	// A small OpenGL visualizer exists to show what the output looks like.
-	// if an image is generated it return the file_string , ie path of the image
+	// Open a second window of the OpenGL visualizer
+	// display/save images of accumulated spikes 
 	char * file_string = NULL;
 	caerImagestreamerVisualizer(5, polarity, &file_string);
-	//printf("\n AAAAA %s\n", file_string);
 #endif
 
 #ifdef ENABLE_NET_STREAM
@@ -94,7 +93,8 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_CAFFEINTERFACE
 	//it also requires imagestreamer visualizer
 	#ifdef ENABLE_IMAGESTREAMERVISUALIZER
-		// caffe deep learning framework interface
+		// this wrapper let you interact with caffe framework
+		// for example, we now classify the latest image
 		caerCaffeWrapper(8, &file_string);
 	#endif
 #endif
