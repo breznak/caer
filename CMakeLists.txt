@@ -11,7 +11,7 @@ IF (NOT ENABLE_VISUALIZER)
 ENDIF()
 
 IF (NOT ENABLE_IMAGESTREAMERVISUALIZER)
-	SET (ENABLE_IMAGESTREAMERVISUALIZER 0 CACHE BOOL "Enable compiling and linking the Image Streamer Visualizer module, this module generates images accumulating a fixed number of spikes" )
+	SET (ENABLE_IMAGESTREAMERVISUALIZER 0 CACHE BOOL "Enable compiling and linking the Image Streamer Visualizer module, this module generates images accumulating a fixed number of spikes")
 ENDIF()
 
 IF (NOT ENABLE_NET_STREAM)
@@ -107,11 +107,11 @@ IF (ENABLE_VISUALIZER)
 ENDIF()
 
 IF (ENABLE_IMAGESTREAMERVISUALIZER)
-	ADD_DEFINITIONS(-DENABLE_IMAGESTREAMERVISUALIZER=1)	
+	ADD_DEFINITIONS(-DENABLE_IMAGESTREAMERVISUALIZER=1)
 ENDIF()
 
 IF (ENABLE_CAFFEINTERFACE)
-	ADD_DEFINITIONS(-DENABLE_CAFFEINTERFACE=1)	
+	ADD_DEFINITIONS(-DENABLE_CAFFEINTERFACE=1)
 ENDIF()
 
 IF (ENABLE_NET_STREAM)
@@ -133,6 +133,7 @@ ENDIF()
 # Enable all warnings for GCC / Clang
 IF (CC_GCC OR CC_CLANG)
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic -Wall -Wextra")
+
 	IF (CC_GCC)
 		# Enable all useful warnings manually in GCC.
 		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused -Wundef -Wformat=2 -Winit-self -Wuninitialized")
@@ -143,12 +144,16 @@ IF (CC_GCC OR CC_CLANG)
 		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wconversion -Wstrict-overflow=2")
 		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wjump-misses-init -Wunsuffixed-float-constants -Wdouble-promotion")
 	ENDIF()
+
 	IF (CC_CLANG)
 		# Enable all warnings in Clang easily.
 		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Weverything -Wno-packed -Wno-padded -Wno-unreachable-code-break")
 		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-disabled-macro-expansion")
 	ENDIF()
 ENDIF()
+
+# Use same flags for C++ support
+SET(CMAKE_CXX_FLAGS ${CMAKE_C_FLAGS})
 
 # Search for external libraries with pkg-config
 INCLUDE(FindPkgConfig)
@@ -161,6 +166,10 @@ SET(CAER_LIBDIRS ${LIBCAER_LIBRARY_DIRS} ${MXML_LIBRARY_DIRS})
 SET(CAER_INCDIRS ${LIBCAER_INCLUDE_DIRS} ${MXML_INCLUDE_DIRS})
 file(GLOB_RECURSE CAER_INI_FILES modules/ini/*.c)
 SET(CAER_SRC_FILES ${CAER_INI_FILES})
+
+# By default, no C++ support is enabled.
+SET(CAER_CXX_LIBS "")
+SET(CAER_CXX_SRC_FILES "")
 
 # Basic IN/OUT support
 file(GLOB_RECURSE CAER_MISC_FILES modules/misc/*.c)
@@ -188,50 +197,57 @@ IF (ENABLE_VISUALIZER)
 ENDIF()
 
 IF (ENABLE_IMAGESTREAMERVISUALIZER)
-	# It requires Visualizer to be enable
+	# It requires the Visualizer to be enabled.
 	file(GLOB_RECURSE CAER_IMAGESTREAMERVISUALIZER_FILES modules/imagestreamervisualizer/*.c)
 	SET(CAER_SRC_FILES ${CAER_SRC_FILES} ${CAER_IMAGESTREAMERVISUALIZER_FILES})
 ENDIF()
 
 IF (ENABLE_CAFFEINTERFACE)
-        #Deep learning  caffe interface with required libs
+	# Deep learning: Caffe interface with required libs.
 	FIND_PACKAGE(Boost)
 	IF(Boost_FOUND)
-	    SET(CAER_INCDIRS ${CAER_INCDIRS} ${Boost_INCLUDE_DIRS})
-  	    MESSAGE(STATUS "BOOST FOUND" ${Boost_LIBRARIES})	
-	    SET(EXTRA_CAFFE_LIBS ${EXTRA_CAFFE_LIBS} ${BOOST_LIBRARYDIR})
+		SET(CAER_INCDIRS ${CAER_INCDIRS} ${Boost_INCLUDE_DIRS})
+		MESSAGE(STATUS "BOOST FOUND")
+		SET(EXTRA_CAFFE_LIBS ${Boost_LIBRARIES})
 	ENDIF(Boost_FOUND)
-        FIND_PACKAGE(OpenCV)
+
+	FIND_PACKAGE(OpenCV)
 	IF(OpenCV_FOUND)
-            SET(CAER_INCDIRS ${CAER_INCDIRS} ${OpenCV_INCLUDE_DIRS})
-            MESSAGE(STATUS "OPENCV FOUND")
-            SET(EXTRA_CAFFE_LIBS ${EXTRA_CAFFE_LIBS} ${OpenCV_LIBS})
+		SET(CAER_INCDIRS ${CAER_INCDIRS} ${OpenCV_INCLUDE_DIRS})
+		MESSAGE(STATUS "OPENCV FOUND")
+		SET(EXTRA_CAFFE_LIBS ${EXTRA_CAFFE_LIBS} ${OpenCV_LIBRARIES})
 	ENDIF(OpenCV_FOUND)
-        FIND_PACKAGE(Caffe) 
-        IF(Caffe_FOUND)
-            SET(CAER_INCDIRS ${CAER_INCDIRS} ${Caffe_INCLUDE_DIRS})
-            MESSAGE(STATUS "CAFFE DEEP LEARNING FRAMEWORK FOUND ")
-            SET(EXTRA_CAFFE_LIBS ${EXTRA_CAFFE_LIBS} ${Caffe_LIBRARIES})
-        ENDIF(Caffe_FOUND)
-        FIND_PACKAGE(Protobuf)
-        IF(Protobuf_FOUND)
-            SET(CAER_INCDIRS ${CAER_INCDIRS} ${Protobuf_INCLUDE_DIRS})
-            MESSAGE( STATUS "PROTOBUF FOUND ")
-            SET(EXTRA_CAFFE_LIBS ${EXTRA_CAFFE_LIBS} ${PROTOBUF_LIBRARIES})
-        ENDIF(Protobuf_FOUND)
-        # we need the c wrapper for using the c++ caffe library
-        SET(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -g -Wall")
-        file(GLOB_RECURSE CAER_CAFFEINTERFACE_FILES_CXX modules/caffeinterface/*.cpp)
+
+	FIND_PACKAGE(Caffe)
+	IF(Caffe_FOUND)
+		SET(CAER_INCDIRS ${CAER_INCDIRS} ${Caffe_INCLUDE_DIRS})
+		MESSAGE(STATUS "CAFFE DEEP LEARNING FRAMEWORK FOUND")
+		SET(EXTRA_CAFFE_LIBS ${EXTRA_CAFFE_LIBS} ${Caffe_LIBRARIES})
+	ENDIF(Caffe_FOUND)
+
+	FIND_PACKAGE(Protobuf)
+	IF(Protobuf_FOUND)
+		SET(CAER_INCDIRS ${CAER_INCDIRS} ${Protobuf_INCLUDE_DIRS})
+		MESSAGE(STATUS "PROTOBUF FOUND")
+		SET(EXTRA_CAFFE_LIBS ${EXTRA_CAFFE_LIBS} ${Protobuf_LIBRARIES})
+	ENDIF(Protobuf_FOUND)
+
+	SET(CAER_CXX_LIBS ${CAER_CXX_LIBS} ${EXTRA_CAFFE_LIBS})
+
+	# We need the C wrapper to use the C++ Caffe library.
+	file(GLOB_RECURSE CAER_CAFFEINTERFACE_FILES_CXX modules/caffeinterface/*.cpp)
+	SET(CAER_CXX_SRC_FILES ${CAER_CXX_SRC_FILES} ${CAER_CAFFEINTERFACE_FILES_CXX})
+
 	file(GLOB_RECURSE CAER_CAFFEINTERFACE_FILES_C modules/caffeinterface/*.c)
-        SET(CAER_SRCXX_FILES ${CAER_CAFFEINTERFACE_FILES_CXX})
 	SET(CAER_SRC_FILES ${CAER_SRC_FILES} ${CAER_CAFFEINTERFACE_FILES_C})
 ENDIF()
 
-# Add local directory to include paths
+# Add local directory to include and library paths
 SET(CAER_INCDIRS ${CAER_INCDIRS} ${CMAKE_SOURCE_DIR}/)
+SET(CAER_LIBDIRS ${CAER_LIBDIRS} ${CMAKE_SOURCE_DIR}/)
 
 INCLUDE_DIRECTORIES(${CAER_INCDIRS})
-LINK_DIRECTORIES(${CAER_LIBDIRS} ${CMAKE_SOURCE_DIR})
+LINK_DIRECTORIES(${CAER_LIBDIRS})
 
 # Set full RPATH
 SET(CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR})
@@ -257,9 +273,8 @@ IF (NOT APPLE)
 	SET(CAER_LIBS ${CAER_LIBS} rt)
 ENDIF()
 
-ADD_EXECUTABLE(caer-bin ${CAER_EXT_FILES} ${CAER_BASE_FILES} ${CAER_SRC_FILES} ${CAER_SRCXX_FILES}  main.c)
-TARGET_LINK_LIBRARIES(caer-bin ${CMAKE_THREAD_LIBS_INIT} ${CAER_LIBS} ${EXTRA_CAFFE_LIBS}) 
-
+ADD_EXECUTABLE(caer-bin ${CAER_EXT_FILES} ${CAER_BASE_FILES} ${CAER_SRC_FILES} ${CAER_CXX_SRC_FILES} main.c)
+TARGET_LINK_LIBRARIES(caer-bin ${CMAKE_THREAD_LIBS_INIT} ${CAER_LIBS} ${CAER_CXX_LIBS})
 INSTALL(TARGETS caer-bin DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # Compile cAERCtl
