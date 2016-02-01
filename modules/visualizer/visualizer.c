@@ -31,7 +31,7 @@ struct visualizer_state {
 	int16_t eventRendererSizeY;
 	size_t eventRendererSlowDown;
 	struct caer_statistics_state eventStatistics;
-	uint32_t *frameRenderer;
+	uint16_t *frameRenderer;
 	int32_t frameRendererSizeX;
 	int32_t frameRendererSizeY;
 	int32_t frameRendererPositionX;
