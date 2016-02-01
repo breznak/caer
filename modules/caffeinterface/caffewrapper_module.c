@@ -1,6 +1,6 @@
 /* Caffe Interface cAER module
-*  Author: federico.corradi@inilabs.com
-*/
+ *  Author: federico.corradi@inilabs.com
+ */
 
 #include "base/mainloop.h"
 #include "base/module.h"
@@ -27,7 +27,7 @@ const char * caerCaffeWrapper(uint16_t moduleID, char ** file_string) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "caerCaffeWrapper");
 	caerModuleSM(&caerCaffeWrapperFunctions, moduleData, sizeof(struct caffewrapper_state), 1, file_string);
 
-	return;
+	return (NULL);
 }
 
 static bool caerCaffeWrapperInit(caerModuleData moduleData) {
@@ -42,8 +42,7 @@ static bool caerCaffeWrapperInit(caerModuleData moduleData) {
 static void caerCaffeWrapperExit(caerModuleData moduleData) {
 	caffewrapperState state = moduleData->moduleState;
 
-        deleteMyClass(state->cpp_class); //free memory block
-	return (true);
+	deleteMyClass(state->cpp_class); //free memory block
 }
 
 static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
@@ -51,8 +50,8 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber, va
 	caffewrapperState state = moduleData->moduleState;
 	char ** file_string = va_arg(args, char **);
 	//run prediction if we generated a valid image
-	if(file_string != NULL){
-        	MyClass_file_set(state->cpp_class, *file_string);
+	if (file_string != NULL) {
+		MyClass_file_set(state->cpp_class, *file_string);
 	}
 	return;
 }

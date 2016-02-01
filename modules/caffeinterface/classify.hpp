@@ -1,6 +1,6 @@
 /* Caffe Interface for deep learning
-*  Author: federico.corradi@inilabs.com
-*/
+ *  Author: federico.corradi@inilabs.com
+ */
 
 #ifndef __CLASSIFY_H
 #define __CLASSIFY_H
@@ -16,43 +16,41 @@
 #include <utility>
 #include <vector>
 
-using namespace caffe;  // NOLINT(build/namespaces)
+using namespace caffe;
+// NOLINT(build/namespaces)
 using std::string;
 
 /* Pair (label, confidence) representing a prediction. */
 typedef std::pair<string, float> Prediction;
 
 class MyClass {
-	private:
-		char * file_i;
-		void SetMean(const string& mean_file);
+private:
+	char * file_i;
+	void SetMean(const string& mean_file);
 
-		std::vector<float> Predict(const cv::Mat& img);
+	std::vector<float> Predict(const cv::Mat& img);
 
-		void WrapInputLayer(std::vector<cv::Mat>* input_channels);
+	void WrapInputLayer(std::vector<cv::Mat>* input_channels);
 
-		void Preprocess(const cv::Mat& img,
-			  std::vector<cv::Mat>* input_channels);
+	void Preprocess(const cv::Mat& img, std::vector<cv::Mat>* input_channels);
 
-		shared_ptr<Net<float> > net_;
-		cv::Size input_geometry_;
-		int num_channels_;
-		cv::Mat mean_;
-		std::vector<string> labels_;
-	public:
+	shared_ptr<Net<float> > net_;
+	cv::Size input_geometry_;
+	int num_channels_;
+	cv::Mat mean_;
+	std::vector<string> labels_;
+public:
 
-		void Classifier(const string& model_file,
-		     const string& trained_file,
-		     const string& mean_file,
-		     const string& label_file);
+	void Classifier(const string& model_file, const string& trained_file, const string& mean_file,
+		const string& label_file);
 
-		std::vector<Prediction> Classify(const cv::Mat& img, int N = 5);
+	std::vector<Prediction> Classify(const cv::Mat& img, int N = 5);
 
-		void caller();
-		void file_set(char * i);
-		int hello_caffe();
-		char * file_get();
-		void init_network();		
+	void caller();
+	void file_set(char * i);
+	int hello_caffe();
+	char * file_get();
+	void init_network();
 };
 
 #endif

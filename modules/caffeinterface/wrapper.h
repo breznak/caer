@@ -1,6 +1,6 @@
 /* C wrapper to caffe interface
-*  Author: federico.corradi@gmail.com
-*/
+ *  Author: federico.corradi@gmail.com
+ */
 #ifndef __WRAPPER_H
 #define __WRAPPER_H
 #include <stdint.h>
@@ -8,7 +8,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-	
+
 typedef struct MyClass MyClass;
 
 MyClass* newMyClass();
