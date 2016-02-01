@@ -54,6 +54,7 @@
 #define TRAINING_NEGATIVES 2	// keyboard "n" (negatives) record pngs and store them in negative folder
 				// keyboard "s" stop saving png, generations on visualizer keeps going
 
+
 extern int8_t savepng_state = 0; //default state -> do not save png
 extern int8_t mode = 0;		 //default mode -> do nothing 
 
@@ -77,6 +78,13 @@ struct imagestreamervisualizer_state {
 	int16_t sizeMaxX;
 	int16_t sizeMaxY;
 	int8_t subSampleBy;
+	// frame
+	uint16_t *frameRenderer;
+	int32_t frameRendererSizeX;
+	int32_t frameRendererSizeY;
+	int32_t frameRendererPositionX;
+	int32_t frameRendererPositionY;
+	enum caer_frame_event_color_channels frameChannels;
 };
 
 
@@ -95,11 +103,11 @@ static struct caer_module_functions caerImagestreamerVisualizerFunctions = { .mo
 	&caerImagestreamerVisualizerRun, .moduleConfig =
 NULL, .moduleExit = &caerImagestreamerVisualizerExit };
 
-void caerImagestreamerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity, char ** file_string) {
+void caerImagestreamerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity, char ** file_string, caerFrameEventPacket frame, char ** file_string_frame) {
 	
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageStreamerVisualizer");
 
-	caerModuleSM(&caerImagestreamerVisualizerFunctions, moduleData, sizeof(struct imagestreamervisualizer_state), 2, polarity, file_string);
+	caerModuleSM(&caerImagestreamerVisualizerFunctions, moduleData, sizeof(struct imagestreamervisualizer_state), 4, polarity, file_string, frame, file_string_frame);
 
 	return;
 }
@@ -197,14 +205,20 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 	// Interpret variable arguments (same as above in main function).
 	caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
 	char ** file_string = va_arg(args, char **);
+	caerFrameEventPacket frame = va_arg(args, caerFrameEventPacket);
+	char ** file_string_frame = va_arg(args, char **);
 
 	// Only process packets with content.
 	// what if content is not a polarity event?
-	if (polarity == NULL) {
+	if (polarity == NULL && frame == NULL) {
 		return;
 	}
 
 	imagestreamervisualizerState state = moduleData->moduleState;
+
+	//update saving state
+	state->savepng = savepng_state;
+	state->mode = mode;
 
 	// If the map is not allocated yet, do it.
 	if (state->ImageMap == NULL) {
@@ -215,9 +229,69 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 		}
 	}
 
-	//update saving state
-	state->savepng = savepng_state;
-	state->mode = mode;
+	// init frame
+	if ( frame != NULL) {
+		caerFrameEvent currFrameEvent;
+
+		for (int32_t i = caerEventPacketHeaderGetEventNumber(&frame->packetHeader) - 1; i >= 0; i--) {
+			currFrameEvent = caerFrameEventPacketGetEvent(frame, i);
+
+			// Only operate on the last valid frame.
+			if (caerFrameEventIsValid(currFrameEvent)) {
+				// Copy the frame content to the permanent frameRenderer.
+				// Use frame sizes to correctly support small ROI frames.
+				state->frameRendererSizeX = caerFrameEventGetLengthX(currFrameEvent);
+				state->frameRendererSizeY = caerFrameEventGetLengthY(currFrameEvent);
+				state->frameRendererPositionX = caerFrameEventGetPositionX(currFrameEvent);
+				state->frameRendererPositionY = caerFrameEventGetPositionY(currFrameEvent);
+				state->frameChannels = caerFrameEventGetChannelNumber(currFrameEvent);
+
+				state->frameRenderer = caerFrameEventGetPixelArrayCGFormat(currFrameEvent);
+
+				break;
+			}
+		}
+
+		if(state->savepng == 1 && state->frameRenderer != NULL){
+			state->counterImg += 1;
+			int frame_loop = 0;
+
+			//save current frame image as png to disk
+			char id_img[15];
+			char ext[] =".png"; // png output (possibles other formats supported by the library are bmp, ppm, TGA, psd, pnm, hdr, gif,..)
+			//check in which mode we are (testing/training/none)
+			char filename[255] = DIRECTORY_IMG;	
+			if(state->mode == TESTING){
+				strcat(filename,"_testing_frame_"); 
+			}
+			if(state->mode == TRAINING_POSITIVES){
+				strcat(filename,"_pos_frame_"); 
+			}
+			if(state->mode == TRAINING_NEGATIVES){
+				strcat(filename,"_neg_frame_");
+			}
+			sprintf(id_img, "%d", state->counterImg);
+			strcat(filename, id_img); //append id_img
+			strcat(filename, ext); //append extension 
+			FILE *f = fopen(filename, "wb");
+
+			//cast frame to unsigned char
+			unsigned char *frame_img;
+			frame_img = (unsigned char*) malloc(state->frameRendererSizeX*state->frameRendererSizeY*1);
+			for(frame_loop = 0; frame_loop < state->frameRendererSizeX*state->frameRendererSizeY*1; ++frame_loop) {
+				frame_img[frame_loop] =  (state->frameRenderer[frame_loop] >> 8) & 0xFF; 
+			}
+			stbi_write_png(filename, state->frameRendererSizeX,state->frameRendererSizeY, 1, frame_img, state->frameRendererSizeX*1);
+			fclose(f);
+			*file_string = strdup(filename);
+			if(*file_string ==  NULL){
+				caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString, "Error file name for png image not valid..");
+				return;
+			} 
+            free(frame_img);
+		}
+	}
+
 
 	// Iterate over events and accumulate them 
 	CAER_POLARITY_ITERATOR_VALID_START(polarity)
@@ -253,13 +327,14 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 			float min_tmp_v = 2555;
 			float mean = 0;
 			float std = 0;
+			int max_a = -1;
+			int min_a = 2555;
+
 			//we accumulated enough spikes..
 			state->counterImg += 1;
 			// init img/data/index coord
 			ImageCoordinate *img_coor = malloc(sizeof(ImageCoordinate));
 			ImageCoordinateInit(img_coor, state->sizeMaxX, state->sizeMaxY, 1); // 1 gray scale, 4 red green alpha
-			int max_a = -1;
-			int min_a = 2555;
 
 			//normalize image vector, convert it to 0..255, resize to SIZE_IMG*SIZE_IMG and update/save png 
 			for(x_loop = 0; x_loop < state->sizeMaxX*state->sizeMaxY*1; ++x_loop) {
@@ -312,15 +387,14 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 				//check in which mode we are (testing/training/none)
 				char filename[255] = DIRECTORY_IMG;	
 				if(state->mode == TESTING){
-					strcat(filename,"_testing_"); 
+					strcat(filename,"_testing_spikes_"); 
 				}
 				if(state->mode == TRAINING_POSITIVES){
-					strcat(filename,"_pos_"); 
+					strcat(filename,"_pos_spikes_"); 
 				}
 				if(state->mode == TRAINING_NEGATIVES){
-					strcat(filename,"_neg_");
+					strcat(filename,"_neg_spikes_");
 				}
-				//char filename[255] = DIRECTORY_IMG ; //from settings.h
 				sprintf(id_img, "%d", state->counterImg);
 				strcat(filename, id_img); //append id_img
 				strcat(filename, ext); //append extension 
@@ -328,14 +402,14 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 				stbi_write_png(filename, SIZE_IMG_W, SIZE_IMG_H, 1, small_img, SIZE_IMG_W*1);
 				fclose(f);
 				*file_string = strdup(filename);
-				printf("File copied %s\n", *file_string);
+				//printf("File copied %s\n", *file_string);
 				if(*file_string ==  NULL){
 					caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString, "Error file name for png image not valid..");
 					return;
 				} 
 			}
 			state->counter = 0;
-			printf("\nImage Streamer: \t\t generated image number %d\n", state->counterImg);	
+			//printf("\nImage Streamer: \t\t generated image number %d\n", state->counterImg);	
 			for(x_loop=0; x_loop<= state->sizeMaxX; x_loop++){
 				for(y_loop=0; y_loop<= state->sizeMaxY; y_loop++){
 					state->ImageMap[x_loop][y_loop] = 0 ;
@@ -344,9 +418,11 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 
 
 	   // free chunks of memory
-      	   free(img_coor);
-      	   free(image_map);
-      
+       free(img_coor);
+       free(image_map);
+       free(state->frameRenderer);
+       state->frameRenderer = NULL;
+
 	   //select context/window
 	   glfwMakeContextCurrent(state->window);
 
@@ -386,7 +462,7 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 			   checkImage);
 	   
 	   //display
-    	   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	   glEnable(GL_TEXTURE_2D);
 	   glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL);
 	   glBindTexture(GL_TEXTURE_2D, texName);

@@ -77,7 +77,12 @@ static bool mainloop_1(void) {
 	// Open a second window of the OpenGL visualizer
 	// display/save images of accumulated spikes 
 	char * file_string = NULL;
-	caerImagestreamerVisualizer(5, polarity, &file_string);
+	#if defined(DAVISFX2) || defined(DAVISFX3)
+            char * file_string_frame = NULL;
+	    caerImagestreamerVisualizer(5, polarity, &file_string, frame, &file_string_frame);
+        #else
+            caerImagestreamerVisualizer(5, polarity, &file_string, NULL, NULL);
+        #endif
 #endif
 
 #ifdef ENABLE_NET_STREAM

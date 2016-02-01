@@ -13,8 +13,8 @@ void MyClass::file_set(char * i) {
     if(file_i != NULL){
         string file = file_i;
 
-        std::cout << "---------- Prediction for "
-                << file_i << " ----------" << std::endl;
+        std::cout << "\n---------- Prediction for "
+                << file_i << " ----------\n" << std::endl;
 
         cv::Mat img = cv::imread(file_i, -1);
         CHECK(!img.empty()) << "Unable to decode image " << file_i;
