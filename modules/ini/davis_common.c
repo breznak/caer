@@ -435,6 +435,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 		sshsNodePutShortIfAbsent(apsNode, "SampleSettle", devInfo->adcClock); // in cycles
 		sshsNodePutShortIfAbsent(apsNode, "RampReset", (devInfo->adcClock / 3)); // in cycles
 		sshsNodePutBoolIfAbsent(apsNode, "RampShortReset", false);
+		sshsNodePutBoolIfAbsent(apsNode, "ADCTestMode", false);
 	}
 
 	// DAVIS RGB has additional timing counters.
@@ -1636,6 +1637,8 @@ static void apsConfigSend(sshsNode node, caerModuleData moduleData, struct caer_
 			U32T(sshsNodeGetShort(node, "RampReset")));
 		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_RAMP_SHORT_RESET,
 			sshsNodeGetBool(node, "RampShortReset"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_ADC_TEST_MODE,
+			sshsNodeGetBool(node, "ADCTestMode"));
 	}
 
 	// DAVIS RGB extra timing support.
@@ -1784,6 +1787,10 @@ static void apsConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 		}
 		else if (changeType == BOOL && caerStrEquals(changeKey, "RampShortReset")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_RAMP_SHORT_RESET,
+				changeValue.boolean);
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "ADCTestMode")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_ADC_TEST_MODE,
 				changeValue.boolean);
 		}
 		else if (changeType == SHORT && caerStrEquals(changeKey, "TransferTime")) {
