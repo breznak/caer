@@ -46,6 +46,7 @@ Extra modules:
 					You can load deep networks that have been trained with caffe (as alexnet/caffenet/vgg etc.)
 					This module can be configured by editing the file: 
 					 "module/caffeinterface/settings.h" 
+					-DCPU_ONLY=1 to use caffe framework with CPU only (ie. no GPU)
 
 2) build:
 
