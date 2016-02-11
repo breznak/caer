@@ -19,10 +19,11 @@ IF (NOT ENABLE_NET_STREAM)
 ENDIF()
 
 IF (NOT ENABLE_CAFFEINTERFACE)
-	SET(ENABLE_CAFFEINTERFACE 0 CACHE BOOL "Enable caffe interface, i.e. deep learning framework")
+	SET(ENABLE_CAFFEINTERFACE 0 CACHE BOOL "Enable Caffe deep learning framework interface module")
+
 	IF (NOT CPU_ONLY)
-		SET(CPU_ONLY 0 CACHE BOOL "Set Caffe framework to work only with CPU, no GPU")
-        ENDIF()
+		SET(CPU_ONLY 0 CACHE BOOL "Set Caffe framework to work only with the CPU, not with GPU support")
+	ENDIF()
 ENDIF()
 
 IF (NOT DVS128 AND NOT DAVISFX2 AND NOT DAVISFX3)
@@ -115,9 +116,10 @@ ENDIF()
 
 IF (ENABLE_CAFFEINTERFACE)
 	ADD_DEFINITIONS(-DENABLE_CAFFEINTERFACE=1)
-        IF(CPU_ONLY)
+
+	IF (CPU_ONLY)
 		ADD_DEFINITIONS(-DCPU_ONLY=1)
-        ENDIF()
+	ENDIF()
 ENDIF()
 
 IF (ENABLE_NET_STREAM)
