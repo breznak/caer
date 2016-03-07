@@ -20,7 +20,6 @@
 #include "modules/visualizer_allegro/visualizer_allegro.h"
 #include "modules/misc/out/net_tcp_server.h"
 #include "modules/misc/out/net_udp.h"
-#include <allegro5/allegro.h>
 #ifdef ENABLE_CAFFEINTERFACE
         #include "modules/caffeinterface/wrapper.h"
 #endif
@@ -152,8 +151,7 @@ static bool mainloop_2(void) {
 	return (true); // If false is returned, processing of this loop stops.
 }
 
-//int main(int argc, char *argv[]) {
-int main(int argc, char **argv) {
+int main(int argc, char *argv[]) {
 	// Initialize config storage from file, support command-line overrides.
 	// If no init from file needed, pass NULL.
 	caerConfigInit("caer-config.xml", argc, argv);
