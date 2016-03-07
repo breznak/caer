@@ -23,7 +23,8 @@ One of the following options is required:
  -DDAVISFX3=1           ... set davisfx3 (for FX3 platform models)
 
 Options (non required): 
- -DENABLE_VISUALIZER=1  ... enable visualizer module (Linux only!)
+ -DENABLE_VISUALIZER=1  ... enable opengl visualizer module (Linux only!)
+ -DENABLE_VISUALIZER_ALLEGRO=1 ... enable allegro visualizer module (Linux/MacOSX)
  -DENABLE_NET_STREAM=1  ... enable tcp server for sending data over network
 
 Extra modules:

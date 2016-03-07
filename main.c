@@ -17,11 +17,14 @@
 #include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
 #include "modules/statistics/statistics.h"
 #include "modules/visualizer/visualizer.h"
+#include "modules/visualizer_allegro/visualizer_allegro.h"
 #include "modules/misc/out/net_tcp_server.h"
 #include "modules/misc/out/net_udp.h"
+#include <allegro5/allegro.h>
 #ifdef ENABLE_CAFFEINTERFACE
         #include "modules/caffeinterface/wrapper.h"
 #endif
+
 
 static bool mainloop_1(void);
 static bool mainloop_2(void);
@@ -70,6 +73,15 @@ static bool mainloop_1(void) {
 		caerVisualizer(4, polarity, frame);
 	#else
 		caerVisualizer(4, polarity, NULL);
+	#endif
+#endif
+
+#ifdef ENABLE_VISUALIZER_ALLEGRO
+	// A small OpenGL visualizer exists to show what the output looks like.
+	#if defined(DAVISFX2) || defined(DAVISFX3)
+		caerVisualizerAllegro(4, polarity, frame);
+	#else
+		caerVisualizerAllegro(4, polarity, NULL);
 	#endif
 #endif
 
@@ -140,7 +152,8 @@ static bool mainloop_2(void) {
 	return (true); // If false is returned, processing of this loop stops.
 }
 
-int main(int argc, char *argv[]) {
+//int main(int argc, char *argv[]) {
+int main(int argc, char **argv) {
 	// Initialize config storage from file, support command-line overrides.
 	// If no init from file needed, pass NULL.
 	caerConfigInit("caer-config.xml", argc, argv);
