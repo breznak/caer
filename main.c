@@ -20,6 +20,9 @@
 #include "modules/visualizer_allegro/visualizer_allegro.h"
 #include "modules/misc/out/net_tcp_server.h"
 #include "modules/misc/out/net_udp.h"
+#ifdef ENABLE_VISUALIZER_ALLEGRO
+	#include <allegro5/allegro5.h>
+#endif
 #ifdef ENABLE_CAFFEINTERFACE
         #include "modules/caffeinterface/wrapper.h"
 #endif
