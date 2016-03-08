@@ -239,31 +239,31 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 
 	if (IS_DAVISRGB(devInfo->chipID)) {
 		createVDACBiasSetting(moduleData, biasNode, "ApsCas", 21, 4);
-		createVDACBiasSetting(moduleData, biasNode, "OVG1Lo", 21, 4);
+		createVDACBiasSetting(moduleData, biasNode, "OVG1Lo", 63, 4);
 		createVDACBiasSetting(moduleData, biasNode, "OVG2Lo", 0, 0);
 		createVDACBiasSetting(moduleData, biasNode, "TX2OVG2Hi", 63, 0);
 		createVDACBiasSetting(moduleData, biasNode, "Gnd07", 13, 4);
 		createVDACBiasSetting(moduleData, biasNode, "AdcTestVoltage", 21, 0);
-		createVDACBiasSetting(moduleData, biasNode, "AdcRefHigh", 63, 7);
-		createVDACBiasSetting(moduleData, biasNode, "AdcRefLow", 0, 7);
+		createVDACBiasSetting(moduleData, biasNode, "AdcRefHigh", 46, 7);
+		createVDACBiasSetting(moduleData, biasNode, "AdcRefLow", 3, 7);
 
 		createCoarseFineBiasSetting(moduleData, biasNode, "IFRefrBn", 5, 255, false, "N", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "IFThrBn", 5, 255, false, "N", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "LocalBufBn", 5, 164, false, "N", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "PadFollBn", 7, 209, false, "N", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "PixInvBn", 4, 164, true, "N", "Normal");
-		createCoarseFineBiasSetting(moduleData, biasNode, "DiffBn", 4, 54, true, "N", "Normal");
-		createCoarseFineBiasSetting(moduleData, biasNode, "OnBn", 6, 63, true, "N", "Normal");
-		createCoarseFineBiasSetting(moduleData, biasNode, "OffBn", 2, 138, true, "N", "Normal");
-		createCoarseFineBiasSetting(moduleData, biasNode, "PrBp", 1, 108, true, "P", "Normal");
-		createCoarseFineBiasSetting(moduleData, biasNode, "PrSFBp", 1, 108, true, "P", "Normal");
-		createCoarseFineBiasSetting(moduleData, biasNode, "RefrBp", 4, 28, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "DiffBn", 3, 75, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "OnBn", 6, 95, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "OffBn", 2, 41, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "PrBp", 1, 88, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "PrSFBp", 1, 173, true, "P", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "RefrBp", 2, 62, true, "P", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "ArrayBiasBufferBn", 6, 128, true, "N", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "ArrayLogicBufferBn", 5, 255, true, "N", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "FalltimeBn", 7, 41, true, "N", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "RisetimeBp", 6, 162, true, "P", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "ReadoutBufBp", 6, 20, false, "P", "Normal");
-		createCoarseFineBiasSetting(moduleData, biasNode, "ApsROSFBn", 6, 255, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "ApsROSFBn", 7, 82, true, "N", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "AdcCompBp", 4, 159, true, "P", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "DACBufBp", 6, 194, true, "P", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "LcolTimeoutBn", 5, 49, true, "N", "Normal");
@@ -271,7 +271,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 		createCoarseFineBiasSetting(moduleData, biasNode, "AEPuXBp", 4, 80, true, "P", "Normal");
 		createCoarseFineBiasSetting(moduleData, biasNode, "AEPuYBp", 7, 152, true, "P", "Normal");
 
-		createCoarseFineBiasSetting(moduleData, biasNode, "BiasBuffer", 7, 255, true, "N", "Normal");
+		createCoarseFineBiasSetting(moduleData, biasNode, "BiasBuffer", 6, 251, true, "N", "Normal");
 
 		createShiftedSourceBiasSetting(moduleData, biasNode, "SSP", 1, 33, "TiedToRail", "SplitGate");
 		createShiftedSourceBiasSetting(moduleData, biasNode, "SSN", 2, 33, "ShiftedSource", "SplitGate");
@@ -440,12 +440,12 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 
 	// DAVIS RGB has additional timing counters.
 	if (IS_DAVISRGB(devInfo->chipID)) {
-		sshsNodePutShortIfAbsent(apsNode, "TransferTime", (devInfo->adcClock * 25)); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "RSFDSettleTime", (devInfo->adcClock * 15)); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSPDResetTime", (devInfo->adcClock * 15)); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSResetFallTime", (devInfo->adcClock * 15)); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSTXFallTime", (devInfo->adcClock * 15)); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSFDResetTime", (devInfo->adcClock * 15)); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "TransferTime", 1500); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "RSFDSettleTime", 1000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSPDResetTime", 1000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSResetFallTime", 1000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSTXFallTime", 1000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSFDResetTime",1000); // in cycles
 	}
 
 	sshsNodeAddAttributeListener(apsNode, moduleData, &apsConfigListener);
