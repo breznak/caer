@@ -1,59 +1,133 @@
-#include "visualizer_allegro.h"
+#include "visualizer.h"
 #include "base/mainloop.h"
 #include "base/module.h"
-#include "modules/statistics/statistics.h"
 #include "ext/portable_time.h"
-#include <allegro5/allegro.h>
 
 #define TEXT_SPACING 20 // in pixels
 
 #define SYSTEM_TIMEOUT 10 // in seconds
 
-struct visualizer_allegro_state {
-	ALLEGRO_DISPLAY *displayEvents;
-	ALLEGRO_DISPLAY *displayFrames;
-    ALLEGRO_BITMAP *bb;
-    ALLEGRO_BITMAP *bbframes;
-	uint32_t  *eventRenderer;
-	int16_t eventRendererSizeX;
-	int16_t eventRendererSizeY;
-	size_t eventRendererSlowDown;
-	struct caer_statistics_state eventStatistics;
-	uint16_t  *frameRenderer;
-	int32_t frameRendererSizeX;
-	int32_t frameRendererSizeY;
-	int32_t frameRendererPositionX;
-	int32_t frameRendererPositionY;
-	enum caer_frame_event_color_channels frameChannels;
-	struct caer_statistics_state frameStatistics;
-	int16_t subsampleRendering;
-	int16_t subsampleCount;
-};
+void caerVisualizerSystemInit(void) {
+	// Initialize the Allegro library.
+	if (al_init()) {
+		// Successfully initialized Allegro.
+		caerLog(CAER_LOG_DEBUG, "Visualizer", "Allegro library initialized successfully.");
+	}
+	else {
+		// Failed to initialize Allegro.
+		caerLog(CAER_LOG_EMERGENCY, "Visualizer", "Failed to initialize Allegro library.");
+		exit(EXIT_FAILURE);
+	}
 
-typedef struct visualizer_allegro_state *visualizerAllegroState;
+	// Set correct names.
+	al_set_org_name("iniLabs");
+	al_set_app_name("cAER");
 
-static bool caerVisualizerAllegroInit(caerModuleData moduleData);
-static void caerVisualizerAllegroRun(caerModuleData moduleData, size_t argsNumber, va_list args);
-static void caerVisualizerAllegroExit(caerModuleData moduleData);
-static bool allocateEventRenderer(visualizerAllegroState state, int16_t sourceID);
-static bool allocateFrameRenderer(visualizerAllegroState state, int16_t sourceID);
+	// Now load addons: primitives to draw, fonts (and TTF) to write text.
+	if (al_init_primitives_addon()) {
+		// Successfully initialized Allegro primitives addon.
+		caerLog(CAER_LOG_DEBUG, "Visualizer", "Allegro primitives addon initialized successfully.");
+	}
+	else {
+		// Failed to initialize Allegro primitives addon.
+		caerLog(CAER_LOG_EMERGENCY, "Visualizer", "Failed to initialize Allegro primitives addon.");
+		exit(EXIT_FAILURE);
+	}
 
-ALLEGRO_BITMAP *create_memory_bitmap(int w, int h);
+	al_init_font_addon();
 
-static struct caer_module_functions caerVisualizerFunctions = { .moduleInit = &caerVisualizerAllegroInit, .moduleRun =
-	&caerVisualizerAllegroRun, .moduleConfig =
-NULL, .moduleExit = &caerVisualizerAllegroExit };
+	if (al_init_ttf_addon()) {
+		// Successfully initialized Allegro TTF addon.
+		caerLog(CAER_LOG_DEBUG, "Visualizer", "Allegro TTF addon initialized successfully.");
+	}
+	else {
+		// Failed to initialize Allegro TTF addon.
+		caerLog(CAER_LOG_EMERGENCY, "Visualizer", "Failed to initialize Allegro TTF addon.");
+		exit(EXIT_FAILURE);
+	}
 
-void caerVisualizerAllegro(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "VisualizerAllegro");
+	// Install main event sources: mouse and keyboard.
+	if (al_install_mouse()) {
+		// Successfully initialized Allegro mouse event source.
+		caerLog(CAER_LOG_DEBUG, "Visualizer", "Allegro mouse event source initialized successfully.");
+	}
+	else {
+		// Failed to initialize Allegro mouse event source.
+		caerLog(CAER_LOG_EMERGENCY, "Visualizer", "Failed to initialize Allegro mouse event source.");
+		exit(EXIT_FAILURE);
+	}
 
-	caerModuleSM(&caerVisualizerFunctions, moduleData, sizeof(struct visualizer_allegro_state), 2, polarity, frame);
+	if (al_install_keyboard()) {
+		// Successfully initialized Allegro keyboard event source.
+		caerLog(CAER_LOG_DEBUG, "Visualizer", "Allegro keyboard event source initialized successfully.");
+	}
+	else {
+		// Failed to initialize Allegro keyboard event source.
+		caerLog(CAER_LOG_EMERGENCY, "Visualizer", "Failed to initialize Allegro keyboard event source.");
+		exit(EXIT_FAILURE);
+	}
 }
 
-static bool caerVisualizerAllegroInit(caerModuleData moduleData) {
-	visualizerAllegroState state = moduleData->moduleState;
+bool caerVisualizerInit(caerVisualizerState state, int32_t bitmapSizeX, int32_t bitmapSizeY) {
+		// Create display window.
+		state->displayWindow = al_create_display(bitmapSizeX, bitmapSizeX);
+		if (state->displayWindow == NULL) {
+			caerLog(CAER_LOG_ERROR, "Visualizer", "Failed to create display element with sizeX=%d, sizeY=%d.", bitmapSizeX, bitmapSizeY);
+			return (false);
+		}
 
-   
+		state->displayWindowSizeX = bitmapSizeX;
+		state->displayWindowSizeY = bitmapSizeY;
+
+		// Get video buffer
+		state->bitmapRenderer = al_get_backbuffer(state->displayWindow);
+		state->bitmapRendererSizeX = bitmapSizeX;
+		state->bitmapRendererSizeY = bitmapSizeY;
+
+		// Initi
+		al_clear_to_color(al_map_rgb(0, 0, 0));
+		al_flip_display();
+
+		return (true);
+}
+
+void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerState state) {
+
+}
+
+void caerVisualizerExit(caerVisualizerState state) {
+
+}
+
+struct visualizer_module_state {
+	struct caer_visualizer_state eventVisualizer;
+	struct caer_visualizer_state frameVisualizer;
+	int32_t frameRendererPositionX;
+	int32_t frameRendererPositionY;
+	enum caer_frame_event_color_channels frameRendererChannels;
+};
+
+typedef struct visualizer_module_state *visualizerModuleState;
+
+static bool caerVisualizerModuleInit(caerModuleData moduleData);
+static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber, va_list args);
+static void caerVisualizerModuleExit(caerModuleData moduleData);
+static bool allocateEventRenderer(visualizerModuleState state, int16_t sourceID);
+static bool allocateFrameRenderer(visualizerModuleState state, int16_t sourceID);
+
+static struct caer_module_functions caerVisualizerFunctions = { .moduleInit = &caerVisualizerModuleInit, .moduleRun =
+	&caerVisualizerModuleRun, .moduleConfig =
+NULL, .moduleExit = &caerVisualizerModuleExit };
+
+void caerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame) {
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "Visualizer");
+
+	caerModuleSM(&caerVisualizerFunctions, moduleData, sizeof(struct visualizer_module_state), 2, polarity, frame);
+}
+
+static bool caerVisualizerModuleInit(caerModuleData moduleData) {
+	visualizerModuleState state = moduleData->moduleState;
+
 	// Configuration.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showEvents", true);
 #ifdef DVS128
@@ -67,7 +141,6 @@ static bool caerVisualizerAllegroInit(caerModuleData moduleData) {
 	state->subsampleRendering = sshsNodeGetShort(moduleData->moduleNode, "subsampleRendering");
 	state->subsampleCount = 1;
 
-
 	if (!caerStatisticsStringInit(&state->eventStatistics)) {
 		return (false);
 	}
@@ -80,37 +153,11 @@ static bool caerVisualizerAllegroInit(caerModuleData moduleData) {
 
 	state->frameStatistics.divisionFactor = 1;
 
-    if(!al_init()) {
-        fprintf(stderr, "failed to initialize allegro!\n");
-        return -1;
-    } 
-
-    state->displayEvents = al_create_display(VISUALIZER_ALLEGRO_SCREEN_WIDTH,VISUALIZER_ALLEGRO_SCREEN_HEIGHT);
-    if( state->displayEvents == NULL) {
-        fprintf(stderr, "failed to create display!\n");
-        return -1;
-    }
-    
-    state->bb = al_get_backbuffer(state->displayEvents);
-    al_clear_to_color(al_map_rgb(0,0,0));
-    al_flip_display();  
-    
-    state->displayFrames = al_create_display(VISUALIZER_ALLEGRO_SCREEN_WIDTH,VISUALIZER_ALLEGRO_SCREEN_HEIGHT);
-    if( state->displayFrames == NULL) {
-        fprintf(stderr, "failed to create display!\n");
-        return -1;
-    }
-    
-    state->bbframes = al_get_backbuffer(state->displayFrames);
-    al_clear_to_color(al_map_rgb(0,0,0));
-    al_flip_display();  
-    
 	return (true);
 }
 
-static void caerVisualizerAllegroExit(caerModuleData moduleData) {
-	visualizerAllegroState state = moduleData->moduleState;
-
+static void caerVisualizerModuleExit(caerModuleData moduleData) {
+	visualizerModuleState state = moduleData->moduleState;
 
 	// Ensure render maps are freed.
 	if (state->eventRenderer != NULL) {
@@ -128,10 +175,10 @@ static void caerVisualizerAllegroExit(caerModuleData moduleData) {
 	caerStatisticsStringExit(&state->frameStatistics);
 }
 
-static void caerVisualizerAllegroRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
+static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
 	UNUSED_ARGUMENT(argsNumber);
 
-	visualizerAllegroState state = moduleData->moduleState;
+	visualizerModuleState state = moduleData->moduleState;
 
 	// Subsampling, only render every Nth packet.
 	if (state->subsampleCount >= state->subsampleRendering) {
@@ -160,7 +207,7 @@ static void caerVisualizerAllegroRun(caerModuleData moduleData, size_t argsNumbe
 					(size_t) (state->eventRendererSizeX * state->eventRendererSizeY) * sizeof(uint32_t));
 			}
 
-			CAER_POLARITY_ITERATOR_VALID_START(polarity)
+			CAER_POLARITY_ITERATOR_VALID_START (polarity)
 				if (caerPolarityEventGetPolarity(caerPolarityIteratorElement)) {
 					// Green.
 					state->eventRenderer[(caerPolarityEventGetY(caerPolarityIteratorElement) * state->eventRendererSizeX)
@@ -233,38 +280,38 @@ static void caerVisualizerAllegroRun(caerModuleData moduleData, size_t argsNumbe
 			+ (int64_t) (currentTime.tv_nsec - state->frameStatistics.lastTime.tv_nsec));
 		bool noFramesTimeout = (diffNanoTimeFrames >= U64T(SYSTEM_TIMEOUT * 1000000000LL));
 
-        // TO DO SEPARATE THREAD
-        //
+		// TO DO SEPARATE THREAD
+		//
 		// All rendering calls at the end.
 		// Only execute if something actually changed (packets not null).
 		if ((renderPolarity && (polarity != NULL || noEventsTimeout))
 			|| (renderFrame && (frame != NULL || noFramesTimeout))) {
 
-            //set backbuffer as target
-            al_clear_to_color(al_map_rgb(0,0,0));
+			//set backbuffer as target
+			al_clear_to_color(al_map_rgb(0, 0, 0));
 
 			// Render polarity events.
 			if (renderPolarity) {
 				// Write statistics text.
 				caerStatisticsStringUpdate((caerEventPacketHeader) polarity, &state->eventStatistics);
-                //lock bitmap
-                al_set_target_bitmap(state->bb); 
-                ALLEGRO_LOCKED_REGION * lock;
-                lock = al_lock_bitmap(state->bb, ALLEGRO_PIXEL_FORMAT_ABGR_8888_LE, ALLEGRO_LOCK_WRITEONLY);
-                if(lock != NULL){
-                    uint8_t *data = lock->data;
-                    uint8_t *eventRR = state->eventRenderer;
-                    for (int y = 0; y < state->eventRendererSizeY; y++) {
-                        memcpy(data, eventRR, state->eventRendererSizeX * sizeof(uint32_t));
-                        
-                        data += lock->pitch;
-                        eventRR += state->eventRendererSizeX * sizeof(uint32_t);
-                    }
-                //unlock                    
-                al_unlock_bitmap(state->bb); 
-                // update display
-                al_flip_display();       
-                }
+				//lock bitmap
+				al_set_target_bitmap(state->bb);
+				ALLEGRO_LOCKED_REGION * lock;
+				lock = al_lock_bitmap(state->bb, ALLEGRO_PIXEL_FORMAT_ABGR_8888_LE, ALLEGRO_LOCK_WRITEONLY);
+				if (lock != NULL) {
+					uint8_t *data = lock->data;
+					uint8_t *eventRR = state->eventRenderer;
+					for (int y = 0; y < state->eventRendererSizeY; y++) {
+						memcpy(data, eventRR, state->eventRendererSizeX * sizeof(uint32_t));
+
+						data += lock->pitch;
+						eventRR += state->eventRendererSizeX * sizeof(uint32_t);
+					}
+					//unlock
+					al_unlock_bitmap(state->bb);
+					// update display
+					al_flip_display();
+				}
 			}
 
 			// Render latest frame.
@@ -272,24 +319,24 @@ static void caerVisualizerAllegroRun(caerModuleData moduleData, size_t argsNumbe
 				// Write statistics text.
 				caerStatisticsStringUpdate((caerEventPacketHeader) frame, &state->frameStatistics);
 
-                //lock bitmap
-                al_set_target_bitmap(state->bbframes); 
-                ALLEGRO_LOCKED_REGION * lock;
-                lock = al_lock_bitmap(state->bbframes, ALLEGRO_PIXEL_FORMAT_ABGR_8888_LE, ALLEGRO_LOCK_WRITEONLY);
-                if(lock != NULL){
-                    uint8_t *data = lock->data;
-                    uint8_t *eventRR = state->frameRenderer;
-                    for (int y = 0; y < state->eventRendererSizeY; y++) {
-                        memcpy(data, eventRR, state->frameRendererSizeX * sizeof(uint16_t));
-                        
-                        data += lock->pitch;
-                        eventRR += state->frameRendererSizeX * sizeof(uint16_t);
-                    }
-                //unlock                    
-                al_unlock_bitmap(state->bbframes);  
-                // update display
-                al_flip_display();      
-                }
+				//lock bitmap
+				al_set_target_bitmap(state->bbframes);
+				ALLEGRO_LOCKED_REGION * lock;
+				lock = al_lock_bitmap(state->bbframes, ALLEGRO_PIXEL_FORMAT_ABGR_8888_LE, ALLEGRO_LOCK_WRITEONLY);
+				if (lock != NULL) {
+					uint8_t *data = lock->data;
+					uint8_t *eventRR = state->frameRenderer;
+					for (int y = 0; y < state->eventRendererSizeY; y++) {
+						memcpy(data, eventRR, state->frameRendererSizeX * sizeof(uint16_t));
+
+						data += lock->pitch;
+						eventRR += state->frameRendererSizeX * sizeof(uint16_t);
+					}
+					//unlock
+					al_unlock_bitmap(state->bbframes);
+					// update display
+					al_flip_display();
+				}
 
 				switch (state->frameChannels) {
 					case GRAYSCALE:
@@ -307,50 +354,10 @@ static void caerVisualizerAllegroRun(caerModuleData moduleData, size_t argsNumbe
 
 		state->subsampleCount = 1;
 	}
-	
-	
+
 	else {
 		state->subsampleCount++;
 	}
-	
-	
+
 }
 
-static bool allocateEventRenderer(visualizerAllegroState state, int16_t sourceID) {
-	// Get size information from source.
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
-	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
-
-	state->eventRenderer = calloc((size_t) (sizeX * sizeY), sizeof(uint32_t));
-	if (state->eventRenderer == NULL) {
-		return (false); // Failure.
-	}
-
-	// Assign maximum sizes for event renderer.
-	state->eventRendererSizeX = sizeX;
-	state->eventRendererSizeY = sizeY;
-
-	return (true);
-}
-
-static bool allocateFrameRenderer(visualizerAllegroState state, int16_t sourceID) {
-	// Get size information from source.
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
-	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
-	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
-
-	state->frameRenderer = calloc((size_t) (sizeX * sizeY * MAX_CHANNELS), sizeof(uint16_t));
-	if (state->frameRenderer == NULL) {
-		return (false); // Failure.
-	}
-
-	// Assign maximum sizes and defaults for frame renderer.
-	state->frameRendererSizeX = sizeX;
-	state->frameRendererSizeY = sizeY;
-	state->frameRendererPositionX = 0;
-	state->frameRendererPositionY = 0;
-	state->frameChannels = MAX_CHANNELS;
-
-	return (true);
-}

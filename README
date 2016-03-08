@@ -9,7 +9,7 @@ cmake >= 2.6
 gcc >= 4.9 or clang >= 3.6
 libcaer >= 1.0.2
 mini-xml (mxml) >= 2.7
-glfw >= 3.0.4 (optional, only if using visualizer module, Linux only!)
+allegro5 >= 5.0.1 (optional, only if using the visualizer)
 
 INSTALLATION:
 
@@ -23,8 +23,7 @@ One of the following options is required:
  -DDAVISFX3=1           ... set davisfx3 (for FX3 platform models)
 
 Options (non required): 
- -DENABLE_VISUALIZER=1  ... enable opengl visualizer module (Linux only!)
- -DENABLE_VISUALIZER_ALLEGRO=1 ... enable allegro visualizer module (Linux/MacOSX)
+ -DENABLE_VISUALIZER=1  ... enable visualizer module
  -DENABLE_NET_STREAM=1  ... enable tcp server for sending data over network
 
 Extra modules:

@@ -16,17 +16,16 @@
 #include "modules/ini/davis_fx3.h"
 #include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
 #include "modules/statistics/statistics.h"
-#include "modules/visualizer/visualizer.h"
-#include "modules/visualizer_allegro/visualizer_allegro.h"
 #include "modules/misc/out/net_tcp_server.h"
 #include "modules/misc/out/net_udp.h"
-#ifdef ENABLE_VISUALIZER_ALLEGRO
-	#include <allegro5/allegro5.h>
-#endif
-#ifdef ENABLE_CAFFEINTERFACE
-        #include "modules/caffeinterface/wrapper.h"
+
+#ifdef ENABLE_VISUALIZER
+	#include "modules/visualizer_allegro/visualizer.h"
 #endif
 
+#ifdef ENABLE_CAFFEINTERFACE
+	#include "modules/caffeinterface/wrapper.h"
+#endif
 
 static bool mainloop_1(void);
 static bool mainloop_2(void);
@@ -70,7 +69,7 @@ static bool mainloop_1(void) {
 	caerStatistics(3, (caerEventPacketHeader) polarity, 1000);
 
 #ifdef ENABLE_VISUALIZER
-	// A small OpenGL visualizer exists to show what the output looks like.
+	// A small visualizer exists to show what the output looks like.
 	#if defined(DAVISFX2) || defined(DAVISFX3)
 		caerVisualizer(4, polarity, frame);
 	#else
@@ -78,25 +77,16 @@ static bool mainloop_1(void) {
 	#endif
 #endif
 
-#ifdef ENABLE_VISUALIZER_ALLEGRO
-	// A small OpenGL visualizer exists to show what the output looks like.
-	#if defined(DAVISFX2) || defined(DAVISFX3)
-		caerVisualizerAllegro(4, polarity, frame);
-	#else
-		caerVisualizerAllegro(4, polarity, NULL);
-	#endif
-#endif
-
 #ifdef ENABLE_IMAGESTREAMERVISUALIZER
 	// Open a second window of the OpenGL visualizer
 	// display/save images of accumulated spikes 
-	char * file_string = NULL;
+	char *file_string = NULL;
 	#if defined(DAVISFX2) || defined(DAVISFX3)
-            char * file_string_frame = NULL;
-	    caerImagestreamerVisualizer(5, polarity, &file_string, frame, &file_string_frame);
-        #else
-            caerImagestreamerVisualizer(5, polarity, &file_string, NULL, NULL);
-        #endif
+		char *file_string_frame = NULL;
+		caerImagestreamerVisualizer(5, polarity, &file_string, frame, &file_string_frame);
+	#else
+		caerImagestreamerVisualizer(5, polarity, &file_string, NULL, NULL);
+	#endif
 #endif
 
 #ifdef ENABLE_NET_STREAM
@@ -105,18 +95,20 @@ static bool mainloop_1(void) {
 	// WARNING: slow clients can dramatically slow this and the whole
 	// processing pipeline down!
 	caerOutputNetTCPServer(6, 1, polarity); // or (6, 2, polarity, frame) for polarity and frames
+
 	// And also send them via UDP. This is fast, as it doesn't care what is on the other side.
 	caerOutputNetUDP(7, 1, polarity); // or (7, 2, polarity, frame) for polarity and frames
 #endif
 
 #ifdef ENABLE_CAFFEINTERFACE
-	//it also requires imagestreamer visualizer
+	// This also requires imagestreamervisualizer
 	#ifdef ENABLE_IMAGESTREAMERVISUALIZER
 		// this wrapper let you interact with caffe framework
 		// for example, we now classify the latest image
 		caerCaffeWrapper(8, &file_string);
 	#endif
 #endif
+
 	return (true); // If false is returned, processing of this loop stops.
 }
 
@@ -161,6 +153,11 @@ int main(int argc, char *argv[]) {
 
 	// Initialize logging sub-system.
 	caerLogInit();
+
+	// Initialize visualizer framework (load fonts etc.).
+#ifdef ENABLE_VISUALIZER
+	caerVisualizerSystemInit();
+#endif
 
 	// Daemonize the application (run in background).
 	//caerDaemonize();
