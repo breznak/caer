@@ -55,6 +55,15 @@ bool caerStatisticsStringInit(caerStatisticsState state) {
 		return (false);
 	}
 
+	// Initialize to current time.
+	struct timespec currentTime;
+	portable_clock_gettime_monotonic(&currentTime);
+	state->lastTime.tv_sec = currentTime.tv_sec;
+	state->lastTime.tv_nsec = currentTime.tv_nsec;
+
+	// Set division factor to 1 by default (avoid division by zero).
+	state->divisionFactor = 1;
+
 	return (true);
 }
 
@@ -75,8 +84,10 @@ void caerStatisticsStringUpdate(caerEventPacketHeader packetHeader, caerStatisti
 	// DiffNanoTime is the difference in nanoseconds; we want to trigger roughly every second.
 	if (diffNanoTime >= 1000000000LLU) {
 		// Print current values.
-		uint64_t totalEventsPerTime = (state->totalEventsCounter * (1000000000LLU / state->divisionFactor)) / diffNanoTime;
-		uint64_t validEventsPerTime = (state->validEventsCounter * (1000000000LLU / state->divisionFactor)) / diffNanoTime;
+		uint64_t totalEventsPerTime = (state->totalEventsCounter * (1000000000LLU / state->divisionFactor))
+			/ diffNanoTime;
+		uint64_t validEventsPerTime = (state->validEventsCounter * (1000000000LLU / state->divisionFactor))
+			/ diffNanoTime;
 
 		sprintf(state->currentStatisticsString, STAT_STRING, totalEventsPerTime, validEventsPerTime);
 

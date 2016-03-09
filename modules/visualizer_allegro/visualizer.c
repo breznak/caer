@@ -7,6 +7,10 @@
 
 #define SYSTEM_TIMEOUT 10 // in seconds
 
+#define GLOBAL_FONT_NAME "LiberationSans-Regular.ttf"
+
+static ALLEGRO_FONT *globalFont = NULL;
+
 void caerVisualizerSystemInit(void) {
 	// Initialize the Allegro library.
 	if (al_init()) {
@@ -46,6 +50,18 @@ void caerVisualizerSystemInit(void) {
 		exit(EXIT_FAILURE);
 	}
 
+	// Load global font.
+	globalFont = al_load_font(GLOBAL_FONT_NAME, 20, 0);
+	if (globalFont == NULL) {
+		// Successfully loaded global font.
+		caerLog(CAER_LOG_DEBUG, "Visualizer", "Allegro global font loaded successfully.");
+	}
+	else {
+		// Failed to load global font.
+		caerLog(CAER_LOG_EMERGENCY, "Visualizer", "Failed to load Allegro global font.");
+		exit(EXIT_FAILURE);
+	}
+
 	// Install main event sources: mouse and keyboard.
 	if (al_install_mouse()) {
 		// Successfully initialized Allegro mouse event source.
@@ -68,35 +84,103 @@ void caerVisualizerSystemInit(void) {
 	}
 }
 
-bool caerVisualizerInit(caerVisualizerState state, int32_t bitmapSizeX, int32_t bitmapSizeY) {
-		// Create display window.
-		state->displayWindow = al_create_display(bitmapSizeX, bitmapSizeX);
-		if (state->displayWindow == NULL) {
-			caerLog(CAER_LOG_ERROR, "Visualizer", "Failed to create display element with sizeX=%d, sizeY=%d.", bitmapSizeX, bitmapSizeY);
-			return (false);
-		}
+bool caerVisualizerInit(caerVisualizerState state, int32_t bitmapSizeX, int32_t bitmapSizeY, int32_t zoomFactor) {
+	// Create display window.
+	state->displayWindow = al_create_display(bitmapSizeX * zoomFactor, bitmapSizeY * zoomFactor);
+	if (state->displayWindow == NULL) {
+		caerLog(CAER_LOG_ERROR, "Visualizer",
+			"Failed to create display element with sizeX=%d, sizeY=%d, zoomFactor=%d.", bitmapSizeX, bitmapSizeY,
+			zoomFactor);
+		return (false);
+	}
 
-		state->displayWindowSizeX = bitmapSizeX;
-		state->displayWindowSizeY = bitmapSizeY;
+	// Initialize window to all black.
+	al_set_target_backbuffer(state->displayWindow);
+	al_clear_to_color(al_map_rgb(0, 0, 0));
+	al_flip_display();
 
-		// Get video buffer
-		state->bitmapRenderer = al_get_backbuffer(state->displayWindow);
-		state->bitmapRendererSizeX = bitmapSizeX;
-		state->bitmapRendererSizeY = bitmapSizeY;
+	// Create video buffer for drawing.
+	al_set_new_bitmap_flags(ALLEGRO_VIDEO_BITMAP | ALLEGRO_MIN_LINEAR | ALLEGRO_MAG_LINEAR);
+	state->bitmapRenderer = al_create_bitmap(bitmapSizeX, bitmapSizeY);
+	if (state->bitmapRenderer == NULL) {
+		caerLog(CAER_LOG_ERROR, "Visualizer", "Failed to create bitmap element with sizeX=%d, sizeY=%d.", bitmapSizeX,
+			bitmapSizeY);
+		return (false);
+	}
 
-		// Initi
-		al_clear_to_color(al_map_rgb(0, 0, 0));
-		al_flip_display();
+	// Clear bitmap to all black.
+	al_set_target_bitmap(state->bitmapRenderer);
+	al_clear_to_color(al_map_rgb(0, 0, 0));
 
-		return (true);
+	// Remember sizes.
+	state->bitmapRendererSizeX = bitmapSizeX;
+	state->bitmapRendererSizeY = bitmapSizeY;
+	state->displayWindowZoomFactor = zoomFactor;
+
+	// Enable packet statistics and sub-sampling support.
+	caerStatisticsStringInit(&state->packetStatistics);
+	state->packetSubsampleRendering = 1;
+	state->packetSubsampleCount = 0;
+
+	// Initialize mutex for locking between update and screen draw operations.
+	mtx_init(&state->bitmapMutex, mtx_plain);
+
+	return (true);
 }
 
 void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerState state) {
+	// Only render ever Nth packet.
+	state->packetSubsampleCount++;
 
+	if (state->packetSubsampleCount == state->packetSubsampleRendering) {
+		state->packetSubsampleCount = 0;
+	}
+	else {
+		return;
+	}
+
+	mtx_lock(&state->bitmapMutex);
+
+	// Update statistics.
+	caerStatisticsStringUpdate(packetHeader, &state->packetStatistics);
+
+	// Update bitmap with new content.
+
+	mtx_unlock(&state->bitmapMutex);
+}
+
+void caerVisualizerUpdateScreen(caerVisualizerState state) {
+	al_set_target_backbuffer(state->displayWindow);
+	al_clear_to_color(al_map_rgb(0, 0, 0));
+
+	mtx_lock(&state->bitmapMutex);
+
+	// Render statistics string.
+	al_draw_text(globalFont, al_map_rgb(255, 255, 255), 5, 5, 0, state->packetStatistics.currentStatisticsString);
+
+	// Blit bitmap to screen, taking zoom factor into consideration.
+	al_draw_scaled_bitmap(state->bitmapRenderer, 0, 0, state->bitmapRendererSizeX, state->bitmapRendererSizeY, 0, 30,
+		state->bitmapRendererSizeX * state->displayWindowZoomFactor,
+		state->bitmapRendererSizeY * state->displayWindowZoomFactor, 0);
+
+	mtx_unlock(&state->bitmapMutex);
+
+	al_flip_display();
 }
 
 void caerVisualizerExit(caerVisualizerState state) {
+	al_set_target_bitmap(NULL);
 
+	al_destroy_bitmap(state->bitmapRenderer);
+	state->bitmapRenderer = NULL;
+
+	al_destroy_display(state->displayWindow);
+	state->displayWindow = NULL;
+
+	caerStatisticsStringExit(&state->packetStatistics);
+	state->packetSubsampleCount = 0;
+
+	mtx_destroy(&state->bitmapMutex);
 }
 
 struct visualizer_module_state {
