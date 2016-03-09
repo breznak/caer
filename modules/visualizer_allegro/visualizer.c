@@ -3,11 +3,11 @@
 #include "base/module.h"
 #include "ext/portable_time.h"
 
-#define TEXT_SPACING 20 // in pixels
-
 #define SYSTEM_TIMEOUT 10 // in seconds
 
 #define GLOBAL_FONT_NAME "LiberationSans-Regular.ttf"
+#define GLOBAL_FONT_SIZE 20 // in pixels
+#define GLOBAL_FONT_SPACING 5 // in pixels
 
 static ALLEGRO_FONT *globalFont = NULL;
 
@@ -84,9 +84,13 @@ void caerVisualizerSystemInit(void) {
 	}
 }
 
-bool caerVisualizerInit(caerVisualizerState state, int32_t bitmapSizeX, int32_t bitmapSizeY, int32_t zoomFactor) {
+bool caerVisualizerInit(caerVisualizerState state, int32_t bitmapSizeX, int32_t bitmapSizeY, int32_t zoomFactor,
+bool doStatistics) {
 	// Create display window.
-	state->displayWindow = al_create_display(bitmapSizeX * zoomFactor, bitmapSizeY * zoomFactor);
+	// Add 30 pixels to Y for automatic statistics if needed (5 spacing + 20 text + 5 spacing).
+	state->displayWindow = al_create_display(bitmapSizeX * zoomFactor,
+		bitmapSizeY * zoomFactor
+			+ ((doStatistics) ? (GLOBAL_FONT_SPACING + GLOBAL_FONT_SIZE + GLOBAL_FONT_SPACING) : (0)));
 	if (state->displayWindow == NULL) {
 		caerLog(CAER_LOG_ERROR, "Visualizer",
 			"Failed to create display element with sizeX=%d, sizeY=%d, zoomFactor=%d.", bitmapSizeX, bitmapSizeY,
@@ -118,7 +122,10 @@ bool caerVisualizerInit(caerVisualizerState state, int32_t bitmapSizeX, int32_t 
 	state->displayWindowZoomFactor = zoomFactor;
 
 	// Enable packet statistics and sub-sampling support.
-	caerStatisticsStringInit(&state->packetStatistics);
+	if (doStatistics) {
+		caerStatisticsStringInit(&state->packetStatistics);
+	}
+
 	state->packetSubsampleRendering = 1;
 	state->packetSubsampleCount = 0;
 
@@ -141,10 +148,15 @@ void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerStat
 
 	mtx_lock(&state->bitmapMutex);
 
-	// Update statistics.
-	caerStatisticsStringUpdate(packetHeader, &state->packetStatistics);
+	// Update statistics (if enabled).
+	if (state->packetStatistics.currentStatisticsString != NULL) {
+		caerStatisticsStringUpdate(packetHeader, &state->packetStatistics);
+	}
 
 	// Update bitmap with new content.
+	if (caerEventPacketHeaderGetEventType(packetHeader) == POLARITY_EVENT) {
+
+	}
 
 	mtx_unlock(&state->bitmapMutex);
 }
@@ -156,10 +168,16 @@ void caerVisualizerUpdateScreen(caerVisualizerState state) {
 	mtx_lock(&state->bitmapMutex);
 
 	// Render statistics string.
-	al_draw_text(globalFont, al_map_rgb(255, 255, 255), 5, 5, 0, state->packetStatistics.currentStatisticsString);
+	bool doStatistics = (state->packetStatistics.currentStatisticsString != NULL);
+
+	if (doStatistics) {
+		al_draw_text(globalFont, al_map_rgb(255, 255, 255), GLOBAL_FONT_SPACING, GLOBAL_FONT_SPACING, 0,
+			state->packetStatistics.currentStatisticsString);
+	}
 
 	// Blit bitmap to screen, taking zoom factor into consideration.
-	al_draw_scaled_bitmap(state->bitmapRenderer, 0, 0, state->bitmapRendererSizeX, state->bitmapRendererSizeY, 0, 30,
+	al_draw_scaled_bitmap(state->bitmapRenderer, 0, 0, state->bitmapRendererSizeX, state->bitmapRendererSizeY, 0,
+		(doStatistics) ? (GLOBAL_FONT_SPACING + GLOBAL_FONT_SIZE + GLOBAL_FONT_SPACING) : (0),
 		state->bitmapRendererSizeX * state->displayWindowZoomFactor,
 		state->bitmapRendererSizeY * state->displayWindowZoomFactor, 0);
 
@@ -177,8 +195,9 @@ void caerVisualizerExit(caerVisualizerState state) {
 	al_destroy_display(state->displayWindow);
 	state->displayWindow = NULL;
 
-	caerStatisticsStringExit(&state->packetStatistics);
-	state->packetSubsampleCount = 0;
+	if (state->packetStatistics.currentStatisticsString != NULL) {
+		caerStatisticsStringExit(&state->packetStatistics);
+	}
 
 	mtx_destroy(&state->bitmapMutex);
 }

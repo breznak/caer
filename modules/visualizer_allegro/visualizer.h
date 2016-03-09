@@ -18,7 +18,7 @@
 struct caer_visualizer_state {
 	ALLEGRO_DISPLAY *displayWindow;
 	int32_t displayWindowZoomFactor;
-	ALLEGRO_BITMAP  *bitmapRenderer;
+	ALLEGRO_BITMAP *bitmapRenderer;
 	int32_t bitmapRendererSizeX;
 	int32_t bitmapRendererSizeY;
 	mtx_t bitmapMutex;
@@ -30,7 +30,8 @@ struct caer_visualizer_state {
 typedef struct caer_visualizer_state *caerVisualizerState;
 
 // For reuse inside other modules.
-bool caerVisualizerInit(caerVisualizerState state, int32_t bitmapSizeX, int32_t bitmapSizeY, int32_t zoomFactor);
+bool caerVisualizerInit(caerVisualizerState state, int32_t bitmapSizeX, int32_t bitmapSizeY, int32_t zoomFactor,
+	bool doStatistics);
 void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerState state);
 void caerVisualizerUpdateScreen(caerVisualizerState state);
 void caerVisualizerExit(caerVisualizerState state);
