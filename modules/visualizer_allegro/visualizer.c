@@ -5,7 +5,7 @@
 
 #define GLOBAL_RESOURCES_DIR "ext/resources/"
 #define GLOBAL_FONT_NAME "LiberationSans-Bold.ttf"
-#define GLOBAL_FONT_SIZE 20 // in pixels
+#define GLOBAL_FONT_SIZE 30 // in pixels
 #define GLOBAL_FONT_SPACING 5 // in pixels
 #define STATISTICS_SIZE (GLOBAL_FONT_SPACING + GLOBAL_FONT_SIZE + GLOBAL_FONT_SPACING)
 
@@ -199,9 +199,10 @@ void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerStat
 	al_set_target_bitmap(state->bitmapRenderer);
 	al_clear_to_color(al_map_rgb(0, 0, 0));
 
-	// Update bitmap with new content.
+	// Update bitmap with new content. (0, 0) is lower left corner.
 	if (caerEventPacketHeaderGetEventType(packetHeader) == POLARITY_EVENT) {
-		CAER_POLARITY_ITERATOR_ALL_START((caerPolarityEventPacket) packetHeader)
+		// Render all valid events.
+		CAER_POLARITY_ITERATOR_VALID_START((caerPolarityEventPacket) packetHeader)
 			if (caerPolarityEventGetPolarity(caerPolarityIteratorElement)) {
 				// ON polarity (green).
 				al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
@@ -212,7 +213,70 @@ void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerStat
 				al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
 					caerPolarityEventGetY(caerPolarityIteratorElement), al_map_rgb(255, 0, 0));
 			}
-		CAER_POLARITY_ITERATOR_ALL_END
+		CAER_POLARITY_ITERATOR_VALID_END
+	}
+	else if (caerEventPacketHeaderGetEventType(packetHeader) == FRAME_EVENT) {
+		// Render only the last, valid frame.
+		caerFrameEventPacket currFramePacket = (caerFrameEventPacket) packetHeader;
+		caerFrameEvent currFrameEvent;
+
+		for (int32_t i = caerEventPacketHeaderGetEventNumber(&currFramePacket->packetHeader) - 1; i >= 0; i--) {
+			currFrameEvent = caerFrameEventPacketGetEvent(currFramePacket, i);
+
+			// Only operate on the last, valid frame.
+			if (caerFrameEventIsValid(currFrameEvent)) {
+				// Copy the frame content to the render bitmap.
+				// Use frame sizes to correctly support small ROI frames.
+				int32_t frameSizeX = caerFrameEventGetLengthX(currFrameEvent);
+				int32_t frameSizeY = caerFrameEventGetLengthY(currFrameEvent);
+				int32_t framePositionX = caerFrameEventGetPositionX(currFrameEvent);
+				int32_t framePositionY = caerFrameEventGetPositionY(currFrameEvent);
+				enum caer_frame_event_color_channels frameChannels = caerFrameEventGetChannelNumber(currFrameEvent);
+
+				for (int32_t y = 0; y < frameSizeY; y++) {
+					for (int32_t x = 0; x < frameSizeX; x++) {
+						ALLEGRO_COLOR color;
+
+						switch (frameChannels) {
+							case GRAYSCALE: {
+								uint8_t pixel = U8T(caerFrameEventGetPixelUnsafe(currFrameEvent, x, y) >> 8);
+								color = al_map_rgb(pixel, pixel, pixel);
+								break;
+							}
+
+							case RGB: {
+								uint8_t pixelR = U8T(
+									caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 0) >> 8);
+								uint8_t pixelG = U8T(
+									caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 1) >> 8);
+								uint8_t pixelB = U8T(
+									caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 2) >> 8);
+								color = al_map_rgb(pixelR, pixelG, pixelB);
+								break;
+							}
+
+							case RGBA:
+							default: {
+								uint8_t pixelR = U8T(
+									caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 0) >> 8);
+								uint8_t pixelG = U8T(
+									caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 1) >> 8);
+								uint8_t pixelB = U8T(
+									caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 2) >> 8);
+								uint8_t pixelA = U8T(
+									caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 3) >> 8);
+								color = al_map_rgba(pixelR, pixelG, pixelB, pixelA);
+								break;
+							}
+						}
+
+						al_put_pixel(framePositionX + x, framePositionY + y, color);
+					}
+				}
+
+				break;
+			}
+		}
 	}
 
 	mtx_unlock(&state->bitmapMutex);
@@ -269,9 +333,6 @@ struct visualizer_module_state {
 	thrd_t renderingThread;
 	struct caer_visualizer_state eventVisualizer;
 	struct caer_visualizer_state frameVisualizer;
-	int32_t frameRendererPositionX;
-	int32_t frameRendererPositionY;
-	enum caer_frame_event_color_channels frameRendererChannels;
 };
 
 typedef struct visualizer_module_state *visualizerModuleState;
@@ -304,7 +365,8 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showFrames", true);
 #endif
 
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "subsampleRendering", 1);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "subsampleEventsRendering", 1);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "subsampleFramesRendering", 1);
 
 	// Start separate rendering thread. Decouples presentation from
 	// data processing and preparation. Communication over properly
@@ -353,6 +415,10 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 			}
 		}
 
+		// Update sub-sample value.
+		state->eventVisualizer.packetSubsampleRendering = sshsNodeGetInt(moduleData->moduleNode,
+			"subsampleEventsRendering");
+
 		// Actually update polarity rendering.
 		caerVisualizerUpdate(&polarity->packetHeader, &state->eventVisualizer);
 	}
@@ -366,6 +432,10 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 				return;
 			}
 		}
+
+		// Update sub-sample value.
+		state->frameVisualizer.packetSubsampleRendering = sshsNodeGetInt(moduleData->moduleNode,
+			"subsampleFramesRendering");
 
 		// Actually update frame rendering.
 		caerVisualizerUpdate(&frame->packetHeader, &state->frameVisualizer);

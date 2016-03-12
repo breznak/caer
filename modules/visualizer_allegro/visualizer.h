@@ -14,7 +14,7 @@
 #include "modules/statistics/statistics.h"
 #include "ext/c11threads_posix.h"
 
-#define VISUALIZER_DEFAULT_ZOOM 1
+#define VISUALIZER_DEFAULT_ZOOM 2
 
 struct caer_visualizer_state {
 	atomic_bool running;
