@@ -14,7 +14,7 @@
 #include "modules/statistics/statistics.h"
 #include "ext/c11threads_posix.h"
 
-#define MAX_CHANNELS 4
+#define VISUALIZER_DEFAULT_ZOOM 1
 
 struct caer_visualizer_state {
 	atomic_bool running;

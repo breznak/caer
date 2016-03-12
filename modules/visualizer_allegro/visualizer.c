@@ -3,14 +3,13 @@
 #include "base/module.h"
 #include "ext/portable_time.h"
 
-#define SYSTEM_TIMEOUT 10 // in seconds
-
 #define GLOBAL_RESOURCES_DIR "ext/resources/"
 #define GLOBAL_FONT_NAME "LiberationSans-Bold.ttf"
 #define GLOBAL_FONT_SIZE 20 // in pixels
 #define GLOBAL_FONT_SPACING 5 // in pixels
+#define STATISTICS_SIZE (GLOBAL_FONT_SPACING + GLOBAL_FONT_SIZE + GLOBAL_FONT_SPACING)
 
-static ALLEGRO_PATH *globalResourcesPath = NULL;
+static const char *globalFontPath = NULL;
 
 void caerVisualizerSystemInit(void) {
 	// Initialize the Allegro library.
@@ -29,7 +28,7 @@ void caerVisualizerSystemInit(void) {
 	al_set_app_name("cAER");
 
 	// Set up path to find local resources.
-	globalResourcesPath = al_get_standard_path(ALLEGRO_RESOURCES_PATH);
+	ALLEGRO_PATH *globalResourcesPath = al_get_standard_path(ALLEGRO_RESOURCES_PATH);
 	if (globalResourcesPath != NULL) {
 		// Successfully loaded standard resources path.
 		caerLog(CAER_LOG_DEBUG, "Visualizer", "Allegro standard resources path loaded successfully.");
@@ -41,6 +40,10 @@ void caerVisualizerSystemInit(void) {
 	}
 
 	al_append_path_component(globalResourcesPath, GLOBAL_RESOURCES_DIR);
+
+	// Remember global font path.
+	al_set_path_filename(globalResourcesPath, GLOBAL_FONT_NAME);
+	globalFontPath = al_path_cstr(globalResourcesPath, ALLEGRO_NATIVE_PATH_SEP);
 
 	// Now load addons: primitives to draw, fonts (and TTF) to write text.
 	if (al_init_primitives_addon()) {
@@ -90,13 +93,39 @@ void caerVisualizerSystemInit(void) {
 bool caerVisualizerInit(caerVisualizerState state, int32_t bitmapSizeX, int32_t bitmapSizeY, int32_t zoomFactor,
 bool doStatistics) {
 	// Create display window.
-	// Add 30 pixels to Y for automatic statistics if needed (5 spacing + 20 text + 5 spacing).
-	state->displayWindow = al_create_display(bitmapSizeX * zoomFactor,
-		bitmapSizeY * zoomFactor
-			+ ((doStatistics) ? (GLOBAL_FONT_SPACING + GLOBAL_FONT_SIZE + GLOBAL_FONT_SPACING) : (0)));
+	// When statistics are turned on, we need to add some space to the
+	// X axis for displaying the whole line and the Y axis for spacing.
+	int32_t displaySizeX = bitmapSizeX * zoomFactor;
+	int32_t displaySizeY = bitmapSizeY * zoomFactor;
+
+	if (doStatistics) {
+		// Determine biggest possible statistics string.
+		size_t maxStatStringLength = (size_t) snprintf(NULL, 0, CAER_STATISTICS_STRING, UINT64_MAX, UINT64_MAX);
+
+		char maxStatString[maxStatStringLength + 1];
+		snprintf(maxStatString, maxStatStringLength + 1, CAER_STATISTICS_STRING, UINT64_MAX, UINT64_MAX);
+		maxStatString[maxStatStringLength] = '\0';
+
+		// Load statistics font into memory.
+		ALLEGRO_FONT *font = al_load_font(globalFontPath, GLOBAL_FONT_SIZE, 0);
+
+		// Only add to display size if font exists.
+		if (font != NULL) {
+			int32_t maxStatStringWidth = al_get_text_width(font, maxStatString);
+			if (maxStatStringWidth > displaySizeX) {
+				displaySizeX = maxStatStringWidth;
+			}
+
+			al_destroy_font(font);
+
+			displaySizeY += STATISTICS_SIZE;
+		}
+	}
+
+	state->displayWindow = al_create_display(displaySizeX, displaySizeY);
 	if (state->displayWindow == NULL) {
 		caerLog(CAER_LOG_ERROR, "Visualizer",
-			"Failed to create display element with sizeX=%d, sizeY=%d, zoomFactor=%d.", bitmapSizeX, bitmapSizeY,
+			"Failed to create display element with sizeX=%d, sizeY=%d, zoomFactor=%d.", displaySizeX, displaySizeY,
 			zoomFactor);
 		return (false);
 	}
@@ -106,16 +135,15 @@ bool doStatistics) {
 	al_clear_to_color(al_map_rgb(0, 0, 0));
 	al_flip_display();
 
-	// Load font here so it's hardware accelerated.
-	// A display must be created and used as target for this to work.
-	al_set_path_filename(globalResourcesPath, GLOBAL_FONT_NAME);
-	state->displayFont = al_load_font(al_path_cstr(globalResourcesPath, ALLEGRO_NATIVE_PATH_SEP), GLOBAL_FONT_SIZE, 0);
+	// Re-load font here so it's hardware accelerated.
+	// A display must have been created and used as target for this to work.
+	state->displayFont = al_load_font(globalFontPath, GLOBAL_FONT_SIZE, 0);
 	if (state->displayFont == NULL) {
-		caerLog(CAER_LOG_ERROR, "Visualizer", "Failed to load display font.");
-		return (false);
+		caerLog(CAER_LOG_ERROR, "Visualizer", "Failed to load display font '%s'. Disabling statistics.",
+			globalFontPath);
 	}
 
-	// Create video buffer for drawing.
+	// Create memory bitmap for drawing into.
 	al_set_new_bitmap_flags(ALLEGRO_MEMORY_BITMAP | ALLEGRO_MIN_LINEAR | ALLEGRO_MAG_LINEAR);
 	state->bitmapRenderer = al_create_bitmap(bitmapSizeX, bitmapSizeY);
 	if (state->bitmapRenderer == NULL) {
@@ -133,11 +161,12 @@ bool doStatistics) {
 	state->bitmapRendererSizeY = bitmapSizeY;
 	state->displayWindowZoomFactor = zoomFactor;
 
-	// Enable packet statistics and sub-sampling support.
-	if (doStatistics) {
+	// Enable packet statistics, only if font to render them exists.
+	if (doStatistics && state->displayFont != NULL) {
 		caerStatisticsStringInit(&state->packetStatistics);
 	}
 
+	// Sub-sampling support. Default to none.
 	state->packetSubsampleRendering = 1;
 	state->packetSubsampleCount = 0;
 
@@ -205,9 +234,8 @@ void caerVisualizerUpdateScreen(caerVisualizerState state) {
 
 	// Blit bitmap to screen, taking zoom factor into consideration.
 	al_draw_scaled_bitmap(state->bitmapRenderer, 0, 0, state->bitmapRendererSizeX, state->bitmapRendererSizeY, 0,
-		(doStatistics) ? (GLOBAL_FONT_SPACING + GLOBAL_FONT_SIZE + GLOBAL_FONT_SPACING) : (0),
-		state->bitmapRendererSizeX * state->displayWindowZoomFactor,
-		state->bitmapRendererSizeY * state->displayWindowZoomFactor, 0);
+		(doStatistics) ? (STATISTICS_SIZE) : (0), state->bitmapRendererSizeX * state->displayWindowZoomFactor,
+		state->bitmapRendererSizeY * state->displayWindowZoomFactor, ALLEGRO_FLIP_VERTICAL);
 
 	mtx_unlock(&state->bitmapMutex);
 
@@ -219,6 +247,11 @@ void caerVisualizerExit(caerVisualizerState state) {
 
 	al_destroy_bitmap(state->bitmapRenderer);
 	state->bitmapRenderer = NULL;
+
+	if (state->displayFont != NULL) {
+		al_destroy_font(state->displayFont);
+		state->displayFont = NULL;
+	}
 
 	al_destroy_display(state->displayWindow);
 	state->displayWindow = NULL;
@@ -288,11 +321,11 @@ static void caerVisualizerModuleExit(caerModuleData moduleData) {
 	thrd_join(state->renderingThread, NULL);
 
 	// Ensure render maps are freed.
-	if (atomic_load_explicit(&state->eventVisualizer.running, memory_order_relaxed)) {
+	if (atomic_load(&state->eventVisualizer.running)) {
 		caerVisualizerExit(&state->eventVisualizer);
 	}
 
-	if (atomic_load_explicit(&state->frameVisualizer.running, memory_order_relaxed)) {
+	if (atomic_load(&state->frameVisualizer.running)) {
 		caerVisualizerExit(&state->frameVisualizer);
 	}
 }
@@ -362,7 +395,7 @@ static bool initializeEventRenderer(visualizerModuleState state, int16_t sourceI
 	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
 	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
-	if (!caerVisualizerInit(&state->eventVisualizer, sizeX, sizeY, 1, true)) {
+	if (!caerVisualizerInit(&state->eventVisualizer, sizeX, sizeY, VISUALIZER_DEFAULT_ZOOM, true)) {
 		return (false);
 	}
 
@@ -375,7 +408,7 @@ static bool initializeFrameRenderer(visualizerModuleState state, int16_t sourceI
 	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
 	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
 
-	if (!caerVisualizerInit(&state->frameVisualizer, sizeX, sizeY, 1, true)) {
+	if (!caerVisualizerInit(&state->frameVisualizer, sizeX, sizeY, VISUALIZER_DEFAULT_ZOOM, true)) {
 		return (false);
 	}
 

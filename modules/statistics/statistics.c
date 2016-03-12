@@ -3,8 +3,6 @@
 #include "base/module.h"
 #include "ext/portable_time.h"
 
-#define STAT_STRING "Total events/second: %10" PRIu64 " - Valid events/second: %10" PRIu64
-
 static bool caerStatisticsInit(caerModuleData moduleData);
 static void caerStatisticsRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerStatisticsExit(caerModuleData moduleData);
@@ -48,7 +46,7 @@ static void caerStatisticsExit(caerModuleData moduleData) {
 }
 
 bool caerStatisticsStringInit(caerStatisticsState state) {
-	size_t maxStatStringLength = (size_t) snprintf(NULL, 0, STAT_STRING, UINT64_MAX, UINT64_MAX);
+	size_t maxStatStringLength = (size_t) snprintf(NULL, 0, CAER_STATISTICS_STRING, UINT64_MAX, UINT64_MAX);
 
 	state->currentStatisticsString = calloc(maxStatStringLength + 1, sizeof(char)); // +1 for NUL termination.
 	if (state->currentStatisticsString == NULL) {
@@ -89,7 +87,7 @@ void caerStatisticsStringUpdate(caerEventPacketHeader packetHeader, caerStatisti
 		uint64_t validEventsPerTime = (state->validEventsCounter * (1000000000LLU / state->divisionFactor))
 			/ diffNanoTime;
 
-		sprintf(state->currentStatisticsString, STAT_STRING, totalEventsPerTime, validEventsPerTime);
+		sprintf(state->currentStatisticsString, CAER_STATISTICS_STRING, totalEventsPerTime, validEventsPerTime);
 
 		// Reset for next update.
 		state->totalEventsCounter = 0;

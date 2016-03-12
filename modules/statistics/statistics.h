@@ -7,6 +7,8 @@
 #include <time.h>
 #include <sys/time.h>
 
+#define CAER_STATISTICS_STRING "Total events/second: %10" PRIu64 " - Valid events/second: %10" PRIu64
+
 struct caer_statistics_state {
 	uint64_t divisionFactor;
 	char *currentStatisticsString;
