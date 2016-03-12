@@ -3,6 +3,7 @@
 
 #include "main.h"
 
+#include <stdatomic.h>
 #include <libcaer/events/polarity.h>
 #include <libcaer/events/frame.h>
 #include <allegro5/allegro.h>
@@ -16,6 +17,8 @@
 #define MAX_CHANNELS 4
 
 struct caer_visualizer_state {
+	atomic_bool running;
+	ALLEGRO_FONT *displayFont;
 	ALLEGRO_DISPLAY *displayWindow;
 	int32_t displayWindowZoomFactor;
 	ALLEGRO_BITMAP *bitmapRenderer;

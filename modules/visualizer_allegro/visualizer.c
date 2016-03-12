@@ -5,11 +5,12 @@
 
 #define SYSTEM_TIMEOUT 10 // in seconds
 
-#define GLOBAL_FONT_NAME "LiberationSans-Regular.ttf"
+#define GLOBAL_RESOURCES_DIR "ext/resources/"
+#define GLOBAL_FONT_NAME "LiberationSans-Bold.ttf"
 #define GLOBAL_FONT_SIZE 20 // in pixels
 #define GLOBAL_FONT_SPACING 5 // in pixels
 
-static ALLEGRO_FONT *globalFont = NULL;
+static ALLEGRO_PATH *globalResourcesPath = NULL;
 
 void caerVisualizerSystemInit(void) {
 	// Initialize the Allegro library.
@@ -26,6 +27,20 @@ void caerVisualizerSystemInit(void) {
 	// Set correct names.
 	al_set_org_name("iniLabs");
 	al_set_app_name("cAER");
+
+	// Set up path to find local resources.
+	globalResourcesPath = al_get_standard_path(ALLEGRO_RESOURCES_PATH);
+	if (globalResourcesPath != NULL) {
+		// Successfully loaded standard resources path.
+		caerLog(CAER_LOG_DEBUG, "Visualizer", "Allegro standard resources path loaded successfully.");
+	}
+	else {
+		// Failed to load standard resources path.
+		caerLog(CAER_LOG_EMERGENCY, "Visualizer", "Failed to load Allegro standard resources path.");
+		exit(EXIT_FAILURE);
+	}
+
+	al_append_path_component(globalResourcesPath, GLOBAL_RESOURCES_DIR);
 
 	// Now load addons: primitives to draw, fonts (and TTF) to write text.
 	if (al_init_primitives_addon()) {
@@ -47,18 +62,6 @@ void caerVisualizerSystemInit(void) {
 	else {
 		// Failed to initialize Allegro TTF addon.
 		caerLog(CAER_LOG_EMERGENCY, "Visualizer", "Failed to initialize Allegro TTF addon.");
-		exit(EXIT_FAILURE);
-	}
-
-	// Load global font.
-	globalFont = al_load_font(GLOBAL_FONT_NAME, 20, 0);
-	if (globalFont == NULL) {
-		// Successfully loaded global font.
-		caerLog(CAER_LOG_DEBUG, "Visualizer", "Allegro global font loaded successfully.");
-	}
-	else {
-		// Failed to load global font.
-		caerLog(CAER_LOG_EMERGENCY, "Visualizer", "Failed to load Allegro global font.");
 		exit(EXIT_FAILURE);
 	}
 
@@ -103,8 +106,17 @@ bool doStatistics) {
 	al_clear_to_color(al_map_rgb(0, 0, 0));
 	al_flip_display();
 
+	// Load font here so it's hardware accelerated.
+	// A display must be created and used as target for this to work.
+	al_set_path_filename(globalResourcesPath, GLOBAL_FONT_NAME);
+	state->displayFont = al_load_font(al_path_cstr(globalResourcesPath, ALLEGRO_NATIVE_PATH_SEP), GLOBAL_FONT_SIZE, 0);
+	if (state->displayFont == NULL) {
+		caerLog(CAER_LOG_ERROR, "Visualizer", "Failed to load display font.");
+		return (false);
+	}
+
 	// Create video buffer for drawing.
-	al_set_new_bitmap_flags(ALLEGRO_VIDEO_BITMAP | ALLEGRO_MIN_LINEAR | ALLEGRO_MAG_LINEAR);
+	al_set_new_bitmap_flags(ALLEGRO_MEMORY_BITMAP | ALLEGRO_MIN_LINEAR | ALLEGRO_MAG_LINEAR);
 	state->bitmapRenderer = al_create_bitmap(bitmapSizeX, bitmapSizeY);
 	if (state->bitmapRenderer == NULL) {
 		caerLog(CAER_LOG_ERROR, "Visualizer", "Failed to create bitmap element with sizeX=%d, sizeY=%d.", bitmapSizeX,
@@ -132,6 +144,8 @@ bool doStatistics) {
 	// Initialize mutex for locking between update and screen draw operations.
 	mtx_init(&state->bitmapMutex, mtx_plain);
 
+	atomic_store(&state->running, true);
+
 	return (true);
 }
 
@@ -153,9 +167,23 @@ void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerStat
 		caerStatisticsStringUpdate(packetHeader, &state->packetStatistics);
 	}
 
+	al_set_target_bitmap(state->bitmapRenderer);
+	al_clear_to_color(al_map_rgb(0, 0, 0));
+
 	// Update bitmap with new content.
 	if (caerEventPacketHeaderGetEventType(packetHeader) == POLARITY_EVENT) {
-
+		CAER_POLARITY_ITERATOR_ALL_START((caerPolarityEventPacket) packetHeader)
+			if (caerPolarityEventGetPolarity(caerPolarityIteratorElement)) {
+				// ON polarity (green).
+				al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
+					caerPolarityEventGetY(caerPolarityIteratorElement), al_map_rgb(0, 255, 0));
+			}
+			else {
+				// OFF polarity (red).
+				al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
+					caerPolarityEventGetY(caerPolarityIteratorElement), al_map_rgb(255, 0, 0));
+			}
+		CAER_POLARITY_ITERATOR_ALL_END
 	}
 
 	mtx_unlock(&state->bitmapMutex);
@@ -171,8 +199,8 @@ void caerVisualizerUpdateScreen(caerVisualizerState state) {
 	bool doStatistics = (state->packetStatistics.currentStatisticsString != NULL);
 
 	if (doStatistics) {
-		al_draw_text(globalFont, al_map_rgb(255, 255, 255), GLOBAL_FONT_SPACING, GLOBAL_FONT_SPACING, 0,
-			state->packetStatistics.currentStatisticsString);
+		al_draw_text(state->displayFont, al_map_rgb(255, 255, 255), GLOBAL_FONT_SPACING,
+		GLOBAL_FONT_SPACING, 0, state->packetStatistics.currentStatisticsString);
 	}
 
 	// Blit bitmap to screen, taking zoom factor into consideration.
@@ -200,9 +228,12 @@ void caerVisualizerExit(caerVisualizerState state) {
 	}
 
 	mtx_destroy(&state->bitmapMutex);
+
+	atomic_store(&state->running, false);
 }
 
 struct visualizer_module_state {
+	thrd_t renderingThread;
 	struct caer_visualizer_state eventVisualizer;
 	struct caer_visualizer_state frameVisualizer;
 	int32_t frameRendererPositionX;
@@ -215,8 +246,9 @@ typedef struct visualizer_module_state *visualizerModuleState;
 static bool caerVisualizerModuleInit(caerModuleData moduleData);
 static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerVisualizerModuleExit(caerModuleData moduleData);
-static bool allocateEventRenderer(visualizerModuleState state, int16_t sourceID);
-static bool allocateFrameRenderer(visualizerModuleState state, int16_t sourceID);
+static int caerVisualizerModuleRenderThread(void *moduleData);
+static bool initializeEventRenderer(visualizerModuleState state, int16_t sourceID);
+static bool initializeFrameRenderer(visualizerModuleState state, int16_t sourceID);
 
 static struct caer_module_functions caerVisualizerFunctions = { .moduleInit = &caerVisualizerModuleInit, .moduleRun =
 	&caerVisualizerModuleRun, .moduleConfig =
@@ -239,22 +271,12 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showFrames", true);
 #endif
 
-	sshsNodePutShortIfAbsent(moduleData->moduleNode, "subsampleRendering", 1);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "subsampleRendering", 1);
 
-	state->subsampleRendering = sshsNodeGetShort(moduleData->moduleNode, "subsampleRendering");
-	state->subsampleCount = 1;
-
-	if (!caerStatisticsStringInit(&state->eventStatistics)) {
-		return (false);
-	}
-
-	state->eventStatistics.divisionFactor = 1000;
-
-	if (!caerStatisticsStringInit(&state->frameStatistics)) {
-		return (false);
-	}
-
-	state->frameStatistics.divisionFactor = 1;
+	// Start separate rendering thread. Decouples presentation from
+	// data processing and preparation. Communication over properly
+	// locked bitmap.
+	thrd_create(&state->renderingThread, &caerVisualizerModuleRenderThread, moduleData);
 
 	return (true);
 }
@@ -262,20 +284,17 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData) {
 static void caerVisualizerModuleExit(caerModuleData moduleData) {
 	visualizerModuleState state = moduleData->moduleState;
 
+	// Wait on rendering thread.
+	thrd_join(state->renderingThread, NULL);
+
 	// Ensure render maps are freed.
-	if (state->eventRenderer != NULL) {
-		free(state->eventRenderer);
-		state->eventRenderer = NULL;
+	if (atomic_load_explicit(&state->eventVisualizer.running, memory_order_relaxed)) {
+		caerVisualizerExit(&state->eventVisualizer);
 	}
 
-	if (state->frameRenderer != NULL) {
-		free(state->frameRenderer);
-		state->frameRenderer = NULL;
+	if (atomic_load_explicit(&state->frameVisualizer.running, memory_order_relaxed)) {
+		caerVisualizerExit(&state->frameVisualizer);
 	}
-
-	// Statistics text.
-	caerStatisticsStringExit(&state->eventStatistics);
-	caerStatisticsStringExit(&state->frameStatistics);
 }
 
 static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
@@ -283,184 +302,82 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 
 	visualizerModuleState state = moduleData->moduleState;
 
-	// Subsampling, only render every Nth packet.
-	if (state->subsampleCount >= state->subsampleRendering) {
-		// Polarity events to render.
-		caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
-		bool renderPolarity = sshsNodeGetBool(moduleData->moduleNode, "showEvents");
+	// Polarity events to render.
+	caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
+	bool renderPolarity = sshsNodeGetBool(moduleData->moduleNode, "showEvents");
 
-		// Frames to render.
-		caerFrameEventPacket frame = va_arg(args, caerFrameEventPacket);
-		bool renderFrame = sshsNodeGetBool(moduleData->moduleNode, "showFrames");
+	// Frames to render.
+	caerFrameEventPacket frame = va_arg(args, caerFrameEventPacket);
+	bool renderFrame = sshsNodeGetBool(moduleData->moduleNode, "showFrames");
 
-		// Update polarity event rendering map.
-		if (renderPolarity && polarity != NULL) {
-			// If the event renderer is not allocated yet, do it.
-			if (state->eventRenderer == NULL) {
-				if (!allocateEventRenderer(state, caerEventPacketHeaderGetEventSource(&polarity->packetHeader))) {
-					// Failed to allocate memory, nothing to do.
-					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
-						"Failed to allocate memory for eventRenderer.");
-					return;
-				}
-			}
-
-			if (state->subsampleRendering > 1) {
-				memset(state->eventRenderer, 0,
-					(size_t) (state->eventRendererSizeX * state->eventRendererSizeY) * sizeof(uint32_t));
-			}
-
-			CAER_POLARITY_ITERATOR_VALID_START (polarity)
-				if (caerPolarityEventGetPolarity(caerPolarityIteratorElement)) {
-					// Green.
-					state->eventRenderer[(caerPolarityEventGetY(caerPolarityIteratorElement) * state->eventRendererSizeX)
-						+ caerPolarityEventGetX(caerPolarityIteratorElement)] = (U32T(0x00FFUL << 8));
-				}
-				else {
-					// Red.
-					state->eventRenderer[(caerPolarityEventGetY(caerPolarityIteratorElement) * state->eventRendererSizeX)
-						+ caerPolarityEventGetX(caerPolarityIteratorElement)] = (U32T(0x00FFUL << 0));
-				}CAER_POLARITY_ITERATOR_VALID_END
-
-			// Accumulate events over four polarity packets.
-			if (state->subsampleRendering <= 1) {
-				if (state->eventRendererSlowDown++ == 4) {
-					state->eventRendererSlowDown = 0;
-
-					memset(state->eventRenderer, 0,
-						(size_t) (state->eventRendererSizeX * state->eventRendererSizeY) * sizeof(uint32_t));
-				}
+	// Update polarity event rendering map.
+	if (renderPolarity && polarity != NULL) {
+		// If the event renderer is not allocated yet, do it.
+		if (!atomic_load_explicit(&state->eventVisualizer.running, memory_order_relaxed)) {
+			if (!initializeEventRenderer(state, caerEventPacketHeaderGetEventSource(&polarity->packetHeader))) {
+				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to initialize event visualizer.");
+				return;
 			}
 		}
 
-		// Select latest frame to render.
-		if (renderFrame && frame != NULL) {
-			// If the event renderer is not allocated yet, do it.
-			if (state->frameRenderer == NULL) {
-				if (!allocateFrameRenderer(state, caerEventPacketHeaderGetEventSource(&frame->packetHeader))) {
-					// Failed to allocate memory, nothing to do.
-					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
-						"Failed to allocate memory for frameRenderer.");
-					return;
-				}
-			}
-
-			caerFrameEvent currFrameEvent;
-
-			for (int32_t i = caerEventPacketHeaderGetEventNumber(&frame->packetHeader) - 1; i >= 0; i--) {
-				currFrameEvent = caerFrameEventPacketGetEvent(frame, i);
-
-				// Only operate on the last valid frame.
-				if (caerFrameEventIsValid(currFrameEvent)) {
-					// Copy the frame content to the permanent frameRenderer.
-					// Use frame sizes to correctly support small ROI frames.
-					state->frameRendererSizeX = caerFrameEventGetLengthX(currFrameEvent);
-					state->frameRendererSizeY = caerFrameEventGetLengthY(currFrameEvent);
-					state->frameRendererPositionX = caerFrameEventGetPositionX(currFrameEvent);
-					state->frameRendererPositionY = caerFrameEventGetPositionY(currFrameEvent);
-					state->frameChannels = caerFrameEventGetChannelNumber(currFrameEvent);
-
-					memcpy(state->frameRenderer, caerFrameEventGetPixelArrayUnsafe(currFrameEvent),
-						((size_t) state->frameRendererSizeX * (size_t) state->frameRendererSizeY
-							* (size_t) state->frameChannels * sizeof(uint16_t)));
-
-					break;
-				}
-			}
-		}
-
-		// Detect if nothing happened for a long time.
-		struct timespec currentTime;
-		portable_clock_gettime_monotonic(&currentTime);
-
-		uint64_t diffNanoTimeEvents = (uint64_t) (((int64_t) (currentTime.tv_sec
-			- state->eventStatistics.lastTime.tv_sec) * 1000000000LL)
-			+ (int64_t) (currentTime.tv_nsec - state->eventStatistics.lastTime.tv_nsec));
-		bool noEventsTimeout = (diffNanoTimeEvents >= U64T(SYSTEM_TIMEOUT * 1000000000LL));
-
-		uint64_t diffNanoTimeFrames = (uint64_t) (((int64_t) (currentTime.tv_sec
-			- state->frameStatistics.lastTime.tv_sec) * 1000000000LL)
-			+ (int64_t) (currentTime.tv_nsec - state->frameStatistics.lastTime.tv_nsec));
-		bool noFramesTimeout = (diffNanoTimeFrames >= U64T(SYSTEM_TIMEOUT * 1000000000LL));
-
-		// TO DO SEPARATE THREAD
-		//
-		// All rendering calls at the end.
-		// Only execute if something actually changed (packets not null).
-		if ((renderPolarity && (polarity != NULL || noEventsTimeout))
-			|| (renderFrame && (frame != NULL || noFramesTimeout))) {
-
-			//set backbuffer as target
-			al_clear_to_color(al_map_rgb(0, 0, 0));
-
-			// Render polarity events.
-			if (renderPolarity) {
-				// Write statistics text.
-				caerStatisticsStringUpdate((caerEventPacketHeader) polarity, &state->eventStatistics);
-				//lock bitmap
-				al_set_target_bitmap(state->bb);
-				ALLEGRO_LOCKED_REGION * lock;
-				lock = al_lock_bitmap(state->bb, ALLEGRO_PIXEL_FORMAT_ABGR_8888_LE, ALLEGRO_LOCK_WRITEONLY);
-				if (lock != NULL) {
-					uint8_t *data = lock->data;
-					uint8_t *eventRR = state->eventRenderer;
-					for (int y = 0; y < state->eventRendererSizeY; y++) {
-						memcpy(data, eventRR, state->eventRendererSizeX * sizeof(uint32_t));
-
-						data += lock->pitch;
-						eventRR += state->eventRendererSizeX * sizeof(uint32_t);
-					}
-					//unlock
-					al_unlock_bitmap(state->bb);
-					// update display
-					al_flip_display();
-				}
-			}
-
-			// Render latest frame.
-			if (renderFrame) {
-				// Write statistics text.
-				caerStatisticsStringUpdate((caerEventPacketHeader) frame, &state->frameStatistics);
-
-				//lock bitmap
-				al_set_target_bitmap(state->bbframes);
-				ALLEGRO_LOCKED_REGION * lock;
-				lock = al_lock_bitmap(state->bbframes, ALLEGRO_PIXEL_FORMAT_ABGR_8888_LE, ALLEGRO_LOCK_WRITEONLY);
-				if (lock != NULL) {
-					uint8_t *data = lock->data;
-					uint8_t *eventRR = state->frameRenderer;
-					for (int y = 0; y < state->eventRendererSizeY; y++) {
-						memcpy(data, eventRR, state->frameRendererSizeX * sizeof(uint16_t));
-
-						data += lock->pitch;
-						eventRR += state->frameRendererSizeX * sizeof(uint16_t);
-					}
-					//unlock
-					al_unlock_bitmap(state->bbframes);
-					// update display
-					al_flip_display();
-				}
-
-				switch (state->frameChannels) {
-					case GRAYSCALE:
-						break;
-
-					case RGB:
-						break;
-
-					case RGBA:
-						break;
-				}
-			}
-
-		}
-
-		state->subsampleCount = 1;
+		// Actually update polarity rendering.
+		caerVisualizerUpdate(&polarity->packetHeader, &state->eventVisualizer);
 	}
 
-	else {
-		state->subsampleCount++;
-	}
+	// Select latest frame to render.
+	if (renderFrame && frame != NULL) {
+		// If the event renderer is not allocated yet, do it.
+		if (!atomic_load_explicit(&state->frameVisualizer.running, memory_order_relaxed)) {
+			if (!initializeFrameRenderer(state, caerEventPacketHeaderGetEventSource(&frame->packetHeader))) {
+				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to initialize frame visualizer.");
+				return;
+			}
+		}
 
+		// Actually update frame rendering.
+		caerVisualizerUpdate(&frame->packetHeader, &state->frameVisualizer);
+	}
 }
 
+static int caerVisualizerModuleRenderThread(void *moduleData) {
+	caerModuleData data = moduleData;
+	visualizerModuleState state = data->moduleState;
+
+	while (atomic_load_explicit(&data->running, memory_order_relaxed)) {
+		if (atomic_load_explicit(&state->eventVisualizer.running, memory_order_relaxed)) {
+			caerVisualizerUpdateScreen(&state->eventVisualizer);
+		}
+
+		if (atomic_load_explicit(&state->frameVisualizer.running, memory_order_relaxed)) {
+			caerVisualizerUpdateScreen(&state->frameVisualizer);
+		}
+	}
+
+	return (thrd_success);
+}
+
+static bool initializeEventRenderer(visualizerModuleState state, int16_t sourceID) {
+	// Get size information from source.
+	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
+	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
+	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
+
+	if (!caerVisualizerInit(&state->eventVisualizer, sizeX, sizeY, 1, true)) {
+		return (false);
+	}
+
+	return (true);
+}
+
+static bool initializeFrameRenderer(visualizerModuleState state, int16_t sourceID) {
+	// Get size information from source.
+	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
+	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
+	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
+
+	if (!caerVisualizerInit(&state->frameVisualizer, sizeX, sizeY, 1, true)) {
+		return (false);
+	}
+
+	return (true);
+}
