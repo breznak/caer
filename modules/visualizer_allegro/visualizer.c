@@ -7,7 +7,10 @@
 #define GLOBAL_FONT_NAME "LiberationSans-Bold.ttf"
 #define GLOBAL_FONT_SIZE 30 // in pixels
 #define GLOBAL_FONT_SPACING 5 // in pixels
-#define STATISTICS_SIZE (GLOBAL_FONT_SPACING + GLOBAL_FONT_SIZE + GLOBAL_FONT_SPACING)
+
+// Calculated at system init.
+static int STATISTICS_WIDTH = 0;
+static int STATISTICS_HEIGHT = 0;
 
 static const char *globalFontPath = NULL;
 
@@ -68,6 +71,25 @@ void caerVisualizerSystemInit(void) {
 		exit(EXIT_FAILURE);
 	}
 
+	// Determine biggest possible statistics string.
+	size_t maxStatStringLength = (size_t) snprintf(NULL, 0, CAER_STATISTICS_STRING, UINT64_MAX, UINT64_MAX);
+
+	char maxStatString[maxStatStringLength + 1];
+	snprintf(maxStatString, maxStatStringLength + 1, CAER_STATISTICS_STRING, UINT64_MAX, UINT64_MAX);
+	maxStatString[maxStatStringLength] = '\0';
+
+	// Load statistics font into memory.
+	ALLEGRO_FONT *font = al_load_font(globalFontPath, GLOBAL_FONT_SIZE, 0);
+
+	// Determine statistics string width.
+	if (font != NULL) {
+		STATISTICS_WIDTH = al_get_text_width(font, maxStatString);
+
+		STATISTICS_HEIGHT = (GLOBAL_FONT_SPACING + GLOBAL_FONT_SIZE + GLOBAL_FONT_SPACING);
+
+		al_destroy_font(font);
+	}
+
 	// Install main event sources: mouse and keyboard.
 	if (al_install_mouse()) {
 		// Successfully initialized Allegro mouse event source.
@@ -99,27 +121,11 @@ bool doStatistics) {
 	int32_t displaySizeY = bitmapSizeY * zoomFactor;
 
 	if (doStatistics) {
-		// Determine biggest possible statistics string.
-		size_t maxStatStringLength = (size_t) snprintf(NULL, 0, CAER_STATISTICS_STRING, UINT64_MAX, UINT64_MAX);
-
-		char maxStatString[maxStatStringLength + 1];
-		snprintf(maxStatString, maxStatStringLength + 1, CAER_STATISTICS_STRING, UINT64_MAX, UINT64_MAX);
-		maxStatString[maxStatStringLength] = '\0';
-
-		// Load statistics font into memory.
-		ALLEGRO_FONT *font = al_load_font(globalFontPath, GLOBAL_FONT_SIZE, 0);
-
-		// Only add to display size if font exists.
-		if (font != NULL) {
-			int32_t maxStatStringWidth = al_get_text_width(font, maxStatString);
-			if (maxStatStringWidth > displaySizeX) {
-				displaySizeX = maxStatStringWidth;
-			}
-
-			al_destroy_font(font);
-
-			displaySizeY += STATISTICS_SIZE;
+		if (STATISTICS_WIDTH > displaySizeX) {
+			displaySizeX = STATISTICS_WIDTH;
 		}
+
+		displaySizeY += STATISTICS_HEIGHT;
 	}
 
 	state->displayWindow = al_create_display(displaySizeX, displaySizeY);
@@ -176,6 +182,8 @@ bool doStatistics) {
 
 	al_register_event_source(state->displayEventQueue, al_get_display_event_source(state->displayWindow));
 	al_register_event_source(state->displayEventQueue, al_get_timer_event_source(state->displayTimer));
+	al_register_event_source(state->displayEventQueue, al_get_keyboard_event_source());
+	al_register_event_source(state->displayEventQueue, al_get_mouse_event_source());
 
 	al_start_timer(state->displayTimer);
 
@@ -293,6 +301,7 @@ void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerStat
 
 void caerVisualizerUpdateScreen(caerVisualizerState state) {
 	bool redraw = false;
+	bool resize = false;
 	ALLEGRO_EVENT displayEvent;
 
 	handleEvents: al_wait_for_event(state->displayEventQueue, &displayEvent);
@@ -303,11 +312,50 @@ void caerVisualizerUpdateScreen(caerVisualizerState state) {
 	else if (displayEvent.type == ALLEGRO_EVENT_DISPLAY_CLOSE) {
 		// TODO: shutdown!
 	}
+	else if (displayEvent.type == ALLEGRO_EVENT_KEY_DOWN) {
+		// React to key presses, but only if they came from the corresponding display.
+		if (displayEvent.keyboard.display == state->displayWindow) {
+			if (displayEvent.keyboard.keycode == ALLEGRO_KEY_UP) {
+				state->displayWindowZoomFactor++;
+				resize = true;
+
+				// Clip zoom factor.
+				if (state->displayWindowZoomFactor > 50) {
+					state->displayWindowZoomFactor = 50;
+				}
+			}
+			else if (displayEvent.keyboard.keycode == ALLEGRO_KEY_DOWN) {
+				state->displayWindowZoomFactor--;
+				resize = true;
+
+				// Clip zoom factor.
+				if (state->displayWindowZoomFactor < 1) {
+					state->displayWindowZoomFactor = 1;
+				}
+			}
+		}
+	}
 
 	if (!al_is_event_queue_empty(state->displayEventQueue)) {
 		// Handle all events before rendering, to avoid
 		// having them backed up too much.
 		goto handleEvents;
+	}
+
+	// Handle display resize (zoom).
+	if (resize) {
+		int32_t displaySizeX = state->bitmapRendererSizeX * state->displayWindowZoomFactor;
+		int32_t displaySizeY = state->bitmapRendererSizeY * state->displayWindowZoomFactor;
+
+		if (state->packetStatistics.currentStatisticsString != NULL) {
+			if (STATISTICS_WIDTH > displaySizeX) {
+				displaySizeX = STATISTICS_WIDTH;
+			}
+
+			displaySizeY += STATISTICS_HEIGHT;
+		}
+
+		al_resize_display(state->displayWindow, displaySizeX, displaySizeY);
 	}
 
 	// Render content to display.
@@ -327,7 +375,7 @@ void caerVisualizerUpdateScreen(caerVisualizerState state) {
 
 		// Blit bitmap to screen, taking zoom factor into consideration.
 		al_draw_scaled_bitmap(state->bitmapRenderer, 0, 0, state->bitmapRendererSizeX, state->bitmapRendererSizeY, 0,
-			(doStatistics) ? (STATISTICS_SIZE) : (0), state->bitmapRendererSizeX * state->displayWindowZoomFactor,
+			(doStatistics) ? (STATISTICS_HEIGHT) : (0), state->bitmapRendererSizeX * state->displayWindowZoomFactor,
 			state->bitmapRendererSizeY * state->displayWindowZoomFactor, ALLEGRO_FLIP_VERTICAL);
 
 		mtx_unlock(&state->bitmapMutex);
