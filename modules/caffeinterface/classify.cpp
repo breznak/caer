@@ -8,23 +8,31 @@ using namespace caffe;
 // NOLINT(build/namespaces)
 using std::string;
 
-void MyClass::file_set(char * i) {
+void MyClass::file_set(char * i, bool *b) {
 	MyClass::file_i = i;
 
 	if (file_i != NULL) {
-		string file = file_i;
+		
+		//std::cout << "\n---------- Prediction for " << file_i << " started ----------\n" << std::endl;
 
-		std::cout << "\n---------- Prediction for " << file_i << " ----------\n" << std::endl;
+		cv::Mat img = cv::imread(file_i, 0);
+		cv::Mat img2;
+		img.convertTo(img2, CV_32FC1);
+		img2 = img2*0.00390625;
+		//std::cout << "\n" << img2 << std::endl;
 
-		cv::Mat img = cv::imread(file_i, -1);
 		CHECK(!img.empty()) << "Unable to decode image " << file_i;
-		std::vector<Prediction> predictions = MyClass::Classify(img);
+		std::vector<Prediction> predictions = MyClass::Classify(img2);
 
 		/* Print the top N predictions. */
 		for (size_t i = 0; i < predictions.size(); ++i) {
 			Prediction p = predictions[i];
-			std::cout << std::fixed << std::setprecision(4) << p.second << " - \"" << p.first << "\"" << std::endl;
-		}
+			//std::cout << std::fixed << std::setprecision(4) << p.second << " - \"" << p.first << "\"" << std::endl;
+                        if (p.first.compare("FACE") == 0 && p.second > 0.5){
+                            *b = true;
+                        }
+                }
+                
 	}
 }
 
@@ -70,7 +78,7 @@ void MyClass::Classifier(const string& model_file, const string& trained_file, c
 	input_geometry_ = cv::Size(input_layer->width(), input_layer->height());
 
 	/* Load the binaryproto mean file. */
-	SetMean(mean_file);
+	//SetMean(mean_file);
 
 	/* Load labels. */
 	std::ifstream labels(label_file.c_str());
@@ -144,25 +152,28 @@ void MyClass::SetMean(const string& mean_file) {
 	 * filled with this value. */
 	cv::Scalar channel_mean = cv::mean(mean);
 	mean_ = cv::Mat(input_geometry_, mean.type(), channel_mean);
+
 }
 
 std::vector<float> MyClass::Predict(const cv::Mat& img) {
+
+	
 	Blob<float>* input_layer = net_->input_blobs()[0];
 	input_layer->Reshape(1, num_channels_, input_geometry_.height, input_geometry_.width);
 	/* Forward dimension change to all layers. */
 	net_->Reshape();
-
+	
 	std::vector<cv::Mat> input_channels;
 	WrapInputLayer(&input_channels);
 
-	Preprocess(img, &input_channels);
-
+	Preprocess(img, &input_channels); //Error in here
 	net_->ForwardPrefilled();
 
 	/* Copy the output layer to a std::vector */
 	Blob<float>* output_layer = net_->output_blobs()[0];
 	const float* begin = output_layer->cpu_data();
 	const float* end = begin + output_layer->channels();
+	
 	return std::vector<float>(begin, end);
 }
 
@@ -186,6 +197,9 @@ void MyClass::WrapInputLayer(std::vector<cv::Mat>* input_channels) {
 
 void MyClass::Preprocess(const cv::Mat& img, std::vector<cv::Mat>* input_channels) {
 	/* Convert the input image to the input image format of the network. */
+	
+	// std::cout << " Preprocess --- img.channnels() " << img.channels() << ", num_channels_" << num_channels_ << std::endl;	
+	
 	cv::Mat sample;
 	if (img.channels() == 3 && num_channels_ == 1)
 		cv::cvtColor(img, sample, cv::COLOR_BGR2GRAY);
@@ -197,27 +211,32 @@ void MyClass::Preprocess(const cv::Mat& img, std::vector<cv::Mat>* input_channel
 		cv::cvtColor(img, sample, cv::COLOR_GRAY2BGR);
 	else
 		sample = img;
+	
 
 	cv::Mat sample_resized;
 	if (sample.size() != input_geometry_)
 		cv::resize(sample, sample_resized, input_geometry_);
 	else
 		sample_resized = sample;
-
+	
 	cv::Mat sample_float;
 	if (num_channels_ == 3)
 		sample_resized.convertTo(sample_float, CV_32FC3);
 	else
 		sample_resized.convertTo(sample_float, CV_32FC1);
-
+	
+	
 	cv::Mat sample_normalized;
+	mean_ = cv::Mat::zeros(1, 1, CV_64F); //TODO remove, compute mean_ from mean_file and adapt size for subtraction.
+	//std::cout << " Preprocess: mean_size " << mean_.size() << std::endl;
+
 	cv::subtract(sample_float, mean_, sample_normalized);
 
 	/* This operation will write the separate BGR planes directly to the
 	 * input layer of the network because it is wrapped by the cv::Mat
 	 * objects in input_channels. */
 	cv::split(sample_normalized, *input_channels);
-
+	
 	CHECK(reinterpret_cast<float*>(input_channels->at(0).data) == net_->input_blobs()[0]->cpu_data())
 		<< "Input channels are not wrapping the input layer of the network.";
 }

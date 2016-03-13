@@ -47,7 +47,7 @@ public:
 	std::vector<Prediction> Classify(const cv::Mat& img, int N = 5);
 
 	void caller();
-	void file_set(char * i);
+	void file_set(char * i, bool *b);
 	int hello_caffe();
 	char * file_get();
 	void init_network();

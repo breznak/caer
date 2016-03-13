@@ -22,16 +22,17 @@ static struct caer_module_functions caerCaffeWrapperFunctions = { .moduleInit = 
 	&caerCaffeWrapperRun, .moduleConfig =
 NULL, .moduleExit = &caerCaffeWrapperExit };
 
-const char * caerCaffeWrapper(uint16_t moduleID, char ** file_string) {
-
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "caerCaffeWrapper");
-	caerModuleSM(&caerCaffeWrapperFunctions, moduleData, sizeof(struct caffewrapper_state), 1, file_string);
+const char * caerCaffeWrapper(uint16_t moduleID, char ** file_string, bool *classificationResults, int max_img_qty) {
+	
+        caerModuleData moduleData = caerMainloopFindModule(moduleID, "caerCaffeWrapper");
+	caerModuleSM(&caerCaffeWrapperFunctions, moduleData, sizeof(struct caffewrapper_state), 3, file_string, classificationResults, max_img_qty);
 
 	return (NULL);
 }
 
 static bool caerCaffeWrapperInit(caerModuleData moduleData) {
-	caffewrapperState state = moduleData->moduleState;
+
+        caffewrapperState state = moduleData->moduleState;
 	//Initializing caffe network..
 	state->cpp_class = newMyClass();
 	MyClass_init_network(state->cpp_class);
@@ -47,11 +48,16 @@ static void caerCaffeWrapperExit(caerModuleData moduleData) {
 
 static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
 	UNUSED_ARGUMENT(argsNumber);
-	caffewrapperState state = moduleData->moduleState;
+        caffewrapperState state = moduleData->moduleState;
 	char ** file_string = va_arg(args, char **);
-	//run prediction if we generated a valid image
-	if (file_string != NULL) {
-		MyClass_file_set(state->cpp_class, *file_string);
-	}
+        bool *classificationResults = va_arg(args, bool*);
+        int max_img_qty = va_arg(args, int);
+        
+        for (int i = 0; i < max_img_qty; ++i){
+            if (file_string[i] != NULL) {
+                MyClass_file_set(state->cpp_class, file_string[i], &classificationResults[i]);
+            }
+        }
+	
 	return;
 }

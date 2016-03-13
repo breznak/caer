@@ -1,3 +1,7 @@
+make 
+make install
+caer-bin
+
 caer
 ====
 
@@ -27,6 +31,7 @@ Options (non required):
  -DENABLE_NET_STREAM=1  ... enable tcp server for sending data over network
 
 Extra modules:
+ -DENABLE_IMAGEGENERATOR=1	    ... Enable image generator
  -DENABLE_IMAGESTREAMERVISUALIZER=1 ... This module produces images by accumulating a fixed number 
 					of spikes. (press "r" to start recording png and "s" to stop)
 					This module depends on the visualizer module (ie. it requires -DENABLE_VISUALIZER=1)
@@ -47,6 +52,7 @@ Extra modules:
 					This module can be configured by editing the file: 
 					 "module/caffeinterface/settings.h" 
 					-DCPU_ONLY=1 to use caffe framework with CPU only (ie. no GPU)
+
 
 2) build:
 
