@@ -21,6 +21,8 @@ struct caer_visualizer_state {
 	ALLEGRO_FONT *displayFont;
 	ALLEGRO_DISPLAY *displayWindow;
 	int32_t displayWindowZoomFactor;
+	ALLEGRO_EVENT_QUEUE *displayEventQueue;
+	ALLEGRO_TIMER *displayTimer;
 	ALLEGRO_BITMAP *bitmapRenderer;
 	int32_t bitmapRendererSizeX;
 	int32_t bitmapRendererSizeY;

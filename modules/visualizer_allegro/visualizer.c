@@ -170,6 +170,15 @@ bool doStatistics) {
 	state->packetSubsampleRendering = 1;
 	state->packetSubsampleCount = 0;
 
+	// Timers and event queues for the rendering side.
+	state->displayEventQueue = al_create_event_queue();
+	state->displayTimer = al_create_timer(1.0 / 60.0);
+
+	al_register_event_source(state->displayEventQueue, al_get_display_event_source(state->displayWindow));
+	al_register_event_source(state->displayEventQueue, al_get_timer_event_source(state->displayTimer));
+
+	al_start_timer(state->displayTimer);
+
 	// Initialize mutex for locking between update and screen draw operations.
 	mtx_init(&state->bitmapMutex, mtx_plain);
 
@@ -182,7 +191,7 @@ void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerStat
 	// Only render ever Nth packet.
 	state->packetSubsampleCount++;
 
-	if (state->packetSubsampleCount == state->packetSubsampleRendering) {
+	if (state->packetSubsampleCount >= state->packetSubsampleRendering) {
 		state->packetSubsampleCount = 0;
 	}
 	else {
@@ -283,27 +292,48 @@ void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerStat
 }
 
 void caerVisualizerUpdateScreen(caerVisualizerState state) {
-	al_set_target_backbuffer(state->displayWindow);
-	al_clear_to_color(al_map_rgb(0, 0, 0));
+	bool redraw = false;
+	ALLEGRO_EVENT displayEvent;
 
-	mtx_lock(&state->bitmapMutex);
+	handleEvents: al_wait_for_event(state->displayEventQueue, &displayEvent);
 
-	// Render statistics string.
-	bool doStatistics = (state->packetStatistics.currentStatisticsString != NULL);
-
-	if (doStatistics) {
-		al_draw_text(state->displayFont, al_map_rgb(255, 255, 255), GLOBAL_FONT_SPACING,
-		GLOBAL_FONT_SPACING, 0, state->packetStatistics.currentStatisticsString);
+	if (displayEvent.type == ALLEGRO_EVENT_TIMER) {
+		redraw = true;
+	}
+	else if (displayEvent.type == ALLEGRO_EVENT_DISPLAY_CLOSE) {
+		// TODO: shutdown!
 	}
 
-	// Blit bitmap to screen, taking zoom factor into consideration.
-	al_draw_scaled_bitmap(state->bitmapRenderer, 0, 0, state->bitmapRendererSizeX, state->bitmapRendererSizeY, 0,
-		(doStatistics) ? (STATISTICS_SIZE) : (0), state->bitmapRendererSizeX * state->displayWindowZoomFactor,
-		state->bitmapRendererSizeY * state->displayWindowZoomFactor, ALLEGRO_FLIP_VERTICAL);
+	if (!al_is_event_queue_empty(state->displayEventQueue)) {
+		// Handle all events before rendering, to avoid
+		// having them backed up too much.
+		goto handleEvents;
+	}
 
-	mtx_unlock(&state->bitmapMutex);
+	// Render content to display.
+	if (redraw) {
+		al_set_target_backbuffer(state->displayWindow);
+		al_clear_to_color(al_map_rgb(0, 0, 0));
 
-	al_flip_display();
+		mtx_lock(&state->bitmapMutex);
+
+		// Render statistics string.
+		bool doStatistics = (state->packetStatistics.currentStatisticsString != NULL);
+
+		if (doStatistics) {
+			al_draw_text(state->displayFont, al_map_rgb(255, 255, 255), GLOBAL_FONT_SPACING,
+			GLOBAL_FONT_SPACING, 0, state->packetStatistics.currentStatisticsString);
+		}
+
+		// Blit bitmap to screen, taking zoom factor into consideration.
+		al_draw_scaled_bitmap(state->bitmapRenderer, 0, 0, state->bitmapRendererSizeX, state->bitmapRendererSizeY, 0,
+			(doStatistics) ? (STATISTICS_SIZE) : (0), state->bitmapRendererSizeX * state->displayWindowZoomFactor,
+			state->bitmapRendererSizeY * state->displayWindowZoomFactor, ALLEGRO_FLIP_VERTICAL);
+
+		mtx_unlock(&state->bitmapMutex);
+
+		al_flip_display();
+	}
 }
 
 void caerVisualizerExit(caerVisualizerState state) {
@@ -319,6 +349,12 @@ void caerVisualizerExit(caerVisualizerState state) {
 
 	al_destroy_display(state->displayWindow);
 	state->displayWindow = NULL;
+
+	al_destroy_timer(state->displayTimer);
+	state->displayTimer = NULL;
+
+	al_destroy_event_queue(state->displayEventQueue);
+	state->displayEventQueue = NULL;
 
 	if (state->packetStatistics.currentStatisticsString != NULL) {
 		caerStatisticsStringExit(&state->packetStatistics);
@@ -422,6 +458,15 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 		// Actually update polarity rendering.
 		caerVisualizerUpdate(&polarity->packetHeader, &state->eventVisualizer);
 	}
+	else if (!renderPolarity) {
+		if (atomic_load_explicit(&state->eventVisualizer.running, memory_order_relaxed)) {
+			mtx_lock(&state->eventVisualizer.bitmapMutex);
+			atomic_store(&state->eventVisualizer.running, false);
+			mtx_unlock(&state->eventVisualizer.bitmapMutex);
+
+			caerVisualizerExit(&state->eventVisualizer);
+		}
+	}
 
 	// Select latest frame to render.
 	if (renderFrame && frame != NULL) {
@@ -439,6 +484,15 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 
 		// Actually update frame rendering.
 		caerVisualizerUpdate(&frame->packetHeader, &state->frameVisualizer);
+	}
+	else if (!renderFrame) {
+		if (atomic_load_explicit(&state->frameVisualizer.running, memory_order_relaxed)) {
+			mtx_lock(&state->frameVisualizer.bitmapMutex);
+			atomic_store(&state->frameVisualizer.running, false);
+			mtx_unlock(&state->frameVisualizer.bitmapMutex);
+
+			caerVisualizerExit(&state->frameVisualizer);
+		}
 	}
 }
 
