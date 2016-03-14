@@ -8,13 +8,12 @@ using namespace caffe;
 // NOLINT(build/namespaces)
 using std::string;
 
-void MyClass::file_set(char * i, bool *b) {
+void MyClass::file_set(char * i, double *b) {
 	MyClass::file_i = i;
 
 	if (file_i != NULL) {
 		
 		//std::cout << "\n---------- Prediction for " << file_i << " started ----------\n" << std::endl;
-
 		cv::Mat img = cv::imread(file_i, 0);
 		cv::Mat img2;
 		img.convertTo(img2, CV_32FC1);
@@ -27,9 +26,10 @@ void MyClass::file_set(char * i, bool *b) {
 		/* Print the top N predictions. */
 		for (size_t i = 0; i < predictions.size(); ++i) {
 			Prediction p = predictions[i];
-			//std::cout << std::fixed << std::setprecision(4) << p.second << " - \"" << p.first << "\"" << std::endl;
+			//std::cout << "\n" << std::fixed << std::setprecision(4) << p.second << " - \"" << p.first << "\"" << std::endl;
                         if (p.first.compare("FACE") == 0 && p.second > 0.5){
-                            *b = true;
+                            *b = p.second;
+                            //std::cout << "\n" << p.second << std::endl;
                         }
                 }
                 

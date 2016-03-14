@@ -27,13 +27,9 @@ class MyClass {
 private:
 	char * file_i;
 	void SetMean(const string& mean_file);
-
 	std::vector<float> Predict(const cv::Mat& img);
-
 	void WrapInputLayer(std::vector<cv::Mat>* input_channels);
-
 	void Preprocess(const cv::Mat& img, std::vector<cv::Mat>* input_channels);
-
 	shared_ptr<Net<float> > net_;
 	cv::Size input_geometry_;
 	int num_channels_;
@@ -43,11 +39,9 @@ public:
 
 	void Classifier(const string& model_file, const string& trained_file, const string& mean_file,
 		const string& label_file);
-
 	std::vector<Prediction> Classify(const cv::Mat& img, int N = 5);
-
 	void caller();
-	void file_set(char * i, bool *b);
+	void file_set(char * i, double *b);
 	int hello_caffe();
 	char * file_get();
 	void init_network();

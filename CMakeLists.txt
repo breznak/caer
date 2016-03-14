@@ -257,7 +257,7 @@ IF (ENABLE_CAFFEINTERFACE)
 	FIND_PACKAGE(GLOG QUIET)
 	IF(Glog_FOUND)
 		SET(CAER_INCDIRS ${CAER_INCDIRS} ${Glog_INCLUDE_DIRS})
-		MESSAGE(STATUS "GLOG FOUND")
+		MESSAGE(STATUS "Glog FOUND")
 		SET(EXTRA_CAFFE_LIBS ${Glog_LIBRARIES})
 	ENDIF()
 
@@ -317,7 +317,8 @@ IF (ENABLE_CAFFEINTERFACE)
 		SET(EXTRA_CAFFE_LIBS ${EXTRA_CAFFE_LIBS} ${CUDA_LIBRARIES})
 	ENDIF()
 	
-	#SET(EXTRA_CAFFE_LIBS "-lglog -lopencv_imgproc -lopencv_highgui -lopencv_core  -lboost_system -lprotobuf ")
+	#SET(EXTRA_CAFFE_LIBS "-lglog -lopencv_imgproc -lopencv_highgui -lopencv_core  -lboost_system -lprotobuf -lcaffe")
+	SET(EXTRA_CAFFE_LIBS ${EXTRA_CAFFE_LIBS} "-lglog -lboost_system -lprotobuf")
 	SET(CAER_CXX_LIBS ${CAER_CXX_LIBS} ${EXTRA_CAFFE_LIBS})
 
 	# We need the C wrapper to use the C++ Caffe library.

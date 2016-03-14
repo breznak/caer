@@ -22,7 +22,7 @@ static struct caer_module_functions caerCaffeWrapperFunctions = { .moduleInit = 
 	&caerCaffeWrapperRun, .moduleConfig =
 NULL, .moduleExit = &caerCaffeWrapperExit };
 
-const char * caerCaffeWrapper(uint16_t moduleID, char ** file_string, bool *classificationResults, int max_img_qty) {
+const char * caerCaffeWrapper(uint16_t moduleID, char ** file_string, double *classificationResults, int max_img_qty) {
 	
         caerModuleData moduleData = caerMainloopFindModule(moduleID, "caerCaffeWrapper");
 	caerModuleSM(&caerCaffeWrapperFunctions, moduleData, sizeof(struct caffewrapper_state), 3, file_string, classificationResults, max_img_qty);
@@ -50,7 +50,7 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber, va
 	UNUSED_ARGUMENT(argsNumber);
         caffewrapperState state = moduleData->moduleState;
 	char ** file_string = va_arg(args, char **);
-        bool *classificationResults = va_arg(args, bool*);
+        double *classificationResults = va_arg(args, double*);
         int max_img_qty = va_arg(args, int);
         
         for (int i = 0; i < max_img_qty; ++i){

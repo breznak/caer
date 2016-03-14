@@ -72,12 +72,11 @@ static bool mainloop_1(void) {
     
 #ifdef ENABLE_VISUALIZER
     // A small visualizer exists to show what the output looks like.
-#if defined(DAVISFX2) || defined(DAVISFX3)
-    caerVisualizer(4, polarity, frame);
-#else
-    caerVisualizer(4, polarity, NULL);
-#endif
-
+    #if defined(DAVISFX2) || defined(DAVISFX3)
+        caerVisualizer(4, polarity, frame);
+    #else
+        caerVisualizer(4, polarity, NULL);
+    #endif
 #endif
 
 #ifdef ENABLE_IMAGEGENERATOR
@@ -113,7 +112,7 @@ static bool mainloop_1(void) {
      * Stores the result of the classification (true = FACE, false = NON FACE) for each
      * element in file_strings_classify
      */
-    bool * classification_results = calloc(sizeof(bool),MAX_IMG_QTY);
+    double * classification_results = calloc(sizeof(double),MAX_IMG_QTY);
     if (classification_results == NULL) {
         caerLog(CAER_LOG_ERROR, mainString, "Failed to allocate classification_results.");
         return (false);
@@ -142,21 +141,21 @@ static bool mainloop_1(void) {
     }
 
     
-#if defined(DAVISFX2) || defined(DAVISFX3)
-    /* frame_img_ptr:
-     *
-     * (Not used so far.)
-     * points to the frame that is generated in imagegenerator.c
-     * Could be used if we want to draw something on top of frame based on classification.
-     * So far, the frame is drawn by the visualizer module.
-     */
-    unsigned char ** frame_img_ptr = calloc(sizeof(unsigned char*),1);
-    
-    //generate images
-    caerImageGenerator(5, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, DISPLAY_IMG_SIZE, frame, frame_img_ptr, &FRAME_W, &FRAME_H);
-#else
-    caerImageGenerator(5, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, DISPLAY_IMG_SIZE, NULL, NULL, NULL, NULL);
-#endif
+    #if defined(DAVISFX2) || defined(DAVISFX3)
+        /* frame_img_ptr:
+         *
+         * (Not used so far.)
+         * points to the frame that is generated in imagegenerator.c
+         * Could be used if we want to draw something on top of frame based on classification.
+         * So far, the frame is drawn by the visualizer module.
+         */
+        unsigned char ** frame_img_ptr = calloc(sizeof(unsigned char*),1);
+        
+        //generate images
+        caerImageGenerator(5, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, DISPLAY_IMG_SIZE, frame,  frame_img_ptr, &FRAME_W, &FRAME_H);
+    #else
+        caerImageGenerator(5, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, DISPLAY_IMG_SIZE, NULL, NULL, NULL, NULL);
+    #endif
 
 #endif    
     
@@ -173,32 +172,29 @@ static bool mainloop_1(void) {
     
 #ifdef ENABLE_CAFFEINTERFACE
     //it also requires image generator
-#ifdef ENABLE_IMAGEGENERATOR
-    // this wrapper let you interact with caffe framework
-    // for example, we now classify the latest image
-    // only run CNN if we have a file to classify
-    if(*file_strings_classify != NULL){
-        caerCaffeWrapper(8, file_strings_classify, classification_results, (int) MAX_IMG_QTY);
-    }
-#endif
+    #ifdef ENABLE_IMAGEGENERATOR
+        // this wrapper let you interact with caffe framework
+        // for example, we now classify the latest image
+        // only run CNN if we have a file to classify
+        if(*file_strings_classify != NULL){
+            caerCaffeWrapper(8, file_strings_classify, classification_results, (int) MAX_IMG_QTY);
+        }
+    #endif
 #endif
     
 #ifdef ENABLE_IMAGESTREAMERVISUALIZER
     // Open a second window of the OpenGL visualizer
     // display images of accumulated spikes
-    
     //it also requires image generator
-#ifdef ENABLE_IMAGEGENERATOR
-    
-#if defined(DAVISFX2) || defined(DAVISFX3)
-    
-    caerImagestreamerVisualizer(9, *display_img_ptr, DISPLAY_IMG_SIZE, classification_results, class_region_sizes, (int) MAX_IMG_QTY);
-    
-#else //without Frames
-    caerImagestreamerVisualizer(9, *display_img_ptr, DISPLAY_IMG_SIZE, classificationResults, class_region_sizes, (int) MAX_IMG_QTY);
-#endif
-    
-#endif
+    #ifdef ENABLE_IMAGEGENERATOR
+        #if defined(DAVISFX2) || defined(DAVISFX3)   
+            caerImagestreamerVisualizer(9, *display_img_ptr, DISPLAY_IMG_SIZE, classification_results, class_region_sizes, (int) MAX_IMG_QTY);
+            
+        #else //without Frames
+            caerImagestreamerVisualizer(9, *display_img_ptr, DISPLAY_IMG_SIZE, classificationResults, class_region_sizes, (int) MAX_IMG_QTY);
+        #endif
+            
+    #endif
 
 #endif
     

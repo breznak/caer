@@ -20,6 +20,8 @@
 #define STB_DEFINE
 #include "ext/stblib/stb.h"
 
+#define THR 0.5
+
 #define PNGSUITE_PRIMARY
 // end std image library 
 
@@ -56,7 +58,7 @@ static struct caer_module_functions caerImagestreamerVisualizerFunctions = { .mo
 	&caerImagestreamerVisualizerInit, .moduleRun = &caerImagestreamerVisualizerRun, .moduleConfig =
 NULL, .moduleExit = &caerImagestreamerVisualizerExit };
 
-void caerImagestreamerVisualizer(uint16_t moduleID, unsigned char * disp_img, const int disp_img_size, bool * classific_results, int * classific_sizes, int max_img_qty) {
+void caerImagestreamerVisualizer(uint16_t moduleID, unsigned char * disp_img, const int disp_img_size, double * classific_results, int * classific_sizes, int max_img_qty) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageStreamerVisualizer"); //"ImageStreamerVisualizer");
         
 	caerModuleSM(&caerImagestreamerVisualizerFunctions, moduleData, sizeof(struct imagestreamervisualizer_state), 5,
@@ -115,7 +117,7 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 	// Interpret variable arguments (same as above in main function).
 	unsigned char * disp_img = va_arg(args, char *);
 	const int DISPLAY_IMG_SIZE = va_arg(args, const int);
-    bool * classific_results = va_arg(args, bool *);
+    double * classific_results = va_arg(args, double *);
     int * classific_sizes = va_arg(args, int *);
     int max_img_qty = va_arg(args, int);
     
@@ -196,15 +198,47 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
              al_put_pixel(x, y, color); 
          }
     }
+
+    //draw red square if classification is successfull
+    if (classific_results[0] > 0 ){
+        //printf("Classification results availale\n");
+        //printf("%f\n", classific_results[0]);
+        if(classific_results[0] > THR){
+            for (int x = 0; x != DISPLAY_IMG_SIZE; ++x) {
+                for (int y = 0; y != 5; ++y) {
+                   c = y * DISPLAY_IMG_SIZE + x; 
+                   color = al_map_rgb((int)(classific_results[0]*255),0,0);
+                   al_put_pixel(x, y, color); 
+                }
+            }
+            for (int x = 0; x != DISPLAY_IMG_SIZE; ++x) {
+                for (int y = DISPLAY_IMG_SIZE; y != DISPLAY_IMG_SIZE-5; y--) {
+                   c = y * DISPLAY_IMG_SIZE + x; 
+                   color = al_map_rgb((int)(classific_results[0]*255),0,0);
+                   al_put_pixel(x, y, color); 
+                }
+            }            
+            for (int y = 0; y != DISPLAY_IMG_SIZE; ++y) {
+                for (int x = 0; x != 5; x++) {
+                   c = y * DISPLAY_IMG_SIZE + x; 
+                   color = al_map_rgb((int)(classific_results[0]*255),0,0);
+                   al_put_pixel(x, y, color); 
+                }
+            }            
+            for (int y = 0; y != DISPLAY_IMG_SIZE; ++y) {
+                for (int x = DISPLAY_IMG_SIZE; x != DISPLAY_IMG_SIZE-5; x--) {
+                   c = y * DISPLAY_IMG_SIZE + x; 
+                   color = al_map_rgb((int)(classific_results[0]*255),0,0);
+                   al_put_pixel(x, y, color); 
+                }
+            }   
+        }
+    }
+
     //unlock
     al_unlock_bitmap(state->bb);
     //flip
     al_flip_display();
-
-    if (classific_results[0]!= NULL){
-        printf("Classification results availale\n");
-        printf("%d\n", classific_results[0]);
-    }
-
+    
 }
 
