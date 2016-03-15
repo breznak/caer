@@ -6,6 +6,7 @@
 #include <stdatomic.h>
 #include <libcaer/events/polarity.h>
 #include <libcaer/events/frame.h>
+#include <libcaer/events/imu6.h>
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_primitives.h>
 #include <allegro5/allegro_font.h>
@@ -41,7 +42,7 @@ void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerStat
 void caerVisualizerUpdateScreen(caerVisualizerState state);
 void caerVisualizerExit(caerVisualizerState state);
 
-void caerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame);
+void caerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame, caerIMU6EventPacket imu);
 
 void caerVisualizerSystemInit(void);
 

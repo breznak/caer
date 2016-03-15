@@ -295,6 +295,57 @@ void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerStat
 			}
 		}
 	}
+	else if (caerEventPacketHeaderGetEventType(packetHeader) == IMU6_EVENT
+		&& caerEventPacketHeaderGetEventValid(packetHeader) != 0) {
+		float accelX = 0, accelY = 0, accelZ = 0;
+		float gyroX = 0, gyroY = 0, gyroZ = 0;
+
+		// Iterate over valid IMU events and average them.
+		// This somewhat smoothes out the rendering.
+		CAER_IMU6_ITERATOR_VALID_START((caerIMU6EventPacket) packetHeader)
+			accelX += caerIMU6EventGetAccelX(caerIMU6IteratorElement);
+			accelY += caerIMU6EventGetAccelY(caerIMU6IteratorElement);
+			accelZ += caerIMU6EventGetAccelZ(caerIMU6IteratorElement);
+
+			gyroX += caerIMU6EventGetGyroX(caerIMU6IteratorElement);
+			gyroY += caerIMU6EventGetGyroY(caerIMU6IteratorElement);
+			gyroZ += caerIMU6EventGetGyroZ(caerIMU6IteratorElement);
+		CAER_IMU6_ITERATOR_VALID_END
+
+		float scaleFactor = 30;
+		float centerPoint = 100;
+
+		ALLEGRO_COLOR accelColor = al_map_rgb(0, 255, 0);
+		ALLEGRO_COLOR gyroColor = al_map_rgb(255, 0, 255);
+
+		// Acceleration X, Y as lines. Z as a circle.
+		accelX /= caerEventPacketHeaderGetEventValid(packetHeader);
+		accelY /= caerEventPacketHeaderGetEventValid(packetHeader);
+		accelZ /= caerEventPacketHeaderGetEventValid(packetHeader);
+
+		al_draw_line(centerPoint, centerPoint, centerPoint + (accelX * scaleFactor),
+			centerPoint - (accelY * scaleFactor), accelColor, 4);
+		al_draw_circle(centerPoint, centerPoint, accelZ * scaleFactor, accelColor, 4);
+
+		// Add text for values.
+		char valStr[128];
+		snprintf(valStr, 128, "%.2f,%.2f g", accelX, accelY);
+
+		al_draw_text(state->displayFont, accelColor, centerPoint + (accelX * scaleFactor),
+			centerPoint - (accelY * scaleFactor), 0, valStr);
+
+		// Gyroscope pitch(X), yaw(Y), roll(Z) as lines.
+		scaleFactor = 10;
+
+		gyroX /= caerEventPacketHeaderGetEventValid(packetHeader);
+		gyroY /= caerEventPacketHeaderGetEventValid(packetHeader);
+		gyroZ /= caerEventPacketHeaderGetEventValid(packetHeader);
+
+		al_draw_line(centerPoint, centerPoint, centerPoint + (gyroY * scaleFactor), centerPoint - (gyroX * scaleFactor),
+			gyroColor, 4);
+		al_draw_line(centerPoint, centerPoint - 25, centerPoint + (gyroZ * scaleFactor), centerPoint - 25, gyroColor,
+			4);
+	}
 
 	mtx_unlock(&state->bitmapMutex);
 }
@@ -417,6 +468,7 @@ struct visualizer_module_state {
 	thrd_t renderingThread;
 	struct caer_visualizer_state eventVisualizer;
 	struct caer_visualizer_state frameVisualizer;
+	struct caer_visualizer_state imuVisualizer;
 };
 
 typedef struct visualizer_module_state *visualizerModuleState;
@@ -427,15 +479,17 @@ static void caerVisualizerModuleExit(caerModuleData moduleData);
 static int caerVisualizerModuleRenderThread(void *moduleData);
 static bool initializeEventRenderer(visualizerModuleState state, int16_t sourceID);
 static bool initializeFrameRenderer(visualizerModuleState state, int16_t sourceID);
+static bool initializeIMURenderer(visualizerModuleState state);
 
 static struct caer_module_functions caerVisualizerFunctions = { .moduleInit = &caerVisualizerModuleInit, .moduleRun =
 	&caerVisualizerModuleRun, .moduleConfig =
 NULL, .moduleExit = &caerVisualizerModuleExit };
 
-void caerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame) {
+void caerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame,
+	caerIMU6EventPacket imu) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "Visualizer");
 
-	caerModuleSM(&caerVisualizerFunctions, moduleData, sizeof(struct visualizer_module_state), 2, polarity, frame);
+	caerModuleSM(&caerVisualizerFunctions, moduleData, sizeof(struct visualizer_module_state), 3, polarity, frame, imu);
 }
 
 static bool caerVisualizerModuleInit(caerModuleData moduleData) {
@@ -445,12 +499,15 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showEvents", true);
 #ifdef DVS128
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showFrames", false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showIMU", true);
 #else
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showFrames", true);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showIMU", true);
 #endif
 
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "subsampleEventsRendering", 1);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "subsampleFramesRendering", 1);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "subsampleIMURendering", 1);
 
 	// Start separate rendering thread. Decouples presentation from
 	// data processing and preparation. Communication over properly
@@ -474,6 +531,10 @@ static void caerVisualizerModuleExit(caerModuleData moduleData) {
 	if (atomic_load(&state->frameVisualizer.running)) {
 		caerVisualizerExit(&state->frameVisualizer);
 	}
+
+	if (atomic_load(&state->imuVisualizer.running)) {
+		caerVisualizerExit(&state->imuVisualizer);
+	}
 }
 
 static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
@@ -488,6 +549,10 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 	// Frames to render.
 	caerFrameEventPacket frame = va_arg(args, caerFrameEventPacket);
 	bool renderFrame = sshsNodeGetBool(moduleData->moduleNode, "showFrames");
+
+	// IMU events to render.
+	caerIMU6EventPacket imu = va_arg(args, caerIMU6EventPacket);
+	bool renderIMU = sshsNodeGetBool(moduleData->moduleNode, "showIMU");
 
 	// Update polarity event rendering map.
 	if (renderPolarity && polarity != NULL) {
@@ -518,7 +583,7 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 
 	// Select latest frame to render.
 	if (renderFrame && frame != NULL) {
-		// If the event renderer is not allocated yet, do it.
+		// If the frame renderer is not allocated yet, do it.
 		if (!atomic_load_explicit(&state->frameVisualizer.running, memory_order_relaxed)) {
 			if (!initializeFrameRenderer(state, caerEventPacketHeaderGetEventSource(&frame->packetHeader))) {
 				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to initialize frame visualizer.");
@@ -542,6 +607,32 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 			caerVisualizerExit(&state->frameVisualizer);
 		}
 	}
+
+	// Render latest IMU event.
+	if (renderIMU && imu != NULL) {
+		// If the IMU renderer is not allocated yet, do it.
+		if (!atomic_load_explicit(&state->imuVisualizer.running, memory_order_relaxed)) {
+			if (!initializeIMURenderer(state)) {
+				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to initialize IMU visualizer.");
+				return;
+			}
+		}
+
+		// Update sub-sample value.
+		state->imuVisualizer.packetSubsampleRendering = sshsNodeGetInt(moduleData->moduleNode, "subsampleIMURendering");
+
+		// Actually update IMU rendering.
+		caerVisualizerUpdate(&imu->packetHeader, &state->imuVisualizer);
+	}
+	else if (!renderIMU) {
+		if (atomic_load_explicit(&state->imuVisualizer.running, memory_order_relaxed)) {
+			mtx_lock(&state->imuVisualizer.bitmapMutex);
+			atomic_store(&state->imuVisualizer.running, false);
+			mtx_unlock(&state->imuVisualizer.bitmapMutex);
+
+			caerVisualizerExit(&state->imuVisualizer);
+		}
+	}
 }
 
 static int caerVisualizerModuleRenderThread(void *moduleData) {
@@ -555,6 +646,10 @@ static int caerVisualizerModuleRenderThread(void *moduleData) {
 
 		if (atomic_load_explicit(&state->frameVisualizer.running, memory_order_relaxed)) {
 			caerVisualizerUpdateScreen(&state->frameVisualizer);
+		}
+
+		if (atomic_load_explicit(&state->imuVisualizer.running, memory_order_relaxed)) {
+			caerVisualizerUpdateScreen(&state->imuVisualizer);
 		}
 	}
 
@@ -581,6 +676,14 @@ static bool initializeFrameRenderer(visualizerModuleState state, int16_t sourceI
 	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
 
 	if (!caerVisualizerInit(&state->frameVisualizer, sizeX, sizeY, VISUALIZER_DEFAULT_ZOOM, true)) {
+		return (false);
+	}
+
+	return (true);
+}
+
+static bool initializeIMURenderer(visualizerModuleState state) {
+	if (!caerVisualizerInit(&state->imuVisualizer, 300, 300, VISUALIZER_DEFAULT_ZOOM, true)) {
 		return (false);
 	}
 

@@ -73,7 +73,7 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_VISUALIZER
     // A small visualizer exists to show what the output looks like.
     #if defined(DAVISFX2) || defined(DAVISFX3)
-        caerVisualizer(4, polarity, frame);
+        caerVisualizer(4, polarity, frame, imu);
     #else
         caerVisualizer(4, polarity, NULL);
     #endif
