@@ -143,8 +143,8 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 	counter = 0;
 	for(int i=0; i<IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT; i++){
 	    for(int y=0; y<IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT; y++){
-	        //c = y * DISPLAY_IMG_SIZE + i;
-	        my_frame->pixels[counter] = (uint16_t)(rand()%65000);//(uint16_t)(small_img[c]<<8); 
+	        c = y * DISPLAY_IMG_SIZE + i;
+	        my_frame->pixels[counter] = (uint16_t)(small_img[c]<<8); 
 	        counter += 1;
 	    }
 	}
@@ -191,7 +191,7 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
             if(keypressed.keyboard.keycode == ALLEGRO_KEY_T){}
 	        if(keypressed.keyboard.keycode == ALLEGRO_KEY_S){}
             if(keypressed.keyboard.keycode == ALLEGRO_KEY_N){}
-            if(keypressed.keyboard.keycode == ALLEGRO_KEY_P){}
+     
         }
         get_event = false;
     }
