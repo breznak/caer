@@ -7,52 +7,14 @@
 #include "imagestreamervisualizer.h"
 #include "base/mainloop.h"
 #include "base/module.h"
-#include "modules/statistics/statistics.h"
 #include "ext/portable_time.h"
-#include <string.h>
-#include <allegro5/allegro5.h>
 
-#include "main.h"
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "ext/stblib/stb_image.h"
-
-#define STB_DEFINE
-#include "ext/stblib/stb.h"
-
-#define THR 0.5
-
-#define PNGSUITE_PRIMARY
-// end std image library 
-
-#define TESTING 0		// keyboard "r" or "t" (recording or testing) "s" (stop) real-time test network, stores images in /tmp/ as defined in header file .h
-#define TRAINING_POSITIVES 1	// keyboard "p" (positives) record pngs and store them in positive folder
-#define TRAINING_NEGATIVES 2	// keyboard "n" (negatives) record pngs and store them in negative folder
-// keyboard "s" stop saving png, generations on visualizer keeps going
-
-static int8_t savepng_state = 0;     //default state -> do not save png
-static int8_t mode = 0;		 //default mode -> do nothing 
-
-struct imagestreamervisualizer_state {
-    ALLEGRO_DISPLAY *window;
-    ALLEGRO_BITMAP *bb;
-    ALLEGRO_EVENT_QUEUE *event_queue;
-    ALLEGRO_EVENT ev;
-    //save output files
-    int8_t savepng;
-    int8_t mode;
-    enum caer_frame_event_color_channels frameChannels;
-};
-
-typedef struct imagestreamervisualizer_state *imagestreamervisualizerState;
 
 static bool caerImagestreamerVisualizerInit(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerImagestreamerVisualizerExit(caerModuleData moduleData);
-
-/*static void framebuffer_size_callback(GLFWwindow* window);
-static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
-*/
+static int caerImagestreamerVisualizerRenderThread(void *moduleData);
+static bool initializeFrameRenderer(caerImagestreamerVisualizerState state, int16_t sourceID);
 
 static struct caer_module_functions caerImagestreamerVisualizerFunctions = { .moduleInit =
 	&caerImagestreamerVisualizerInit, .moduleRun = &caerImagestreamerVisualizerRun, .moduleConfig =
@@ -69,31 +31,32 @@ void caerImagestreamerVisualizer(uint16_t moduleID, unsigned char * disp_img, co
 
 static bool caerImagestreamerVisualizerInit(caerModuleData moduleData, size_t argsNumber, va_list args) {
 	
-	sshsNodePutByteIfAbsent(moduleData->moduleNode, "savepng", 0);
+    caerImagestreamerVisualizerState state = moduleData->moduleState;
+
+    sshsNodePutByteIfAbsent(moduleData->moduleNode, "savepng", 0);
     sshsNodePutByteIfAbsent(moduleData->moduleNode, "mode", 0);
-        
-    imagestreamervisualizerState state = moduleData->moduleState;
-	
-    if(!al_init()) {
+       
+    // Start separate rendering thread. Decouples presentation from
+    // data processing and preparation. Communication over properly
+    // locked bitmap.
+    
+/*  if(!al_init()) {
         fprintf(stderr, "failed to initialize allegro!\n");
         return -1;
     }
-    state->window = al_create_display(IMAGESTREAMERVISUALIZER_SCREEN_WIDTH,IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT);
-    if( state->window == NULL) {
+    state->displayWindow = al_create_display(IMAGESTREAMERVISUALIZER_SCREEN_WIDTH,IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT);
+    if( state->displayWindow == NULL) {
         fprintf(stderr, "failed to create display!\n");
         return -1;
     }
-    state->bb = al_get_backbuffer(state->window);
-    al_set_window_title(state->window, "Image Generator: Accumulated spikes");
+    state->bb = al_get_backbuffer(state->displayWindow);
+    al_set_window_title(state->displayWindow, "Image Generator: Accumulated spikes");
     al_clear_to_color(al_map_rgb(0,0,0));
     al_flip_display();
-
-    /*keyboard*/
     if(!al_install_keyboard()) {
         fprintf(stderr, "failed to initialize the keyboard!\n");
         return -1;
     }
-
     state->event_queue = al_create_event_queue();
     if(!state->event_queue) {
         fprintf(stderr, "failed to create event_queue!\n");
@@ -101,19 +64,54 @@ static bool caerImagestreamerVisualizerInit(caerModuleData moduleData, size_t ar
     }
     
     al_register_event_source(state->event_queue, al_get_keyboard_event_source());
-       
-	return (true);
+
+*/
+
+
+    if (!atomic_load_explicit(&state->vis_state.running, memory_order_relaxed)) {
+		if (!caerVisualizerInit(&state->vis_state, IMAGESTREAMERVISUALIZER_SCREEN_WIDTH, IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT, 2, true)) {
+			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to initialize image streamer visualizer.");
+			return (false);
+		}
+    }
+
+    thrd_create(&state->renderingThread, &caerImagestreamerVisualizerRenderThread, moduleData);
+    
+    return (true);
 
 }
 
+static int caerImagestreamerVisualizerRenderThread(void *moduleData) {
+
+	caerModuleData data = moduleData;
+	caerImagestreamerVisualizerState state = data->moduleState;
+	
+	while (atomic_load_explicit(&data->running, memory_order_relaxed)) {
+		if (atomic_load_explicit(&state->vis_state.running, memory_order_relaxed)) {
+			caerVisualizerUpdateScreen(&state->vis_state);
+		}
+	}
+	
+	return (thrd_success);
+}
+
 static void caerImagestreamerVisualizerExit(caerModuleData moduleData) {
-	imagestreamervisualizerState state = moduleData->moduleState;
+	caerImagestreamerVisualizerState state = moduleData->moduleState;
 
+	// Wait on rendering thread.
+	thrd_join(state->renderingThread, NULL);
 
+	if (atomic_load(&state->vis_state.running)) {
+		caerVisualizerExit(&state->vis_state);
+	}
+	
 }
 
 static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
 	UNUSED_ARGUMENT(argsNumber);
+	
+	caerImagestreamerVisualizerState state = moduleData->moduleState;
+
 	// Interpret variable arguments (same as above in main function).
 	unsigned char * disp_img = va_arg(args, char *);
 	const int DISPLAY_IMG_SIZE = va_arg(args, const int);
@@ -121,27 +119,50 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
     int * classific_sizes = va_arg(args, int *);
     int max_img_qty = va_arg(args, int);
     
+    //update saving state, might have been changed by user key inputs
+    sshsNodePutByte(moduleData->moduleNode, "savepng", savepng_state);
+    sshsNodePutByte(moduleData->moduleNode, "mode", mode);
+            
+    //create one frame event packet, one single frame
+    caerFrameEventPacket my_frame_packet = caerFrameEventPacketAllocate(1, moduleData->moduleID, 0, IMAGESTREAMERVISUALIZER_SCREEN_WIDTH, IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT, 1);
+    //get that single frame
+	caerFrameEvent my_frame = caerFrameEventPacketGetEvent(my_frame_packet,0);
+
+	
     // only proceed if we have a display image
     if (disp_img == NULL){
         return;
     }
-    
-    //update saving state, might have been changed by user key inputs
-    sshsNodePutByte(moduleData->moduleNode, "savepng", savepng_state);
-    sshsNodePutByte(moduleData->moduleNode, "mode", mode);
-    imagestreamervisualizerState state = moduleData->moduleState;
-    
-    //select context/window
-    //glfwMakeContextCurrent(state->window);
-    
+   
     #define checkImageWidth 256 //DISPLAY_IMG_SIZE; not working
     #define checkImageHeight 256 //DISPLAY_IMG_SIZE; not working
     unsigned char *small_img = disp_img;
-    
+
+	//now put stuff into the frame
+	int c,counter;
+	counter = 0;
+	for(int i=0; i<IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT; i++){
+	    for(int y=0; y<IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT; y++){
+	        //c = y * DISPLAY_IMG_SIZE + i;
+	        my_frame->pixels[counter] = (uint16_t)(rand()%65000);//(uint16_t)(small_img[c]<<8); 
+	        counter += 1;
+	    }
+	}
+	
+    //add info to the frame
+    caerFrameEventSetLengthXLengthYChannelNumber(my_frame, IMAGESTREAMERVISUALIZER_SCREEN_WIDTH, IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT,
+	1, my_frame_packet);
+	//valido
+	caerFrameEventValidate(my_frame,my_frame_packet);
+	
+	//update bitmap
+	caerVisualizerUpdate(&my_frame_packet->packetHeader, &state->vis_state);
+	free(my_frame_packet);
+	
     //static GLubyte checkImage[checkImageHeight][checkImageWidth][4];
     //static GLuint texName;
 
-    ALLEGRO_EVENT keypressed;
+/*    ALLEGRO_EVENT keypressed;
     bool get_event = al_get_next_event(state->event_queue, &keypressed);
     if( get_event ){
         switch(keypressed.type){
@@ -239,6 +260,8 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
     al_unlock_bitmap(state->bb);
     //flip
     al_flip_display();
-    
+    */
 }
+
+
 
