@@ -485,96 +485,96 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
     /* **** FRAME SECTION END *** */
     
     /* **** SPIKE SECTION START *** */
-    
-    // Iterate over events and accumulate them 
-    CAER_POLARITY_ITERATOR_VALID_START(polarity)
-    
-    // Get coordinates and polarity (0 or 1) of latest spike.
-    uint16_t x = caerPolarityEventGetX(caerPolarityIteratorElement);
-    uint16_t y = caerPolarityEventGetY(caerPolarityIteratorElement);
-    int pol = caerPolarityEventGetPolarity(caerPolarityIteratorElement);
-    int x_loop = 0;
-    int y_loop = 0;
+    if (polarity != NULL){
+	    // Iterate over events and accumulate them 
+	    CAER_POLARITY_ITERATOR_VALID_START(polarity)
+	    
+	    // Get coordinates and polarity (0 or 1) of latest spike.
+	    uint16_t x = caerPolarityEventGetX(caerPolarityIteratorElement);
+	    uint16_t y = caerPolarityEventGetY(caerPolarityIteratorElement);
+	    int pol = caerPolarityEventGetPolarity(caerPolarityIteratorElement);
+	    int x_loop = 0;
+	    int y_loop = 0;
 
-    //Update image Map
-    if (pol == 0) {
-        if (state->ImageMap[x][y] != INT64_MIN) {
-            state->ImageMap[x][y] = state->ImageMap[x][y] - 1;
-        }
-    } else {
-        if (state->ImageMap[x][y] != INT64_MAX) {
-            state->ImageMap[x][y] = state->ImageMap[x][y] + 1;
-        }
-    }
-    state->spikeCounter += 1;
+	    //Update image Map
+	    if (pol == 0) {
+		if (state->ImageMap[x][y] != INT64_MIN) {
+		    state->ImageMap[x][y] = state->ImageMap[x][y] - 1;
+		}
+	    } else {
+		if (state->ImageMap[x][y] != INT64_MAX) {
+		    state->ImageMap[x][y] = state->ImageMap[x][y] + 1;
+		}
+	    }
+	    state->spikeCounter += 1;
 
-    //If we saw enough spikes, generate Image from ImageMap.
-    if (state->spikeCounter >= state->numSpikes) {
-        
-        unsigned char *quadratic_image_map;
-        quadratic_image_map = (unsigned char*) malloc(SIZE_QUADRATIC_MAP * SIZE_QUADRATIC_MAP * 1);
-        if (quadratic_image_map == NULL) {
-		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate quadratic_image_map.");
-		return;
-        }
-        //nomalize image map and copy it into quadratic image_map [0,255]
-        if (!normalize_to_quadratic_image_map(state->ImageMap, state->sizeX, state->sizeY, SIZE_QUADRATIC_MAP, quadratic_image_map)){
-            caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to generate quadratic image map.");
-            return;
-        };
-        
-        
+	    //If we saw enough spikes, generate Image from ImageMap.
+	    if (state->spikeCounter >= state->numSpikes) {
+		
+		unsigned char *quadratic_image_map;
+		quadratic_image_map = (unsigned char*) malloc(SIZE_QUADRATIC_MAP * SIZE_QUADRATIC_MAP * 1);
+		if (quadratic_image_map == NULL) {
+			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate quadratic_image_map.");
+			return;
+		}
+		//nomalize image map and copy it into quadratic image_map [0,255]
+		if (!normalize_to_quadratic_image_map(state->ImageMap, state->sizeX, state->sizeY, SIZE_QUADRATIC_MAP, quadratic_image_map)){
+		    caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to generate quadratic image map.");
+		    return;
+		};
+		
+		
 
-        // if Recording key (R) or testing key (T) is pressed, write image for classification to disk
-        if (state->savepng == 1) {
-            
-            //create classify_img with desired CLASSIFY_IMG_SIZE (input size of CNN)
-            unsigned char *classify_img;
-            classify_img = (unsigned char*) malloc(CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE * 1);
-            if (classify_img == NULL) {
-		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate classify_img.");
-		return;
-            }
-            stbir_resize_uint8(quadratic_image_map, SIZE_QUADRATIC_MAP, SIZE_QUADRATIC_MAP, 0, classify_img, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE, 0, 1);
-            
-            //normalize before saving
-            normalize_image(classify_img, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE);
-            if (!save_img(state->counterImg, classify_img, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE, file_strings_classify, state->mode, file_string_counter, CLASSIFY_IMG_DIRECTORY, true, MAX_IMG_QTY)){
-                caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to save image.");
-		return;
-            }
-            free(classify_img);
-        }
+		// if Recording key (R) or testing key (T) is pressed, write image for classification to disk
+		if (state->savepng == 1) {
+		    
+		    //create classify_img with desired CLASSIFY_IMG_SIZE (input size of CNN)
+		    unsigned char *classify_img;
+		    classify_img = (unsigned char*) malloc(CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE * 1);
+		    if (classify_img == NULL) {
+			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate classify_img.");
+			return;
+		    }
+		    stbir_resize_uint8(quadratic_image_map, SIZE_QUADRATIC_MAP, SIZE_QUADRATIC_MAP, 0, classify_img, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE, 0, 1);
+		    
+		    //normalize before saving
+		    normalize_image(classify_img, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE);
+		    if (!save_img(state->counterImg, classify_img, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE, file_strings_classify, state->mode, file_string_counter, CLASSIFY_IMG_DIRECTORY, true, MAX_IMG_QTY)){
+		        caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to save image.");
+			return;
+		    }
+		    free(classify_img);
+		}
 
-        //Create small_img to display the image_map, return it (to main function) in display_img_ptr
-        unsigned char *disp_img;
-        *display_img_ptr = (unsigned char*) malloc(DISPLAY_IMG_SIZE * DISPLAY_IMG_SIZE * 1);
-        if (*display_img_ptr == NULL) {
-		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate *display_img_ptr.");
-		return;
-        }
-        disp_img = *display_img_ptr;
-        stbir_resize_uint8(quadratic_image_map, SIZE_QUADRATIC_MAP, SIZE_QUADRATIC_MAP, 0, disp_img, DISPLAY_IMG_SIZE, DISPLAY_IMG_SIZE, 0, 1);
-        normalize_image(disp_img, DISPLAY_IMG_SIZE, DISPLAY_IMG_SIZE);
+		//Create small_img to display the image_map, return it (to main function) in display_img_ptr
+		unsigned char *disp_img;
+		*display_img_ptr = (unsigned char*) malloc(DISPLAY_IMG_SIZE * DISPLAY_IMG_SIZE * 1);
+		if (*display_img_ptr == NULL) {
+			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate *display_img_ptr.");
+			return;
+		}
+		disp_img = *display_img_ptr;
+		stbir_resize_uint8(quadratic_image_map, SIZE_QUADRATIC_MAP, SIZE_QUADRATIC_MAP, 0, disp_img, DISPLAY_IMG_SIZE, DISPLAY_IMG_SIZE, 0, 1);
+		normalize_image(disp_img, DISPLAY_IMG_SIZE, DISPLAY_IMG_SIZE);
 
 
-        //reset values
-        for (x_loop = 0; x_loop < state->sizeX; x_loop++) {
-            for (y_loop = 0; y_loop < state->sizeY; y_loop++) {
-                state->ImageMap[x_loop][y_loop] = 0;
-            }
-        }
-        state->counterImg += 1;
-        state->spikeCounter = 0;
+		//reset values
+		for (x_loop = 0; x_loop < state->sizeX; x_loop++) {
+		    for (y_loop = 0; y_loop < state->sizeY; y_loop++) {
+		        state->ImageMap[x_loop][y_loop] = 0;
+		    }
+		}
+		state->counterImg += 1;
+		state->spikeCounter = 0;
 
-        // free chunks of memory
-        free(quadratic_image_map);
-        free(state->frameRenderer);
-        state->frameRenderer = NULL;
+		// free chunks of memory
+		free(quadratic_image_map);
+		free(state->frameRenderer);
+		state->frameRenderer = NULL;
 
-    }
-    CAER_POLARITY_ITERATOR_VALID_END
-            
+	    }
+	    CAER_POLARITY_ITERATOR_VALID_END
+     }       
     /* **** SPIKE SECTION END *** */
 }
 
