@@ -2,7 +2,7 @@
 #define IMAGESTREAMERVISUALIZER_H_
 
 #include "main.h"
-#include "modules/visualizer_allegro/visualizer.h"
+#include "modules/visualizer/visualizer.h"
 
 #define IMAGESTREAMERVISUALIZER_SCREEN_WIDTH 200 
 #define IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT 200 

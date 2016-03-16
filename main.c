@@ -20,7 +20,7 @@
 #include "modules/misc/out/net_udp.h"
 
 #ifdef ENABLE_VISUALIZER
-        #include "modules/visualizer_allegro/visualizer.h"
+        #include "modules/visualizer/visualizer.h"
 #endif
 
 #ifdef ENABLE_CAFFEINTERFACE
