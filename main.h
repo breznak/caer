@@ -10,6 +10,7 @@
 
 // Common includes, useful for everyone.
 #include <libcaer/libcaer.h>
+#include <libcaer/events/packetContainer.h>
 #include "ext/sshs/sshs.h"
 
 // Suppress unused argument warnings, if needed

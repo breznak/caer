@@ -12,7 +12,7 @@ void MyClass::file_set(char * i, double *b) {
 	MyClass::file_i = i;
 
 	if (file_i != NULL) {
-		
+
 		//std::cout << "\n---------- Prediction for " << file_i << " started ----------\n" << std::endl;
 		cv::Mat img = cv::imread(file_i, 0);
 		cv::Mat img2;
@@ -32,7 +32,7 @@ void MyClass::file_set(char * i, double *b) {
                             //std::cout << "\n" << p.second << std::endl;
                         }
                 }
-                
+
 	}
 }
 
@@ -59,7 +59,7 @@ void MyClass::init_network() {
 
 void MyClass::Classifier(const string& model_file, const string& trained_file, const string& mean_file,
 	const string& label_file) {
-#ifdef CPU_ONLY
+#ifdef CAFFE_CPU_ONLY
 	Caffe::set_mode(Caffe::CPU);
 #else
 	Caffe::set_mode(Caffe::GPU);
@@ -157,12 +157,12 @@ void MyClass::SetMean(const string& mean_file) {
 
 std::vector<float> MyClass::Predict(const cv::Mat& img) {
 
-	
+
 	Blob<float>* input_layer = net_->input_blobs()[0];
 	input_layer->Reshape(1, num_channels_, input_geometry_.height, input_geometry_.width);
 	/* Forward dimension change to all layers. */
 	net_->Reshape();
-	
+
 	std::vector<cv::Mat> input_channels;
 	WrapInputLayer(&input_channels);
 
@@ -173,7 +173,7 @@ std::vector<float> MyClass::Predict(const cv::Mat& img) {
 	Blob<float>* output_layer = net_->output_blobs()[0];
 	const float* begin = output_layer->cpu_data();
 	const float* end = begin + output_layer->channels();
-	
+
 	return std::vector<float>(begin, end);
 }
 
@@ -197,9 +197,9 @@ void MyClass::WrapInputLayer(std::vector<cv::Mat>* input_channels) {
 
 void MyClass::Preprocess(const cv::Mat& img, std::vector<cv::Mat>* input_channels) {
 	/* Convert the input image to the input image format of the network. */
-	
-	// std::cout << " Preprocess --- img.channnels() " << img.channels() << ", num_channels_" << num_channels_ << std::endl;	
-	
+
+	// std::cout << " Preprocess --- img.channnels() " << img.channels() << ", num_channels_" << num_channels_ << std::endl;
+
 	cv::Mat sample;
 	if (img.channels() == 3 && num_channels_ == 1)
 		cv::cvtColor(img, sample, cv::COLOR_BGR2GRAY);
@@ -211,21 +211,21 @@ void MyClass::Preprocess(const cv::Mat& img, std::vector<cv::Mat>* input_channel
 		cv::cvtColor(img, sample, cv::COLOR_GRAY2BGR);
 	else
 		sample = img;
-	
+
 
 	cv::Mat sample_resized;
 	if (sample.size() != input_geometry_)
 		cv::resize(sample, sample_resized, input_geometry_);
 	else
 		sample_resized = sample;
-	
+
 	cv::Mat sample_float;
 	if (num_channels_ == 3)
 		sample_resized.convertTo(sample_float, CV_32FC3);
 	else
 		sample_resized.convertTo(sample_float, CV_32FC1);
-	
-	
+
+
 	cv::Mat sample_normalized;
 	mean_ = cv::Mat::zeros(1, 1, CV_64F); //TODO remove, compute mean_ from mean_file and adapt size for subtraction.
 	//std::cout << " Preprocess: mean_size " << mean_.size() << std::endl;
@@ -236,7 +236,7 @@ void MyClass::Preprocess(const cv::Mat& img, std::vector<cv::Mat>* input_channel
 	 * input layer of the network because it is wrapped by the cv::Mat
 	 * objects in input_channels. */
 	cv::split(sample_normalized, *input_channels);
-	
+
 	CHECK(reinterpret_cast<float*>(input_channels->at(0).data) == net_->input_blobs()[0]->cpu_data())
 		<< "Input channels are not wrapping the input layer of the network.";
 }

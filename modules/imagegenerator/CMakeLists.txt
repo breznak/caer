@@ -1,0 +1,14 @@
+IF (NOT ENABLE_IMAGEGENERATOR)
+	SET(ENABLE_IMAGEGENERATOR 0 CACHE BOOL "Enable the image generator module")
+ENDIF()
+
+IF (ENABLE_IMAGEGENERATOR)
+	ADD_DEFINITIONS(-DENABLE_IMAGEGENERATOR=1)
+
+	SET(CAER_IMAGEGENERATOR_FILES
+		modules/imagegenerator/imagegenerator.c
+		ext/stblib/stb_image_resize.c
+		ext/stblib/stb_image_write.c)
+
+	SET(CAER_C_SRC_FILES ${CAER_C_SRC_FILES} ${CAER_IMAGEGENERATOR_FILES} PARENT_SCOPE)
+ENDIF()
