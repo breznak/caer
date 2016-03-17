@@ -223,12 +223,14 @@ void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerStat
 			if (caerPolarityEventGetPolarity(caerPolarityIteratorElement)) {
 				// ON polarity (green).
 				al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
-					caerPolarityEventGetY(caerPolarityIteratorElement), al_map_rgb(0, 255, 0));
+					(state->bitmapRendererSizeY - 1 - caerPolarityEventGetY(caerPolarityIteratorElement)),
+					al_map_rgb(0, 255, 0));
 			}
 			else {
 				// OFF polarity (red).
 				al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
-					caerPolarityEventGetY(caerPolarityIteratorElement), al_map_rgb(255, 0, 0));
+					(state->bitmapRendererSizeY - 1 - caerPolarityEventGetY(caerPolarityIteratorElement)),
+					al_map_rgb(255, 0, 0));
 			}
 		CAER_POLARITY_ITERATOR_VALID_END
 	}
@@ -287,7 +289,8 @@ void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerStat
 							}
 						}
 
-						al_put_pixel(framePositionX + x, framePositionY + y, color);
+						al_put_pixel((framePositionX + x), (state->bitmapRendererSizeY - 1 - (framePositionY + y)),
+							color);
 					}
 				}
 
@@ -427,7 +430,7 @@ void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		// Blit bitmap to screen, taking zoom factor into consideration.
 		al_draw_scaled_bitmap(state->bitmapRenderer, 0, 0, state->bitmapRendererSizeX, state->bitmapRendererSizeY, 0,
 			(doStatistics) ? (STATISTICS_HEIGHT) : (0), state->bitmapRendererSizeX * state->displayWindowZoomFactor,
-			state->bitmapRendererSizeY * state->displayWindowZoomFactor, ALLEGRO_FLIP_VERTICAL);
+			state->bitmapRendererSizeY * state->displayWindowZoomFactor, 0);
 
 		mtx_unlock(&state->bitmapMutex);
 
