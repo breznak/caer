@@ -29,7 +29,7 @@
 #endif
 #ifdef ENABLE_NETWORK_OUTPUT
 	#include "modules/misc/out/net_tcp_server.h"
-	#include "modules/misc/out/net_tco.h"
+	#include "modules/misc/out/net_tcp.h"
 	#include "modules/misc/out/net_udp.h"
 	#include "modules/misc/out/unixs.h"
 #endif
