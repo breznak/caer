@@ -405,7 +405,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
     imagegeneratorState state = moduleData->moduleState;
     //get savepng-state from ImageStreamerVisualizer module
     #ifdef ENABLE_IMAGESTREAMERVISUALIZER
-        caerModuleData imageStreamerVisualizerModuleData = caerMainloopFindModule(9, "ImageStreamerVisualizer");
+    caerModuleData imageStreamerVisualizerModuleData = caerMainloopFindModule(10, "ImageStreamerVisualizer");
     
     // update savepng and mode (might be changed from imageStreamVisualizer, which listens
     // to keyboard inputs)
