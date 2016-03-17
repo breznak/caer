@@ -58,7 +58,6 @@
 	#include "modules/imagestreamervisualizer/imagestreamervisualizer.h"
 #endif
 
-
 static bool mainloop_1(void);
 
 static bool mainloop_1(void) {
@@ -135,7 +134,7 @@ static bool mainloop_1(void) {
 	int FRAME_W = NULL;
 	int FRAME_H = NULL;
 	char mainString[16] = "_main.c_";
-	
+
 	/* class_region_sizes:
 	 * (Not used so far)
 	 *
