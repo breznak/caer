@@ -4,7 +4,7 @@
 
 	<groupId>net.sf.jaer</groupId>
 	<artifactId>caerctl-gui-javafx</artifactId>
-	<version>0.5</version>
+	<version>0.5.1</version>
 	<packaging>jar</packaging>
 
 	<name>caerctl-gui-javafx</name>
@@ -50,7 +50,7 @@
 		<dependency>
 			<groupId>net.sf.jaer</groupId>
 			<artifactId>jaerfx2</artifactId>
-			<version>0.8</version>
+			<version>0.8.1</version>
 		</dependency>
 	</dependencies>
 
