@@ -47,6 +47,9 @@
 
 #ifdef ENABLE_IMAGEGENERATOR
 	#include "modules/imagegenerator/imagegenerator.h"
+	#define MAX_IMG_QTY 8
+	#define CLASSIFYSIZE 36
+	#define DISPLAYIMGSIZE 256
 #endif
 #ifdef ENABLE_CAFFEINTERFACE
 	#include "modules/caffeinterface/wrapper.h"
@@ -55,7 +58,6 @@
 	#include "modules/imagestreamervisualizer/imagestreamervisualizer.h"
 #endif
 
-#define MAX_IMG_QTY 8
 
 static bool mainloop_1(void);
 
@@ -128,12 +130,12 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_IMAGEGENERATOR
 	// save images of accumulated spikes and frames
-	int CLASSIFY_IMG_SIZE = 36;
-	int DISPLAY_IMG_SIZE = 256;
+	int CLASSIFY_IMG_SIZE = CLASSIFYSIZE;
+	int DISPLAY_IMG_SIZE = DISPLAYIMGSIZE;
 	int FRAME_W = NULL;
 	int FRAME_H = NULL;
 	char mainString[16] = "_main.c_";
-
+	
 	/* class_region_sizes:
 	 * (Not used so far)
 	 *
@@ -147,7 +149,6 @@ static bool mainloop_1(void) {
 	 * (assuming only faces in the center are relevant. If other faces should be classified to, one
 	 * has to add an array with position of face)
 	 */
-
 	int * class_region_sizes = calloc(sizeof(int), MAX_IMG_QTY);
 	if (class_region_sizes == NULL) {
 		caerLog(CAER_LOG_ERROR, mainString, "Failed to allocate class_region_sizes.");
