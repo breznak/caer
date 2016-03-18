@@ -6,6 +6,10 @@ IF (NOT CMAKE_BUILD_TYPE)
 	SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "Possible build types: None Debug Release RelWithDebInfo MinSizeRel")
 ENDIF()
 
+IF (NOT USE_TCMALLOC)
+	SET(USE_TCMALLOC 0 CACHE BOOL "Link to and use TCMalloc (Google Perftools) to provide faster memory allocation")
+ENDIF()
+
 # Project name and version
 PROJECT(cAER C CXX)
 SET(PROJECT_VERSION_MAJOR 0)
@@ -154,6 +158,16 @@ SET(CAER_C_LIBS ${CAER_C_LIBS} m)
 # Add realtime support, not needed on MacOS X though
 IF (NOT APPLE)
 	SET(CAER_C_LIBS ${CAER_C_LIBS} rt)
+ENDIF()
+
+# TCMalloc support (fast memory allocation)
+IF (USE_TCMALLOC)
+	PKG_CHECK_MODULES(LIBTCMALLOC REQUIRED libtcmalloc>=2.2)
+
+	SET(CAER_INCDIRS ${CAER_INCDIRS} ${LIBTCMALLOC_INCLUDE_DIRS})
+	SET(CAER_LIBDIRS ${CAER_LIBDIRS} ${LIBTCMALLOC_LIBRARY_DIRS})
+
+	SET(CAER_C_LIBS ${CAER_C_LIBS} ${LIBTCMALLOC_LIBRARIES})
 ENDIF()
 
 ADD_EXECUTABLE(caer-bin ${CAER_C_SRC_FILES} ${CAER_CXX_SRC_FILES} main.c)
