@@ -12,8 +12,8 @@
 #include <allegro5/allegro_font.h>
 #include <allegro5/allegro_ttf.h>
 
+#include "ext/ringbuffer/ringbuffer.h"
 #include "modules/statistics/statistics.h"
-#include "ext/c11threads_posix.h"
 
 #define VISUALIZER_DEFAULT_ZOOM 2
 
@@ -27,7 +27,7 @@ struct caer_visualizer_state {
 	ALLEGRO_BITMAP *bitmapRenderer;
 	int32_t bitmapRendererSizeX;
 	int32_t bitmapRendererSizeY;
-	mtx_t bitmapMutex;
+	RingBuffer dataTransfer;
 	struct caer_statistics_state packetStatistics;
 	int32_t packetSubsampleRendering;
 	int32_t packetSubsampleCount;

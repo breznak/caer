@@ -8,7 +8,7 @@ IF (ENABLE_VISUALIZER)
 		MESSAGE(SEND_ERROR "Statistics module required by Visualizer module. Please enable it!")
 		RETURN()
 	ENDIF()
-	
+
 	SET(CAER_COMPILE_DEFINITIONS ${CAER_COMPILE_DEFINITIONS} -DENABLE_VISUALIZER=1 PARENT_SCOPE)
 
 	# Visualizer support via Allegro library
