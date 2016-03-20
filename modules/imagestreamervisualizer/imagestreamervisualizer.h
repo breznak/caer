@@ -3,6 +3,7 @@
 
 #include "main.h"
 #include "modules/visualizer/visualizer.h"
+#include "ext/c11threads_posix.h"
 
 #define IMAGESTREAMERVISUALIZER_SCREEN_WIDTH 200 
 #define IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT 200 

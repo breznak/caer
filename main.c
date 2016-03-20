@@ -44,6 +44,9 @@
 #ifdef ENABLE_VISUALIZER
 	#include "modules/visualizer/visualizer.h"
 #endif
+#ifdef ENABLE_VISUALIZER_SIMPLE
+	#include "modules/visualizer_simple/visualizer_simple.h"
+#endif
 
 #ifdef ENABLE_IMAGEGENERATOR
 	#include "modules/imagegenerator/imagegenerator.h"
