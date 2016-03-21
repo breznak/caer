@@ -19,16 +19,16 @@ static int8_t savepng_state = 0;     //default state -> do not save png
 static int8_t mode = 0;		 //default mode -> do nothing 
 
 struct imagestreamervisualizer_state {
-    struct caer_visualizer_state vis_state;
-    //save output files
-    int8_t savepng;
-    int8_t mode;
+	struct caer_visualizer_state vis_state;
+	//save output files
+	int8_t savepng;
+	int8_t mode;
 	thrd_t renderingThread;
 };
 
-
 typedef struct imagestreamervisualizer_state *caerImagestreamerVisualizerState;
 
-void caerImagestreamerVisualizer(uint16_t moduleID, unsigned char * disp_img, const int disp_img_size, double * classific_results, int * classific_sizes, int max_img_qty);
+void caerImagestreamerVisualizer(uint16_t moduleID, unsigned char * disp_img, const int disp_img_size,
+	double * classific_results, int * classific_sizes, int max_img_qty);
 
 #endif /* IMAGESTREAMERVISUALIZER_H_ */
