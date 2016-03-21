@@ -38,6 +38,7 @@ typedef struct caer_visualizer_state *caerVisualizerState;
 // For reuse inside other modules.
 bool caerVisualizerInit(caerVisualizerState state, int32_t bitmapSizeX, int32_t bitmapSizeY, int32_t zoomFactor,
 	bool doStatistics);
+bool caerVisualizerInitGraphics(caerVisualizerState state);
 void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerState state);
 void caerVisualizerUpdateScreen(caerVisualizerState state);
 void caerVisualizerExit(caerVisualizerState state);

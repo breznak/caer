@@ -31,7 +31,7 @@ Optional input/output modules:
 Optional modules:
  -DENABLE_BAFILTER=1    - enable background activity filter module
  -DENABLE_STATISTICS=1  - enable console statistics module
- -DENABLE_VISUALIZER=1  - enable visualizer module (for NVIDIA graphic cards you might want to use -DENABLE_VISUALIZER_SIMPLE=1)
+ -DENABLE_VISUALIZER=1  - enable visualizer module
  -DENABLE_IMAGEGENERATOR=1 - enable image generator
  -DENABLE_IMAGESTREAMERVISUALIZER=1 - this module produces images by accumulating a fixed number 
 		of spikes. (press "r" to start recording png and "s" to stop)

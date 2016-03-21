@@ -7,7 +7,6 @@ ADD_SUBDIRECTORY(ini)
 ADD_SUBDIRECTORY(misc)
 ADD_SUBDIRECTORY(statistics)
 ADD_SUBDIRECTORY(visualizer)
-ADD_SUBDIRECTORY(visualizer_simple)
 
 # Propagate to parent scope.
 SET(CAER_INCDIRS ${CAER_INCDIRS} PARENT_SCOPE)

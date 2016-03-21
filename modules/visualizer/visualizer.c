@@ -114,13 +114,40 @@ void caerVisualizerSystemInit(void) {
 
 bool caerVisualizerInit(caerVisualizerState state, int32_t bitmapSizeX, int32_t bitmapSizeY, int32_t zoomFactor,
 bool doStatistics) {
+	// Remember sizes.
+	state->bitmapRendererSizeX = bitmapSizeX;
+	state->bitmapRendererSizeY = bitmapSizeY;
+	state->displayWindowZoomFactor = zoomFactor;
+
+	// Enable packet statistics, only if font to render them exists.
+	if (doStatistics) {
+		if (!caerStatisticsStringInit(&state->packetStatistics)) {
+			return (false);
+		}
+	}
+
+	// Sub-sampling support. Default to none.
+	state->packetSubsampleRendering = 1;
+	state->packetSubsampleCount = 0;
+
+	state->dataTransfer = ringBufferInit(64);
+	if (state->dataTransfer == NULL) {
+		return (false);
+	}
+
+	atomic_store(&state->running, true);
+
+	return (true);
+}
+
+bool caerVisualizerInitGraphics(caerVisualizerState state) {
 	// Create display window.
 	// When statistics are turned on, we need to add some space to the
 	// X axis for displaying the whole line and the Y axis for spacing.
-	int32_t displaySizeX = bitmapSizeX * zoomFactor;
-	int32_t displaySizeY = bitmapSizeY * zoomFactor;
+	int32_t displaySizeX = state->bitmapRendererSizeX * state->displayWindowZoomFactor;
+	int32_t displaySizeY = state->bitmapRendererSizeY * state->displayWindowZoomFactor;
 
-	if (doStatistics) {
+	if (state->packetStatistics.currentStatisticsString != NULL) {
 		if (STATISTICS_WIDTH > displaySizeX) {
 			displaySizeX = STATISTICS_WIDTH;
 		}
@@ -132,7 +159,7 @@ bool doStatistics) {
 	if (state->displayWindow == NULL) {
 		caerLog(CAER_LOG_ERROR, "Visualizer",
 			"Failed to create display element with sizeX=%d, sizeY=%d, zoomFactor=%d.", displaySizeX, displaySizeY,
-			zoomFactor);
+			state->displayWindowZoomFactor);
 		return (false);
 	}
 
@@ -151,10 +178,10 @@ bool doStatistics) {
 
 	// Create memory bitmap for drawing into.
 	al_set_new_bitmap_flags(ALLEGRO_MEMORY_BITMAP | ALLEGRO_MIN_LINEAR | ALLEGRO_MAG_LINEAR);
-	state->bitmapRenderer = al_create_bitmap(bitmapSizeX, bitmapSizeY);
+	state->bitmapRenderer = al_create_bitmap(state->bitmapRendererSizeX, state->bitmapRendererSizeY);
 	if (state->bitmapRenderer == NULL) {
-		caerLog(CAER_LOG_ERROR, "Visualizer", "Failed to create bitmap element with sizeX=%d, sizeY=%d.", bitmapSizeX,
-			bitmapSizeY);
+		caerLog(CAER_LOG_ERROR, "Visualizer", "Failed to create bitmap element with sizeX=%d, sizeY=%d.",
+			state->bitmapRendererSizeX, state->bitmapRendererSizeY);
 		return (false);
 	}
 
@@ -162,23 +189,18 @@ bool doStatistics) {
 	al_set_target_bitmap(state->bitmapRenderer);
 	al_clear_to_color(al_map_rgb(0, 0, 0));
 
-	// Remember sizes.
-	state->bitmapRendererSizeX = bitmapSizeX;
-	state->bitmapRendererSizeY = bitmapSizeY;
-	state->displayWindowZoomFactor = zoomFactor;
-
-	// Enable packet statistics, only if font to render them exists.
-	if (doStatistics && state->displayFont != NULL) {
-		caerStatisticsStringInit(&state->packetStatistics);
-	}
-
-	// Sub-sampling support. Default to none.
-	state->packetSubsampleRendering = 1;
-	state->packetSubsampleCount = 0;
-
 	// Timers and event queues for the rendering side.
 	state->displayEventQueue = al_create_event_queue();
+	if (state->displayEventQueue == NULL) {
+		caerLog(CAER_LOG_ERROR, "Visualizer", "Failed to create event queue.");
+		return (false);
+	}
+
 	state->displayTimer = al_create_timer(1.0 / 60.0);
+	if (state->displayTimer == NULL) {
+		caerLog(CAER_LOG_ERROR, "Visualizer", "Failed to create timer.");
+		return (false);
+	}
 
 	al_register_event_source(state->displayEventQueue, al_get_display_event_source(state->displayWindow));
 	al_register_event_source(state->displayEventQueue, al_get_timer_event_source(state->displayTimer));
@@ -186,10 +208,6 @@ bool doStatistics) {
 	al_register_event_source(state->displayEventQueue, al_get_mouse_event_source());
 
 	al_start_timer(state->displayTimer);
-
-	state->dataTransfer = ringBufferInit(64);
-
-	atomic_store(&state->running, true);
 
 	return (true);
 }
@@ -454,6 +472,8 @@ void caerVisualizerUpdateScreen(caerVisualizerState state) {
 }
 
 void caerVisualizerExit(caerVisualizerState state) {
+	al_set_target_bitmap(NULL);
+
 	al_destroy_bitmap(state->bitmapRenderer);
 	state->bitmapRenderer = NULL;
 
@@ -492,9 +512,7 @@ typedef struct visualizer_module_state *visualizerModuleState;
 static bool caerVisualizerModuleInit(caerModuleData moduleData);
 static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerVisualizerModuleExit(caerModuleData moduleData);
-static int caerVisualizerModuleEventsRenderThread(void *moduleData);
-static int caerVisualizerModuleFramesRenderThread(void *moduleData);
-static int caerVisualizerModuleIMURenderThread(void *moduleData);
+static int caerVisualizerModuleRenderThread(void *visualizerState);
 static bool initializeEventRenderer(visualizerModuleState state, int16_t sourceID);
 static bool initializeFrameRenderer(visualizerModuleState state, int16_t sourceID);
 static bool initializeIMURenderer(visualizerModuleState state);
@@ -511,8 +529,6 @@ void caerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity, caerFra
 }
 
 static bool caerVisualizerModuleInit(caerModuleData moduleData) {
-	visualizerModuleState state = moduleData->moduleState;
-
 	// Configuration.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showEvents", true);
 #ifdef DVS128
@@ -527,35 +543,26 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "subsampleFramesRendering", 1);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "subsampleIMURendering", 1);
 
-	// Start separate rendering thread. Decouples presentation from
-	// data processing and preparation. Communication over properly
-	// locked bitmap.
-	thrd_create(&state->eventsRenderingThread, &caerVisualizerModuleEventsRenderThread, moduleData);
-	thrd_create(&state->framesRenderingThread, &caerVisualizerModuleFramesRenderThread, moduleData);
-	thrd_create(&state->imuRenderingThread, &caerVisualizerModuleIMURenderThread, moduleData);
-
 	return (true);
 }
 
 static void caerVisualizerModuleExit(caerModuleData moduleData) {
 	visualizerModuleState state = moduleData->moduleState;
 
-	// Wait on rendering thread.
-	thrd_join(state->eventsRenderingThread, NULL);
-	thrd_join(state->framesRenderingThread, NULL);
-	thrd_join(state->imuRenderingThread, NULL);
-
-	// Ensure render maps are freed.
+	// Shut down rendering threads and wait on them.
 	if (atomic_load(&state->eventsVisualizer.running)) {
-		caerVisualizerExit(&state->eventsVisualizer);
+		atomic_store(&state->eventsVisualizer.running, false);
+		thrd_join(state->eventsRenderingThread, NULL);
 	}
 
 	if (atomic_load(&state->framesVisualizer.running)) {
-		caerVisualizerExit(&state->framesVisualizer);
+		atomic_store(&state->framesVisualizer.running, false);
+		thrd_join(state->framesRenderingThread, NULL);
 	}
 
 	if (atomic_load(&state->imuVisualizer.running)) {
-		caerVisualizerExit(&state->imuVisualizer);
+		atomic_store(&state->imuVisualizer.running, false);
+		thrd_join(state->imuRenderingThread, NULL);
 	}
 }
 
@@ -594,10 +601,10 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 		caerVisualizerUpdate(&polarity->packetHeader, &state->eventsVisualizer);
 	}
 	else if (!renderPolarity) {
+		// If we have a renderer running, but don't want to render anymore to it, let's just stop it.
 		if (atomic_load_explicit(&state->eventsVisualizer.running, memory_order_relaxed)) {
 			atomic_store(&state->eventsVisualizer.running, false);
-
-			caerVisualizerExit(&state->eventsVisualizer);
+			thrd_join(state->eventsRenderingThread, NULL);
 		}
 	}
 
@@ -619,10 +626,10 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 		caerVisualizerUpdate(&frame->packetHeader, &state->framesVisualizer);
 	}
 	else if (!renderFrame) {
+		// If we have a renderer running, but don't want to render anymore to it, let's just stop it.
 		if (atomic_load_explicit(&state->framesVisualizer.running, memory_order_relaxed)) {
 			atomic_store(&state->framesVisualizer.running, false);
-
-			caerVisualizerExit(&state->framesVisualizer);
+			thrd_join(state->framesRenderingThread, NULL);
 		}
 	}
 
@@ -643,49 +650,26 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 		caerVisualizerUpdate(&imu->packetHeader, &state->imuVisualizer);
 	}
 	else if (!renderIMU) {
+		// If we have a renderer running, but don't want to render anymore to it, let's just stop it.
 		if (atomic_load_explicit(&state->imuVisualizer.running, memory_order_relaxed)) {
 			atomic_store(&state->imuVisualizer.running, false);
-
-			caerVisualizerExit(&state->imuVisualizer);
+			thrd_join(state->imuRenderingThread, NULL);
 		}
 	}
 }
 
-static int caerVisualizerModuleEventsRenderThread(void *moduleData) {
-	caerModuleData data = moduleData;
-	visualizerModuleState state = data->moduleState;
+static int caerVisualizerModuleRenderThread(void *visualizerState) {
+	caerVisualizerState state = visualizerState;
 
-	while (atomic_load_explicit(&data->running, memory_order_relaxed)) {
-		if (atomic_load_explicit(&state->eventsVisualizer.running, memory_order_relaxed)) {
-			caerVisualizerUpdateScreen(&state->eventsVisualizer);
-		}
+	if (!caerVisualizerInitGraphics(state)) {
+		return (thrd_error);
 	}
 
-	return (thrd_success);
-}
-
-static int caerVisualizerModuleFramesRenderThread(void *moduleData) {
-	caerModuleData data = moduleData;
-	visualizerModuleState state = data->moduleState;
-
-	while (atomic_load_explicit(&data->running, memory_order_relaxed)) {
-		if (atomic_load_explicit(&state->framesVisualizer.running, memory_order_relaxed)) {
-			caerVisualizerUpdateScreen(&state->framesVisualizer);
-		}
+	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
+		caerVisualizerUpdateScreen(state);
 	}
 
-	return (thrd_success);
-}
-
-static int caerVisualizerModuleIMURenderThread(void *moduleData) {
-	caerModuleData data = moduleData;
-	visualizerModuleState state = data->moduleState;
-
-	while (atomic_load_explicit(&data->running, memory_order_relaxed)) {
-		if (atomic_load_explicit(&state->imuVisualizer.running, memory_order_relaxed)) {
-			caerVisualizerUpdateScreen(&state->imuVisualizer);
-		}
-	}
+	caerVisualizerExit(state);
 
 	return (thrd_success);
 }
@@ -697,6 +681,14 @@ static bool initializeEventRenderer(visualizerModuleState state, int16_t sourceI
 	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
 	if (!caerVisualizerInit(&state->eventsVisualizer, sizeX, sizeY, VISUALIZER_DEFAULT_ZOOM, true)) {
+		return (false);
+	}
+
+	// Start separate rendering thread. Decouples presentation from
+	// data processing and preparation. Communication over properly
+	// locked bitmap.
+	if (thrd_create(&state->eventsRenderingThread, &caerVisualizerModuleRenderThread, &state->eventsVisualizer)
+		!= thrd_success) {
 		return (false);
 	}
 
@@ -713,11 +705,27 @@ static bool initializeFrameRenderer(visualizerModuleState state, int16_t sourceI
 		return (false);
 	}
 
+	// Start separate rendering thread. Decouples presentation from
+	// data processing and preparation. Communication over properly
+	// locked bitmap.
+	if (thrd_create(&state->framesRenderingThread, &caerVisualizerModuleRenderThread, &state->framesVisualizer)
+		!= thrd_success) {
+		return (false);
+	}
+
 	return (true);
 }
 
 static bool initializeIMURenderer(visualizerModuleState state) {
-	if (!caerVisualizerInit(&state->imuVisualizer, 300, 300, VISUALIZER_DEFAULT_ZOOM, true)) {
+	if (!caerVisualizerInit(&state->imuVisualizer, 200, 200, VISUALIZER_DEFAULT_ZOOM, true)) {
+		return (false);
+	}
+
+	// Start separate rendering thread. Decouples presentation from
+	// data processing and preparation. Communication over properly
+	// locked bitmap.
+	if (thrd_create(&state->imuRenderingThread, &caerVisualizerModuleRenderThread, &state->imuVisualizer)
+		!= thrd_success) {
 		return (false);
 	}
 
