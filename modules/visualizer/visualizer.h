@@ -42,6 +42,7 @@ bool caerVisualizerInitGraphics(caerVisualizerState state);
 void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerState state);
 void caerVisualizerUpdateScreen(caerVisualizerState state);
 void caerVisualizerExit(caerVisualizerState state);
+int caerVisualizerRenderThread(void *visualizerState);
 
 void caerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame, caerIMU6EventPacket imu);
 

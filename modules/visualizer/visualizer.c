@@ -498,6 +498,22 @@ void caerVisualizerExit(caerVisualizerState state) {
 	atomic_store(&state->running, false);
 }
 
+int caerVisualizerRenderThread(void *visualizerState) {
+	caerVisualizerState state = visualizerState;
+
+	if (!caerVisualizerInitGraphics(state)) {
+		return (thrd_error);
+	}
+
+	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
+		caerVisualizerUpdateScreen(state);
+	}
+
+	caerVisualizerExit(state);
+
+	return (thrd_success);
+}
+
 struct visualizer_module_state {
 	thrd_t eventsRenderingThread;
 	struct caer_visualizer_state eventsVisualizer;
@@ -512,7 +528,6 @@ typedef struct visualizer_module_state *visualizerModuleState;
 static bool caerVisualizerModuleInit(caerModuleData moduleData);
 static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerVisualizerModuleExit(caerModuleData moduleData);
-static int caerVisualizerModuleRenderThread(void *visualizerState);
 static bool initializeEventRenderer(visualizerModuleState state, int16_t sourceID);
 static bool initializeFrameRenderer(visualizerModuleState state, int16_t sourceID);
 static bool initializeIMURenderer(visualizerModuleState state);
@@ -658,22 +673,6 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 	}
 }
 
-static int caerVisualizerModuleRenderThread(void *visualizerState) {
-	caerVisualizerState state = visualizerState;
-
-	if (!caerVisualizerInitGraphics(state)) {
-		return (thrd_error);
-	}
-
-	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
-		caerVisualizerUpdateScreen(state);
-	}
-
-	caerVisualizerExit(state);
-
-	return (thrd_success);
-}
-
 static bool initializeEventRenderer(visualizerModuleState state, int16_t sourceID) {
 	// Get size information from source.
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
@@ -687,7 +686,7 @@ static bool initializeEventRenderer(visualizerModuleState state, int16_t sourceI
 	// Start separate rendering thread. Decouples presentation from
 	// data processing and preparation. Communication over properly
 	// locked bitmap.
-	if (thrd_create(&state->eventsRenderingThread, &caerVisualizerModuleRenderThread, &state->eventsVisualizer)
+	if (thrd_create(&state->eventsRenderingThread, &caerVisualizerRenderThread, &state->eventsVisualizer)
 		!= thrd_success) {
 		return (false);
 	}
@@ -708,7 +707,7 @@ static bool initializeFrameRenderer(visualizerModuleState state, int16_t sourceI
 	// Start separate rendering thread. Decouples presentation from
 	// data processing and preparation. Communication over properly
 	// locked bitmap.
-	if (thrd_create(&state->framesRenderingThread, &caerVisualizerModuleRenderThread, &state->framesVisualizer)
+	if (thrd_create(&state->framesRenderingThread, &caerVisualizerRenderThread, &state->framesVisualizer)
 		!= thrd_success) {
 		return (false);
 	}
@@ -724,8 +723,7 @@ static bool initializeIMURenderer(visualizerModuleState state) {
 	// Start separate rendering thread. Decouples presentation from
 	// data processing and preparation. Communication over properly
 	// locked bitmap.
-	if (thrd_create(&state->imuRenderingThread, &caerVisualizerModuleRenderThread, &state->imuVisualizer)
-		!= thrd_success) {
+	if (thrd_create(&state->imuRenderingThread, &caerVisualizerRenderThread, &state->imuVisualizer) != thrd_success) {
 		return (false);
 	}
 
