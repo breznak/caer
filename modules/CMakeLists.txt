@@ -1,6 +1,7 @@
 # Add all modules
 ADD_SUBDIRECTORY(backgroundactivityfilter)
 ADD_SUBDIRECTORY(caffeinterface)
+#ADD_SUBDIRECTORY(cameracalibration)
 ADD_SUBDIRECTORY(imagegenerator)
 ADD_SUBDIRECTORY(imagestreamervisualizer)
 ADD_SUBDIRECTORY(ini)

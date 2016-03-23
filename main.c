@@ -38,6 +38,9 @@
 #ifdef ENABLE_BAFILTER
 	#include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
 #endif
+#ifdef ENABLE_CAMERACALIBRATION
+	#include "modules/cameracalibration/cameracalibration.h"
+#endif
 #ifdef ENABLE_STATISTICS
 	#include "modules/statistics/statistics.h"
 #endif
@@ -100,6 +103,11 @@ static bool mainloop_1(void) {
 	// to show statistics about the current event-rate.
 #ifdef ENABLE_STATISTICS
 	caerStatistics(3, (caerEventPacketHeader) polarity, 1000);
+#endif
+
+	// Enable image and event undistortion by using OpenCV camera calibration.
+#ifdef ENABLE_CAMERACALIBRATION
+	caerCameraCalibration(12, polarity, frame);
 #endif
 
 	// A small visualizer exists to show what the output looks like.
