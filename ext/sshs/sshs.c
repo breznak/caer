@@ -1,7 +1,7 @@
 #include "sshs_internal.h"
 #include "ext/slre/slre.h"
 
-struct sshs {
+struct sshs_struct {
 	sshsNode root;
 };
 

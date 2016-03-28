@@ -91,7 +91,7 @@ bool sshsHelperStringToValueConverter(enum sshs_node_attr_value_type type, const
 	union sshs_node_attr_value *value);
 
 // SSHS
-typedef struct sshs *sshs;
+typedef struct sshs_struct *sshs;
 typedef void (*sshsErrorLogCallback)(const char *msg);
 
 sshs sshsGetGlobal(void);
