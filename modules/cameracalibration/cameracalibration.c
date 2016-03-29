@@ -1,11 +1,6 @@
 #include "cameracalibration.h"
 #include "base/mainloop.h"
 #include "base/module.h"
-#include <unistd.h>
-#include <sys/uio.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
 
 static bool caerCameraCalibrationInit(caerModuleData moduleData);
 static void caerCameraCalibrationRun(caerModuleData moduleData, size_t argsNumber, va_list args);
@@ -73,13 +68,13 @@ static bool caerCameraCalibrationInit(caerModuleData moduleData) {
 	char *calibPattern = sshsNodeGetString(moduleData->moduleNode, "calibrationPattern");
 
 	if (strcmp(calibPattern, "chessboard") == 0) {
-		state->calibrationPattern = CALIB_CHESSBOARD;
+		state->calibrationPattern = CAMCALIB_CHESSBOARD;
 	}
 	else if (strcmp(calibPattern, "circlesGrid") == 0) {
-		state->calibrationPattern = CALIB_CIRCLES_GRID;
+		state->calibrationPattern = CAMCALIB_CIRCLES_GRID;
 	}
 	else if (strcmp(calibPattern, "asymmetricCirclesGrid") == 0) {
-		state->calibrationPattern = CALIB_ASYMMETRIC_CIRCLES_GRID;
+		state->calibrationPattern = CAMCALIB_ASYMMETRIC_CIRCLES_GRID;
 	}
 	else {
 		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,

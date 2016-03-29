@@ -1,3 +1,6 @@
+#ifndef CALIBRATION_HPP_
+#define CALIBRATION_HPP_
+
 #include <iostream>
 #include <sstream>
 #include <time.h>
@@ -8,9 +11,10 @@
 #include <opencv2/core/utility.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/calib3d.hpp>
-#include <opencv2/imgcodecs.hpp>
-#include <opencv2/videoio.hpp>
-#include <opencv2/highgui.hpp>
+
+#define MAX_REPROJECTION_ERROR 0.05
+
+#define REMAP_INTERPOLATION INTER_LINEAR
 
 using namespace cv;
 using namespace std;
@@ -21,6 +25,7 @@ public:
 	Calibration(CameraCalibrationState state);
 	void updateSettings(void);
 	bool findNewPoints(caerFrameEvent frame);
+	size_t foundPoints(void);
 	bool runCalibrationAndSave(void);
 
 	bool loadUndistortMatrices(void);
@@ -51,3 +56,5 @@ private:
 		const vector<Mat>& rvecs, const vector<Mat>& tvecs, const vector<float>& reprojErrs, double totalAvgErr);
 
 };
+
+#endif /* CALIBRATION_HPP_ */

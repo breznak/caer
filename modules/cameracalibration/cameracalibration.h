@@ -10,7 +10,7 @@ extern "C" {
 #include <libcaer/events/polarity.h>
 #include <libcaer/events/frame.h>
 
-enum CameraCalibrationPattern { CALIB_CHESSBOARD, CALIB_CIRCLES_GRID, CALIB_ASYMMETRIC_CIRCLES_GRID };
+enum CameraCalibrationPattern { CAMCALIB_CHESSBOARD, CAMCALIB_CIRCLES_GRID, CAMCALIB_ASYMMETRIC_CIRCLES_GRID };
 
 struct CameraCalibration_state {
 	bool doCalibration;
@@ -27,6 +27,7 @@ struct CameraCalibration_state {
 	char *loadFileName;
 	int imageWidth;
 	int imageHeigth;
+	// struct Calibration *cpp_class; // Pointer to cpp_class_object
 };
 
 typedef struct CameraCalibration_state *CameraCalibrationState;

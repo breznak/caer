@@ -56,15 +56,15 @@ bool Calibration::findNewPoints(caerFrameEvent frame) {
 	bool found;
 
 	switch (settings->calibrationPattern) {
-		case CALIB_CHESSBOARD:
+		case CAMCALIB_CHESSBOARD:
 			found = findChessboardCorners(view, boardSize, pointBuf, chessBoardFlags);
 			break;
 
-		case CALIB_CIRCLES_GRID:
+		case CAMCALIB_CIRCLES_GRID:
 			found = findCirclesGrid(view, boardSize, pointBuf);
 			break;
 
-		case CALIB_ASYMMETRIC_CIRCLES_GRID:
+		case CAMCALIB_ASYMMETRIC_CIRCLES_GRID:
 			found = findCirclesGrid(view, boardSize, pointBuf, CALIB_CB_ASYMMETRIC_GRID);
 			break;
 
@@ -74,8 +74,8 @@ bool Calibration::findNewPoints(caerFrameEvent frame) {
 	}
 
 	if (found) {
-		// improve the found corners' coordinate accuracy for chessboard
-		if (settings->calibrationPattern == CALIB_CHESSBOARD) {
+		// Improve the found corners' coordinate accuracy for chessboard pattern.
+		if (settings->calibrationPattern == CAMCALIB_CHESSBOARD) {
 			Mat viewGray;
 
 			// Only convert color if not grayscale already.
@@ -96,12 +96,13 @@ bool Calibration::findNewPoints(caerFrameEvent frame) {
 		}
 
 		imagePoints.push_back(pointBuf);
-
-		// TODO: Draw the corners.
-		//drawChessboardCorners(view, boardSize, Mat(pointBuf), found);
 	}
 
 	return (found);
+}
+
+size_t Calibration::foundPoints(void) {
+	return (imagePoints.size());
 }
 
 double Calibration::computeReprojectionErrors(const vector<vector<Point3f> >& objectPoints,
@@ -138,8 +139,8 @@ void Calibration::calcBoardCornerPositions(Size boardSize, float squareSize, vec
 	corners.clear();
 
 	switch (patternType) {
-		case CALIB_CHESSBOARD:
-		case CALIB_CIRCLES_GRID:
+		case CAMCALIB_CHESSBOARD:
+		case CAMCALIB_CIRCLES_GRID:
 			for (int y = 0; y < boardSize.height; y++) {
 				for (int x = 0; x < boardSize.width; x++) {
 					corners.push_back(Point3f(x * squareSize, y * squareSize, 0));
@@ -147,7 +148,7 @@ void Calibration::calcBoardCornerPositions(Size boardSize, float squareSize, vec
 			}
 			break;
 
-		case CALIB_ASYMMETRIC_CIRCLES_GRID:
+		case CAMCALIB_ASYMMETRIC_CIRCLES_GRID:
 			for (int y = 0; y < boardSize.height; y++) {
 				for (int x = 0; x < boardSize.width; x++) {
 					corners.push_back(Point3f((2 * x + y % 2) * squareSize, y * squareSize, 0));
@@ -203,7 +204,7 @@ bool Calibration::runCalibration(Size& imageSize, Mat& cameraMatrix, Mat& distCo
 	totalAvgErr = computeReprojectionErrors(objectPoints, imagePoints, rvecs, tvecs, cameraMatrix, distCoeffs,
 		reprojErrs, settings->useFisheyeModel);
 
-	bool ok = checkRange(cameraMatrix) && checkRange(distCoeffs);
+	bool ok = checkRange(cameraMatrix) && checkRange(distCoeffs) && totalAvgErr < MAX_REPROJECTION_ERROR;
 
 	return (ok);
 }
@@ -243,11 +244,15 @@ void Calibration::saveCameraParams(Size& imageSize, Mat& cameraMatrix, Mat& dist
 				flag & fisheye::CALIB_RECOMPUTE_EXTRINSIC ? " +recompute_extrinsic" : "");
 		}
 		else {
-			sprintf(buf, "flags:%s%s%s%s", flag & CALIB_USE_INTRINSIC_GUESS ? " +use_intrinsic_guess" : "",
-				flag & CALIB_FIX_ASPECT_RATIO ? " +fix_aspectRatio" : "",
+			sprintf(buf, "flags:%s%s%s%s%s%s%s%s%s%s", flag & CALIB_USE_INTRINSIC_GUESS ? " +use_intrinsic_guess" : "",
+				flag & CALIB_FIX_ASPECT_RATIO ? " +fix_aspect_ratio" : "",
 				flag & CALIB_FIX_PRINCIPAL_POINT ? " +fix_principal_point" : "",
-				flag & CALIB_ZERO_TANGENT_DIST ? " +zero_tangent_dist" : "");
+				flag & CALIB_ZERO_TANGENT_DIST ? " +zero_tangent_dist" : "", flag & CALIB_FIX_K1 ? " +fix_k1" : "",
+				flag & CALIB_FIX_K2 ? " +fix_k2" : "", flag & CALIB_FIX_K3 ? " +fix_k3" : "",
+				flag & CALIB_FIX_K4 ? " +fix_k4" : "", flag & CALIB_FIX_K5 ? " +fix_k5" : "",
+				flag & CALIB_FIX_K6 ? " +fix_k6" : "");
 		}
+
 		cvWriteComment(*fs, buf, 0);
 	}
 
@@ -321,7 +326,7 @@ bool Calibration::loadUndistortMatrices(void) {
 			imageSize, 0);
 
 		initUndistortRectifyMap(undistortCameraMatrix, undistortDistCoeffs, Mat(), optimalCameramatrix, imageSize,
-			CV_16SC2, undistortRemap1, undistortRemap2);
+		CV_16SC2, undistortRemap1, undistortRemap2);
 	}
 
 	return (true);
@@ -343,5 +348,5 @@ void Calibration::undistortFrame(caerFrameEvent frame) {
 	Mat view = Mat(frameSize, CV_16UC(caerFrameEventGetChannelNumber(frame)), caerFrameEventGetPixelArrayUnsafe(frame));
 	Mat inView = view.clone();
 
-	remap(inView, view, undistortRemap1, undistortRemap2, INTER_LINEAR);
+	remap(inView, view, undistortRemap1, undistortRemap2, REMAP_INTERPOLATION);
 }
