@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-#include "cameracalibration.h"
+#include "calibration_settings.h"
 
 typedef struct Calibration Calibration;
 
-Calibration *calibration_init(CameraCalibrationState state);
+Calibration *calibration_init(CameraCalibrationSettings settings);
 void calibration_destroy(Calibration *calibClass);
 void calibration_updateSettings(Calibration *calibClass);
 bool calibration_findNewPoints(Calibration *calibClass, caerFrameEvent frame);

@@ -3,8 +3,8 @@
 
 extern "C" {
 
-Calibration *calibration_init(CameraCalibrationState state) {
-	return (new Calibration(state));
+Calibration *calibration_init(CameraCalibrationSettings settings) {
+	return (new Calibration(settings));
 }
 
 void calibration_destroy(Calibration *calibClass) {

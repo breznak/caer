@@ -1,6 +1,15 @@
 #include "cameracalibration.h"
+#include "calibration_settings.h"
+#include "calibration_wrapper.h"
 #include "base/mainloop.h"
 #include "base/module.h"
+
+struct CameraCalibrationState_struct {
+	struct CameraCalibrationSettings_struct settings; // Struct containing all settings (shared)
+	struct Calibration *cpp_class; // Pointer to cpp_class_object
+};
+
+typedef struct CameraCalibrationState_struct *CameraCalibrationState;
 
 static bool caerCameraCalibrationInit(caerModuleData moduleData);
 static void caerCameraCalibrationRun(caerModuleData moduleData, size_t argsNumber, va_list args);
@@ -14,7 +23,7 @@ static struct caer_module_functions caerCameraCalibrationFunctions = { .moduleIn
 void caerCameraCalibration(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "CameraCalibration");
 
-	caerModuleSM(&caerCameraCalibrationFunctions, moduleData, sizeof(struct CameraCalibration_state), 2, polarity,
+	caerModuleSM(&caerCameraCalibrationFunctions, moduleData, sizeof(struct CameraCalibrationState_struct), 2, polarity,
 		frame);
 }
 
@@ -38,28 +47,28 @@ static bool caerCameraCalibrationInit(caerModuleData moduleData) {
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "loadFileName", "camera_calib.xml"); // The name of the file from which to load the calibration settings for undistortion
 
 	// Get current config settings.
-	state->doCalibration = sshsNodeGetBool(moduleData->moduleNode, "doCalibration");
-	state->boardWidth = sshsNodeGetInt(moduleData->moduleNode, "boardWidth");
-	state->boardHeigth = sshsNodeGetInt(moduleData->moduleNode, "boardHeigth");
-	state->boardSquareSize = sshsNodeGetFloat(moduleData->moduleNode, "boardSquareSize");
-	state->aspectRatio = sshsNodeGetFloat(moduleData->moduleNode, "aspectRatio");
-	state->assumeZeroTangentialDistortion = sshsNodeGetBool(moduleData->moduleNode, "assumeZeroTangentialDistortion");
-	state->fixPrincipalPointAtCenter = sshsNodeGetBool(moduleData->moduleNode, "fixPrincipalPointAtCenter");
-	state->useFisheyeModel = sshsNodeGetBool(moduleData->moduleNode, "useFisheyeModel");
-	state->doUndistortion = sshsNodeGetBool(moduleData->moduleNode, "doUndistortion");
+	state->settings.doCalibration = sshsNodeGetBool(moduleData->moduleNode, "doCalibration");
+	state->settings.boardWidth = sshsNodeGetInt(moduleData->moduleNode, "boardWidth");
+	state->settings.boardHeigth = sshsNodeGetInt(moduleData->moduleNode, "boardHeigth");
+	state->settings.boardSquareSize = sshsNodeGetFloat(moduleData->moduleNode, "boardSquareSize");
+	state->settings.aspectRatio = sshsNodeGetFloat(moduleData->moduleNode, "aspectRatio");
+	state->settings.assumeZeroTangentialDistortion = sshsNodeGetBool(moduleData->moduleNode, "assumeZeroTangentialDistortion");
+	state->settings.fixPrincipalPointAtCenter = sshsNodeGetBool(moduleData->moduleNode, "fixPrincipalPointAtCenter");
+	state->settings.useFisheyeModel = sshsNodeGetBool(moduleData->moduleNode, "useFisheyeModel");
+	state->settings.doUndistortion = sshsNodeGetBool(moduleData->moduleNode, "doUndistortion");
 
 	// Check input validity.
-	if (state->boardWidth <= 0 || state->boardHeigth <= 0) {
+	if (state->settings.boardWidth <= 0 || state->settings.boardHeigth <= 0) {
 		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Invalid board size.");
 		return (false);
 	}
 
-	if (state->boardSquareSize <= 10e-6f) {
+	if (state->settings.boardSquareSize <= 10e-6f) {
 		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Invalid board square size.");
 		return (false);
 	}
 
-	if (state->aspectRatio <= 0) {
+	if (state->settings.aspectRatio < 0) {
 		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Invalid aspect ratio.");
 		return (false);
 	}
@@ -68,13 +77,13 @@ static bool caerCameraCalibrationInit(caerModuleData moduleData) {
 	char *calibPattern = sshsNodeGetString(moduleData->moduleNode, "calibrationPattern");
 
 	if (strcmp(calibPattern, "chessboard") == 0) {
-		state->calibrationPattern = CAMCALIB_CHESSBOARD;
+		state->settings.calibrationPattern = CAMCALIB_CHESSBOARD;
 	}
 	else if (strcmp(calibPattern, "circlesGrid") == 0) {
-		state->calibrationPattern = CAMCALIB_CIRCLES_GRID;
+		state->settings.calibrationPattern = CAMCALIB_CIRCLES_GRID;
 	}
 	else if (strcmp(calibPattern, "asymmetricCirclesGrid") == 0) {
-		state->calibrationPattern = CAMCALIB_ASYMMETRIC_CIRCLES_GRID;
+		state->settings.calibrationPattern = CAMCALIB_ASYMMETRIC_CIRCLES_GRID;
 	}
 	else {
 		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
@@ -87,9 +96,12 @@ static bool caerCameraCalibrationInit(caerModuleData moduleData) {
 	free(calibPattern);
 
 	// Parse file strings.
-	state->saveFileName = sshsNodeGetString(moduleData->moduleNode, "saveFileName");
+	state->settings.saveFileName = sshsNodeGetString(moduleData->moduleNode, "saveFileName");
 
-	state->loadFileName = sshsNodeGetString(moduleData->moduleNode, "loadFileName");
+	state->settings.loadFileName = sshsNodeGetString(moduleData->moduleNode, "loadFileName");
+
+	// Initialize C++ class for OpenCV integration.
+	state->cpp_class = calibration_init(&state->settings);
 
 	return (true);
 }
@@ -112,4 +124,6 @@ static void caerCameraCalibrationConfig(caerModuleData moduleData) {
 
 static void caerCameraCalibrationExit(caerModuleData moduleData) {
 	CameraCalibrationState state = moduleData->moduleState;
+
+	calibration_destroy(state->cpp_class);
 }

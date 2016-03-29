@@ -1,7 +1,7 @@
 #include "calibration.hpp"
 
-Calibration::Calibration(CameraCalibrationState state) {
-	settings = state;
+Calibration::Calibration(CameraCalibrationSettings settings) {
+	this->settings = settings;
 
 	updateSettings();
 }
@@ -204,7 +204,7 @@ bool Calibration::runCalibration(Size& imageSize, Mat& cameraMatrix, Mat& distCo
 	totalAvgErr = computeReprojectionErrors(objectPoints, imagePoints, rvecs, tvecs, cameraMatrix, distCoeffs,
 		reprojErrs, settings->useFisheyeModel);
 
-	bool ok = checkRange(cameraMatrix) && checkRange(distCoeffs) && totalAvgErr < MAX_REPROJECTION_ERROR;
+	bool ok = checkRange(cameraMatrix) && checkRange(distCoeffs) && totalAvgErr < settings->maxTotalError;
 
 	return (ok);
 }
@@ -289,6 +289,11 @@ void Calibration::saveCameraParams(Size& imageSize, Mat& cameraMatrix, Mat& dist
 }
 
 bool Calibration::runCalibrationAndSave(void) {
+	// Only run if enough valid points have been accumulated.
+	if ((int) imagePoints.size() < settings->minNumberOfPoints) {
+		return (false);
+	}
+
 	Size imageSize(settings->imageWidth, settings->imageHeigth);
 	vector<Mat> rvecs, tvecs;
 	vector<float> reprojErrs;

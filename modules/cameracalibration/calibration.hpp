@@ -5,14 +5,15 @@
 #include <sstream>
 #include <time.h>
 #include <stdio.h>
-#include "cameracalibration.h"
+#include "calibration_settings.h"
+
+#include <libcaer/events/polarity.h>
+#include <libcaer/events/frame.h>
 
 #include <opencv2/core.hpp>
 #include <opencv2/core/utility.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/calib3d.hpp>
-
-#define MAX_REPROJECTION_ERROR 0.05
 
 #define REMAP_INTERPOLATION INTER_LINEAR
 
@@ -22,7 +23,7 @@ using namespace std;
 class Calibration {
 
 public:
-	Calibration(CameraCalibrationState state);
+	Calibration(CameraCalibrationSettings settings);
 	void updateSettings(void);
 	bool findNewPoints(caerFrameEvent frame);
 	size_t foundPoints(void);
@@ -33,7 +34,7 @@ public:
 	void undistortFrame(caerFrameEvent frame);
 
 private:
-	CameraCalibrationState settings;
+	CameraCalibrationSettings settings;
 	int flag;
 	Size boardSize;
 
@@ -54,7 +55,6 @@ private:
 		vector<Mat>& tvecs, vector<float>& reprojErrs, double& totalAvgErr);
 	void saveCameraParams(Size& imageSize, Mat& cameraMatrix, Mat& distCoeffs,
 		const vector<Mat>& rvecs, const vector<Mat>& tvecs, const vector<float>& reprojErrs, double totalAvgErr);
-
 };
 
 #endif /* CALIBRATION_HPP_ */
