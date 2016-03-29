@@ -28,7 +28,7 @@ static bool caerCameraCalibrationInit(caerModuleData moduleData) {
 
 	// Create config settings.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doCalibration", true); // Do calibration using live images
-	sshsNodePutStringIfAbsent(moduleData->moduleNode, "saveFilename", "camera_calib.xml"); // The name of the file where to write the calculated calibration settings
+	sshsNodePutStringIfAbsent(moduleData->moduleNode, "saveFileName", "camera_calib.xml"); // The name of the file where to write the calculated calibration settings
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "captureDelay", 100000); // Only use a frame for calibration if at least this much time has passed
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "calibrationPattern", "chessboard"); // One of the Chessboard, circles, or asymmetric circle pattern
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "boardWidth", 5); // The size of the board (width)
@@ -40,7 +40,7 @@ static bool caerCameraCalibrationInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "useFisheyeModel", false); // Use Fisheye camera model for calibration
 
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doUndistortion", false); // Do undistortion of incoming images using calibration loaded from file
-	sshsNodePutStringIfAbsent(moduleData->moduleNode, "loadFilename", "camera_calib.xml"); // The name of the file from which to load the calibration settings for undistortion
+	sshsNodePutStringIfAbsent(moduleData->moduleNode, "loadFileName", "camera_calib.xml"); // The name of the file from which to load the calibration settings for undistortion
 
 	// Get current config settings.
 	state->doCalibration = sshsNodeGetBool(moduleData->moduleNode, "doCalibration");
@@ -91,28 +91,10 @@ static bool caerCameraCalibrationInit(caerModuleData moduleData) {
 
 	free(calibPattern);
 
-	// Parse file strings and open them for write (save) and read (load) access.
-	char *saveFilename = sshsNodeGetString(moduleData->moduleNode, "saveFilename");
-	state->saveFileFd = open(saveFilename, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP);
-	if (state->saveFileFd < 0) {
-		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to open save file for writing.");
+	// Parse file strings.
+	state->saveFileName = sshsNodeGetString(moduleData->moduleNode, "saveFileName");
 
-		free(saveFilename);
-		return (false);
-	}
-
-	free(saveFilename);
-
-	char *loadFilename = sshsNodeGetString(moduleData->moduleNode, "loadFilename");
-	state->loadFileFd = open(saveFilename, O_RDONLY);
-	if (state->loadFileFd < 0) {
-		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to open load file for reading.");
-
-		free(loadFilename);
-		return (false);
-	}
-
-	free(loadFilename);
+	state->loadFileName = sshsNodeGetString(moduleData->moduleNode, "loadFileName");
 
 	return (true);
 }
@@ -135,7 +117,4 @@ static void caerCameraCalibrationConfig(caerModuleData moduleData) {
 
 static void caerCameraCalibrationExit(caerModuleData moduleData) {
 	CameraCalibrationState state = moduleData->moduleState;
-
-	close(state->saveFileFd);
-	close(state->loadFileFd);
 }

@@ -14,7 +14,7 @@ enum CameraCalibrationPattern { CALIB_CHESSBOARD, CALIB_CIRCLES_GRID, CALIB_ASYM
 
 struct CameraCalibration_state {
 	bool doCalibration;
-	int saveFileFd;
+	char *saveFileName;
 	enum CameraCalibrationPattern calibrationPattern;
 	int boardWidth;
 	int boardHeigth;
@@ -24,7 +24,9 @@ struct CameraCalibration_state {
 	bool fixPrincipalPointAtCenter;
 	bool useFisheyeModel;
 	bool doUndistortion;
-	int loadFileFd;
+	char *loadFileName;
+	int imageWidth;
+	int imageHeigth;
 };
 
 typedef struct CameraCalibration_state *CameraCalibrationState;
