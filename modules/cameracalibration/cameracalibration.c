@@ -15,6 +15,7 @@ static bool caerCameraCalibrationInit(caerModuleData moduleData);
 static void caerCameraCalibrationRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerCameraCalibrationConfig(caerModuleData moduleData);
 static void caerCameraCalibrationExit(caerModuleData moduleData);
+static void updateSettings(caerModuleData moduleData);
 
 static struct caer_module_functions caerCameraCalibrationFunctions = { .moduleInit = &caerCameraCalibrationInit,
 	.moduleRun = &caerCameraCalibrationRun, .moduleConfig = &caerCameraCalibrationConfig, .moduleExit =
@@ -33,7 +34,9 @@ static bool caerCameraCalibrationInit(caerModuleData moduleData) {
 	// Create config settings.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doCalibration", true); // Do calibration using live images
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "saveFileName", "camera_calib.xml"); // The name of the file where to write the calculated calibration settings
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "captureDelay", 100000); // Only use a frame for calibration if at least this much time has passed
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "captureDelay", 500000); // Only use a frame for calibration if at least this much time has passed
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "minNumberOfPoints", 10);
+	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "maxTotalError", 0.05f);
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "calibrationPattern", "chessboard"); // One of the Chessboard, circles, or asymmetric circle pattern
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "boardWidth", 5); // The size of the board (width)
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "boardHeigth", 5); // The size of the board (heigth)
@@ -46,32 +49,34 @@ static bool caerCameraCalibrationInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doUndistortion", false); // Do undistortion of incoming images using calibration loaded from file
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "loadFileName", "camera_calib.xml"); // The name of the file from which to load the calibration settings for undistortion
 
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
+
+	// Update all settings.
+	updateSettings(moduleData);
+
+	// Initialize C++ class for OpenCV integration.
+	state->cpp_class = calibration_init(&state->settings);
+
+	return (true);
+}
+
+static void updateSettings(caerModuleData moduleData) {
+	CameraCalibrationState state = moduleData->moduleState;
+
 	// Get current config settings.
 	state->settings.doCalibration = sshsNodeGetBool(moduleData->moduleNode, "doCalibration");
+	state->settings.captureDelay = sshsNodeGetInt(moduleData->moduleNode, "captureDelay");
+	state->settings.minNumberOfPoints = sshsNodeGetInt(moduleData->moduleNode, "minNumberOfPoints");
+	state->settings.maxTotalError = sshsNodeGetFloat(moduleData->moduleNode, "maxTotalError");
 	state->settings.boardWidth = sshsNodeGetInt(moduleData->moduleNode, "boardWidth");
 	state->settings.boardHeigth = sshsNodeGetInt(moduleData->moduleNode, "boardHeigth");
 	state->settings.boardSquareSize = sshsNodeGetFloat(moduleData->moduleNode, "boardSquareSize");
 	state->settings.aspectRatio = sshsNodeGetFloat(moduleData->moduleNode, "aspectRatio");
-	state->settings.assumeZeroTangentialDistortion = sshsNodeGetBool(moduleData->moduleNode, "assumeZeroTangentialDistortion");
+	state->settings.assumeZeroTangentialDistortion = sshsNodeGetBool(moduleData->moduleNode,
+		"assumeZeroTangentialDistortion");
 	state->settings.fixPrincipalPointAtCenter = sshsNodeGetBool(moduleData->moduleNode, "fixPrincipalPointAtCenter");
 	state->settings.useFisheyeModel = sshsNodeGetBool(moduleData->moduleNode, "useFisheyeModel");
 	state->settings.doUndistortion = sshsNodeGetBool(moduleData->moduleNode, "doUndistortion");
-
-	// Check input validity.
-	if (state->settings.boardWidth <= 0 || state->settings.boardHeigth <= 0) {
-		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Invalid board size.");
-		return (false);
-	}
-
-	if (state->settings.boardSquareSize <= 10e-6f) {
-		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Invalid board square size.");
-		return (false);
-	}
-
-	if (state->settings.aspectRatio < 0) {
-		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Invalid aspect ratio.");
-		return (false);
-	}
 
 	// Parse calibration pattern string.
 	char *calibPattern = sshsNodeGetString(moduleData->moduleNode, "calibrationPattern");
@@ -87,23 +92,38 @@ static bool caerCameraCalibrationInit(caerModuleData moduleData) {
 	}
 	else {
 		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
-			"Invalid calibration pattern defined. Select one of: chessboard, circlesGrid or asymmetricCirclesGrid.");
+			"Invalid calibration pattern defined. Select one of: chessboard, circlesGrid or asymmetricCirclesGrid. Defaulting to chessboard.");
 
-		free(calibPattern);
-		return (false);
+		state->settings.calibrationPattern = CAMCALIB_CHESSBOARD;
 	}
 
 	free(calibPattern);
 
-	// Parse file strings.
+	// Get file strings.
 	state->settings.saveFileName = sshsNodeGetString(moduleData->moduleNode, "saveFileName");
-
 	state->settings.loadFileName = sshsNodeGetString(moduleData->moduleNode, "loadFileName");
+}
 
-	// Initialize C++ class for OpenCV integration.
-	state->cpp_class = calibration_init(&state->settings);
+static void caerCameraCalibrationConfig(caerModuleData moduleData) {
+	caerModuleConfigUpdateReset(moduleData);
 
-	return (true);
+	CameraCalibrationState state = moduleData->moduleState;
+
+	free(state->settings.saveFileName);
+	free(state->settings.loadFileName);
+
+	updateSettings(moduleData);
+
+	calibration_updateSettings(state->cpp_class);
+}
+
+static void caerCameraCalibrationExit(caerModuleData moduleData) {
+	CameraCalibrationState state = moduleData->moduleState;
+
+	calibration_destroy(state->cpp_class);
+
+	free(state->settings.saveFileName);
+	free(state->settings.loadFileName);
 }
 
 static void caerCameraCalibrationRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
@@ -113,17 +133,8 @@ static void caerCameraCalibrationRun(caerModuleData moduleData, size_t argsNumbe
 	caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
 	caerFrameEventPacket frame = va_arg(args, caerFrameEventPacket);
 
-	// Only process packets with content.
-	if (polarity == NULL && frame == NULL) {
-		return;
-	}
-}
+	// Calibration is done only using frames.
 
-static void caerCameraCalibrationConfig(caerModuleData moduleData) {
-}
+	// Undistortion can be applied to both frames and events.
 
-static void caerCameraCalibrationExit(caerModuleData moduleData) {
-	CameraCalibrationState state = moduleData->moduleState;
-
-	calibration_destroy(state->cpp_class);
 }

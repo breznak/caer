@@ -6,6 +6,9 @@ enum CameraCalibrationPattern { CAMCALIB_CHESSBOARD, CAMCALIB_CIRCLES_GRID, CAMC
 struct CameraCalibrationSettings_struct {
 	bool doCalibration;
 	char *saveFileName;
+	int captureDelay;
+	int minNumberOfPoints;
+	float maxTotalError;
 	enum CameraCalibrationPattern calibrationPattern;
 	int boardWidth;
 	int boardHeigth;
@@ -18,8 +21,6 @@ struct CameraCalibrationSettings_struct {
 	char *loadFileName;
 	int imageWidth;
 	int imageHeigth;
-	int minNumberOfPoints;
-	float maxTotalError;
 };
 
 typedef struct CameraCalibrationSettings_struct *CameraCalibrationSettings;
