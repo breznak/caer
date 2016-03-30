@@ -263,13 +263,13 @@ void caerVisualizerUpdateScreen(caerVisualizerState state) {
 				if (caerPolarityEventGetPolarity(caerPolarityIteratorElement)) {
 					// ON polarity (green).
 					al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
-						(state->bitmapRendererSizeY - 1 - caerPolarityEventGetY(caerPolarityIteratorElement)),
+						caerPolarityEventGetY(caerPolarityIteratorElement),
 						al_map_rgb(0, 255, 0));
 				}
 				else {
 					// OFF polarity (red).
 					al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
-						(state->bitmapRendererSizeY - 1 - caerPolarityEventGetY(caerPolarityIteratorElement)),
+						caerPolarityEventGetY(caerPolarityIteratorElement),
 						al_map_rgb(255, 0, 0));
 				}
 			CAER_POLARITY_ITERATOR_VALID_END
@@ -329,7 +329,7 @@ void caerVisualizerUpdateScreen(caerVisualizerState state) {
 								}
 							}
 
-							al_put_pixel((framePositionX + x), (state->bitmapRendererSizeY - 1 - (framePositionY + y)),
+							al_put_pixel((framePositionX + x), (framePositionY + y),
 								color);
 						}
 					}
