@@ -445,7 +445,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
                 state->frameRendererPositionY = caerFrameEventGetPositionY(currFrameEvent);
                 state->frameChannels = caerFrameEventGetChannelNumber(currFrameEvent);
 
-                state->frameRenderer = caerFrameEventGetPixelArrayCGFormat(currFrameEvent);
+                state->frameRenderer = caerFrameEventGetPixelArrayUnsafe(currFrameEvent);
 
                 break;
             }
@@ -569,7 +569,6 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 
 		// free chunks of memory
 		free(quadratic_image_map);
-		free(state->frameRenderer);
 		state->frameRenderer = NULL;
 
 	    }

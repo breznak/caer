@@ -7,7 +7,7 @@ REQUIREMENTS:
 
 cmake >= 2.6
 gcc >= 4.9 or clang >= 3.6
-libcaer >= 1.0.3
+libcaer >= 2.0.0
 mini-xml (mxml) >= 2.7
 allegro5 >= 5.0.1 (optional, only if using the visualizer)
 
