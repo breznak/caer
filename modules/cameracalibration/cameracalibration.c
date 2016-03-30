@@ -7,6 +7,9 @@
 struct CameraCalibrationState_struct {
 	struct CameraCalibrationSettings_struct settings; // Struct containing all settings (shared)
 	struct Calibration *cpp_class; // Pointer to cpp_class_object
+	uint64_t lastFrameTimestamp;
+	bool calibrationCompleted;
+	bool calibrationLoaded;
 };
 
 typedef struct CameraCalibrationState_struct *CameraCalibrationState;
@@ -32,16 +35,16 @@ static bool caerCameraCalibrationInit(caerModuleData moduleData) {
 	CameraCalibrationState state = moduleData->moduleState;
 
 	// Create config settings.
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doCalibration", true); // Do calibration using live images
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doCalibration", false); // Do calibration using live images
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "saveFileName", "camera_calib.xml"); // The name of the file where to write the calculated calibration settings
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "captureDelay", 500000); // Only use a frame for calibration if at least this much time has passed
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "minNumberOfPoints", 10);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "minNumberOfPoints", 20);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "maxTotalError", 0.05f);
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "calibrationPattern", "chessboard"); // One of the Chessboard, circles, or asymmetric circle pattern
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "boardWidth", 5); // The size of the board (width)
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "boardHeigth", 5); // The size of the board (heigth)
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "boardSquareSize", 1.0f); // The size of a square in your defined unit (point, millimeter, etc.)
-	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "aspectRatio", 0.75f); // The aspect ratio
+	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "aspectRatio", 0); // The aspect ratio
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "assumeZeroTangentialDistortion", false); // Assume zero tangential distortion
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "fixPrincipalPointAtCenter", false); // Fix the principal point at the center
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "useFisheyeModel", false); // Use Fisheye camera model for calibration
@@ -65,11 +68,11 @@ static void updateSettings(caerModuleData moduleData) {
 
 	// Get current config settings.
 	state->settings.doCalibration = sshsNodeGetBool(moduleData->moduleNode, "doCalibration");
-	state->settings.captureDelay = sshsNodeGetInt(moduleData->moduleNode, "captureDelay");
-	state->settings.minNumberOfPoints = sshsNodeGetInt(moduleData->moduleNode, "minNumberOfPoints");
+	state->settings.captureDelay = U32T(sshsNodeGetInt(moduleData->moduleNode, "captureDelay"));
+	state->settings.minNumberOfPoints = U32T(sshsNodeGetInt(moduleData->moduleNode, "minNumberOfPoints"));
 	state->settings.maxTotalError = sshsNodeGetFloat(moduleData->moduleNode, "maxTotalError");
-	state->settings.boardWidth = sshsNodeGetInt(moduleData->moduleNode, "boardWidth");
-	state->settings.boardHeigth = sshsNodeGetInt(moduleData->moduleNode, "boardHeigth");
+	state->settings.boardWidth = U32T(sshsNodeGetInt(moduleData->moduleNode, "boardWidth"));
+	state->settings.boardHeigth = U32T(sshsNodeGetInt(moduleData->moduleNode, "boardHeigth"));
 	state->settings.boardSquareSize = sshsNodeGetFloat(moduleData->moduleNode, "boardSquareSize");
 	state->settings.aspectRatio = sshsNodeGetFloat(moduleData->moduleNode, "aspectRatio");
 	state->settings.assumeZeroTangentialDistortion = sshsNodeGetBool(moduleData->moduleNode,
@@ -109,12 +112,20 @@ static void caerCameraCalibrationConfig(caerModuleData moduleData) {
 
 	CameraCalibrationState state = moduleData->moduleState;
 
+	// Free filename strings, get reloaded in next step.
 	free(state->settings.saveFileName);
 	free(state->settings.loadFileName);
 
+	// Reload all local settings.
 	updateSettings(moduleData);
 
+	// Update the C++ internal state, based on new settings.
 	calibration_updateSettings(state->cpp_class);
+
+	// Reset calibration status after any config change.
+	state->lastFrameTimestamp = 0;
+	state->calibrationCompleted = false;
+	state->calibrationLoaded = false;
 }
 
 static void caerCameraCalibrationExit(caerModuleData moduleData) {
@@ -133,8 +144,65 @@ static void caerCameraCalibrationRun(caerModuleData moduleData, size_t argsNumbe
 	caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
 	caerFrameEventPacket frame = va_arg(args, caerFrameEventPacket);
 
+	CameraCalibrationState state = moduleData->moduleState;
+
+	// As soon as we have a packet, we can get the source ID and initialize the image size.
+	if (polarity != NULL || frame != NULL) {
+		int16_t sourceID = -1;
+
+		if (polarity != NULL) {
+			sourceID = caerEventPacketHeaderGetEventSource(&polarity->packetHeader);
+		}
+
+		if (frame != NULL) {
+			sourceID = caerEventPacketHeaderGetEventSource(&frame->packetHeader);
+		}
+
+		// At this point we must have a valid source ID.
+		// Get size information from source.
+		sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
+		state->settings.imageWidth = U32T(sshsNodeGetShort(sourceInfoNode, "apsSizeX"));
+		state->settings.imageHeigth = U32T(sshsNodeGetShort(sourceInfoNode, "apsSizeY"));
+	}
+
 	// Calibration is done only using frames.
+	if (state->settings.doCalibration && !state->calibrationCompleted && frame != NULL) {
+		CAER_FRAME_ITERATOR_VALID_START(frame)
+			// Only work on new frames if enough time has passed between this and the last used one.
+			uint64_t currTimestamp = U64T(caerFrameEventGetTSStartOfFrame64(caerFrameIteratorElement, frame));
+
+			// If enough time has passed, try to add a new point set.
+			if ((currTimestamp - state->lastFrameTimestamp) >= state->settings.captureDelay) {
+				state->lastFrameTimestamp = currTimestamp;
+
+				calibration_findNewPoints(state->cpp_class, caerFrameIteratorElement);
+			}
+		CAER_FRAME_ITERATOR_VALID_END
+
+		// If enough points have been found in this round, try doing calibration.
+		if (calibration_foundPoints(state->cpp_class) >= state->settings.minNumberOfPoints) {
+			state->calibrationCompleted = calibration_runCalibrationAndSave(state->cpp_class);
+		}
+	}
+
+	// At this point we always try to load the calibration settings for undistortion.
+	// Maybe they just got created or exist from a previous run.
+	if (state->settings.doUndistortion && !state->calibrationLoaded) {
+		state->calibrationLoaded = calibration_loadUndistortMatrices(state->cpp_class);
+	}
 
 	// Undistortion can be applied to both frames and events.
+	if (state->settings.doUndistortion && state->calibrationLoaded) {
+		if (frame != NULL) {
+			CAER_FRAME_ITERATOR_VALID_START(frame)
+				calibration_undistortFrame(state->cpp_class, caerFrameIteratorElement);
+			CAER_FRAME_ITERATOR_VALID_END
+		}
 
+		if (polarity != NULL) {
+			CAER_POLARITY_ITERATOR_VALID_START(polarity)
+				calibration_undistortEvent(state->cpp_class, caerPolarityIteratorElement);
+			CAER_POLARITY_ITERATOR_VALID_END
+		}
+	}
 }

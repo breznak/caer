@@ -286,11 +286,14 @@ void Calibration::saveCameraParams(Size& imageSize, Mat& cameraMatrix, Mat& dist
 
 		fs << "extrinsic_parameters" << bigmat;
 	}
+
+	// Close file.
+	fs.release();
 }
 
 bool Calibration::runCalibrationAndSave(void) {
 	// Only run if enough valid points have been accumulated.
-	if ((int) imagePoints.size() < settings->minNumberOfPoints) {
+	if (imagePoints.size() < settings->minNumberOfPoints) {
 		return (false);
 	}
 
@@ -310,11 +313,20 @@ bool Calibration::runCalibrationAndSave(void) {
 
 bool Calibration::loadUndistortMatrices(void) {
 	// Open file with undistort matrices.
+	FileStorage fs(settings->loadFileName, FileStorage::READ);
+
 	Mat undistortCameraMatrix;
 	Mat undistortDistCoeffs;
 	bool useFisheyeModel = false;
 
-	// Generate maps for frame remap() and event remapping via LUT.
+	fs["camera_matrix"] >> undistortCameraMatrix;
+	fs["distortion_coefficients"] >> undistortDistCoeffs;
+	fs["use_fisheye_model"] >> useFisheyeModel;
+
+	// Close file.
+	fs.release();
+
+	// Generate maps for frame remap().
 	Size imageSize(settings->imageWidth, settings->imageHeigth);
 
 	if (useFisheyeModel) {
@@ -334,6 +346,8 @@ bool Calibration::loadUndistortMatrices(void) {
 		CV_16SC2, undistortRemap1, undistortRemap2);
 	}
 
+	// TODO: generate LUT for event undistortion.
+
 	return (true);
 }
 
@@ -342,6 +356,7 @@ void Calibration::undistortEvent(caerPolarityEvent polarity) {
 		return;
 	}
 
+	// TODO: use LUT to undistort.
 }
 
 void Calibration::undistortFrame(caerFrameEvent frame) {

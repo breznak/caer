@@ -6,12 +6,12 @@ enum CameraCalibrationPattern { CAMCALIB_CHESSBOARD, CAMCALIB_CIRCLES_GRID, CAMC
 struct CameraCalibrationSettings_struct {
 	bool doCalibration;
 	char *saveFileName;
-	int captureDelay;
-	int minNumberOfPoints;
+	uint32_t captureDelay;
+	uint32_t minNumberOfPoints;
 	float maxTotalError;
 	enum CameraCalibrationPattern calibrationPattern;
-	int boardWidth;
-	int boardHeigth;
+	uint32_t boardWidth;
+	uint32_t boardHeigth;
 	float boardSquareSize;
 	float aspectRatio;
 	bool assumeZeroTangentialDistortion;
@@ -19,8 +19,8 @@ struct CameraCalibrationSettings_struct {
 	bool useFisheyeModel;
 	bool doUndistortion;
 	char *loadFileName;
-	int imageWidth;
-	int imageHeigth;
+	uint32_t imageWidth;
+	uint32_t imageHeigth;
 };
 
 typedef struct CameraCalibrationSettings_struct *CameraCalibrationSettings;
