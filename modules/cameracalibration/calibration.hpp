@@ -50,11 +50,10 @@ private:
 		const Mat& cameraMatrix, const Mat& distCoeffs, vector<float>& perViewErrors, bool fisheye);
 	void calcBoardCornerPositions(Size boardSize, float squareSize, vector<Point3f>& corners,
 		enum CameraCalibrationPattern patternType);
-	bool runCalibration(Size& imageSize,
-		Mat& cameraMatrix, Mat& distCoeffs, vector<vector<Point2f> > imagePoints, vector<Mat>& rvecs,
-		vector<Mat>& tvecs, vector<float>& reprojErrs, double& totalAvgErr);
-	void saveCameraParams(Size& imageSize, Mat& cameraMatrix, Mat& distCoeffs,
-		const vector<Mat>& rvecs, const vector<Mat>& tvecs, const vector<float>& reprojErrs, double totalAvgErr);
+	bool runCalibration(Size& imageSize, Mat& cameraMatrix, Mat& distCoeffs,
+		vector<vector<Point2f> > imagePoints, vector<float>& reprojErrs, double& totalAvgErr);
+	void saveCameraParams(Size& imageSize, Mat& cameraMatrix, Mat& distCoeffs, const vector<float>& reprojErrs,
+		double totalAvgErr);
 };
 
 #endif /* CALIBRATION_HPP_ */

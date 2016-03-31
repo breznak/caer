@@ -48,7 +48,7 @@ bool Calibration::findNewPoints(caerFrameEvent frame) {
 	// Create a new Mat that has only 8 bit depth from the original 16 bit one.
 	// findCorner functions in OpenCV only support 8 bit depth.
 	Mat view;
-	orig.convertTo(view, CV_8UC(orig.channels()), 1.0/256.0);
+	orig.convertTo(view, CV_8UC(orig.channels()), 1.0 / 256.0);
 
 	int chessBoardFlags = CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_NORMALIZE_IMAGE;
 
@@ -168,8 +168,7 @@ void Calibration::calcBoardCornerPositions(Size boardSize, float squareSize, vec
 }
 
 bool Calibration::runCalibration(Size& imageSize, Mat& cameraMatrix, Mat& distCoeffs,
-	vector<vector<Point2f> > imagePoints, vector<Mat>& rvecs, vector<Mat>& tvecs, vector<float>& reprojErrs,
-	double& totalAvgErr) {
+	vector<vector<Point2f> > imagePoints, vector<float>& reprojErrs, double& totalAvgErr) {
 	// 3x3 camera matrix to fill in.
 	cameraMatrix = Mat::eye(3, 3, CV_64F);
 
@@ -191,6 +190,8 @@ bool Calibration::runCalibration(Size& imageSize, Mat& cameraMatrix, Mat& distCo
 	objectPoints.resize(imagePoints.size(), objectPoints[0]);
 
 	// Find intrinsic and extrinsic camera parameters.
+	vector<Mat> rvecs, tvecs;
+
 	if (settings->useFisheyeModel) {
 		Mat _rvecs, _tvecs;
 		fisheye::calibrate(objectPoints, imagePoints, imageSize, cameraMatrix, distCoeffs, _rvecs, _tvecs, flag);
@@ -198,7 +199,7 @@ bool Calibration::runCalibration(Size& imageSize, Mat& cameraMatrix, Mat& distCo
 		rvecs.reserve(_rvecs.rows);
 		tvecs.reserve(_tvecs.rows);
 
-		for (int i = 0; i < int(objectPoints.size()); i++) {
+		for (size_t i = 0; i < objectPoints.size(); i++) {
 			rvecs.push_back(_rvecs.row(i));
 			tvecs.push_back(_tvecs.row(i));
 		}
@@ -216,8 +217,8 @@ bool Calibration::runCalibration(Size& imageSize, Mat& cameraMatrix, Mat& distCo
 }
 
 // Print camera parameters to the output file
-void Calibration::saveCameraParams(Size& imageSize, Mat& cameraMatrix, Mat& distCoeffs, const vector<Mat>& rvecs,
-	const vector<Mat>& tvecs, const vector<float>& reprojErrs, double totalAvgErr) {
+void Calibration::saveCameraParams(Size& imageSize, Mat& cameraMatrix, Mat& distCoeffs, const vector<float>& reprojErrs,
+	double totalAvgErr) {
 	FileStorage fs(settings->saveFileName, FileStorage::WRITE);
 
 	time_t tm;
@@ -228,8 +229,8 @@ void Calibration::saveCameraParams(Size& imageSize, Mat& cameraMatrix, Mat& dist
 
 	fs << "calibration_time" << buf;
 
-	if (!rvecs.empty() || !reprojErrs.empty()) {
-		fs << "nr_of_frames" << (int) std::max(rvecs.size(), reprojErrs.size());
+	if (!reprojErrs.empty()) {
+		fs << "nr_of_frames" << (int) reprojErrs.size();
 	}
 
 	fs << "image_width" << imageSize.width;
@@ -270,27 +271,9 @@ void Calibration::saveCameraParams(Size& imageSize, Mat& cameraMatrix, Mat& dist
 	fs << "distortion_coefficients" << distCoeffs;
 
 	fs << "avg_reprojection_error" << totalAvgErr;
+
 	if (!reprojErrs.empty()) {
 		fs << "per_view_reprojection_errors" << Mat(reprojErrs);
-	}
-
-	if (!rvecs.empty() && !tvecs.empty()) {
-		CV_Assert(rvecs[0].type() == tvecs[0].type());
-		Mat bigmat((int) rvecs.size(), 6, rvecs[0].type());
-
-		for (size_t i = 0; i < rvecs.size(); i++) {
-			Mat r = bigmat(Range(int(i), int(i + 1)), Range(0, 3));
-			Mat t = bigmat(Range(int(i), int(i + 1)), Range(3, 6));
-
-			CV_Assert(rvecs[i].rows == 3 && rvecs[i].cols == 1);
-			CV_Assert(tvecs[i].rows == 3 && tvecs[i].cols == 1);
-
-			// *.t() is MatExpr (not Mat) so we can use assignment operator.
-			r = rvecs[i].t();
-			t = tvecs[i].t();
-		}
-
-		fs << "extrinsic_parameters" << bigmat;
 	}
 
 	// Close file.
@@ -304,14 +287,13 @@ bool Calibration::runCalibrationAndSave(void) {
 	}
 
 	Size imageSize(settings->imageWidth, settings->imageHeigth);
-	vector<Mat> rvecs, tvecs;
 	vector<float> reprojErrs;
 	double totalAvgErr = 0;
 
-	bool ok = runCalibration(imageSize, cameraMatrix, distCoeffs, imagePoints, rvecs, tvecs, reprojErrs, totalAvgErr);
+	bool ok = runCalibration(imageSize, cameraMatrix, distCoeffs, imagePoints, reprojErrs, totalAvgErr);
 
 	if (ok) {
-		saveCameraParams(imageSize, cameraMatrix, distCoeffs, rvecs, tvecs, reprojErrs, totalAvgErr);
+		saveCameraParams(imageSize, cameraMatrix, distCoeffs, reprojErrs, totalAvgErr);
 	}
 
 	return (ok);
