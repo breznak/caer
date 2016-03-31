@@ -39,10 +39,10 @@ static bool caerCameraCalibrationInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doCalibration", false); // Do calibration using live images
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "saveFileName", "camera_calib.xml"); // The name of the file where to write the calculated calibration settings
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "captureDelay", 500000); // Only use a frame for calibration if at least this much time has passed
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "minNumberOfPoints", 20);
-	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "maxTotalError", 0.05f);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "minNumberOfPoints", 30);
+	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "maxTotalError", 0.25f);
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "calibrationPattern", "chessboard"); // One of the Chessboard, circles, or asymmetric circle pattern
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "boardWidth", 5); // The size of the board (width)
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "boardWidth", 9); // The size of the board (width)
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "boardHeigth", 5); // The size of the board (heigth)
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "boardSquareSize", 1.0f); // The size of a square in your defined unit (point, millimeter, etc.)
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "aspectRatio", 0); // The aspect ratio
@@ -182,9 +182,10 @@ static void caerCameraCalibrationRun(caerModuleData moduleData, size_t argsNumbe
 		CAER_FRAME_ITERATOR_VALID_END
 
 		// If enough points have been found in this round, try doing calibration.
-		if (calibration_foundPoints(state->cpp_class) >= state->settings.minNumberOfPoints
-			&& calibration_foundPoints(state->cpp_class) != state->lastFoundPoints) {
-			state->lastFoundPoints = calibration_foundPoints(state->cpp_class);
+		size_t foundPoints = calibration_foundPoints(state->cpp_class);
+
+		if (foundPoints >= state->settings.minNumberOfPoints && foundPoints > state->lastFoundPoints) {
+			state->lastFoundPoints = foundPoints;
 
 			state->calibrationCompleted = calibration_runCalibrationAndSave(state->cpp_class);
 		}
