@@ -230,7 +230,7 @@ void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerStat
 	}
 
 	if (!ringBufferPut(state->dataTransfer, packetHeaderCopy)) {
-		caerLog(CAER_LOG_ERROR, "Visualizer", "Failed to move copy to ringbuffer: ringbuffer full!");
+		caerLog(CAER_LOG_INFO, "Visualizer", "Failed to move copy to ringbuffer: ringbuffer full!");
 	}
 }
 
