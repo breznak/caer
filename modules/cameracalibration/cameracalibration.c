@@ -39,8 +39,8 @@ static bool caerCameraCalibrationInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doCalibration", false); // Do calibration using live images
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "saveFileName", "camera_calib.xml"); // The name of the file where to write the calculated calibration settings
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "captureDelay", 500000); // Only use a frame for calibration if at least this much time has passed
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "minNumberOfPoints", 30);
-	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "maxTotalError", 0.25f);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "minNumberOfPoints", 20); // Minimum number of points to start calibration with.
+	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "maxTotalError", 0.30f); // Maximum total average error allowed (in pixels).
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "calibrationPattern", "chessboard"); // One of the Chessboard, circles, or asymmetric circle pattern
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "boardWidth", 9); // The size of the board (width)
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "boardHeigth", 5); // The size of the board (heigth)
@@ -52,6 +52,7 @@ static bool caerCameraCalibrationInit(caerModuleData moduleData) {
 
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doUndistortion", false); // Do undistortion of incoming images using calibration loaded from file
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "loadFileName", "camera_calib.xml"); // The name of the file from which to load the calibration settings for undistortion
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "fitAllPixels", false); // Whether to fit all the input pixels (black borders) or maximize the image, at the cost of loosing some pixels.
 
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
@@ -81,6 +82,7 @@ static void updateSettings(caerModuleData moduleData) {
 	state->settings.fixPrincipalPointAtCenter = sshsNodeGetBool(moduleData->moduleNode, "fixPrincipalPointAtCenter");
 	state->settings.useFisheyeModel = sshsNodeGetBool(moduleData->moduleNode, "useFisheyeModel");
 	state->settings.doUndistortion = sshsNodeGetBool(moduleData->moduleNode, "doUndistortion");
+	state->settings.fitAllPixels = sshsNodeGetBool(moduleData->moduleNode, "fitAllPixels");
 
 	// Parse calibration pattern string.
 	char *calibPattern = sshsNodeGetString(moduleData->moduleNode, "calibrationPattern");

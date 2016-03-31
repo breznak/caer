@@ -323,7 +323,7 @@ bool Calibration::loadUndistortMatrices(void) {
 			Matx33d::eye(), optimalCameramatrix, 1);
 
 		fisheye::initUndistortRectifyMap(undistortCameraMatrix, undistortDistCoeffs, Matx33d::eye(),
-			optimalCameramatrix, imageSize,
+			(settings->fitAllPixels) ? (optimalCameramatrix) : (undistortCameraMatrix), imageSize,
 			CV_16SC2, undistortRemap1, undistortRemap2);
 	}
 	else {
@@ -356,5 +356,5 @@ void Calibration::undistortFrame(caerFrameEvent frame) {
 	Mat view = Mat(frameSize, CV_16UC(caerFrameEventGetChannelNumber(frame)), caerFrameEventGetPixelArrayUnsafe(frame));
 	Mat inView = view.clone();
 
-	remap(inView, view, undistortRemap1, undistortRemap2, REMAP_INTERPOLATION);
+	remap(inView, view, undistortRemap1, undistortRemap2, INTER_LINEAR, BORDER_CONSTANT);
 }

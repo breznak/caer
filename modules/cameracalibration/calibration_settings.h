@@ -19,6 +19,7 @@ struct CameraCalibrationSettings_struct {
 	bool useFisheyeModel;
 	bool doUndistortion;
 	char *loadFileName;
+	bool fitAllPixels;
 	uint32_t imageWidth;
 	uint32_t imageHeigth;
 };
