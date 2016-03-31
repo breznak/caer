@@ -41,8 +41,14 @@ bool Calibration::findNewPoints(caerFrameEvent frame) {
 		return (false);
 	}
 
+	// Initialize OpenCV Mat based on caerFrameEvent data directly (no image copy).
 	Size frameSize(caerFrameEventGetLengthX(frame), caerFrameEventGetLengthY(frame));
-	Mat view = Mat(frameSize, CV_16UC(caerFrameEventGetChannelNumber(frame)), caerFrameEventGetPixelArrayUnsafe(frame));
+	Mat orig = Mat(frameSize, CV_16UC(caerFrameEventGetChannelNumber(frame)), caerFrameEventGetPixelArrayUnsafe(frame));
+
+	// Create a new Mat that has only 8 bit depth from the original 16 bit one.
+	// findCorner functions in OpenCV only support 8 bit depth.
+	Mat view;
+	orig.convertTo(view, CV_8UC(orig.channels()), 1.0/256.0);
 
 	int chessBoardFlags = CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_NORMALIZE_IMAGE;
 
@@ -79,19 +85,19 @@ bool Calibration::findNewPoints(caerFrameEvent frame) {
 			Mat viewGray;
 
 			// Only convert color if not grayscale already.
-			if (caerFrameEventGetChannelNumber(frame) == GRAYSCALE) {
-				view.copyTo(viewGray);
+			if (view.channels() == 1) {
+				viewGray = view;
 			}
 			else {
-				if (caerFrameEventGetChannelNumber(frame) == RGB) {
+				if (view.channels() == 3) {
 					cvtColor(view, viewGray, COLOR_RGB2GRAY);
 				}
-				else if (caerFrameEventGetChannelNumber(frame) == RGBA) {
+				else if (view.channels() == 4) {
 					cvtColor(view, viewGray, COLOR_RGBA2GRAY);
 				}
 			}
 
-			cornerSubPix(viewGray, pointBuf, Size(11, 11), Size(-1, -1),
+			cornerSubPix(viewGray, pointBuf, Size(5, 5), Size(-1, -1),
 				TermCriteria(TermCriteria::EPS + TermCriteria::COUNT, 30, 0.1));
 		}
 

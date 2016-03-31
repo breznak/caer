@@ -8,6 +8,7 @@ struct CameraCalibrationState_struct {
 	struct CameraCalibrationSettings_struct settings; // Struct containing all settings (shared)
 	struct Calibration *cpp_class; // Pointer to cpp_class_object
 	uint64_t lastFrameTimestamp;
+	size_t lastFoundPoints;
 	bool calibrationCompleted;
 	bool calibrationLoaded;
 };
@@ -124,6 +125,7 @@ static void caerCameraCalibrationConfig(caerModuleData moduleData) {
 
 	// Reset calibration status after any config change.
 	state->lastFrameTimestamp = 0;
+	state->lastFoundPoints = 0;
 	state->calibrationCompleted = false;
 	state->calibrationLoaded = false;
 }
@@ -180,7 +182,10 @@ static void caerCameraCalibrationRun(caerModuleData moduleData, size_t argsNumbe
 		CAER_FRAME_ITERATOR_VALID_END
 
 		// If enough points have been found in this round, try doing calibration.
-		if (calibration_foundPoints(state->cpp_class) >= state->settings.minNumberOfPoints) {
+		if (calibration_foundPoints(state->cpp_class) >= state->settings.minNumberOfPoints
+			&& calibration_foundPoints(state->cpp_class) != state->lastFoundPoints) {
+			state->lastFoundPoints = calibration_foundPoints(state->cpp_class);
+
 			state->calibrationCompleted = calibration_runCalibrationAndSave(state->cpp_class);
 		}
 	}
