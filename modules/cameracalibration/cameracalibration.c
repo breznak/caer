@@ -179,7 +179,9 @@ static void caerCameraCalibrationRun(caerModuleData moduleData, size_t argsNumbe
 			if ((currTimestamp - state->lastFrameTimestamp) >= state->settings.captureDelay) {
 				state->lastFrameTimestamp = currTimestamp;
 
-				calibration_findNewPoints(state->cpp_class, caerFrameIteratorElement);
+				bool foundPoint = calibration_findNewPoints(state->cpp_class, caerFrameIteratorElement);
+				caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString,
+					"Searching for new point set, result = %d.", foundPoint);
 			}
 		CAER_FRAME_ITERATOR_VALID_END
 
@@ -190,6 +192,8 @@ static void caerCameraCalibrationRun(caerModuleData moduleData, size_t argsNumbe
 			state->lastFoundPoints = foundPoints;
 
 			state->calibrationCompleted = calibration_runCalibrationAndSave(state->cpp_class);
+			caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString, "Executing calibration, result = %d.",
+				state->calibrationCompleted);
 		}
 	}
 
