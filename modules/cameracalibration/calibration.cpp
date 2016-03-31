@@ -330,8 +330,9 @@ bool Calibration::loadUndistortMatrices(void) {
 		Mat optimalCameramatrix = getOptimalNewCameraMatrix(undistortCameraMatrix, undistortDistCoeffs, imageSize, 1,
 			imageSize, 0);
 
-		initUndistortRectifyMap(undistortCameraMatrix, undistortDistCoeffs, Mat(), optimalCameramatrix, imageSize,
-		CV_16SC2, undistortRemap1, undistortRemap2);
+		initUndistortRectifyMap(undistortCameraMatrix, undistortDistCoeffs, Mat(),
+			(settings->fitAllPixels) ? (optimalCameramatrix) : (undistortCameraMatrix), imageSize,
+			CV_16SC2, undistortRemap1, undistortRemap2);
 	}
 
 	// TODO: generate LUT for event undistortion.
