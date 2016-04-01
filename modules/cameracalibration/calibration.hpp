@@ -28,18 +28,19 @@ public:
 	bool runCalibrationAndSave(void);
 
 	bool loadUndistortMatrices(void);
-	void undistortEvent(caerPolarityEvent polarity);
+	void undistortEvent(caerPolarityEvent polarity, caerPolarityEventPacket polarityPacket);
 	void undistortFrame(caerFrameEvent frame);
 
 private:
-	CameraCalibrationSettings settings;
-	int flag;
+	CameraCalibrationSettings settings = NULL;
+	int flag = 0;
 	Size boardSize;
 
 	vector<vector<Point2f> > imagePoints;
 	Mat cameraMatrix;
 	Mat distCoeffs;
 
+	vector<Point2f> undistortEventMap;
 	Mat undistortRemap1;
 	Mat undistortRemap2;
 

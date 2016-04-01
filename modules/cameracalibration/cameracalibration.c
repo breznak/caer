@@ -213,7 +213,7 @@ static void caerCameraCalibrationRun(caerModuleData moduleData, size_t argsNumbe
 
 		if (polarity != NULL) {
 			CAER_POLARITY_ITERATOR_VALID_START(polarity)
-				calibration_undistortEvent(state->cpp_class, caerPolarityIteratorElement);
+				calibration_undistortEvent(state->cpp_class, caerPolarityIteratorElement, polarity);
 			CAER_POLARITY_ITERATOR_VALID_END
 		}
 	}

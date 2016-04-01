@@ -31,8 +31,8 @@ bool calibration_loadUndistortMatrices(Calibration *calibClass) {
 	return (calibClass->loadUndistortMatrices());
 }
 
-void calibration_undistortEvent(Calibration *calibClass, caerPolarityEvent polarity) {
-	calibClass->undistortEvent(polarity);
+void calibration_undistortEvent(Calibration *calibClass, caerPolarityEvent polarity, caerPolarityEventPacket polarityPacket) {
+	calibClass->undistortEvent(polarity, polarityPacket);
 }
 
 void calibration_undistortFrame(Calibration *calibClass, caerFrameEvent frame) {
