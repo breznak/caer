@@ -67,7 +67,7 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 
 	//create one frame event packet, one single frame
 	caerFrameEventPacket my_frame_packet = caerFrameEventPacketAllocate(1, moduleData->moduleID, 0,
-	IMAGESTREAMERVISUALIZER_SCREEN_WIDTH, IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT, 4);
+	IMAGESTREAMERVISUALIZER_SCREEN_WIDTH, IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT, 3);
 	//get that single frame
 	caerFrameEvent my_frame = caerFrameEventPacketGetEvent(my_frame_packet, 0);
 
@@ -83,17 +83,23 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 	for (int i = 0; i < IMAGESTREAMERVISUALIZER_SCREEN_WIDTH; i++) {
 		for (int y = 0; y < IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT; y++) {
 			c = i * DISPLAY_IMG_SIZE + y;
-			my_frame->pixels[counter] = (uint16_t) (small_img[c] << 8);
-			my_frame->pixels[counter+1] = (uint16_t) (small_img[c] << 8);
-			my_frame->pixels[counter+2] = (uint16_t) (small_img[c] << 8);
-			my_frame->pixels[counter+3] = (uint16_t) (0);
-			counter += 4;	
+			//depending on results display image with different color
+			if(*classific_results == 0){
+				my_frame->pixels[counter] = (uint16_t) (small_img[c] << 8);
+				my_frame->pixels[counter+1] = (uint16_t) (small_img[c] << 8);
+				my_frame->pixels[counter+2] = (uint16_t) (small_img[c] << 8);
+			}else{
+				my_frame->pixels[counter] = (uint16_t) (0);
+				my_frame->pixels[counter+1] = (uint16_t) ( (int)(small_img[c]* *classific_results) << 8);
+				my_frame->pixels[counter+2] = (uint16_t) (0);
+			}
+			counter += 3;	
 		}
 	}
 
 	//add info to the frame
 	caerFrameEventSetLengthXLengthYChannelNumber(my_frame, IMAGESTREAMERVISUALIZER_SCREEN_WIDTH,
-	IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT, 4, my_frame_packet);
+	IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT, 3, my_frame_packet);
 	//valido
 	caerFrameEventValidate(my_frame, my_frame_packet);
 	//update bitmap

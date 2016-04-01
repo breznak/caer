@@ -29,7 +29,7 @@ void MyClass::file_set(char * i, double *b, double thr) {
 			//std::cout << "\n" << std::fixed << std::setprecision(4) << p.second << " - \"" << p.first << "\"" << std::endl;
                         if (p.first.compare("FACE") == 0 && p.second > thr){
                             *b = p.second;
-                            std::cout << "\n" << p.second << " DETECTION \"" << std::endl;
+                            std::cout << "\n" << p.second << " DETECTION " << std::endl;
                         }
                 }
 

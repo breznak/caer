@@ -24,6 +24,6 @@
 
 // DVS FACE DETECTION MAC
 #define NET_MODEL "modules/caffeinterface/caffe_models/faces_36x36/lenet.prototxt";
-#define NET_WEIGHTS  "modules/caffeinterface/caffe_models/faces_36x36/newdb_lenet_15000_spikes_iter_99000.caffemodel";
+#define NET_WEIGHTS  "modules/caffeinterface/caffe_models/faces_36x36/lenet_spikes_and_frames__iter_480000.caffemodel";
 #define NET_MEAN "modules/caffeinterface/caffe_models/faces_36x36/mean.mean";
 #define NET_VAL "modules/caffeinterface/caffe_models/faces_36x36/val.txt";
