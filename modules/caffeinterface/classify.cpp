@@ -8,7 +8,7 @@ using namespace caffe;
 // NOLINT(build/namespaces)
 using std::string;
 
-void MyClass::file_set(char * i, double *b) {
+void MyClass::file_set(char * i, double *b, double thr) {
 	MyClass::file_i = i;
 
 	if (file_i != NULL) {
@@ -27,9 +27,9 @@ void MyClass::file_set(char * i, double *b) {
 		for (size_t i = 0; i < predictions.size(); ++i) {
 			Prediction p = predictions[i];
 			//std::cout << "\n" << std::fixed << std::setprecision(4) << p.second << " - \"" << p.first << "\"" << std::endl;
-                        if (p.first.compare("FACE") == 0 && p.second > 0.5){
+                        if (p.first.compare("FACE") == 0 && p.second > thr){
                             *b = p.second;
-                            //std::cout << "\n" << p.second << std::endl;
+                            std::cout << "\n" << p.second << " DETECTION \"" << std::endl;
                         }
                 }
 

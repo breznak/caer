@@ -65,16 +65,13 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 static void caerImageGeneratorExit(caerModuleData moduleData);
 static bool allocateImageMap(imagegeneratorState state, int16_t sourceID);
 
-//static void framebuffer_size_callback(GLFWwindow* window);
-//static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
-
 static struct caer_module_functions caerImageGeneratorFunctions = {.moduleInit =
     &caerImageGeneratorInit, .moduleRun = &caerImageGeneratorRun, .moduleConfig =
     NULL, .moduleExit = &caerImageGeneratorExit};
 
 void caerImageGenerator(uint16_t moduleID, caerPolarityEventPacket polarity, char ** file_strings_classify,
-        int max_img_qty, int classify_img_size, char **display_img_ptr, int display_img_size,
-        caerFrameEventPacket frame, char ** frame_ptr, int* frame_w, int* frame_h) {
+    int max_img_qty, int classify_img_size, char **display_img_ptr, int display_img_size,
+    caerFrameEventPacket frame, char ** frame_ptr, int* frame_w, int* frame_h) {
 
     caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageGenerator"); 
 
@@ -92,6 +89,8 @@ static bool caerImageGeneratorInit(caerModuleData moduleData) {
     state->numSpikes = sshsNodeGetInt(moduleData->moduleNode, "numSpikes");
     sshsNodePutByteIfAbsent(moduleData->moduleNode, "savepng", 0);
     state->savepng =  sshsNodeGetByte(moduleData->moduleNode, "savepng");
+    sshsNodePutByteIfAbsent(moduleData->moduleNode, "mode", 0);
+    state->mode =  sshsNodeGetByte(moduleData->moduleNode, "mode");    
 
     return (true);
 }
@@ -213,7 +212,7 @@ static bool normalize_to_quadratic_image_map(int64_t **image_map, int size_w, in
         for (int x = 0; x < size_quad; ++x) {
 
             //copy desired region
-            qmap[itr] = image_map[x + x_offset][size_h - (y + y_offset) -1];
+            qmap[itr] = image_map[x + x_offset][(y + y_offset) -1];
             //accumulate mean
             mean = mean + qmap[itr];
             ++itr;
@@ -403,19 +402,8 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 
     //update module state
     imagegeneratorState state = moduleData->moduleState;
-    //get savepng-state from ImageStreamerVisualizer module
-    #ifdef ENABLE_IMAGESTREAMERVISUALIZER
-    caerModuleData imageStreamerVisualizerModuleData = caerMainloopFindModule(10, "ImageStreamerVisualizer");
-    
-    // update savepng and mode (might be changed from imageStreamVisualizer, which listens
-    // to keyboard inputs)
-    state->savepng = sshsNodeGetByte(imageStreamerVisualizerModuleData->moduleNode, "savepng");
-    state->mode = sshsNodeGetByte(imageStreamerVisualizerModuleData->moduleNode, "mode");
-    #else
-        state->savepng = 0;
-	state->mode = NULL;	
-    #endif
-
+    state->savepng = sshsNodeGetByte(moduleData->moduleNode, "savepng");
+    state->mode = sshsNodeGetByte(moduleData->moduleNode, "mode");
 
     // If the map is not allocated yet, do it.
     if (state->ImageMap == NULL) {
@@ -456,8 +444,8 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
             //cast frame to unsigned char and return it in frame_ptr 
             *frame_ptr = (unsigned char*) malloc(state->frameRendererSizeX * state->frameRendererSizeY * 1);
             if (*frame_ptr == NULL) {
-		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate *frame_ptr.");
-		return;
+		        caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate *frame_ptr.");
+		        return;
             }       
             *FRAME_W = state->frameRendererSizeX;
             *FRAME_H = state->frameRendererSizeY;
@@ -469,8 +457,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
             }
             
             //save frame if desired, do NOT classify on frame (at the moment)
-            if (state->savepng == 1 && SAVE_FRAME) {
-                
+            if (state->savepng == 1 && SAVE_FRAME) {               
                 if (!save_img(state->counterFrame, frame_img, state->frameRendererSizeX, state->frameRendererSizeY, file_strings_classify, FRAME_SAVE_MODE, -1, FRAME_IMG_DIRECTORY, false, MAX_IMG_QTY)){
                     caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to save image.");
                     return;
@@ -522,8 +509,6 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 		    caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to generate quadratic image map.");
 		    return;
 		};
-		
-		
 
 		// if Recording key (R) or testing key (T) is pressed, write image for classification to disk
 		if (state->savepng == 1) {
@@ -532,11 +517,11 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 		    unsigned char *classify_img;
 		    classify_img = (unsigned char*) malloc(CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE * 1);
 		    if (classify_img == NULL) {
-			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate classify_img.");
-			return;
+			    caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate classify_img.");
+			    return;
 		    }
 		    stbir_resize_uint8(quadratic_image_map, SIZE_QUADRATIC_MAP, SIZE_QUADRATIC_MAP, 0, classify_img, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE, 0, 1);
-		    
+
 		    //normalize before saving
 		    normalize_image(classify_img, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE);
 		    if (!save_img(state->counterImg, classify_img, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE, file_strings_classify, state->mode, file_string_counter, CLASSIFY_IMG_DIRECTORY, true, MAX_IMG_QTY)){
@@ -556,8 +541,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 		disp_img = *display_img_ptr;
 		stbir_resize_uint8(quadratic_image_map, SIZE_QUADRATIC_MAP, SIZE_QUADRATIC_MAP, 0, disp_img, DISPLAY_IMG_SIZE, DISPLAY_IMG_SIZE, 0, 1);
 		normalize_image(disp_img, DISPLAY_IMG_SIZE, DISPLAY_IMG_SIZE);
-
-
+		
 		//reset values
 		for (x_loop = 0; x_loop < state->sizeX; x_loop++) {
 		    for (y_loop = 0; y_loop < state->sizeY; y_loop++) {

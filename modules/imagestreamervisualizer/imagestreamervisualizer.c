@@ -27,8 +27,6 @@ void caerImagestreamerVisualizer(uint16_t moduleID, unsigned char * disp_img, co
 static bool caerImagestreamerVisualizerInit(caerModuleData moduleData, size_t argsNumber, va_list args) {
 	caerImagestreamerVisualizerState state = moduleData->moduleState;
 
-	sshsNodePutByteIfAbsent(moduleData->moduleNode, "savepng", 0);
-	sshsNodePutByteIfAbsent(moduleData->moduleNode, "mode", 0);
 
 	if (!caerVisualizerInit(&state->vis_state, IMAGESTREAMERVISUALIZER_SCREEN_WIDTH,
 	IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT, VISUALIZER_DEFAULT_ZOOM, false)) {
@@ -67,13 +65,9 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 	int * classific_sizes = va_arg(args, int *);
 	int max_img_qty = va_arg(args, int);
 
-	//update saving state, might have been changed by user key inputs
-	sshsNodePutByte(moduleData->moduleNode, "savepng", savepng_state);
-	sshsNodePutByte(moduleData->moduleNode, "mode", mode);
-
 	//create one frame event packet, one single frame
 	caerFrameEventPacket my_frame_packet = caerFrameEventPacketAllocate(1, moduleData->moduleID, 0,
-	IMAGESTREAMERVISUALIZER_SCREEN_WIDTH, IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT, 1);
+	IMAGESTREAMERVISUALIZER_SCREEN_WIDTH, IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT, 4);
 	//get that single frame
 	caerFrameEvent my_frame = caerFrameEventPacketGetEvent(my_frame_packet, 0);
 
@@ -82,27 +76,26 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 		return;
 	}
 
-#define checkImageWidth 256 //DISPLAY_IMG_SIZE; not working
-#define checkImageHeight 256 //DISPLAY_IMG_SIZE; not working
 	unsigned char *small_img = disp_img;
-
 	//now put stuff into the frame
 	int c, counter;
 	counter = 0;
-	for (int i = 0; i < IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT; i++) {
+	for (int i = 0; i < IMAGESTREAMERVISUALIZER_SCREEN_WIDTH; i++) {
 		for (int y = 0; y < IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT; y++) {
-			c = y * DISPLAY_IMG_SIZE + i;
+			c = i * DISPLAY_IMG_SIZE + y;
 			my_frame->pixels[counter] = (uint16_t) (small_img[c] << 8);
-			counter += 1;
+			my_frame->pixels[counter+1] = (uint16_t) (small_img[c] << 8);
+			my_frame->pixels[counter+2] = (uint16_t) (small_img[c] << 8);
+			my_frame->pixels[counter+3] = (uint16_t) (0);
+			counter += 4;	
 		}
 	}
 
 	//add info to the frame
 	caerFrameEventSetLengthXLengthYChannelNumber(my_frame, IMAGESTREAMERVISUALIZER_SCREEN_WIDTH,
-	IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT, 1, my_frame_packet);
+	IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT, 4, my_frame_packet);
 	//valido
 	caerFrameEventValidate(my_frame, my_frame_packet);
-
 	//update bitmap
 	caerVisualizerUpdate(&my_frame_packet->packetHeader, &state->vis_state);
 
