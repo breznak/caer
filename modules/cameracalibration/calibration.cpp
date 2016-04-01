@@ -318,16 +318,17 @@ bool Calibration::loadUndistortMatrices(void) {
 	Size imageSize(settings->imageWidth, settings->imageHeigth);
 
 	// Allocate undistort events maps.
-	undistortEventMap.clear();
-	undistortEventMap.reserve(settings->imageWidth * settings->imageHeigth);
-
 	vector<Point2f> undistortEventInputMap;
 	undistortEventInputMap.reserve(settings->imageWidth * settings->imageHeigth);
+
+	vector<Point2f> undistortEventOutputMap;
+	undistortEventOutputMap.reserve(settings->imageWidth * settings->imageHeigth);
 
 	// Populate undistort events input map with all possible (x, y) address combinations.
 	for (size_t y = 0; y < settings->imageHeigth; y++) {
 		for (size_t x = 0; x < settings->imageWidth; x++) {
-			undistortEventInputMap.push_back(Point2f(x, y));
+			// Use center of pixel to get better approximation, since we're using floats anyway.
+			undistortEventInputMap.push_back(Point2f(x + 0.5, y + 0.5));
 		}
 	}
 
@@ -340,16 +341,25 @@ bool Calibration::loadUndistortMatrices(void) {
 			(settings->fitAllPixels) ? (optimalCameramatrix) : (undistortCameraMatrix), imageSize,
 			CV_16SC2, undistortRemap1, undistortRemap2);
 
-		fisheye::undistortPoints(undistortEventInputMap, undistortEventMap, undistortCameraMatrix, undistortDistCoeffs,
-			Matx33d::eye(), (settings->fitAllPixels) ? (optimalCameramatrix) : (undistortCameraMatrix));
+		fisheye::undistortPoints(undistortEventInputMap, undistortEventOutputMap, undistortCameraMatrix,
+			undistortDistCoeffs, Matx33d::eye(),
+			(settings->fitAllPixels) ? (optimalCameramatrix) : (undistortCameraMatrix));
 	}
 	else {
 		initUndistortRectifyMap(undistortCameraMatrix, undistortDistCoeffs, Matx33d::eye(),
 			(settings->fitAllPixels) ? (Mat()) : (undistortCameraMatrix), imageSize,
 			CV_16SC2, undistortRemap1, undistortRemap2);
 
-		undistortPoints(undistortEventInputMap, undistortEventMap, undistortCameraMatrix, undistortDistCoeffs,
+		undistortPoints(undistortEventInputMap, undistortEventOutputMap, undistortCameraMatrix, undistortDistCoeffs,
 			Matx33d::eye(), (settings->fitAllPixels) ? (Mat()) : (undistortCameraMatrix));
+	}
+
+	// Convert undistortEventOutputMap to integer from float for faster calculations later on.
+	undistortEventMap.clear();
+	undistortEventMap.reserve(settings->imageWidth * settings->imageHeigth);
+
+	for (size_t i = 0; i < undistortEventOutputMap.size(); i++) {
+		undistortEventMap.push_back(undistortEventOutputMap.at(i));
 	}
 
 	return (true);
@@ -362,11 +372,11 @@ void Calibration::undistortEvent(caerPolarityEvent polarity, caerPolarityEventPa
 
 	// Get new coordinates at which event shall be remapped.
 	size_t mapIdx = (caerPolarityEventGetY(polarity) * settings->imageWidth) + caerPolarityEventGetX(polarity);
-	Point2f eventUndistort = undistortEventMap.at(mapIdx);
+	Point2i eventUndistort = undistortEventMap.at(mapIdx);
 
 	// Check that new coordinates are still within view boundary. If not, keep old ones and invalidate event.
-	if (eventUndistort.x < 0 || eventUndistort.x >= settings->imageWidth || eventUndistort.y < 0
-		|| eventUndistort.y >= settings->imageHeigth) {
+	if (eventUndistort.x < 0 || eventUndistort.x >= (int) settings->imageWidth || eventUndistort.y < 0
+		|| eventUndistort.y >= (int) settings->imageHeigth) {
 		caerPolarityEventInvalidate(polarity, polarityPacket);
 	}
 	else {
@@ -385,5 +395,5 @@ void Calibration::undistortFrame(caerFrameEvent frame) {
 	Mat view = Mat(frameSize, CV_16UC(caerFrameEventGetChannelNumber(frame)), caerFrameEventGetPixelArrayUnsafe(frame));
 	Mat inView = view.clone();
 
-	remap(inView, view, undistortRemap1, undistortRemap2, INTER_LINEAR, BORDER_CONSTANT);
+	remap(inView, view, undistortRemap1, undistortRemap2, INTER_CUBIC, BORDER_CONSTANT);
 }

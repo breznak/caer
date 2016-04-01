@@ -40,7 +40,7 @@ private:
 	Mat cameraMatrix;
 	Mat distCoeffs;
 
-	vector<Point2f> undistortEventMap;
+	vector<Point2i> undistortEventMap;
 	Mat undistortRemap1;
 	Mat undistortRemap2;
 
