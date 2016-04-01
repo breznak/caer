@@ -346,12 +346,14 @@ bool Calibration::loadUndistortMatrices(void) {
 			(settings->fitAllPixels) ? (optimalCameramatrix) : (undistortCameraMatrix));
 	}
 	else {
-		initUndistortRectifyMap(undistortCameraMatrix, undistortDistCoeffs, Matx33d::eye(),
-			(settings->fitAllPixels) ? (Mat()) : (undistortCameraMatrix), imageSize,
-			CV_16SC2, undistortRemap1, undistortRemap2);
+		// fitAllPixels is not supported for standard lenses. The computation looks strange for APS frames
+		// and completely fails for DVS events.
+
+		initUndistortRectifyMap(undistortCameraMatrix, undistortDistCoeffs, Matx33d::eye(), undistortCameraMatrix,
+			imageSize, CV_16SC2, undistortRemap1, undistortRemap2);
 
 		undistortPoints(undistortEventInputMap, undistortEventOutputMap, undistortCameraMatrix, undistortDistCoeffs,
-			Matx33d::eye(), (settings->fitAllPixels) ? (Mat()) : (undistortCameraMatrix));
+			Matx33d::eye(), undistortCameraMatrix);
 	}
 
 	// Convert undistortEventOutputMap to integer from float for faster calculations later on.
