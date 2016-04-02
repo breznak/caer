@@ -5,8 +5,8 @@
 #include "modules/visualizer/visualizer.h"
 #include "ext/c11threads_posix.h"
 
-#define IMAGESTREAMERVISUALIZER_SCREEN_WIDTH 200 
-#define IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT 200 
+#define IMAGESTREAMERVISUALIZER_SCREEN_WIDTH 200
+#define IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT 200
 
 #define THR 0.5
 
@@ -16,7 +16,7 @@
 // keyboard "s" stop saving png, generations on visualizer keeps going
 
 static int8_t savepng_state = 0;     //default state -> do not save png
-static int8_t mode = 0;		 //default mode -> do nothing 
+static int8_t mode = 0;		 //default mode -> do nothing
 
 struct imagestreamervisualizer_state {
 	struct caer_visualizer_state vis_state;

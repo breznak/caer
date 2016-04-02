@@ -93,7 +93,7 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 				my_frame->pixels[counter+1] = (uint16_t) ( (int)(small_img[c]* *classific_results) << 8);
 				my_frame->pixels[counter+2] = (uint16_t) (0);
 			}
-			counter += 3;	
+			counter += 3;
 		}
 	}
 

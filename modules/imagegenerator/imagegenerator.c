@@ -73,7 +73,7 @@ void caerImageGenerator(uint16_t moduleID, caerPolarityEventPacket polarity, cha
     int max_img_qty, int classify_img_size, char **display_img_ptr, int display_img_size,
     caerFrameEventPacket frame, char ** frame_ptr, int* frame_w, int* frame_h) {
 
-    caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageGenerator"); 
+    caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageGenerator");
 
     caerModuleSM(&caerImageGeneratorFunctions, moduleData, sizeof (struct imagegenerator_state), 10,
             polarity, file_strings_classify, max_img_qty, classify_img_size, display_img_ptr, display_img_size, frame, frame_ptr, frame_w, frame_h);
@@ -90,7 +90,7 @@ static bool caerImageGeneratorInit(caerModuleData moduleData) {
     sshsNodePutByteIfAbsent(moduleData->moduleNode, "savepng", 0);
     state->savepng =  sshsNodeGetByte(moduleData->moduleNode, "savepng");
     sshsNodePutByteIfAbsent(moduleData->moduleNode, "mode", 0);
-    state->mode =  sshsNodeGetByte(moduleData->moduleNode, "mode");    
+    state->mode =  sshsNodeGetByte(moduleData->moduleNode, "mode");
 
     return (true);
 }
@@ -111,8 +111,8 @@ static void caerImageGeneratorExit(caerModuleData moduleData) {
  *  saves an image img to disk.
  *  If saveForClassification, put filename in file_strings_classify[file_counter].
  *  All files that are added to file_strings_classify will be classified from caffe
- * 
- *  imgCounter: number of images of this type (spike-images or frames) seen so far 
+ *
+ *  imgCounter: number of images of this type (spike-images or frames) seen so far
  *  img: image to save
  *  size_w: width of image
  *  size_h: height of image
@@ -122,7 +122,7 @@ static void caerImageGeneratorExit(caerModuleData moduleData) {
  *  directory: disk directory to save img
  *  save_for_classification: if true, add filename to file_stings_classify, otherwise just save img to disk
  *  max_img_qty: maximal number of images that can be added to file_strings_classify
- * 
+ *
  */
 
 static bool save_img(int img_counter, char *img, int size_w, int size_h, char ** file_strings_classify, char state_mode, int file_counter, char *directory, bool save_for_classification, int max_img_qty) {
@@ -148,7 +148,7 @@ static bool save_img(int img_counter, char *img, int size_w, int size_h, char **
     }
     sprintf(id_img, "%d", img_counter);
     strcat(filename, id_img); //append id_img
-    strcat(filename, ext); //append extension 
+    strcat(filename, ext); //append extension
 
     //save file and print error message if error occurs
     if (stbi_write_png(filename, size_w, size_h, 1, img, size_w * 1) == 0) {
@@ -170,7 +170,7 @@ static bool save_img(int img_counter, char *img, int size_w, int size_h, char **
  *  a normalized quadratic_image_map of type char in range [0,255].
  *  The area of the quadratic map is the center (in both directions) of the rectangular map
  *  (like cutting out quadratic part and discard everything outside of cutting region).
- * 
+ *
  *  image_map: accumulated spike image, rectangular
  *  size_w: width of image_map
  *  size_h: height of image_map
@@ -179,10 +179,10 @@ static bool save_img(int img_counter, char *img, int size_w, int size_h, char **
  */
 
 static bool normalize_to_quadratic_image_map(int64_t **image_map, int size_w, int size_h, int size_quad, unsigned char * quadratic_image_map) {
-    
+
     //check if sizes match
     if (size_w < size_quad || size_h < size_quad) {
-        printf("\n Error in normalize_quadratic_image_map, size_quad too big.\n"); 
+        printf("\n Error in normalize_quadratic_image_map, size_quad too big.\n");
         return (false);
     }
 
@@ -205,7 +205,7 @@ static bool normalize_to_quadratic_image_map(int64_t **image_map, int size_w, in
     int x_offset = (size_w - size_quad) / 2;
     int y_offset = (size_h - size_quad) / 2;
 
-    //create quadratic int64_t map from input image_map 
+    //create quadratic int64_t map from input image_map
     int64_t qmap[size_quad * size_quad];
     int itr = 0;
     for (int y = 0; y < size_quad; ++y) {
@@ -254,26 +254,26 @@ static bool normalize_to_quadratic_image_map(int64_t **image_map, int size_w, in
         std = 0.0;
         max_tmp_v = FLT_MIN;
         min_tmp_v = FLT_MAX;
-        
+
         // get mean
         for (int i = 0; i < size_quad * size_quad; ++i) {
             mean = mean + qmap[i];
         }
         mean = mean / (size_quad * size_quad * 1.0);
-        
+
         // get std
         for (int i = 0; i < size_quad * size_quad; ++i) {
             std = std + pow((qmap[i] - mean), 2);
         }
         std = pow((std / (size_quad * size_quad * 1.0)), 0.5);
-        
+
         // find max_tmp_v and min_tmp_v, needed to shift normalized values into region [0,255]
         for (int i = 0; i < size_quad * size_quad; ++i) {
             tmp_v = ((((float) qmap[i]) - mean) / std);
             max_tmp_v = MAX(tmp_v, max_tmp_v);
             min_tmp_v = MIN(tmp_v, min_tmp_v);
         }
-        
+
         // normalize and shift into region [0,255]
         for (int i = 0; i < size_quad * size_quad; ++i) {
 
@@ -283,7 +283,7 @@ static bool normalize_to_quadratic_image_map(int64_t **image_map, int size_w, in
         }
 
     }
-    
+
     return (true);
 }
 
@@ -291,11 +291,11 @@ static bool normalize_to_quadratic_image_map(int64_t **image_map, int size_w, in
 /*  Function: normalize_image
  *  -------------------------
  *  Normalizes image and shifts values into region [0,255].
- * 
+ *
  *  image: image to normalize
  *  size_w: width of image
  *  size_h: height of image
- */  
+ */
 
 static void normalize_image(unsigned char * image, int size_w, int size_h) {
     /* normalize png image [0,255] */
@@ -341,11 +341,11 @@ static void normalize_image(unsigned char * image, int size_w, int size_h) {
 /*  Function: cut_out_window_from_image
  *  -----------------------------------
  *  (not used so far)
- * 
+ *
  *  Cuts out a sub-image (window) form an image. The position of the window/sub-image is defined
  *  by its top left corner. The top-left-corner-coordinates have to be chosen, so that the sub image
- *  is still completely covered by the original image. 
- *  
+ *  is still completely covered by the original image.
+ *
  *  image: image, from which the window is cut out
  *  imageX: size of image in X direction
  *  imageY: size of image in Y direction
@@ -354,16 +354,16 @@ static void normalize_image(unsigned char * image, int size_w, int size_h) {
  *  windowY: size of window in Y direction
  *  windowTopLeftCornerX: x-coordinate (of top left corner of window) in original image
  *  windowTopLeftCornerY: y-coordinate (of top left corner of window) in original image
- *  
- */  
+ *
+ */
 static bool cut_out_window_from_image(unsigned char *image, int imageX, int imageY, unsigned char *window, int windowX, int windowY,
         int windowTopLeftCornerX, int windowTopLeftCornerY) {
-    
+
     // check sizes and position of window
     if (windowTopLeftCornerX < 0 || windowTopLeftCornerY < 0 ||
             imageX < 1 || imageY < 1 || windowX < 1 || windowY < 1 ||
             windowTopLeftCornerX + windowX - 1 >= imageX || windowTopLeftCornerY + windowY - 1 >= imageY) {
-        printf("\nError in cutOutWindowFromImage, sizes do not match.\n"); 
+        printf("\nError in cutOutWindowFromImage, sizes do not match.\n");
         return (false);
     }
 
@@ -418,7 +418,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
     // initialize Frame
     if (frame != NULL) {
         caerFrameEvent currFrameEvent;
-        
+
         //get latest event packages
         for (int32_t i = caerEventPacketHeaderGetEventNumber(&frame->packetHeader) - 1; i >= 0; i--) {
             currFrameEvent = caerFrameEventPacketGetEvent(frame, i);
@@ -441,12 +441,12 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 
         if (state->frameRenderer != NULL) {
 
-            //cast frame to unsigned char and return it in frame_ptr 
+            //cast frame to unsigned char and return it in frame_ptr
             *frame_ptr = (unsigned char*) malloc(state->frameRendererSizeX * state->frameRendererSizeY * 1);
             if (*frame_ptr == NULL) {
 		        caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate *frame_ptr.");
 		        return;
-            }       
+            }
             *FRAME_W = state->frameRendererSizeX;
             *FRAME_H = state->frameRendererSizeY;
 
@@ -455,9 +455,9 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
             for (int frame_loop = 0; frame_loop < state->frameRendererSizeX * state->frameRendererSizeY * 1; ++frame_loop) {
                 frame_img[frame_loop] = (state->frameRenderer[frame_loop] >> 8) & 0xFF;
             }
-            
+
             //save frame if desired, do NOT classify on frame (at the moment)
-            if (state->savepng == 1 && SAVE_FRAME) {               
+            if (state->savepng == 1 && SAVE_FRAME) {
                 if (!save_img(state->counterFrame, frame_img, state->frameRendererSizeX, state->frameRendererSizeY, file_strings_classify, FRAME_SAVE_MODE, -1, FRAME_IMG_DIRECTORY, false, MAX_IMG_QTY)){
                     caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to save image.");
                     return;
@@ -470,12 +470,12 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
     }
 
     /* **** FRAME SECTION END *** */
-    
+
     /* **** SPIKE SECTION START *** */
     if (polarity != NULL){
-	    // Iterate over events and accumulate them 
+	    // Iterate over events and accumulate them
 	    CAER_POLARITY_ITERATOR_VALID_START(polarity)
-	    
+
 	    // Get coordinates and polarity (0 or 1) of latest spike.
 	    uint16_t x = caerPolarityEventGetX(caerPolarityIteratorElement);
 	    uint16_t y = caerPolarityEventGetY(caerPolarityIteratorElement);
@@ -497,7 +497,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 
 	    //If we saw enough spikes, generate Image from ImageMap.
 	    if (state->spikeCounter >= state->numSpikes) {
-		
+
 		unsigned char *quadratic_image_map;
 		quadratic_image_map = (unsigned char*) malloc(SIZE_QUADRATIC_MAP * SIZE_QUADRATIC_MAP * 1);
 		if (quadratic_image_map == NULL) {
@@ -512,7 +512,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 
 		// if Recording key (R) or testing key (T) is pressed, write image for classification to disk
 		if (state->savepng == 1) {
-		    
+
 		    //create classify_img with desired CLASSIFY_IMG_SIZE (input size of CNN)
 		    unsigned char *classify_img;
 		    classify_img = (unsigned char*) malloc(CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE * 1);
@@ -541,7 +541,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 		disp_img = *display_img_ptr;
 		stbir_resize_uint8(quadratic_image_map, SIZE_QUADRATIC_MAP, SIZE_QUADRATIC_MAP, 0, disp_img, DISPLAY_IMG_SIZE, DISPLAY_IMG_SIZE, 0, 1);
 		normalize_image(disp_img, DISPLAY_IMG_SIZE, DISPLAY_IMG_SIZE);
-		
+
 		//reset values
 		for (x_loop = 0; x_loop < state->sizeX; x_loop++) {
 		    for (y_loop = 0; y_loop < state->sizeY; y_loop++) {
@@ -557,7 +557,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 
 	    }
 	    CAER_POLARITY_ITERATOR_VALID_END
-     }       
+     }
     /* **** SPIKE SECTION END *** */
 }
 
@@ -566,10 +566,10 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
  *  -------------------------
  *  Allocates an ImageMap, so that pixels in ImageMap can be accessed with spike coordinates
  *  x and y by ImageMap[x][y].
- * 
+ *
  *  state: imageGenerator state
- *  sourdeID: source identifier 
- */  
+ *  sourdeID: source identifier
+ */
 static bool allocateImageMap(imagegeneratorState state, int16_t sourceID) {
     // Get size information from source.
     sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);

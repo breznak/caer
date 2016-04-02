@@ -15,7 +15,7 @@ typedef struct ImageCoordinate {
    int x;
    int y;
    int index;
-   float * image_data;   
+   float * image_data;
    int sizeX;
    int sizeY;
 }ImageCoordinate;

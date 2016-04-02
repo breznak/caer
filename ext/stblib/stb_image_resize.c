@@ -73,7 +73,7 @@ static stbir_uint8 stbir__linear_to_srgb_uchar(float in)
     static const stbir__FP32 minval = { (127-13) << 23 };
     stbir_uint32 tab,bias,scale,t;
     stbir__FP32 f;
- 
+
     // Clamp to [2^(-13), 1-eps]; these two values map to 0 and 1, respectively.
     // The tests are carefully written so that NaNs map to 0, same as in the reference
     // implementation.
@@ -81,13 +81,13 @@ static stbir_uint8 stbir__linear_to_srgb_uchar(float in)
         in = minval.f;
     if (in > almostone.f)
         in = almostone.f;
- 
+
     // Do the table lookup and unpack bias, scale
     f.f = in;
     tab = fp32_to_srgb8_tab4[(f.u - minval.u) >> 20];
     bias = (tab >> 16) << 9;
     scale = tab & 0xffff;
- 
+
     // Grab next-highest mantissa bits and perform linear interpolation
     t = (f.u >> 12) & 0xff;
     return (unsigned char) ((bias + scale*t) >> 16);
@@ -1788,7 +1788,7 @@ static int stbir__resize_arbitrary(
         return 0;
 
     result = stbir__resize_allocated(&info, input_data, input_stride_in_bytes,
-                                            output_data, output_stride_in_bytes, 
+                                            output_data, output_stride_in_bytes,
                                             alpha_channel, flags, type,
                                             edge_horizontal, edge_vertical,
                                             colorspace, extra_memory, memory_required);
@@ -1842,7 +1842,7 @@ STBIRDEF int stbir_resize_uint8_srgb_edgemode(const unsigned char *input_pixels 
 STBIRDEF int stbir_resize_uint8_generic( const unsigned char *input_pixels , int input_w , int input_h , int input_stride_in_bytes,
                                                unsigned char *output_pixels, int output_w, int output_h, int output_stride_in_bytes,
                                          int num_channels, int alpha_channel, int flags,
-                                         stbir_edge edge_wrap_mode, stbir_filter filter, stbir_colorspace space, 
+                                         stbir_edge edge_wrap_mode, stbir_filter filter, stbir_colorspace space,
                                          void *alloc_context)
 {
     return stbir__resize_arbitrary(alloc_context, input_pixels, input_w, input_h, input_stride_in_bytes,
@@ -1854,7 +1854,7 @@ STBIRDEF int stbir_resize_uint8_generic( const unsigned char *input_pixels , int
 STBIRDEF int stbir_resize_uint16_generic(const stbir_uint16 *input_pixels  , int input_w , int input_h , int input_stride_in_bytes,
                                                stbir_uint16 *output_pixels , int output_w, int output_h, int output_stride_in_bytes,
                                          int num_channels, int alpha_channel, int flags,
-                                         stbir_edge edge_wrap_mode, stbir_filter filter, stbir_colorspace space, 
+                                         stbir_edge edge_wrap_mode, stbir_filter filter, stbir_colorspace space,
                                          void *alloc_context)
 {
     return stbir__resize_arbitrary(alloc_context, input_pixels, input_w, input_h, input_stride_in_bytes,
@@ -1867,7 +1867,7 @@ STBIRDEF int stbir_resize_uint16_generic(const stbir_uint16 *input_pixels  , int
 STBIRDEF int stbir_resize_float_generic( const float *input_pixels         , int input_w , int input_h , int input_stride_in_bytes,
                                                float *output_pixels        , int output_w, int output_h, int output_stride_in_bytes,
                                          int num_channels, int alpha_channel, int flags,
-                                         stbir_edge edge_wrap_mode, stbir_filter filter, stbir_colorspace space, 
+                                         stbir_edge edge_wrap_mode, stbir_filter filter, stbir_colorspace space,
                                          void *alloc_context)
 {
     return stbir__resize_arbitrary(alloc_context, input_pixels, input_w, input_h, input_stride_in_bytes,
@@ -1881,7 +1881,7 @@ STBIRDEF int stbir_resize(         const void *input_pixels , int input_w , int 
                                          void *output_pixels, int output_w, int output_h, int output_stride_in_bytes,
                                    stbir_datatype datatype,
                                    int num_channels, int alpha_channel, int flags,
-                                   stbir_edge edge_mode_horizontal, stbir_edge edge_mode_vertical, 
+                                   stbir_edge edge_mode_horizontal, stbir_edge edge_mode_vertical,
                                    stbir_filter filter_horizontal,  stbir_filter filter_vertical,
                                    stbir_colorspace space, void *alloc_context)
 {
@@ -1896,7 +1896,7 @@ STBIRDEF int stbir_resize_subpixel(const void *input_pixels , int input_w , int 
                                          void *output_pixels, int output_w, int output_h, int output_stride_in_bytes,
                                    stbir_datatype datatype,
                                    int num_channels, int alpha_channel, int flags,
-                                   stbir_edge edge_mode_horizontal, stbir_edge edge_mode_vertical, 
+                                   stbir_edge edge_mode_horizontal, stbir_edge edge_mode_vertical,
                                    stbir_filter filter_horizontal,  stbir_filter filter_vertical,
                                    stbir_colorspace space, void *alloc_context,
                                    float x_scale, float y_scale,
@@ -1917,7 +1917,7 @@ STBIRDEF int stbir_resize_region(  const void *input_pixels , int input_w , int 
                                          void *output_pixels, int output_w, int output_h, int output_stride_in_bytes,
                                    stbir_datatype datatype,
                                    int num_channels, int alpha_channel, int flags,
-                                   stbir_edge edge_mode_horizontal, stbir_edge edge_mode_vertical, 
+                                   stbir_edge edge_mode_horizontal, stbir_edge edge_mode_vertical,
                                    stbir_filter filter_horizontal,  stbir_filter filter_vertical,
                                    stbir_colorspace space, void *alloc_context,
                                    float s0, float t0, float s1, float t1)

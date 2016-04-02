@@ -323,7 +323,7 @@ void caerVisualizerUpdateScreen(caerVisualizerState state) {
 									uint8_t pixelB = U8T(
 										caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 2) >> 8);
 									uint8_t pixelA = U8T(
-										caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 3) >> 8);	
+										caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 3) >> 8);
 									color = al_map_rgba(pixelR, pixelG, pixelB, pixelA);
 									break;
 								}

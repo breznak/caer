@@ -32,12 +32,12 @@ void calculateCoordinates(ImageCoordinate *ar, int index,int columns, int rows){
 
 void normalizeImage(ImageCoordinate *ar){
     int i,j = 0;
-    double max = -1; 
+    double max = -1;
     double min = 255.0;
     double tmp = 0.0;
     for(i=0; i<ar->sizeX; i++){
     	for(j=0; j<ar->sizeY; j++){
-    		calculateIndex(ar, ar->sizeY, i, j); 
+    		calculateIndex(ar, ar->sizeY, i, j);
 		min = MIN(min,ar->image_data[ar->index]);
 		max = MAX(max,ar->image_data[ar->index]);
         }
