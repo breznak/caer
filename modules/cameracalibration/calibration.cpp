@@ -43,7 +43,7 @@ bool Calibration::findNewPoints(caerFrameEvent frame) {
 
 	// Initialize OpenCV Mat based on caerFrameEvent data directly (no image copy).
 	Size frameSize(caerFrameEventGetLengthX(frame), caerFrameEventGetLengthY(frame));
-	Mat orig = Mat(frameSize, CV_16UC(caerFrameEventGetChannelNumber(frame)), caerFrameEventGetPixelArrayUnsafe(frame));
+	Mat orig(frameSize, CV_16UC(caerFrameEventGetChannelNumber(frame)), caerFrameEventGetPixelArrayUnsafe(frame));
 
 	// Create a new Mat that has only 8 bit depth from the original 16 bit one.
 	// findCorner functions in OpenCV only support 8 bit depth.
@@ -348,7 +348,6 @@ bool Calibration::loadUndistortMatrices(void) {
 	else {
 		// fitAllPixels is not supported for standard lenses. The computation looks strange for APS frames
 		// and completely fails for DVS events.
-
 		initUndistortRectifyMap(undistortCameraMatrix, undistortDistCoeffs, Matx33d::eye(), undistortCameraMatrix,
 			imageSize, CV_16SC2, undistortRemap1, undistortRemap2);
 
@@ -394,8 +393,8 @@ void Calibration::undistortFrame(caerFrameEvent frame) {
 	}
 
 	Size frameSize(caerFrameEventGetLengthX(frame), caerFrameEventGetLengthY(frame));
-	Mat view = Mat(frameSize, CV_16UC(caerFrameEventGetChannelNumber(frame)), caerFrameEventGetPixelArrayUnsafe(frame));
-	Mat inView = view.clone();
+	Mat view(frameSize, CV_16UC(caerFrameEventGetChannelNumber(frame)), caerFrameEventGetPixelArrayUnsafe(frame));
+	Mat inputView = view.clone();
 
-	remap(inView, view, undistortRemap1, undistortRemap2, INTER_CUBIC, BORDER_CONSTANT);
+	remap(inputView, view, undistortRemap1, undistortRemap2, INTER_CUBIC, BORDER_CONSTANT);
 }
