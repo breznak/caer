@@ -94,6 +94,7 @@ bool caerInputDAVISInit(caerModuleData moduleData, uint16_t deviceType) {
 	sshsNodePutBool(sourceInfoNode, "apsHasInternalADC", devInfo.apsHasInternalADC);
 
 	sshsNodePutBool(sourceInfoNode, "extInputHasGenerator", devInfo.extInputHasGenerator);
+	sshsNodePutBool(sourceInfoNode, "extInputHasExtraDetectors", devInfo.extInputHasExtraDetectors);
 
 	caerModuleSetSubSystemString(moduleData, devInfo.deviceString);
 
@@ -445,7 +446,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 		sshsNodePutShortIfAbsent(apsNode, "GSPDResetTime", 1000); // in cycles
 		sshsNodePutShortIfAbsent(apsNode, "GSResetFallTime", 1000); // in cycles
 		sshsNodePutShortIfAbsent(apsNode, "GSTXFallTime", 1000); // in cycles
-		sshsNodePutShortIfAbsent(apsNode, "GSFDResetTime",1000); // in cycles
+		sshsNodePutShortIfAbsent(apsNode, "GSFDResetTime", 1000); // in cycles
 	}
 
 	sshsNodeAddAttributeListener(apsNode, moduleData, &apsConfigListener);
@@ -486,6 +487,24 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 		sshsNodePutBoolIfAbsent(extNode, "GeneratePulsePolarity", true);
 		sshsNodePutIntIfAbsent(extNode, "GeneratePulseInterval", devInfo->logicClock);
 		sshsNodePutIntIfAbsent(extNode, "GeneratePulseLength", devInfo->logicClock / 2);
+		sshsNodePutBoolIfAbsent(extNode, "GenerateInjectOnRisingEdge", false);
+		sshsNodePutBoolIfAbsent(extNode, "GenerateInjectOnFallingEdge", false);
+	}
+
+	if (devInfo->extInputHasExtraDetectors) {
+		sshsNodePutBoolIfAbsent(extNode, "RunDetector1", false);
+		sshsNodePutBoolIfAbsent(extNode, "DetectRisingEdges1", false);
+		sshsNodePutBoolIfAbsent(extNode, "DetectFallingEdges1", false);
+		sshsNodePutBoolIfAbsent(extNode, "DetectPulses1", true);
+		sshsNodePutBoolIfAbsent(extNode, "DetectPulsePolarity1", true);
+		sshsNodePutIntIfAbsent(extNode, "DetectPulseLength1", devInfo->logicClock);
+
+		sshsNodePutBoolIfAbsent(extNode, "RunDetector2", false);
+		sshsNodePutBoolIfAbsent(extNode, "DetectRisingEdges2", false);
+		sshsNodePutBoolIfAbsent(extNode, "DetectFallingEdges2", false);
+		sshsNodePutBoolIfAbsent(extNode, "DetectPulses2", true);
+		sshsNodePutBoolIfAbsent(extNode, "DetectPulsePolarity2", true);
+		sshsNodePutIntIfAbsent(extNode, "DetectPulseLength2", devInfo->logicClock);
 	}
 
 	sshsNodeAddAttributeListener(extNode, moduleData, &extInputConfigListener);
@@ -1943,8 +1962,40 @@ static void extInputConfigSend(sshsNode node, caerModuleData moduleData, struct 
 		DAVIS_CONFIG_EXTINPUT_GENERATE_PULSE_INTERVAL, U32T(sshsNodeGetInt(node, "GeneratePulseInterval")));
 		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_GENERATE_PULSE_LENGTH,
 			U32T(sshsNodeGetInt(node, "GeneratePulseLength")));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
+		DAVIS_CONFIG_EXTINPUT_GENERATE_INJECT_ON_RISING_EDGE, sshsNodeGetBool(node, "GenerateInjectOnRisingEdge"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
+		DAVIS_CONFIG_EXTINPUT_GENERATE_INJECT_ON_FALLING_EDGE, sshsNodeGetBool(node, "GenerateInjectOnFallingEdge"));
 		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_RUN_GENERATOR,
 			sshsNodeGetBool(node, "RunGenerator"));
+	}
+
+	if (devInfo->extInputHasExtraDetectors) {
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_DETECT_RISING_EDGES1,
+			sshsNodeGetBool(node, "DetectRisingEdges1"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_DETECT_FALLING_EDGES1,
+			sshsNodeGetBool(node, "DetectFallingEdges1"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_DETECT_PULSES1,
+			sshsNodeGetBool(node, "DetectPulses1"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
+		DAVIS_CONFIG_EXTINPUT_DETECT_PULSE_POLARITY1, sshsNodeGetBool(node, "DetectPulsePolarity1"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_DETECT_PULSE_LENGTH1,
+			U32T(sshsNodeGetInt(node, "DetectPulseLength1")));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_RUN_DETECTOR1,
+			sshsNodeGetBool(node, "RunDetector1"));
+
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_DETECT_RISING_EDGES2,
+			sshsNodeGetBool(node, "DetectRisingEdges2"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_DETECT_FALLING_EDGES2,
+			sshsNodeGetBool(node, "DetectFallingEdges2"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_DETECT_PULSES2,
+			sshsNodeGetBool(node, "DetectPulses2"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
+		DAVIS_CONFIG_EXTINPUT_DETECT_PULSE_POLARITY2, sshsNodeGetBool(node, "DetectPulsePolarity2"));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_DETECT_PULSE_LENGTH2,
+			U32T(sshsNodeGetInt(node, "DetectPulseLength2")));
+		caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_RUN_DETECTOR2,
+			sshsNodeGetBool(node, "RunDetector2"));
 	}
 }
 
@@ -1995,8 +2046,64 @@ static void extInputConfigListener(sshsNode node, void *userData, enum sshs_node
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_GENERATE_PULSE_LENGTH, U32T(changeValue.iint));
 		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "GenerateInjectOnRisingEdge")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
+			DAVIS_CONFIG_EXTINPUT_GENERATE_INJECT_ON_RISING_EDGE, changeValue.boolean);
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "GenerateInjectOnFallingEdge")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
+			DAVIS_CONFIG_EXTINPUT_GENERATE_INJECT_ON_FALLING_EDGE, changeValue.boolean);
+		}
 		else if (changeType == BOOL && caerStrEquals(changeKey, "RunGenerator")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_RUN_GENERATOR,
+				changeValue.boolean);
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectRisingEdges1")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
+			DAVIS_CONFIG_EXTINPUT_DETECT_RISING_EDGES1, changeValue.boolean);
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectFallingEdges1")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
+			DAVIS_CONFIG_EXTINPUT_DETECT_FALLING_EDGES1, changeValue.boolean);
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectPulses1")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_DETECT_PULSES1,
+				changeValue.boolean);
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectPulsePolarity1")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
+			DAVIS_CONFIG_EXTINPUT_DETECT_PULSE_POLARITY1, changeValue.boolean);
+		}
+		else if (changeType == INT && caerStrEquals(changeKey, "DetectPulseLength1")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
+			DAVIS_CONFIG_EXTINPUT_DETECT_PULSE_LENGTH1, U32T(changeValue.iint));
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "RunDetector1")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_RUN_DETECTOR1,
+				changeValue.boolean);
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectRisingEdge2s")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
+			DAVIS_CONFIG_EXTINPUT_DETECT_RISING_EDGES2, changeValue.boolean);
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectFallingEdges2")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
+			DAVIS_CONFIG_EXTINPUT_DETECT_FALLING_EDGES2, changeValue.boolean);
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectPulses2")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_DETECT_PULSES2,
+				changeValue.boolean);
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectPulsePolarity2")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
+			DAVIS_CONFIG_EXTINPUT_DETECT_PULSE_POLARITY2, changeValue.boolean);
+		}
+		else if (changeType == INT && caerStrEquals(changeKey, "DetectPulseLength2")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
+			DAVIS_CONFIG_EXTINPUT_DETECT_PULSE_LENGTH2, U32T(changeValue.iint));
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "RunDetector2")) {
+			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_RUN_DETECTOR2,
 				changeValue.boolean);
 		}
 	}
