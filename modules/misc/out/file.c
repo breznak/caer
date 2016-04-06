@@ -188,6 +188,7 @@ static bool caerOutputFileInit(caerModuleData moduleData) {
 		// Write AEDAT 3.1 header (RAW format).
 		write(state->fileDescriptor, "#!AER-DAT3.1\r\n", 14);
 		write(state->fileDescriptor, "#Format: RAW\r\n", 14);
+		write(state->fileDescriptor, "#!END-HEADER\r\n", 14);
 	}
 
 	return (true);
