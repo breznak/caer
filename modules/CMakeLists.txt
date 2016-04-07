@@ -10,7 +10,7 @@ ADD_SUBDIRECTORY(misc)
 ADD_SUBDIRECTORY(statistics)
 ADD_SUBDIRECTORY(visualizer)
 
-INCLUDE(PrivateModules.txt OPTIONAL)
+INCLUDE(PrivateModules/PrivateModules.txt OPTIONAL)
 
 # Propagate to parent scope.
 SET(CAER_INCDIRS ${CAER_INCDIRS} PARENT_SCOPE)
