@@ -293,6 +293,11 @@ bool Calibration::runCalibrationAndSave(double *totalAvgError) {
 		return (false);
 	}
 
+	// Check that image size is properly defined.
+	if (settings->imageWidth <= 0 || settings->imageHeigth <= 0) {
+		return (false);
+	}
+
 	Size imageSize(settings->imageWidth, settings->imageHeigth);
 	vector<float> reprojErrs;
 	*totalAvgError = 0;
@@ -325,6 +330,11 @@ bool Calibration::loadUndistortMatrices(void) {
 
 	// Close file.
 	fs.release();
+
+	// Check that image size is properly defined.
+	if (settings->imageWidth <= 0 || settings->imageHeigth <= 0) {
+		return (false);
+	}
 
 	// Generate maps for frame remap().
 	Size imageSize(settings->imageWidth, settings->imageHeigth);
