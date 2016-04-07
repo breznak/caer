@@ -1,2 +1,5 @@
 # Add all your private (non-standard) modules here.
 # Usually by using ADD_SUBDIRECTORY(moduleDirectory).
+
+ADD_SUBDIRECTORY(ambergtrolley)
+ADD_SUBDIRECTORY(laserscanner)
