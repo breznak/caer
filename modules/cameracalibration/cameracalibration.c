@@ -191,9 +191,10 @@ static void caerCameraCalibrationRun(caerModuleData moduleData, size_t argsNumbe
 		if (foundPoints >= state->settings.minNumberOfPoints && foundPoints > state->lastFoundPoints) {
 			state->lastFoundPoints = foundPoints;
 
-			state->calibrationCompleted = calibration_runCalibrationAndSave(state->cpp_class);
-			caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString, "Executing calibration, result = %d.",
-				state->calibrationCompleted);
+			double totalAvgError;
+			state->calibrationCompleted = calibration_runCalibrationAndSave(state->cpp_class, &totalAvgError);
+			caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString,
+				"Executing calibration, result = %d, error = %f.", state->calibrationCompleted, totalAvgError);
 		}
 	}
 

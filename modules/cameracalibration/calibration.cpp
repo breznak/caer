@@ -217,9 +217,14 @@ bool Calibration::runCalibration(Size& imageSize, Mat& cameraMatrix, Mat& distCo
 }
 
 // Print camera parameters to the output file
-void Calibration::saveCameraParams(Size& imageSize, Mat& cameraMatrix, Mat& distCoeffs, const vector<float>& reprojErrs,
+bool Calibration::saveCameraParams(Size& imageSize, Mat& cameraMatrix, Mat& distCoeffs, const vector<float>& reprojErrs,
 	double totalAvgErr) {
 	FileStorage fs(settings->saveFileName, FileStorage::WRITE);
+
+	// Check file.
+	if (!fs.isOpened()) {
+		return (false);
+	}
 
 	time_t tm;
 	time(&tm);
@@ -278,9 +283,11 @@ void Calibration::saveCameraParams(Size& imageSize, Mat& cameraMatrix, Mat& dist
 
 	// Close file.
 	fs.release();
+
+	return (true);
 }
 
-bool Calibration::runCalibrationAndSave(void) {
+bool Calibration::runCalibrationAndSave(double *totalAvgError) {
 	// Only run if enough valid points have been accumulated.
 	if (imagePoints.size() < settings->minNumberOfPoints) {
 		return (false);
@@ -288,12 +295,12 @@ bool Calibration::runCalibrationAndSave(void) {
 
 	Size imageSize(settings->imageWidth, settings->imageHeigth);
 	vector<float> reprojErrs;
-	double totalAvgErr = 0;
+	*totalAvgError = 0;
 
-	bool ok = runCalibration(imageSize, cameraMatrix, distCoeffs, imagePoints, reprojErrs, totalAvgErr);
+	bool ok = runCalibration(imageSize, cameraMatrix, distCoeffs, imagePoints, reprojErrs, *totalAvgError);
 
 	if (ok) {
-		saveCameraParams(imageSize, cameraMatrix, distCoeffs, reprojErrs, totalAvgErr);
+		ok = saveCameraParams(imageSize, cameraMatrix, distCoeffs, reprojErrs, *totalAvgError);
 	}
 
 	return (ok);
@@ -302,6 +309,11 @@ bool Calibration::runCalibrationAndSave(void) {
 bool Calibration::loadUndistortMatrices(void) {
 	// Open file with undistort matrices.
 	FileStorage fs(settings->loadFileName, FileStorage::READ);
+
+	// Check file.
+	if (!fs.isOpened()) {
+		return (false);
+	}
 
 	Mat undistortCameraMatrix;
 	Mat undistortDistCoeffs;

@@ -25,7 +25,7 @@ public:
 	void updateSettings(void);
 	bool findNewPoints(caerFrameEvent frame);
 	size_t foundPoints(void);
-	bool runCalibrationAndSave(void);
+	bool runCalibrationAndSave(double *totalAvgError);
 
 	bool loadUndistortMatrices(void);
 	void undistortEvent(caerPolarityEvent polarity, caerPolarityEventPacket polarityPacket);
@@ -51,7 +51,7 @@ private:
 		enum CameraCalibrationPattern patternType);
 	bool runCalibration(Size& imageSize, Mat& cameraMatrix, Mat& distCoeffs,
 		vector<vector<Point2f> > imagePoints, vector<float>& reprojErrs, double& totalAvgErr);
-	void saveCameraParams(Size& imageSize, Mat& cameraMatrix, Mat& distCoeffs, const vector<float>& reprojErrs,
+	bool saveCameraParams(Size& imageSize, Mat& cameraMatrix, Mat& distCoeffs, const vector<float>& reprojErrs,
 		double totalAvgErr);
 };
 
