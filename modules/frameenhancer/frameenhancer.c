@@ -20,6 +20,8 @@ caerFrameEventPacket caerFrameEnhancer(uint16_t moduleID, caerFrameEventPacket f
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "FrameEnhancer");
 
 	caerModuleSM(&caerFrameEnhancerFunctions, moduleData, sizeof(struct FrameEnhancer_state), 1, frame);
+
+	return (frame);
 }
 
 static bool caerFrameEnhancerInit(caerModuleData moduleData) {
