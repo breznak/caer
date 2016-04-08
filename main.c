@@ -41,6 +41,9 @@
 #ifdef ENABLE_CAMERACALIBRATION
 	#include "modules/cameracalibration/cameracalibration.h"
 #endif
+#ifdef ENABLE_FRAMEENHANCER
+	#include "modules/frameenhancer/frameenhancer.h"
+#endif
 #ifdef ENABLE_STATISTICS
 	#include "modules/statistics/statistics.h"
 #endif
@@ -105,23 +108,28 @@ static bool mainloop_1(void) {
 	caerStatistics(3, (caerEventPacketHeader) polarity, 1000);
 #endif
 
+	// Enable APS frame image enhancements.
+#ifdef ENABLE_FRAMEENHANCER
+	frame = caerFrameEnhancer(4, frame);
+#endif
+
 	// Enable image and event undistortion by using OpenCV camera calibration.
 #ifdef ENABLE_CAMERACALIBRATION
-	caerCameraCalibration(12, polarity, frame);
+	caerCameraCalibration(5, polarity, frame);
 #endif
 
 	// A small visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
 	#if defined(DAVISFX2) || defined(DAVISFX3)
-		caerVisualizer(4, polarity, frame, imu);
+		caerVisualizer(6, polarity, frame, imu);
 	#else
-		caerVisualizer(4, polarity, NULL, NULL);
+		caerVisualizer(6, polarity, NULL, NULL);
 	#endif
 #endif
 
 #ifdef ENABLE_FILE_OUTPUT
 	// Enable output to file (AER2 format).
-	caerOutputFile(5, 1, polarity);// or (5, 2, polarity, frame) for polarity and frames
+	caerOutputFile(7, 1, polarity);// or (5, 2, polarity, frame) for polarity and frames
 #endif
 
 #ifdef ENABLE_NETWORK_OUTPUT
@@ -129,10 +137,10 @@ static bool mainloop_1(void) {
 	// External clients connect to cAER, and we send them the data.
 	// WARNING: slow clients can dramatically slow this and the whole
 	// processing pipeline down!
-	caerOutputNetTCPServer(6, 1, polarity);// or (6, 2, polarity, frame) for polarity and frames
+	caerOutputNetTCPServer(8, 1, polarity);// or (6, 2, polarity, frame) for polarity and frames
 
 	// And also send them via UDP. This is fast, as it doesn't care what is on the other side.
-	caerOutputNetUDP(7, 1, polarity);// or (7, 2, polarity, frame) for polarity and frames
+	caerOutputNetUDP(9, 1, polarity);// or (7, 2, polarity, frame) for polarity and frames
 #endif
 
 #ifdef ENABLE_IMAGEGENERATOR
@@ -206,9 +214,9 @@ static bool mainloop_1(void) {
 	unsigned char ** frame_img_ptr = calloc(sizeof(unsigned char *), 1);
 
 	// generate images
-	caerImageGenerator(8, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, DISPLAY_IMG_SIZE, frame, frame_img_ptr, &FRAME_W, &FRAME_H);
+	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, DISPLAY_IMG_SIZE, frame, frame_img_ptr, &FRAME_W, &FRAME_H);
 #else
-	caerImageGenerator(8, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, DISPLAY_IMG_SIZE, NULL, NULL, NULL, NULL);
+	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, DISPLAY_IMG_SIZE, NULL, NULL, NULL, NULL);
 #endif
 #endif
 
@@ -219,7 +227,7 @@ static bool mainloop_1(void) {
 	// for example, we now classify the latest image
 	// only run CNN if we have a file to classify
 	if(*file_strings_classify != NULL) {
-		caerCaffeWrapper(9, file_strings_classify, classification_results, (int) MAX_IMG_QTY);
+		caerCaffeWrapper(21, file_strings_classify, classification_results, (int) MAX_IMG_QTY);
 	}
 #endif
 #endif
@@ -230,9 +238,9 @@ static bool mainloop_1(void) {
 	// this also requires image generator
 #ifdef ENABLE_IMAGEGENERATOR
 #if defined(DAVISFX2) || defined(DAVISFX3)
-	caerImagestreamerVisualizer(10, *display_img_ptr, DISPLAY_IMG_SIZE, classification_results, class_region_sizes, (int) MAX_IMG_QTY);
+	caerImagestreamerVisualizer(22, *display_img_ptr, DISPLAY_IMG_SIZE, classification_results, class_region_sizes, (int) MAX_IMG_QTY);
 #else //without Frames
-	caerImagestreamerVisualizer(10, *display_img_ptr, DISPLAY_IMG_SIZE, classificationResults, class_region_sizes, (int) MAX_IMG_QTY);
+	caerImagestreamerVisualizer(22, *display_img_ptr, DISPLAY_IMG_SIZE, classificationResults, class_region_sizes, (int) MAX_IMG_QTY);
 #endif
 #endif
 #endif
