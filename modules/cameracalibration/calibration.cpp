@@ -85,14 +85,14 @@ bool Calibration::findNewPoints(caerFrameEvent frame) {
 			Mat viewGray;
 
 			// Only convert color if not grayscale already.
-			if (view.channels() == 1) {
+			if (view.channels() == GRAYSCALE) {
 				viewGray = view;
 			}
 			else {
-				if (view.channels() == 3) {
+				if (view.channels() == RGB) {
 					cvtColor(view, viewGray, COLOR_RGB2GRAY);
 				}
-				else if (view.channels() == 4) {
+				else if (view.channels() == RGBA) {
 					cvtColor(view, viewGray, COLOR_RGBA2GRAY);
 				}
 			}
