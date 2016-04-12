@@ -230,7 +230,10 @@ void caerVisualizerUpdate(caerEventPacketHeader packetHeader, caerVisualizerStat
 	}
 
 	if (!ringBufferPut(state->dataTransfer, packetHeaderCopy)) {
+		free(packetHeaderCopy);
+
 		caerLog(CAER_LOG_INFO, "Visualizer", "Failed to move copy to ringbuffer: ringbuffer full!");
+		return;
 	}
 }
 
@@ -242,6 +245,7 @@ void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		caerEventPacketHeader packetHeader2 = ringBufferGet(state->dataTransfer);
 
 		if (packetHeader2 != NULL) {
+			free(packetHeader);
 			packetHeader = packetHeader2;
 			goto repeat;
 		}
@@ -263,14 +267,12 @@ void caerVisualizerUpdateScreen(caerVisualizerState state) {
 				if (caerPolarityEventGetPolarity(caerPolarityIteratorElement)) {
 					// ON polarity (green).
 					al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
-						caerPolarityEventGetY(caerPolarityIteratorElement),
-						al_map_rgb(0, 255, 0));
+						caerPolarityEventGetY(caerPolarityIteratorElement), al_map_rgb(0, 255, 0));
 				}
 				else {
 					// OFF polarity (red).
 					al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
-						caerPolarityEventGetY(caerPolarityIteratorElement),
-						al_map_rgb(255, 0, 0));
+						caerPolarityEventGetY(caerPolarityIteratorElement), al_map_rgb(255, 0, 0));
 				}
 			CAER_POLARITY_ITERATOR_VALID_END
 		}
@@ -329,8 +331,7 @@ void caerVisualizerUpdateScreen(caerVisualizerState state) {
 								}
 							}
 
-							al_put_pixel((framePositionX + x), (framePositionY + y),
-								color);
+							al_put_pixel((framePositionX + x), (framePositionY + y), color);
 						}
 					}
 
@@ -372,7 +373,7 @@ void caerVisualizerUpdateScreen(caerVisualizerState state) {
 
 			// Add text for values.
 			char valStr[128];
-			snprintf(valStr, 128, "%.2f,%.2f g", accelX, accelY);
+			snprintf(valStr, 128, "%.2f,%.2f g", (double) accelX, (double) accelY);
 
 			al_draw_text(state->displayFont, accelColor, centerPoint + (accelX * scaleFactor),
 				centerPoint - (accelY * scaleFactor), 0, valStr);
@@ -389,6 +390,9 @@ void caerVisualizerUpdateScreen(caerVisualizerState state) {
 			al_draw_line(centerPoint, centerPoint - 25, centerPoint + (gyroZ * scaleFactor), centerPoint - 25,
 				gyroColor, 4);
 		}
+
+		// Free packet copy.
+		free(packetHeader);
 	}
 
 	bool redraw = false;
@@ -463,9 +467,10 @@ void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		}
 
 		// Blit bitmap to screen, taking zoom factor into consideration.
-		al_draw_scaled_bitmap(state->bitmapRenderer, 0, 0, state->bitmapRendererSizeX, state->bitmapRendererSizeY, 0,
-			(doStatistics) ? (STATISTICS_HEIGHT) : (0), state->bitmapRendererSizeX * state->displayWindowZoomFactor,
-			state->bitmapRendererSizeY * state->displayWindowZoomFactor, 0);
+		al_draw_scaled_bitmap(state->bitmapRenderer, 0, 0, (float) state->bitmapRendererSizeX,
+			(float) state->bitmapRendererSizeY, 0, (doStatistics) ? ((float) STATISTICS_HEIGHT) : (0),
+			(float) (state->bitmapRendererSizeX * state->displayWindowZoomFactor),
+			(float) (state->bitmapRendererSizeY * state->displayWindowZoomFactor), 0);
 
 		al_flip_display();
 	}
