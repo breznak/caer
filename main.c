@@ -3,6 +3,13 @@
  *
  *  Created on: Oct 6, 2013
  *      Author: chtekk
+ *
+ *  Compile & run:
+ *  $ cd caer/
+ *  $ rm -rf CMakeFiles CMakeCache.txt
+ *  $ CC=clang-3.7 cmake [-DJAER_COMPAT_FORMAT=1 -DENABLE_VISUALIZER=1 -DENABLE_NET_STREAM=1] -DDAVISFX2 .
+ *  $ make
+ *  $ ./caer-bin
  */
 
 #include "main.h"
@@ -129,7 +136,7 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_FILE_OUTPUT
 	// Enable output to file (AER2 format).
-	caerOutputFile(7, 1, polarity);// or (5, 2, polarity, frame) for polarity and frames
+	caerOutputFile(7, 1, polarity);// or (7, 2, polarity, frame) for polarity and frames
 #endif
 
 #ifdef ENABLE_NETWORK_OUTPUT
@@ -137,10 +144,10 @@ static bool mainloop_1(void) {
 	// External clients connect to cAER, and we send them the data.
 	// WARNING: slow clients can dramatically slow this and the whole
 	// processing pipeline down!
-	caerOutputNetTCPServer(8, 1, polarity);// or (6, 2, polarity, frame) for polarity and frames
+	caerOutputNetTCPServer(8, 1, polarity);// or (8, 2, polarity, frame) for polarity and frames
 
 	// And also send them via UDP. This is fast, as it doesn't care what is on the other side.
-	caerOutputNetUDP(9, 1, polarity);// or (7, 2, polarity, frame) for polarity and frames
+	caerOutputNetUDP(9, 1, polarity);// or (9, 2, polarity, frame) for polarity and frames
 #endif
 
 #ifdef ENABLE_IMAGEGENERATOR
