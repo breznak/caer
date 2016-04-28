@@ -32,6 +32,8 @@ caerFrameEventPacket caerFrameEnhancer(uint16_t moduleID, caerFrameEventPacket f
 
 	caerModuleSM(&caerFrameEnhancerFunctions, moduleData, sizeof(struct FrameEnhancer_state), 2, frame, &enhancedFrame);
 
+	enhancedFrame = frame; // TODO: remove this once done.
+
 	return (enhancedFrame);
 }
 
