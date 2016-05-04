@@ -47,6 +47,13 @@ IF (ENABLE_VISUALIZER)
 
 	SET(VISUALIZER_SRC_FILES modules/visualizer/visualizer.c)
 
+	# Copy resources to build directory.
+	FILE(COPY ${CMAKE_SOURCE_DIR}/ext/resources/LiberationSans-Regular.ttf DESTINATION ${CM_BUILD_DIR}/ext/resources)
+	FILE(COPY ${CMAKE_SOURCE_DIR}/ext/resources/LiberationSans-Bold.ttf DESTINATION ${CM_BUILD_DIR}/ext/resources)
+
+	# Install resources to a common system location.
+	INSTALL(FILES ${CM_BUILD_DIR}/ext/resources/LiberationSans-Regular.ttf ${CM_BUILD_DIR}/ext/resources/LiberationSans-Bold.ttf DESTINATION ${CM_SHARE_DIR})
+
 	# Propagate to parent scope.
 	SET(CAER_INCDIRS ${CAER_INCDIRS} ${VISUALIZER_INCDIRS} PARENT_SCOPE)
 	SET(CAER_LIBDIRS ${CAER_LIBDIRS} ${VISUALIZER_LIBDIRS} PARENT_SCOPE)

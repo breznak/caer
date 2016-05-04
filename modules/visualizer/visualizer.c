@@ -3,7 +3,22 @@
 #include "base/module.h"
 #include "ext/c11threads_posix.h"
 
-#define GLOBAL_RESOURCES_DIR "ext/resources/"
+#define xstr(a) str(a)
+#define str(a) #a
+
+#ifdef CM_SHARE_DIR
+	#define CM_SHARE_DIRECTORY xstr(CM_SHARE_DIR)
+#else
+	#define CM_SHARE_DIRECTORY "/usr/share/caer"
+#endif
+
+#ifdef CM_BUILD_DIR
+	#define CM_BUILD_DIRECTORY xstr(CM_BUILD_DIR)
+#else
+	#define CM_BUILD_DIRECTORY ""
+#endif
+
+#define GLOBAL_RESOURCES_DIRECTORY "ext/resources"
 #define GLOBAL_FONT_NAME "LiberationSans-Bold.ttf"
 #define GLOBAL_FONT_SIZE 30 // in pixels
 #define GLOBAL_FONT_SPACING 5 // in pixels
@@ -12,6 +27,8 @@
 static int STATISTICS_WIDTH = 0;
 static int STATISTICS_HEIGHT = 0;
 
+static const char *systemFont = CM_SHARE_DIRECTORY "/" GLOBAL_FONT_NAME;
+static const char *buildFont = CM_BUILD_DIRECTORY "/" GLOBAL_RESOURCES_DIRECTORY "/" GLOBAL_FONT_NAME;
 static const char *globalFontPath = NULL;
 
 void caerVisualizerSystemInit(void) {
@@ -30,23 +47,13 @@ void caerVisualizerSystemInit(void) {
 	al_set_org_name("iniLabs");
 	al_set_app_name("cAER");
 
-	// Set up path to find local resources.
-	ALLEGRO_PATH *globalResourcesPath = al_get_standard_path(ALLEGRO_RESOURCES_PATH);
-	if (globalResourcesPath != NULL) {
-		// Successfully loaded standard resources path.
-		caerLog(CAER_LOG_DEBUG, "Visualizer", "Allegro standard resources path loaded successfully.");
+	// Search for global font, first in system share dir, else in build dir.
+	if (access(systemFont, R_OK) == 0) {
+		globalFontPath = systemFont;
 	}
 	else {
-		// Failed to load standard resources path.
-		caerLog(CAER_LOG_EMERGENCY, "Visualizer", "Failed to load Allegro standard resources path.");
-		exit(EXIT_FAILURE);
+		globalFontPath = buildFont;
 	}
-
-	al_append_path_component(globalResourcesPath, GLOBAL_RESOURCES_DIR);
-
-	// Remember global font path.
-	al_set_path_filename(globalResourcesPath, GLOBAL_FONT_NAME);
-	globalFontPath = al_path_cstr(globalResourcesPath, ALLEGRO_NATIVE_PATH_SEP);
 
 	// Now load addons: primitives to draw, fonts (and TTF) to write text.
 	if (al_init_primitives_addon()) {
@@ -80,6 +87,9 @@ void caerVisualizerSystemInit(void) {
 
 	// Load statistics font into memory.
 	ALLEGRO_FONT *font = al_load_font(globalFontPath, GLOBAL_FONT_SIZE, 0);
+	if (font == NULL) {
+		caerLog(CAER_LOG_ERROR, "Visualizer", "Failed to load display font '%s'.", globalFontPath);
+	}
 
 	// Determine statistics string width.
 	if (font != NULL) {
