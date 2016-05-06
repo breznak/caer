@@ -11,14 +11,19 @@
 
 typedef struct caer_visualizer_state *caerVisualizerState;
 
+typedef void (*caerVisualizerRenderer)(caerVisualizerState state, caerEventPacketHeader packetHeader);
+
 // For reuse inside other modules.
-caerVisualizerState caerVisualizerInit(int32_t bitmapSizeX, int32_t bitmapSizeY, int32_t zoomFactor, bool doStatistics);
+caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, int32_t bitmapSizeX, int32_t bitmapSizeY,
+	int32_t zoomFactor, bool doStatistics);
 void caerVisualizerUpdate(caerVisualizerState state, caerEventPacketHeader packetHeader);
 void caerVisualizerExit(caerVisualizerState state);
 
-//typedef int (*caerVisualizerRenderer)(void *);
+void caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketHeader polarityEventPacketHeader);
+void caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketHeader frameEventPacketHeader);
+void caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketHeader imu6EventPacketHeader);
 
-void caerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame, caerIMU6EventPacket imu);
+void caerVisualizer(uint16_t moduleID, caerVisualizerRenderer renderer, caerEventPacketHeader packetHeader);
 
 void caerVisualizerSystemInit(void);
 

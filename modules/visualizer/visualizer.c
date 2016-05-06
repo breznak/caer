@@ -23,6 +23,7 @@ struct caer_visualizer_state {
 	int32_t bitmapRendererSizeY;
 	RingBuffer dataTransfer;
 	thrd_t renderingThread;
+	caerVisualizerRenderer renderer;
 	struct caer_statistics_state packetStatistics;
 	int32_t packetSubsampleRendering;
 	int32_t packetSubsampleCount;
@@ -152,7 +153,8 @@ void caerVisualizerSystemInit(void) {
 	}
 }
 
-caerVisualizerState caerVisualizerInit(int32_t bitmapSizeX, int32_t bitmapSizeY, int32_t zoomFactor, bool doStatistics) {
+caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, int32_t bitmapSizeX, int32_t bitmapSizeY,
+	int32_t zoomFactor, bool doStatistics) {
 	// Allocate memory for visualizer state.
 	caerVisualizerState state = calloc(1, sizeof(struct caer_visualizer_state));
 	if (state == NULL) {
@@ -163,6 +165,9 @@ caerVisualizerState caerVisualizerInit(int32_t bitmapSizeX, int32_t bitmapSizeY,
 	state->bitmapRendererSizeX = bitmapSizeX;
 	state->bitmapRendererSizeY = bitmapSizeY;
 	state->displayWindowZoomFactor = zoomFactor;
+
+	// Remember rendering function.
+	state->renderer = renderer;
 
 	// Sub-sampling support. Default to none.
 	state->packetSubsampleRendering = 1;
@@ -366,133 +371,13 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 
 		// Update bitmap with new content. (0, 0) is lower left corner.
 		if (caerEventPacketHeaderGetEventType(packetHeader) == POLARITY_EVENT) {
-			// Render all valid events.
-			CAER_POLARITY_ITERATOR_VALID_START((caerPolarityEventPacket) packetHeader)
-				if (caerPolarityEventGetPolarity(caerPolarityIteratorElement)) {
-					// ON polarity (green).
-					al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
-						caerPolarityEventGetY(caerPolarityIteratorElement), al_map_rgb(0, 255, 0));
-				}
-				else {
-					// OFF polarity (red).
-					al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
-						caerPolarityEventGetY(caerPolarityIteratorElement), al_map_rgb(255, 0, 0));
-				}
-			CAER_POLARITY_ITERATOR_VALID_END
+
 		}
 		else if (caerEventPacketHeaderGetEventType(packetHeader) == FRAME_EVENT) {
-			// Render only the last, valid frame.
-			caerFrameEventPacket currFramePacket = (caerFrameEventPacket) packetHeader;
-			caerFrameEvent currFrameEvent;
 
-			for (int32_t i = caerEventPacketHeaderGetEventNumber(&currFramePacket->packetHeader) - 1; i >= 0; i--) {
-				currFrameEvent = caerFrameEventPacketGetEvent(currFramePacket, i);
-
-				// Only operate on the last, valid frame.
-				if (caerFrameEventIsValid(currFrameEvent)) {
-					// Copy the frame content to the render bitmap.
-					// Use frame sizes to correctly support small ROI frames.
-					int32_t frameSizeX = caerFrameEventGetLengthX(currFrameEvent);
-					int32_t frameSizeY = caerFrameEventGetLengthY(currFrameEvent);
-					int32_t framePositionX = caerFrameEventGetPositionX(currFrameEvent);
-					int32_t framePositionY = caerFrameEventGetPositionY(currFrameEvent);
-					enum caer_frame_event_color_channels frameChannels = caerFrameEventGetChannelNumber(currFrameEvent);
-
-					for (int32_t y = 0; y < frameSizeY; y++) {
-						for (int32_t x = 0; x < frameSizeX; x++) {
-							ALLEGRO_COLOR color;
-
-							switch (frameChannels) {
-								case GRAYSCALE: {
-									uint8_t pixel = U8T(caerFrameEventGetPixelUnsafe(currFrameEvent, x, y) >> 8);
-									color = al_map_rgb(pixel, pixel, pixel);
-									break;
-								}
-
-								case RGB: {
-									uint8_t pixelR = U8T(
-										caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 0) >> 8);
-									uint8_t pixelG = U8T(
-										caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 1) >> 8);
-									uint8_t pixelB = U8T(
-										caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 2) >> 8);
-									color = al_map_rgb(pixelR, pixelG, pixelB);
-									break;
-								}
-
-								case RGBA:
-								default: {
-									uint8_t pixelR = U8T(
-										caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 0) >> 8);
-									uint8_t pixelG = U8T(
-										caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 1) >> 8);
-									uint8_t pixelB = U8T(
-										caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 2) >> 8);
-									uint8_t pixelA = U8T(
-										caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 3) >> 8);
-									color = al_map_rgba(pixelR, pixelG, pixelB, pixelA);
-									break;
-								}
-							}
-
-							al_put_pixel((framePositionX + x), (framePositionY + y), color);
-						}
-					}
-
-					break;
-				}
-			}
 		}
-		else if (caerEventPacketHeaderGetEventType(packetHeader) == IMU6_EVENT
-			&& caerEventPacketHeaderGetEventValid(packetHeader) != 0) {
-			float accelX = 0, accelY = 0, accelZ = 0;
-			float gyroX = 0, gyroY = 0, gyroZ = 0;
+		else if (caerEventPacketHeaderGetEventType(packetHeader) == IMU6_EVENT) {
 
-			// Iterate over valid IMU events and average them.
-			// This somewhat smoothes out the rendering.
-			CAER_IMU6_ITERATOR_VALID_START((caerIMU6EventPacket) packetHeader)
-				accelX += caerIMU6EventGetAccelX(caerIMU6IteratorElement);
-				accelY += caerIMU6EventGetAccelY(caerIMU6IteratorElement);
-				accelZ += caerIMU6EventGetAccelZ(caerIMU6IteratorElement);
-
-				gyroX += caerIMU6EventGetGyroX(caerIMU6IteratorElement);
-				gyroY += caerIMU6EventGetGyroY(caerIMU6IteratorElement);
-				gyroZ += caerIMU6EventGetGyroZ(caerIMU6IteratorElement);
-			CAER_IMU6_ITERATOR_VALID_END
-
-			float scaleFactor = 30;
-			float centerPoint = 100;
-
-			ALLEGRO_COLOR accelColor = al_map_rgb(0, 255, 0);
-			ALLEGRO_COLOR gyroColor = al_map_rgb(255, 0, 255);
-
-			// Acceleration X, Y as lines. Z as a circle.
-			accelX /= caerEventPacketHeaderGetEventValid(packetHeader);
-			accelY /= caerEventPacketHeaderGetEventValid(packetHeader);
-			accelZ /= caerEventPacketHeaderGetEventValid(packetHeader);
-
-			al_draw_line(centerPoint, centerPoint, centerPoint + (accelX * scaleFactor),
-				centerPoint - (accelY * scaleFactor), accelColor, 4);
-			al_draw_circle(centerPoint, centerPoint, accelZ * scaleFactor, accelColor, 4);
-
-			// Add text for values.
-			char valStr[128];
-			snprintf(valStr, 128, "%.2f,%.2f g", (double) accelX, (double) accelY);
-
-			al_draw_text(state->displayFont, accelColor, centerPoint + (accelX * scaleFactor),
-				centerPoint - (accelY * scaleFactor), 0, valStr);
-
-			// Gyroscope pitch(X), yaw(Y), roll(Z) as lines.
-			scaleFactor = 10;
-
-			gyroX /= caerEventPacketHeaderGetEventValid(packetHeader);
-			gyroY /= caerEventPacketHeaderGetEventValid(packetHeader);
-			gyroZ /= caerEventPacketHeaderGetEventValid(packetHeader);
-
-			al_draw_line(centerPoint, centerPoint, centerPoint + (gyroY * scaleFactor),
-				centerPoint - (gyroX * scaleFactor), gyroColor, 4);
-			al_draw_line(centerPoint, centerPoint - 25, centerPoint + (gyroZ * scaleFactor), centerPoint - 25,
-				gyroColor, 4);
 		}
 
 		// Free packet copy.
@@ -649,8 +534,7 @@ static bool initializeIMURenderer(visualizerModuleState state);
 static struct caer_module_functions caerVisualizerFunctions = { .moduleInit = &caerVisualizerModuleInit, .moduleRun =
 	&caerVisualizerModuleRun, .moduleConfig = NULL, .moduleExit = &caerVisualizerModuleExit };
 
-void caerVisualizer(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame,
-	caerIMU6EventPacket imu) {
+void caerVisualizer(uint16_t moduleID, caerVisualizerRenderer renderer, caerEventPacketHeader packetHeader) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "Visualizer");
 
 	caerModuleSM(&caerVisualizerFunctions, moduleData, sizeof(struct visualizer_module_state), 3, polarity, frame, imu);
@@ -810,4 +694,130 @@ static bool initializeIMURenderer(visualizerModuleState state) {
 	}
 
 	return (true);
+}
+
+void caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketHeader polarityEventPacketHeader) {
+	// Render all valid events.
+	CAER_POLARITY_ITERATOR_VALID_START((caerPolarityEventPacket) polarityEventPacketHeader)
+		if (caerPolarityEventGetPolarity(caerPolarityIteratorElement)) {
+			// ON polarity (green).
+			al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
+				caerPolarityEventGetY(caerPolarityIteratorElement), al_map_rgb(0, 255, 0));
+		}
+		else {
+			// OFF polarity (red).
+			al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
+				caerPolarityEventGetY(caerPolarityIteratorElement), al_map_rgb(255, 0, 0));
+		}CAER_POLARITY_ITERATOR_VALID_END
+}
+
+void caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketHeader frameEventPacketHeader) {
+	// Render only the last, valid frame.
+	caerFrameEventPacket currFramePacket = (caerFrameEventPacket) frameEventPacketHeader;
+	caerFrameEvent currFrameEvent;
+
+	for (int32_t i = caerEventPacketHeaderGetEventNumber(&currFramePacket->packetHeader) - 1; i >= 0; i--) {
+		currFrameEvent = caerFrameEventPacketGetEvent(currFramePacket, i);
+
+		// Only operate on the last, valid frame.
+		if (caerFrameEventIsValid(currFrameEvent)) {
+			// Copy the frame content to the render bitmap.
+			// Use frame sizes to correctly support small ROI frames.
+			int32_t frameSizeX = caerFrameEventGetLengthX(currFrameEvent);
+			int32_t frameSizeY = caerFrameEventGetLengthY(currFrameEvent);
+			int32_t framePositionX = caerFrameEventGetPositionX(currFrameEvent);
+			int32_t framePositionY = caerFrameEventGetPositionY(currFrameEvent);
+			enum caer_frame_event_color_channels frameChannels = caerFrameEventGetChannelNumber(currFrameEvent);
+
+			for (int32_t y = 0; y < frameSizeY; y++) {
+				for (int32_t x = 0; x < frameSizeX; x++) {
+					ALLEGRO_COLOR color;
+
+					switch (frameChannels) {
+						case GRAYSCALE: {
+							uint8_t pixel = U8T(caerFrameEventGetPixelUnsafe(currFrameEvent, x, y) >> 8);
+							color = al_map_rgb(pixel, pixel, pixel);
+							break;
+						}
+
+						case RGB: {
+							uint8_t pixelR = U8T(caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 0) >> 8);
+							uint8_t pixelG = U8T(caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 1) >> 8);
+							uint8_t pixelB = U8T(caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 2) >> 8);
+							color = al_map_rgb(pixelR, pixelG, pixelB);
+							break;
+						}
+
+						case RGBA:
+						default: {
+							uint8_t pixelR = U8T(caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 0) >> 8);
+							uint8_t pixelG = U8T(caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 1) >> 8);
+							uint8_t pixelB = U8T(caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 2) >> 8);
+							uint8_t pixelA = U8T(caerFrameEventGetPixelForChannelUnsafe(currFrameEvent, x, y, 3) >> 8);
+							color = al_map_rgba(pixelR, pixelG, pixelB, pixelA);
+							break;
+						}
+					}
+
+					al_put_pixel((framePositionX + x), (framePositionY + y), color);
+				}
+			}
+
+			break;
+		}
+	}
+}
+
+void caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketHeader imu6EventPacketHeader) {
+	if (caerEventPacketHeaderGetEventValid(imu6EventPacketHeader) == 0) {
+		return;
+	}
+
+	float accelX = 0, accelY = 0, accelZ = 0;
+	float gyroX = 0, gyroY = 0, gyroZ = 0;
+
+	// Iterate over valid IMU events and average them.
+	// This somewhat smoothes out the rendering.
+	CAER_IMU6_ITERATOR_VALID_START((caerIMU6EventPacket) imu6EventPacketHeader)
+		accelX += caerIMU6EventGetAccelX(caerIMU6IteratorElement);
+		accelY += caerIMU6EventGetAccelY(caerIMU6IteratorElement);
+		accelZ += caerIMU6EventGetAccelZ(caerIMU6IteratorElement);
+
+		gyroX += caerIMU6EventGetGyroX(caerIMU6IteratorElement);
+		gyroY += caerIMU6EventGetGyroY(caerIMU6IteratorElement);
+		gyroZ += caerIMU6EventGetGyroZ(caerIMU6IteratorElement);
+	CAER_IMU6_ITERATOR_VALID_END
+
+	float scaleFactor = 30;
+	float centerPoint = 100;
+
+	ALLEGRO_COLOR accelColor = al_map_rgb(0, 255, 0);
+	ALLEGRO_COLOR gyroColor = al_map_rgb(255, 0, 255);
+
+	// Acceleration X, Y as lines. Z as a circle.
+	accelX /= caerEventPacketHeaderGetEventValid(imu6EventPacketHeader);
+	accelY /= caerEventPacketHeaderGetEventValid(imu6EventPacketHeader);
+	accelZ /= caerEventPacketHeaderGetEventValid(imu6EventPacketHeader);
+
+	al_draw_line(centerPoint, centerPoint, centerPoint + (accelX * scaleFactor), centerPoint - (accelY * scaleFactor),
+		accelColor, 4);
+	al_draw_circle(centerPoint, centerPoint, accelZ * scaleFactor, accelColor, 4);
+
+	// Add text for values.
+	char valStr[128];
+	snprintf(valStr, 128, "%.2f,%.2f g", (double) accelX, (double) accelY);
+
+	al_draw_text(state->displayFont, accelColor, centerPoint + (accelX * scaleFactor),
+		centerPoint - (accelY * scaleFactor), 0, valStr);
+
+	// Gyroscope pitch(X), yaw(Y), roll(Z) as lines.
+	scaleFactor = 10;
+
+	gyroX /= caerEventPacketHeaderGetEventValid(imu6EventPacketHeader);
+	gyroY /= caerEventPacketHeaderGetEventValid(imu6EventPacketHeader);
+	gyroZ /= caerEventPacketHeaderGetEventValid(imu6EventPacketHeader);
+
+	al_draw_line(centerPoint, centerPoint, centerPoint + (gyroY * scaleFactor), centerPoint - (gyroX * scaleFactor),
+		gyroColor, 4);
+	al_draw_line(centerPoint, centerPoint - 25, centerPoint + (gyroZ * scaleFactor), centerPoint - 25, gyroColor, 4);
 }

@@ -128,9 +128,11 @@ static bool mainloop_1(void) {
 	// A small visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
 	#if defined(DAVISFX2) || defined(DAVISFX3)
-		caerVisualizer(6, polarity, frame, imu);
+		caerVisualizer(60, &caerVisualizerRendererPolarityEvents, (caerEventPacketHeader) polarity);
+		caerVisualizer(61, &caerVisualizerRendererFrameEvents, (caerEventPacketHeader) frame);
+		caerVisualizer(62, &caerVisualizerRendererIMU6Events, (caerEventPacketHeader) imu);
 	#else
-		caerVisualizer(6, polarity, NULL, NULL);
+		caerVisualizer(60, &caerVisualizerRendererPolarityEvents, (caerEventPacketHeader) polarity);
 	#endif
 #endif
 
