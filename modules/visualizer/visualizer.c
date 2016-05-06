@@ -370,15 +370,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		al_clear_to_color(al_map_rgb(0, 0, 0));
 
 		// Update bitmap with new content. (0, 0) is lower left corner.
-		if (caerEventPacketHeaderGetEventType(packetHeader) == POLARITY_EVENT) {
-
-		}
-		else if (caerEventPacketHeaderGetEventType(packetHeader) == FRAME_EVENT) {
-
-		}
-		else if (caerEventPacketHeaderGetEventType(packetHeader) == IMU6_EVENT) {
-
-		}
+		(*state->renderer)(state, packetHeader);
 
 		// Free packet copy.
 		free(packetHeader);
@@ -517,9 +509,7 @@ static int caerVisualizerRenderThread(void *visualizerState) {
 }
 
 struct visualizer_module_state {
-	caerVisualizerState eventsVisualizer;
-	caerVisualizerState framesVisualizer;
-	caerVisualizerState imuVisualizer;
+	caerVisualizerState visualizer;
 };
 
 typedef struct visualizer_module_state *visualizerModuleState;
@@ -527,9 +517,6 @@ typedef struct visualizer_module_state *visualizerModuleState;
 static bool caerVisualizerModuleInit(caerModuleData moduleData);
 static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerVisualizerModuleExit(caerModuleData moduleData);
-static bool initializeEventRenderer(visualizerModuleState state, int16_t sourceID);
-static bool initializeFrameRenderer(visualizerModuleState state, int16_t sourceID);
-static bool initializeIMURenderer(visualizerModuleState state);
 
 static struct caer_module_functions caerVisualizerFunctions = { .moduleInit = &caerVisualizerModuleInit, .moduleRun =
 	&caerVisualizerModuleRun, .moduleConfig = NULL, .moduleExit = &caerVisualizerModuleExit };
@@ -537,23 +524,13 @@ static struct caer_module_functions caerVisualizerFunctions = { .moduleInit = &c
 void caerVisualizer(uint16_t moduleID, caerVisualizerRenderer renderer, caerEventPacketHeader packetHeader) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "Visualizer");
 
-	caerModuleSM(&caerVisualizerFunctions, moduleData, sizeof(struct visualizer_module_state), 3, polarity, frame, imu);
+	caerModuleSM(&caerVisualizerFunctions, moduleData, sizeof(struct visualizer_module_state), 2, renderer,
+		packetHeader);
 }
 
 static bool caerVisualizerModuleInit(caerModuleData moduleData) {
 	// Configuration.
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showEvents", true);
-#ifdef DVS128
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showFrames", false);
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showIMU", false);
-#else
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showFrames", true);
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showIMU", true);
-#endif
-
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "subsampleEventsRendering", 1);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "subsampleFramesRendering", 1);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "subsampleIMURendering", 1);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "subsampleRendering", 1);
 
 	return (true);
 }
@@ -562,14 +539,8 @@ static void caerVisualizerModuleExit(caerModuleData moduleData) {
 	visualizerModuleState state = moduleData->moduleState;
 
 	// Shut down rendering.
-	caerVisualizerExit(state->eventsVisualizer);
-	state->eventsVisualizer = NULL;
-
-	caerVisualizerExit(state->framesVisualizer);
-	state->framesVisualizer = NULL;
-
-	caerVisualizerExit(state->imuVisualizer);
-	state->imuVisualizer = NULL;
+	caerVisualizerExit(state->visualizer);
+	state->visualizer = NULL;
 }
 
 static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
@@ -577,123 +548,31 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 
 	visualizerModuleState state = moduleData->moduleState;
 
-	// Polarity events to render.
-	caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
-	bool renderPolarity = sshsNodeGetBool(moduleData->moduleNode, "showEvents");
+	caerVisualizerRenderer renderer = va_arg(args, caerVisualizerRenderer);
+	caerEventPacketHeader packetHeader = va_arg(args, caerEventPacketHeader);
 
-	// Frames to render.
-	caerFrameEventPacket frame = va_arg(args, caerFrameEventPacket);
-	bool renderFrame = sshsNodeGetBool(moduleData->moduleNode, "showFrames");
+	// Get size information from source.
+	//sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
+	//int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
+	//int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
-	// IMU events to render.
-	caerIMU6EventPacket imu = va_arg(args, caerIMU6EventPacket);
-	bool renderIMU = sshsNodeGetBool(moduleData->moduleNode, "showIMU");
-
-	// Update polarity event rendering map.
-	if (renderPolarity && polarity != NULL) {
-		// If the event renderer is not allocated yet, do it.
-		if (state->eventsVisualizer == NULL) {
-			if (!initializeEventRenderer(state, caerEventPacketHeaderGetEventSource(&polarity->packetHeader))) {
-				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to initialize event visualizer.");
-				return;
-			}
+	// Initialize visualizer.
+	if (state->visualizer == NULL) {
+		state->visualizer = caerVisualizerInit(renderer, 240, 180, VISUALIZER_DEFAULT_ZOOM, true);
+		if (state->visualizer == NULL) {
+			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to initialize visualizer.");
+			return;
 		}
+	}
 
+	// Render given packet.
+	if (packetHeader != NULL) {
 		// Update sub-sample value.
-		state->eventsVisualizer->packetSubsampleRendering = sshsNodeGetInt(moduleData->moduleNode,
-			"subsampleEventsRendering");
+		state->visualizer->packetSubsampleRendering = sshsNodeGetInt(moduleData->moduleNode, "subsampleRendering");
 
 		// Actually update polarity rendering.
-		caerVisualizerUpdate(state->eventsVisualizer, &polarity->packetHeader);
+		caerVisualizerUpdate(state->visualizer, packetHeader);
 	}
-	else if (!renderPolarity && state->eventsVisualizer != NULL) {
-		// If we have a renderer running, but don't want to render anymore to it, let's just stop it.
-		caerVisualizerExit(state->eventsVisualizer);
-		state->eventsVisualizer = NULL;
-	}
-
-	// Select latest frame to render.
-	if (renderFrame && frame != NULL) {
-		// If the frame renderer is not allocated yet, do it.
-		if (state->framesVisualizer == NULL) {
-			if (!initializeFrameRenderer(state, caerEventPacketHeaderGetEventSource(&frame->packetHeader))) {
-				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to initialize frame visualizer.");
-				return;
-			}
-		}
-
-		// Update sub-sample value.
-		state->framesVisualizer->packetSubsampleRendering = sshsNodeGetInt(moduleData->moduleNode,
-			"subsampleFramesRendering");
-
-		// Actually update frame rendering.
-		caerVisualizerUpdate(state->framesVisualizer, &frame->packetHeader);
-	}
-	else if (!renderFrame && state->framesVisualizer != NULL) {
-		// If we have a renderer running, but don't want to render anymore to it, let's just stop it.
-		caerVisualizerExit(state->framesVisualizer);
-		state->framesVisualizer = NULL;
-	}
-
-	// Render latest IMU event.
-	if (renderIMU && imu != NULL) {
-		// If the IMU renderer is not allocated yet, do it.
-		if (state->imuVisualizer == NULL) {
-			if (!initializeIMURenderer(state)) {
-				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to initialize IMU visualizer.");
-				return;
-			}
-		}
-
-		// Update sub-sample value.
-		state->imuVisualizer->packetSubsampleRendering = sshsNodeGetInt(moduleData->moduleNode,
-			"subsampleIMURendering");
-
-		// Actually update IMU rendering.
-		caerVisualizerUpdate(state->imuVisualizer, &imu->packetHeader);
-	}
-	else if (!renderIMU && state->imuVisualizer != NULL) {
-		// If we have a renderer running, but don't want to render anymore to it, let's just stop it.
-		caerVisualizerExit(state->imuVisualizer);
-		state->imuVisualizer = NULL;
-	}
-}
-
-static bool initializeEventRenderer(visualizerModuleState state, int16_t sourceID) {
-	// Get size information from source.
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
-	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
-
-	state->eventsVisualizer = caerVisualizerInit(sizeX, sizeY, VISUALIZER_DEFAULT_ZOOM, true);
-	if (state->eventsVisualizer == NULL) {
-		return (false);
-	}
-
-	return (true);
-}
-
-static bool initializeFrameRenderer(visualizerModuleState state, int16_t sourceID) {
-	// Get size information from source.
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
-	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
-	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
-
-	state->framesVisualizer = caerVisualizerInit(sizeX, sizeY, VISUALIZER_DEFAULT_ZOOM, true);
-	if (state->framesVisualizer == NULL) {
-		return (false);
-	}
-
-	return (true);
-}
-
-static bool initializeIMURenderer(visualizerModuleState state) {
-	state->imuVisualizer = caerVisualizerInit(200, 200, VISUALIZER_DEFAULT_ZOOM, true);
-	if (state->imuVisualizer == NULL) {
-		return (false);
-	}
-
-	return (true);
 }
 
 void caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketHeader polarityEventPacketHeader) {
@@ -768,10 +647,24 @@ void caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacke
 	}
 }
 
+#define RESET_LIMIT_POS(VAL, LIMIT) if ((VAL) > (LIMIT)) { (VAL) = (LIMIT); }
+#define RESET_LIMIT_NEG(VAL, LIMIT) if ((VAL) < (LIMIT)) { (VAL) = (LIMIT); }
+
 void caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketHeader imu6EventPacketHeader) {
 	if (caerEventPacketHeaderGetEventValid(imu6EventPacketHeader) == 0) {
 		return;
 	}
+
+	float scaleFactorAccel = 30;
+	float scaleFactorGyro = 10;
+	float maxSizeX = 240;
+	float maxSizeY = 180;
+
+	ALLEGRO_COLOR accelColor = al_map_rgb(0, 255, 0);
+	ALLEGRO_COLOR gyroColor = al_map_rgb(255, 0, 255);
+
+	float centerPointX = maxSizeX / 2;
+	float centerPointY = maxSizeY / 2;
 
 	float accelX = 0, accelY = 0, accelZ = 0;
 	float gyroX = 0, gyroY = 0, gyroZ = 0;
@@ -788,36 +681,47 @@ void caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacket
 		gyroZ += caerIMU6EventGetGyroZ(caerIMU6IteratorElement);
 	CAER_IMU6_ITERATOR_VALID_END
 
-	float scaleFactor = 30;
-	float centerPoint = 100;
+	// Normalize values.
+	int32_t validEvents = caerEventPacketHeaderGetEventValid(imu6EventPacketHeader);
 
-	ALLEGRO_COLOR accelColor = al_map_rgb(0, 255, 0);
-	ALLEGRO_COLOR gyroColor = al_map_rgb(255, 0, 255);
+	accelX /= (float) validEvents;
+	accelY /= (float) validEvents;
+	accelZ /= (float) validEvents;
+
+	gyroX /= (float) validEvents;
+	gyroY /= (float) validEvents;
+	gyroZ /= (float) validEvents;
 
 	// Acceleration X, Y as lines. Z as a circle.
-	accelX /= caerEventPacketHeaderGetEventValid(imu6EventPacketHeader);
-	accelY /= caerEventPacketHeaderGetEventValid(imu6EventPacketHeader);
-	accelZ /= caerEventPacketHeaderGetEventValid(imu6EventPacketHeader);
+	float accelXScaled = centerPointX + accelX * scaleFactorAccel;
+	RESET_LIMIT_POS(accelXScaled, maxSizeX - 2);
+	RESET_LIMIT_NEG(accelXScaled, 1);
+	float accelYScaled = centerPointY - accelY * scaleFactorAccel;
+	RESET_LIMIT_POS(accelYScaled, maxSizeY - 2);
+	RESET_LIMIT_NEG(accelYScaled, 1);
+	float accelZScaled = accelZ * scaleFactorAccel;
+	RESET_LIMIT_POS(accelZScaled, centerPointY - 2);
+	RESET_LIMIT_NEG(accelZScaled, 1);
 
-	al_draw_line(centerPoint, centerPoint, centerPoint + (accelX * scaleFactor), centerPoint - (accelY * scaleFactor),
-		accelColor, 4);
-	al_draw_circle(centerPoint, centerPoint, accelZ * scaleFactor, accelColor, 4);
+	al_draw_line(centerPointX, centerPointY, accelXScaled, accelYScaled, accelColor, 4);
+	al_draw_circle(centerPointX, centerPointY, accelZScaled, accelColor, 4);
 
-	// Add text for values.
-	char valStr[128];
-	snprintf(valStr, 128, "%.2f,%.2f g", (double) accelX, (double) accelY);
-
-	al_draw_text(state->displayFont, accelColor, centerPoint + (accelX * scaleFactor),
-		centerPoint - (accelY * scaleFactor), 0, valStr);
+	// TODO: Add text for values.
+	//char valStr[128];
+	//snprintf(valStr, 128, "%.2f,%.2f g", (double) accelX, (double) accelY);
+	//al_draw_text(state->displayFont, accelColor, accelXScaled, accelYScaled, 0, valStr);
 
 	// Gyroscope pitch(X), yaw(Y), roll(Z) as lines.
-	scaleFactor = 10;
+	float gyroXScaled = centerPointY - gyroX * scaleFactorGyro;
+	RESET_LIMIT_POS(gyroXScaled, maxSizeY - 2);
+	RESET_LIMIT_NEG(gyroXScaled, 1);
+	float gyroYScaled = centerPointX + gyroY * scaleFactorGyro;
+	RESET_LIMIT_POS(gyroYScaled, maxSizeX - 2);
+	RESET_LIMIT_NEG(gyroYScaled, 1);
+	float gyroZScaled = centerPointX + gyroZ * scaleFactorGyro;
+	RESET_LIMIT_POS(gyroZScaled, maxSizeX - 2);
+	RESET_LIMIT_NEG(gyroZScaled, 1);
 
-	gyroX /= caerEventPacketHeaderGetEventValid(imu6EventPacketHeader);
-	gyroY /= caerEventPacketHeaderGetEventValid(imu6EventPacketHeader);
-	gyroZ /= caerEventPacketHeaderGetEventValid(imu6EventPacketHeader);
-
-	al_draw_line(centerPoint, centerPoint, centerPoint + (gyroY * scaleFactor), centerPoint - (gyroX * scaleFactor),
-		gyroColor, 4);
-	al_draw_line(centerPoint, centerPoint - 25, centerPoint + (gyroZ * scaleFactor), centerPoint - 25, gyroColor, 4);
+	al_draw_line(centerPointX, centerPointY, gyroYScaled, gyroXScaled, gyroColor, 4);
+	al_draw_line(centerPointX, centerPointY - 25, gyroZScaled, centerPointY - 25, gyroColor, 4);
 }
