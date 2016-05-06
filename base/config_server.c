@@ -85,7 +85,7 @@ static int caerConfigServerRunner(void *inPtr) {
 	memset(&configServerAddress, 0, sizeof(struct sockaddr_in));
 
 	configServerAddress.sin_family = AF_INET;
-	configServerAddress.sin_port = htons(sshsNodeGetInt(serverNode, "portNumber"));
+	configServerAddress.sin_port = htons(U16T(sshsNodeGetInt(serverNode, "portNumber")));
 	char *ipAddress = sshsNodeGetString(serverNode, "ipAddress");
 	inet_aton(ipAddress, &configServerAddress.sin_addr); // htonl() is implicit here.
 	free(ipAddress);

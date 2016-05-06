@@ -401,8 +401,8 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 	sshsNodePutBoolIfAbsent(apsNode, "WaitOnTransferStall", true);
 	sshsNodePutShortIfAbsent(apsNode, "StartColumn0", 0);
 	sshsNodePutShortIfAbsent(apsNode, "StartRow0", 0);
-	sshsNodePutShortIfAbsent(apsNode, "EndColumn0", (devInfo->apsSizeX - 1));
-	sshsNodePutShortIfAbsent(apsNode, "EndRow0", (devInfo->apsSizeY - 1));
+	sshsNodePutShortIfAbsent(apsNode, "EndColumn0", I16T(devInfo->apsSizeX - 1));
+	sshsNodePutShortIfAbsent(apsNode, "EndRow0", I16T(devInfo->apsSizeY - 1));
 	sshsNodePutIntIfAbsent(apsNode, "Exposure", 4000); // in µs
 	sshsNodePutIntIfAbsent(apsNode, "FrameDelay", 1000); // in µs
 	sshsNodePutShortIfAbsent(apsNode, "RowSettle", (devInfo->adcClock / 3)); // in cycles

@@ -169,8 +169,8 @@ static bool allocateTimestampMap(BAFilterState state, int16_t sourceID) {
 	}
 
 	// Assign max ranges for arrays (0 to MAX-1).
-	state->sizeMaxX = (sizeX - 1);
-	state->sizeMaxY = (sizeY - 1);
+	state->sizeMaxX = I16T(sizeX - 1);
+	state->sizeMaxY = I16T(sizeY - 1);
 
 	// TODO: size the map differently if subSampleBy is set!
 	return (true);
