@@ -8,7 +8,7 @@
 #include "base/mainloop.h"
 #include "base/module.h"
 
-static bool caerImagestreamerVisualizerInit(caerModuleData moduleData, size_t argsNumber, va_list args);
+static bool caerImagestreamerVisualizerInit(caerModuleData moduleData);
 static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerImagestreamerVisualizerExit(caerModuleData moduleData);
 
@@ -24,19 +24,12 @@ void caerImagestreamerVisualizer(uint16_t moduleID, unsigned char * disp_img, co
 		disp_img, disp_img_size, classific_results, classific_sizes, max_img_qty);
 }
 
-static bool caerImagestreamerVisualizerInit(caerModuleData moduleData, size_t argsNumber, va_list args) {
+static bool caerImagestreamerVisualizerInit(caerModuleData moduleData) {
 	caerImagestreamerVisualizerState state = moduleData->moduleState;
 
-
-	if (!caerVisualizerInit(&state->vis_state, IMAGESTREAMERVISUALIZER_SCREEN_WIDTH,
-	IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT, VISUALIZER_DEFAULT_ZOOM, false)) {
-		return (false);
-	}
-
-	// Start separate rendering thread. Decouples presentation from
-	// data processing and preparation. Communication over properly
-	// locked bitmap.
-	if (thrd_create(&state->renderingThread, &caerVisualizerRenderThread, &state->vis_state) != thrd_success) {
+	state->vis_state = caerVisualizerInit(IMAGESTREAMERVISUALIZER_SCREEN_WIDTH, IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT,
+		VISUALIZER_DEFAULT_ZOOM, false);
+	if (state->vis_state == NULL) {
 		return (false);
 	}
 
@@ -46,11 +39,8 @@ static bool caerImagestreamerVisualizerInit(caerModuleData moduleData, size_t ar
 static void caerImagestreamerVisualizerExit(caerModuleData moduleData) {
 	caerImagestreamerVisualizerState state = moduleData->moduleState;
 
-	// Shut down rendering threads and wait on them.
-	if (atomic_load(&state->vis_state.running)) {
-		atomic_store(&state->vis_state.running, false);
-		thrd_join(state->renderingThread, NULL);
-	}
+	caerVisualizerExit(state->vis_state);
+	state->vis_state = NULL;
 }
 
 static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
@@ -66,7 +56,7 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 	int max_img_qty = va_arg(args, int);
 
 	//create one frame event packet, one single frame
-	caerFrameEventPacket my_frame_packet = caerFrameEventPacketAllocate(1, moduleData->moduleID, 0,
+	caerFrameEventPacket my_frame_packet = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0,
 	IMAGESTREAMERVISUALIZER_SCREEN_WIDTH, IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT, 3);
 	//get that single frame
 	caerFrameEvent my_frame = caerFrameEventPacketGetEvent(my_frame_packet, 0);
@@ -84,14 +74,15 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 		for (int y = 0; y < IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT; y++) {
 			c = i * DISPLAY_IMG_SIZE + y;
 			//depending on results display image with different color
-			if(*classific_results == 0){
+			if (*classific_results == 0) {
 				my_frame->pixels[counter] = (uint16_t) (small_img[c] << 8);
-				my_frame->pixels[counter+1] = (uint16_t) (small_img[c] << 8);
-				my_frame->pixels[counter+2] = (uint16_t) (small_img[c] << 8);
-			}else{
+				my_frame->pixels[counter + 1] = (uint16_t) (small_img[c] << 8);
+				my_frame->pixels[counter + 2] = (uint16_t) (small_img[c] << 8);
+			}
+			else {
 				my_frame->pixels[counter] = (uint16_t) (0);
-				my_frame->pixels[counter+1] = (uint16_t) ( (int)(small_img[c]* *classific_results) << 8);
-				my_frame->pixels[counter+2] = (uint16_t) (0);
+				my_frame->pixels[counter + 1] = (uint16_t) ((int) (small_img[c] * *classific_results) << 8);
+				my_frame->pixels[counter + 2] = (uint16_t) (0);
 			}
 			counter += 3;
 		}
@@ -103,7 +94,7 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
 	//valido
 	caerFrameEventValidate(my_frame, my_frame_packet);
 	//update bitmap
-	caerVisualizerUpdate(&my_frame_packet->packetHeader, &state->vis_state);
+	caerVisualizerUpdate(state->vis_state, &my_frame_packet->packetHeader);
 
 	free(my_frame_packet);
 }
