@@ -28,11 +28,10 @@ static struct caer_module_functions caerFrameEnhancerFunctions = { .moduleInit =
 caerFrameEventPacket caerFrameEnhancer(uint16_t moduleID, caerFrameEventPacket frame) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "FrameEnhancer");
 
-	caerFrameEventPacket enhancedFrame = NULL;
+	// By default, same as input frame packet.
+	caerFrameEventPacket enhancedFrame = frame;
 
 	caerModuleSM(&caerFrameEnhancerFunctions, moduleData, sizeof(struct FrameEnhancer_state), 2, frame, &enhancedFrame);
-
-	enhancedFrame = frame; // TODO: remove this once done.
 
 	return (enhancedFrame);
 }
@@ -98,19 +97,19 @@ static void caerFrameEnhancerRun(caerModuleData moduleData, size_t argsNumber, v
 #ifdef ENABLE_FRAMEENHANCER_OPENCV
 		switch (state->whiteBalanceType) {
 			case 0:
-				caerFrameUtilsWhiteBalance(frame);
+				caerFrameUtilsWhiteBalance(*enhancedFrame);
 				break;
 
 			case 1:
-				caerFrameUtilsOpenCVWhiteBalance(frame, WHITEBALANCE_SIMPLE);
+				caerFrameUtilsOpenCVWhiteBalance(*enhancedFrame, WHITEBALANCE_SIMPLE);
 				break;
 
 			case 2:
-				caerFrameUtilsOpenCVWhiteBalance(frame, WHITEBALANCE_GRAYWORLD);
+				caerFrameUtilsOpenCVWhiteBalance(*enhancedFrame, WHITEBALANCE_GRAYWORLD);
 				break;
 		}
 #else
-		caerFrameUtilsWhiteBalance(frame);
+		caerFrameUtilsWhiteBalance(*enhancedFrame);
 #endif
 	}
 
@@ -118,23 +117,23 @@ static void caerFrameEnhancerRun(caerModuleData moduleData, size_t argsNumber, v
 #ifdef ENABLE_FRAMEENHANCER_OPENCV
 		switch (state->contrastType) {
 			case 0:
-				caerFrameUtilsContrast(frame);
+				caerFrameUtilsContrast(*enhancedFrame);
 				break;
 
 			case 1:
-				caerFrameUtilsOpenCVContrast(frame, CONTRAST_NORMALIZATION);
+				caerFrameUtilsOpenCVContrast(*enhancedFrame, CONTRAST_NORMALIZATION);
 				break;
 
 			case 2:
-				caerFrameUtilsOpenCVContrast(frame, CONTRAST_HISTOGRAM_EQUALIZATION);
+				caerFrameUtilsOpenCVContrast(*enhancedFrame, CONTRAST_HISTOGRAM_EQUALIZATION);
 				break;
 
 			case 3:
-				caerFrameUtilsOpenCVContrast(frame, CONTRAST_CLAHE);
+				caerFrameUtilsOpenCVContrast(*enhancedFrame, CONTRAST_CLAHE);
 				break;
 		}
 #else
-		caerFrameUtilsContrast(frame);
+		caerFrameUtilsContrast(*enhancedFrame);
 #endif
 	}
 }
