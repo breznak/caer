@@ -125,9 +125,9 @@ void caerVisualizerSystemInit(void) {
 
 	// Determine statistics string width.
 	if (font != NULL) {
-		STATISTICS_WIDTH = al_get_text_width(font, maxStatString);
+		STATISTICS_WIDTH = (2 * GLOBAL_FONT_SPACING) + al_get_text_width(font, maxStatString);
 
-		STATISTICS_HEIGHT = (2 * GLOBAL_FONT_SPACING + GLOBAL_FONT_SIZE);
+		STATISTICS_HEIGHT = (2 * GLOBAL_FONT_SPACING) + GLOBAL_FONT_SIZE;
 
 		al_destroy_font(font);
 	}
