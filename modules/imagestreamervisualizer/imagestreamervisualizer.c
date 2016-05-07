@@ -27,8 +27,7 @@ void caerImagestreamerVisualizer(uint16_t moduleID, unsigned char * disp_img, co
 static bool caerImagestreamerVisualizerInit(caerModuleData moduleData) {
 	caerImagestreamerVisualizerState state = moduleData->moduleState;
 
-	state->vis_state = caerVisualizerInit(&caerVisualizerRendererFrameEvents, IMAGESTREAMERVISUALIZER_SCREEN_WIDTH,
-	IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT, VISUALIZER_DEFAULT_ZOOM, false);
+	state->vis_state = caerVisualizerInit(&caerVisualizerRendererFrameEvents, NULL, IMAGESTREAMERVISUALIZER_SCREEN_WIDTH, IMAGESTREAMERVISUALIZER_SCREEN_HEIGHT, VISUALIZER_DEFAULT_ZOOM, false, moduleData);
 	if (state->vis_state == NULL) {
 		return (false);
 	}
