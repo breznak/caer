@@ -7,21 +7,22 @@
 #include <libcaer/events/frame.h>
 #include <libcaer/events/imu6.h>
 
-#define VISUALIZER_DEFAULT_ZOOM 2
+#define VISUALIZER_DEFAULT_ZOOM 2.0f
+#define VISUALIZER_REFRESH_RATE 60.0f
 
 typedef struct caer_visualizer_state *caerVisualizerState;
 
-typedef void (*caerVisualizerRenderer)(caerVisualizerState state, caerEventPacketHeader packetHeader);
+typedef bool (*caerVisualizerRenderer)(caerVisualizerState state, caerEventPacketHeader packetHeader);
 
 // For reuse inside other modules.
 caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, int32_t bitmapSizeX, int32_t bitmapSizeY,
-	int32_t zoomFactor, bool doStatistics);
+	float zoomFactor, bool doStatistics);
 void caerVisualizerUpdate(caerVisualizerState state, caerEventPacketHeader packetHeader);
 void caerVisualizerExit(caerVisualizerState state);
 
-void caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketHeader polarityEventPacketHeader);
-void caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketHeader frameEventPacketHeader);
-void caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketHeader imu6EventPacketHeader);
+bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketHeader polarityEventPacketHeader);
+bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketHeader frameEventPacketHeader);
+bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketHeader imu6EventPacketHeader);
 
 void caerVisualizer(uint16_t moduleID, caerVisualizerRenderer renderer, caerEventPacketHeader packetHeader);
 

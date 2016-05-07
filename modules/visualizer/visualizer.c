@@ -15,12 +15,13 @@ struct caer_visualizer_state {
 	atomic_bool running;
 	ALLEGRO_FONT *displayFont;
 	ALLEGRO_DISPLAY *displayWindow;
-	int32_t displayWindowZoomFactor;
+	float displayWindowZoomFactor;
 	ALLEGRO_EVENT_QUEUE *displayEventQueue;
 	ALLEGRO_TIMER *displayTimer;
 	ALLEGRO_BITMAP *bitmapRenderer;
 	int32_t bitmapRendererSizeX;
 	int32_t bitmapRendererSizeY;
+	bool bitmapDrawUpdate;
 	RingBuffer dataTransfer;
 	thrd_t renderingThread;
 	caerVisualizerRenderer renderer;
@@ -154,7 +155,7 @@ void caerVisualizerSystemInit(void) {
 }
 
 caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, int32_t bitmapSizeX, int32_t bitmapSizeY,
-	int32_t zoomFactor, bool doStatistics) {
+	float zoomFactor, bool doStatistics) {
 	// Allocate memory for visualizer state.
 	caerVisualizerState state = calloc(1, sizeof(struct caer_visualizer_state));
 	if (state == NULL) {
@@ -267,8 +268,8 @@ static bool caerVisualizerInitGraphics(caerVisualizerState state) {
 	// Create display window.
 	// When statistics are turned on, we need to add some space to the
 	// X axis for displaying the whole line and the Y axis for spacing.
-	int32_t displaySizeX = state->bitmapRendererSizeX * state->displayWindowZoomFactor;
-	int32_t displaySizeY = state->bitmapRendererSizeY * state->displayWindowZoomFactor;
+	int32_t displaySizeX = I32T((float ) state->bitmapRendererSizeX * state->displayWindowZoomFactor);
+	int32_t displaySizeY = I32T((float ) state->bitmapRendererSizeY * state->displayWindowZoomFactor);
 
 	if (state->packetStatistics.currentStatisticsString != NULL) {
 		if (STATISTICS_WIDTH > displaySizeX) {
@@ -280,8 +281,8 @@ static bool caerVisualizerInitGraphics(caerVisualizerState state) {
 
 	state->displayWindow = al_create_display(displaySizeX, displaySizeY);
 	if (state->displayWindow == NULL) {
-		caerLog(CAER_LOG_ERROR, "Visualizer", "Failed to create display window with sizeX=%d, sizeY=%d, zoomFactor=%d.",
-			displaySizeX, displaySizeY, state->displayWindowZoomFactor);
+		caerLog(CAER_LOG_ERROR, "Visualizer", "Failed to create display window with sizeX=%d, sizeY=%d, zoomFactor=%f.",
+			displaySizeX, displaySizeY, (double) state->displayWindowZoomFactor);
 		return (false);
 	}
 
@@ -316,7 +317,7 @@ static bool caerVisualizerInitGraphics(caerVisualizerState state) {
 		return (false);
 	}
 
-	state->displayTimer = al_create_timer(1.0 / 60.0);
+	state->displayTimer = al_create_timer(1.0f / VISUALIZER_REFRESH_RATE);
 	if (state->displayTimer == NULL) {
 		// Clean up all memory that may have been used.
 		caerVisualizerExitGraphics(state);
@@ -367,10 +368,23 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		}
 
 		al_set_target_bitmap(state->bitmapRenderer);
-		al_clear_to_color(al_map_rgb(0, 0, 0));
+
+		// Only clear bitmap to black if nothing has been
+		// rendered since the last display flip.
+		if (!state->bitmapDrawUpdate) {
+			al_clear_to_color(al_map_rgb(0, 0, 0));
+		}
 
 		// Update bitmap with new content. (0, 0) is lower left corner.
-		(*state->renderer)(state, packetHeader);
+		// NULL renderer is supported and simply does nothing (black screen).
+		if (state->renderer != NULL) {
+			bool didDrawSomething = (*state->renderer)(state, packetHeader);
+
+			// Remember if something was drawn, even just once.
+			if (!state->bitmapDrawUpdate) {
+				state->bitmapDrawUpdate = didDrawSomething;
+			}
+		}
 
 		// Free packet copy.
 		free(packetHeader);
@@ -420,8 +434,8 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 
 	// Handle display resize (zoom).
 	if (resize) {
-		int32_t displaySizeX = state->bitmapRendererSizeX * state->displayWindowZoomFactor;
-		int32_t displaySizeY = state->bitmapRendererSizeY * state->displayWindowZoomFactor;
+		int32_t displaySizeX = I32T((float ) state->bitmapRendererSizeX * state->displayWindowZoomFactor);
+		int32_t displaySizeY = I32T((float ) state->bitmapRendererSizeY * state->displayWindowZoomFactor);
 
 		if (state->packetStatistics.currentStatisticsString != NULL) {
 			if (STATISTICS_WIDTH > displaySizeX) {
@@ -435,7 +449,9 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 	}
 
 	// Render content to display.
-	if (redraw) {
+	if (redraw && state->bitmapDrawUpdate) {
+		state->bitmapDrawUpdate = false;
+
 		al_set_target_backbuffer(state->displayWindow);
 		al_clear_to_color(al_map_rgb(0, 0, 0));
 
@@ -450,8 +466,8 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		// Blit bitmap to screen, taking zoom factor into consideration.
 		al_draw_scaled_bitmap(state->bitmapRenderer, 0, 0, (float) state->bitmapRendererSizeX,
 			(float) state->bitmapRendererSizeY, 0, (doStatistics) ? ((float) STATISTICS_HEIGHT) : (0),
-			(float) (state->bitmapRendererSizeX * state->displayWindowZoomFactor),
-			(float) (state->bitmapRendererSizeY * state->displayWindowZoomFactor), 0);
+			(float) state->bitmapRendererSizeX * state->displayWindowZoomFactor,
+			(float) state->bitmapRendererSizeY * state->displayWindowZoomFactor, 0);
 
 		al_flip_display();
 	}
@@ -530,7 +546,9 @@ void caerVisualizer(uint16_t moduleID, caerVisualizerRenderer renderer, caerEven
 
 static bool caerVisualizerModuleInit(caerModuleData moduleData) {
 	// Configuration.
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showStatistics", true);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "subsampleRendering", 1);
+	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "zoomFactor", VISUALIZER_DEFAULT_ZOOM);
 
 	return (true);
 }
@@ -551,31 +569,61 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 	caerVisualizerRenderer renderer = va_arg(args, caerVisualizerRenderer);
 	caerEventPacketHeader packetHeader = va_arg(args, caerEventPacketHeader);
 
-	// Get size information from source.
-	//sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
-	//int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-	//int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
+	// Without a packet, we cannot initialize or render anything.
+	if (packetHeader == NULL) {
+		return;
+	}
 
-	// Initialize visualizer.
+	// Initialize visualizer. Needs information from a packet (the source ID)!
 	if (state->visualizer == NULL) {
-		state->visualizer = caerVisualizerInit(renderer, 240, 180, VISUALIZER_DEFAULT_ZOOM, true);
+		// Get size information from source.
+		int16_t sourceID = caerEventPacketHeaderGetEventSource(packetHeader);
+		sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
+
+		// Default sizes if nothing else is specified in sourceInfo node.
+		int16_t sizeX = 320;
+		int16_t sizeY = 240;
+
+		// Get sizes from sourceInfo node. visualizer prefix takes precedence,
+		// for APS and DVS images, alternative prefixes are provided.
+		if (sshsNodeAttributeExists(sourceInfoNode, "visualizerSizeX", SHORT)) {
+			sizeX = sshsNodeGetShort(sourceInfoNode, "visualizerSizeX");
+			sizeY = sshsNodeGetShort(sourceInfoNode, "visualizerSizeY");
+		}
+		else if (sshsNodeAttributeExists(sourceInfoNode, "dvsSizeX", SHORT)
+			&& caerEventPacketHeaderGetEventType(packetHeader) == POLARITY_EVENT) {
+			sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
+			sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
+		}
+		else if (sshsNodeAttributeExists(sourceInfoNode, "apsSizeX", SHORT)
+			&& caerEventPacketHeaderGetEventType(packetHeader) == FRAME_EVENT) {
+			sizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
+			sizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
+		}
+
+		state->visualizer = caerVisualizerInit(renderer, sizeX, sizeY,
+			sshsNodeGetFloat(moduleData->moduleNode, "zoomFactor"),
+			sshsNodeGetBool(moduleData->moduleNode, "showStatistics"));
 		if (state->visualizer == NULL) {
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to initialize visualizer.");
 			return;
 		}
 	}
 
-	// Render given packet.
-	if (packetHeader != NULL) {
-		// Update sub-sample value.
-		state->visualizer->packetSubsampleRendering = sshsNodeGetInt(moduleData->moduleNode, "subsampleRendering");
+	// Update sub-sample value.
+	state->visualizer->packetSubsampleRendering = sshsNodeGetInt(moduleData->moduleNode, "subsampleRendering");
 
-		// Actually update polarity rendering.
-		caerVisualizerUpdate(state->visualizer, packetHeader);
-	}
+	// Render given packet.
+	caerVisualizerUpdate(state->visualizer, packetHeader);
 }
 
-void caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketHeader polarityEventPacketHeader) {
+bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketHeader polarityEventPacketHeader) {
+	UNUSED_ARGUMENT(state);
+
+	if (caerEventPacketHeaderGetEventValid(polarityEventPacketHeader) == 0) {
+		return (false);
+	}
+
 	// Render all valid events.
 	CAER_POLARITY_ITERATOR_VALID_START((caerPolarityEventPacket) polarityEventPacketHeader)
 		if (caerPolarityEventGetPolarity(caerPolarityIteratorElement)) {
@@ -587,10 +635,19 @@ void caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPa
 			// OFF polarity (red).
 			al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
 				caerPolarityEventGetY(caerPolarityIteratorElement), al_map_rgb(255, 0, 0));
-		}CAER_POLARITY_ITERATOR_VALID_END
+		}
+	CAER_POLARITY_ITERATOR_VALID_END
+
+	return (true);
 }
 
-void caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketHeader frameEventPacketHeader) {
+bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketHeader frameEventPacketHeader) {
+	UNUSED_ARGUMENT(state);
+
+	if (caerEventPacketHeaderGetEventValid(frameEventPacketHeader) == 0) {
+		return (false);
+	}
+
 	// Render only the last, valid frame.
 	caerFrameEventPacket currFramePacket = (caerFrameEventPacket) frameEventPacketHeader;
 	caerFrameEvent currFrameEvent;
@@ -642,23 +699,25 @@ void caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacke
 				}
 			}
 
-			break;
+			return (true);
 		}
 	}
+
+	return (false);
 }
 
 #define RESET_LIMIT_POS(VAL, LIMIT) if ((VAL) > (LIMIT)) { (VAL) = (LIMIT); }
 #define RESET_LIMIT_NEG(VAL, LIMIT) if ((VAL) < (LIMIT)) { (VAL) = (LIMIT); }
 
-void caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketHeader imu6EventPacketHeader) {
+bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketHeader imu6EventPacketHeader) {
 	if (caerEventPacketHeaderGetEventValid(imu6EventPacketHeader) == 0) {
-		return;
+		return (false);
 	}
 
 	float scaleFactorAccel = 30;
-	float scaleFactorGyro = 10;
-	float maxSizeX = 240;
-	float maxSizeY = 180;
+	float scaleFactorGyro = 15;
+	float maxSizeX = (float) state->bitmapRendererSizeX;
+	float maxSizeY = (float) state->bitmapRendererSizeY;
 
 	ALLEGRO_COLOR accelColor = al_map_rgb(0, 255, 0);
 	ALLEGRO_COLOR gyroColor = al_map_rgb(255, 0, 255);
@@ -724,4 +783,6 @@ void caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacket
 
 	al_draw_line(centerPointX, centerPointY, gyroYScaled, gyroXScaled, gyroColor, 4);
 	al_draw_line(centerPointX, centerPointY - 25, gyroZScaled, centerPointY - 25, gyroColor, 4);
+
+	return (true);
 }
