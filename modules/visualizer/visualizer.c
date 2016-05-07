@@ -716,6 +716,7 @@ bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacket
 
 	float scaleFactorAccel = 30;
 	float scaleFactorGyro = 15;
+	float lineThickness = 4;
 	float maxSizeX = (float) state->bitmapRendererSizeX;
 	float maxSizeY = (float) state->bitmapRendererSizeY;
 
@@ -753,17 +754,17 @@ bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacket
 
 	// Acceleration X, Y as lines. Z as a circle.
 	float accelXScaled = centerPointX + accelX * scaleFactorAccel;
-	RESET_LIMIT_POS(accelXScaled, maxSizeX - 2);
-	RESET_LIMIT_NEG(accelXScaled, 1);
+	RESET_LIMIT_POS(accelXScaled, maxSizeX - 2 - lineThickness);
+	RESET_LIMIT_NEG(accelXScaled, 1 + lineThickness);
 	float accelYScaled = centerPointY - accelY * scaleFactorAccel;
-	RESET_LIMIT_POS(accelYScaled, maxSizeY - 2);
-	RESET_LIMIT_NEG(accelYScaled, 1);
+	RESET_LIMIT_POS(accelYScaled, maxSizeY - 2 - lineThickness);
+	RESET_LIMIT_NEG(accelYScaled, 1 + lineThickness);
 	float accelZScaled = accelZ * scaleFactorAccel;
-	RESET_LIMIT_POS(accelZScaled, centerPointY - 2);
-	RESET_LIMIT_NEG(accelZScaled, 1);
+	RESET_LIMIT_POS(accelZScaled, centerPointY - 2 - lineThickness); // Circle max.
+	RESET_LIMIT_NEG(accelZScaled, 1); // Circle min.
 
-	al_draw_line(centerPointX, centerPointY, accelXScaled, accelYScaled, accelColor, 4);
-	al_draw_circle(centerPointX, centerPointY, accelZScaled, accelColor, 4);
+	al_draw_line(centerPointX, centerPointY, accelXScaled, accelYScaled, accelColor, lineThickness);
+	al_draw_circle(centerPointX, centerPointY, accelZScaled, accelColor, lineThickness);
 
 	// TODO: Add text for values.
 	//char valStr[128];
@@ -772,17 +773,17 @@ bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacket
 
 	// Gyroscope pitch(X), yaw(Y), roll(Z) as lines.
 	float gyroXScaled = centerPointY - gyroX * scaleFactorGyro;
-	RESET_LIMIT_POS(gyroXScaled, maxSizeY - 2);
-	RESET_LIMIT_NEG(gyroXScaled, 1);
+	RESET_LIMIT_POS(gyroXScaled, maxSizeY - 2 - lineThickness);
+	RESET_LIMIT_NEG(gyroXScaled, 1 + lineThickness);
 	float gyroYScaled = centerPointX + gyroY * scaleFactorGyro;
-	RESET_LIMIT_POS(gyroYScaled, maxSizeX - 2);
-	RESET_LIMIT_NEG(gyroYScaled, 1);
+	RESET_LIMIT_POS(gyroYScaled, maxSizeX - 2 - lineThickness);
+	RESET_LIMIT_NEG(gyroYScaled, 1 + lineThickness);
 	float gyroZScaled = centerPointX + gyroZ * scaleFactorGyro;
-	RESET_LIMIT_POS(gyroZScaled, maxSizeX - 2);
-	RESET_LIMIT_NEG(gyroZScaled, 1);
+	RESET_LIMIT_POS(gyroZScaled, maxSizeX - 2 - lineThickness);
+	RESET_LIMIT_NEG(gyroZScaled, 1 + lineThickness);
 
-	al_draw_line(centerPointX, centerPointY, gyroYScaled, gyroXScaled, gyroColor, 4);
-	al_draw_line(centerPointX, centerPointY - 25, gyroZScaled, centerPointY - 25, gyroColor, 4);
+	al_draw_line(centerPointX, centerPointY, gyroYScaled, gyroXScaled, gyroColor, lineThickness);
+	al_draw_line(centerPointX, centerPointY - 20, gyroZScaled, centerPointY - 20, gyroColor, lineThickness);
 
 	return (true);
 }
