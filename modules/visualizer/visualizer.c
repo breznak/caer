@@ -4,6 +4,7 @@
 #include "ext/ringbuffer/ringbuffer.h"
 #include "modules/statistics/statistics.h"
 
+#include <math.h>
 #include <stdatomic.h>
 #include <allegro5/allegro_primitives.h>
 #include <allegro5/allegro_font.h>
@@ -788,7 +789,7 @@ bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacket
 	float accelYScaled = centerPointY - accelY * scaleFactorAccel;
 	RESET_LIMIT_POS(accelYScaled, maxSizeY - 2 - lineThickness);
 	RESET_LIMIT_NEG(accelYScaled, 1 + lineThickness);
-	float accelZScaled = accelZ * scaleFactorAccel;
+	float accelZScaled = fabsf(accelZ * scaleFactorAccel);
 	RESET_LIMIT_POS(accelZScaled, centerPointY - 2 - lineThickness); // Circle max.
 	RESET_LIMIT_NEG(accelZScaled, 1); // Circle min.
 
