@@ -24,7 +24,7 @@ bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPa
 bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketHeader frameEventPacketHeader);
 bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketHeader imu6EventPacketHeader);
 
-void caerVisualizer(uint16_t moduleID, caerVisualizerRenderer renderer, caerEventPacketHeader packetHeader);
+void caerVisualizer(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer, caerEventPacketHeader packetHeader);
 
 void caerVisualizerSystemInit(void);
 

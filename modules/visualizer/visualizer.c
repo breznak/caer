@@ -537,8 +537,18 @@ static void caerVisualizerModuleExit(caerModuleData moduleData);
 static struct caer_module_functions caerVisualizerFunctions = { .moduleInit = &caerVisualizerModuleInit, .moduleRun =
 	&caerVisualizerModuleRun, .moduleConfig = NULL, .moduleExit = &caerVisualizerModuleExit };
 
-void caerVisualizer(uint16_t moduleID, caerVisualizerRenderer renderer, caerEventPacketHeader packetHeader) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "Visualizer");
+void caerVisualizer(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer, caerEventPacketHeader packetHeader) {
+	// Concatenate name and 'Visualizer' prefix.
+	size_t nameLength = (name != NULL) ? (strlen(name)) : (0);
+	char visualizerName[10 + nameLength + 1]; // +1 for NUL termination.
+
+	memcpy(visualizerName, "Visualizer", 10);
+	if (name != NULL) {
+		memcpy(visualizerName + 10, name, nameLength);
+	}
+	visualizerName[10 + nameLength] = '\0';
+
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, visualizerName);
 
 	caerModuleSM(&caerVisualizerFunctions, moduleData, sizeof(struct visualizer_module_state), 2, renderer,
 		packetHeader);
