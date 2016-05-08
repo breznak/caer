@@ -40,9 +40,15 @@ void caerModuleSMv(caerModuleFunctions moduleFunctions, caerModuleData moduleDat
 		}
 	}
 	else if (moduleData->moduleStatus == STOPPED && running) {
-		moduleData->moduleState = calloc(1, memSize);
-		if (moduleData->moduleState == NULL && memSize != 0) {
-			return;
+		if (memSize != 0) {
+			moduleData->moduleState = calloc(1, memSize);
+			if (moduleData->moduleState == NULL) {
+				return;
+			}
+		}
+		else {
+			// memSize is zero, so moduleState must be NULL.
+			moduleData->moduleState = NULL;
 		}
 
 		if (moduleFunctions->moduleInit != NULL) {
