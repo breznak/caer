@@ -517,6 +517,11 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 
 				sshsNodePutInt(state->parentModule->moduleNode, "subsampleRendering", currentSubsampling);
 			}
+			else if (displayEvent.type == ALLEGRO_EVENT_KEY_DOWN && displayEvent.keyboard.keycode == ALLEGRO_KEY_S) {
+				bool currentShowStatistics = sshsNodeGetBool(state->parentModule->moduleNode, "showStatistics");
+
+				sshsNodePutBool(state->parentModule->moduleNode, "showStatistics", !currentShowStatistics);
+			}
 			else {
 				// Forward event to user-defined event handler.
 				if (state->eventHandler != NULL) {
@@ -544,7 +549,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 	}
 
 	// Handle display resize (zoom).
-	if (atomic_load_explicit(&state->displayWindowResize, memory_order_relaxed)) {
+	if (atomic_load_explicit(&state->displayWindowResize, memory_order_acquire)) {
 		al_resize_display(state->displayWindow, state->displayWindowSizeX, state->displayWindowSizeY);
 	}
 
@@ -624,12 +629,6 @@ static int caerVisualizerRenderThread(void *visualizerState) {
 	return (thrd_success);
 }
 
-struct visualizer_module_state {
-	caerVisualizerState visualizer;
-};
-
-typedef struct visualizer_module_state *visualizerModuleState;
-
 // Init is deferred and called from Run, because we need actual packets.
 static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRenderer renderer,
 	caerVisualizerEventHandler eventHandler, caerEventPacketHeader packetHeader);
@@ -653,14 +652,11 @@ void caerVisualizer(uint16_t moduleID, const char *name, caerVisualizerRenderer 
 
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, visualizerName);
 
-	caerModuleSM(&caerVisualizerFunctions, moduleData, sizeof(struct visualizer_module_state), 3, renderer,
-		eventHandler, packetHeader);
+	caerModuleSM(&caerVisualizerFunctions, moduleData, 0, 3, renderer, eventHandler, packetHeader);
 }
 
 static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRenderer renderer,
 	caerVisualizerEventHandler eventHandler, caerEventPacketHeader packetHeader) {
-	visualizerModuleState state = moduleData->moduleState;
-
 	// Get size information from source.
 	int16_t sourceID = caerEventPacketHeaderGetEventSource(packetHeader);
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
@@ -686,9 +682,9 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRe
 		sizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
 	}
 
-	state->visualizer = caerVisualizerInit(renderer, eventHandler, sizeX, sizeY, VISUALIZER_DEFAULT_ZOOM, true,
+	moduleData->moduleState = caerVisualizerInit(renderer, eventHandler, sizeX, sizeY, VISUALIZER_DEFAULT_ZOOM, true,
 		moduleData);
-	if (state->visualizer == NULL) {
+	if (moduleData->moduleState == NULL) {
 		return (false);
 	}
 
@@ -696,17 +692,13 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRe
 }
 
 static void caerVisualizerModuleExit(caerModuleData moduleData) {
-	visualizerModuleState state = moduleData->moduleState;
-
 	// Shut down rendering.
-	caerVisualizerExit(state->visualizer);
-	state->visualizer = NULL;
+	caerVisualizerExit(moduleData->moduleState);
+	moduleData->moduleState = NULL;
 }
 
 static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
 	UNUSED_ARGUMENT(argsNumber);
-
-	visualizerModuleState state = moduleData->moduleState;
 
 	caerVisualizerRenderer renderer = va_arg(args, caerVisualizerRenderer);
 	caerVisualizerEventHandler eventHandler = va_arg(args, caerVisualizerEventHandler);
@@ -718,14 +710,14 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 	}
 
 	// Initialize visualizer. Needs information from a packet (the source ID)!
-	if (state->visualizer == NULL) {
+	if (moduleData->moduleState == NULL) {
 		if (!caerVisualizerModuleInit(moduleData, renderer, eventHandler, packetHeader)) {
 			return;
 		}
 	}
 
 	// Render given packet.
-	caerVisualizerUpdate(state->visualizer, packetHeader);
+	caerVisualizerUpdate(moduleData->moduleState, packetHeader);
 }
 
 bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketHeader polarityEventPacketHeader) {
