@@ -9,7 +9,7 @@ cmake >= 2.6
 gcc >= 4.9 or clang >= 3.6
 libcaer >= 2.0.0
 mini-xml (mxml) >= 2.7
-allegro5 >= 5.0.1 (optional, only if using the visualizer)
+allegro5 >= 5.0.11 (optional, only if using the Visualizer)
 
 INSTALLATION:
 
