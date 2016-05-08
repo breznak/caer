@@ -871,6 +871,22 @@ static mxml_node_t *sshsNodeGenerateXML(sshsNode node, bool recursive, const cha
 		sshsNode *children = sshsNodeGetChildren(node, &numChildren);
 
 		for (size_t i = 0; i < numChildren; i++) {
+			// First check that this child node is not filtered out.
+			bool isFilteredOut = false;
+
+			// Verify that the node is not filtered out.
+			for (size_t fn = 0; fn < filterNodesLength; fn++) {
+				if (strcmp(sshsNodeGetName(children[i]), filterNodes[fn]) == 0) {
+					// Matches, don't process this node.
+					isFilteredOut = true;
+					break;
+				}
+			}
+
+			if (isFilteredOut) {
+				continue;
+			}
+
 			mxml_node_t *child = sshsNodeGenerateXML(children[i], recursive, filterKeys, filterKeysLength, filterNodes,
 				filterNodesLength);
 
