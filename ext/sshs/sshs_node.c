@@ -43,8 +43,10 @@ static bool sshsNodeCheckAttributeValueChanged(enum sshs_node_attr_value_type ty
 	union sshs_node_attr_value newValue);
 static sshsNodeAttr *sshsNodeGetAttributes(sshsNode node, size_t *numAttributes);
 static const char *sshsNodeXMLWhitespaceCallback(mxml_node_t *node, int where);
-static void sshsNodeToXML(sshsNode node, int outFd, bool recursive, const char **filterKeys, size_t filterKeysLength);
-static mxml_node_t *sshsNodeGenerateXML(sshsNode node, bool recursive, const char **filterKeys, size_t filterKeysLength);
+static void sshsNodeToXML(sshsNode node, int outFd, bool recursive, const char **filterKeys, size_t filterKeysLength,
+	const char **filterNodes, size_t filterNodesLength);
+static mxml_node_t *sshsNodeGenerateXML(sshsNode node, bool recursive, const char **filterKeys, size_t filterKeysLength,
+	const char **filterNodes, size_t filterNodesLength);
 static mxml_node_t **sshsNodeXMLFilterChildNodes(mxml_node_t *node, const char *nodeName, size_t *numChildren);
 static bool sshsNodeFromXML(sshsNode node, int inFd, bool recursive, bool strict);
 static void sshsNodeConsumeXML(sshsNode node, mxml_node_t *content, bool recursive);
@@ -724,11 +726,12 @@ char *sshsNodeGetString(sshsNode node, const char *key) {
 }
 
 void sshsNodeExportNodeToXML(sshsNode node, int outFd, const char **filterKeys, size_t filterKeysLength) {
-	sshsNodeToXML(node, outFd, false, filterKeys, filterKeysLength);
+	sshsNodeToXML(node, outFd, false, filterKeys, filterKeysLength, NULL, 0);
 }
 
-void sshsNodeExportSubTreeToXML(sshsNode node, int outFd, const char **filterKeys, size_t filterKeysLength) {
-	sshsNodeToXML(node, outFd, true, filterKeys, filterKeysLength);
+void sshsNodeExportSubTreeToXML(sshsNode node, int outFd, const char **filterKeys, size_t filterKeysLength,
+	const char **filterNodes, size_t filterNodesLength) {
+	sshsNodeToXML(node, outFd, true, filterKeys, filterKeysLength, filterNodes, filterNodesLength);
 }
 
 #define INDENT_MAX_LEVEL 20
@@ -804,11 +807,12 @@ static const char *sshsNodeXMLWhitespaceCallback(mxml_node_t *node, int where) {
 	return (NULL);
 }
 
-static void sshsNodeToXML(sshsNode node, int outFd, bool recursive, const char **filterKeys, size_t filterKeysLength) {
+static void sshsNodeToXML(sshsNode node, int outFd, bool recursive, const char **filterKeys, size_t filterKeysLength,
+	const char **filterNodes, size_t filterNodesLength) {
 	mxml_node_t *root = mxmlNewElement(MXML_NO_PARENT, "sshs");
 	mxmlElementSetAttr(root, "version", "1.0");
 	mxmlAdd(root, MXML_ADD_AFTER, MXML_ADD_TO_PARENT,
-		sshsNodeGenerateXML(node, recursive, filterKeys, filterKeysLength));
+		sshsNodeGenerateXML(node, recursive, filterKeys, filterKeysLength, filterNodes, filterNodesLength));
 
 	// Disable wrapping
 	mxmlSetWrapMargin(0);
@@ -819,7 +823,8 @@ static void sshsNodeToXML(sshsNode node, int outFd, bool recursive, const char *
 	mxmlDelete(root);
 }
 
-static mxml_node_t *sshsNodeGenerateXML(sshsNode node, bool recursive, const char **filterKeys, size_t filterKeysLength) {
+static mxml_node_t *sshsNodeGenerateXML(sshsNode node, bool recursive, const char **filterKeys, size_t filterKeysLength,
+	const char **filterNodes, size_t filterNodesLength) {
 	mxml_node_t *this = mxmlNewElement(MXML_NO_PARENT, "node");
 
 	// First this node's name and full path.
@@ -866,7 +871,8 @@ static mxml_node_t *sshsNodeGenerateXML(sshsNode node, bool recursive, const cha
 		sshsNode *children = sshsNodeGetChildren(node, &numChildren);
 
 		for (size_t i = 0; i < numChildren; i++) {
-			mxml_node_t *child = sshsNodeGenerateXML(children[i], recursive, filterKeys, filterKeysLength);
+			mxml_node_t *child = sshsNodeGenerateXML(children[i], recursive, filterKeys, filterKeysLength, filterNodes,
+				filterNodesLength);
 
 			if (mxmlGetFirstChild(child) != NULL) {
 				mxmlAdd(this, MXML_ADD_AFTER, MXML_ADD_TO_PARENT, child);

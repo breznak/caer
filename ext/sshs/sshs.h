@@ -77,7 +77,8 @@ bool sshsNodePutStringIfAbsent(sshsNode node, const char *key, const char *value
 void sshsNodePutString(sshsNode node, const char *key, const char *value);
 char *sshsNodeGetString(sshsNode node, const char *key);
 void sshsNodeExportNodeToXML(sshsNode node, int outFd, const char **filterKeys, size_t filterKeysLength);
-void sshsNodeExportSubTreeToXML(sshsNode node, int outFd, const char **filterKeys, size_t filterKeysLength);
+void sshsNodeExportSubTreeToXML(sshsNode node, int outFd, const char **filterKeys, size_t filterKeysLength,
+	const char **filterNodes, size_t filterNodesLength);
 bool sshsNodeImportNodeFromXML(sshsNode node, int inFd, bool strict);
 bool sshsNodeImportSubTreeFromXML(sshsNode node, int inFd, bool strict);
 bool sshsNodeStringToNodeConverter(sshsNode node, const char *key, const char *type, const char *value);
