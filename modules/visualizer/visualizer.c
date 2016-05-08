@@ -12,26 +12,31 @@
 
 struct caer_visualizer_state {
 	atomic_bool running;
-	ALLEGRO_FONT *displayFont;
+	atomic_bool displayWindowResize;
+	int32_t displayWindowSizeX;
+	int32_t displayWindowSizeY;
 	ALLEGRO_DISPLAY *displayWindow;
 	ALLEGRO_EVENT_QUEUE *displayEventQueue;
 	ALLEGRO_TIMER *displayTimer;
+	ALLEGRO_FONT *displayFont;
 	ALLEGRO_BITMAP *bitmapRenderer;
 	int32_t bitmapRendererSizeX;
 	int32_t bitmapRendererSizeY;
 	bool bitmapDrawUpdate;
-	float displayWindowZoomFactor;
 	RingBuffer dataTransfer;
 	thrd_t renderingThread;
 	caerVisualizerRenderer renderer;
 	caerVisualizerEventHandler eventHandler;
 	caerModuleData parentModule;
-	bool showStatistics;
+	atomic_bool showStatistics;
 	struct caer_statistics_state packetStatistics;
-	int32_t packetSubsampleRendering;
+	atomic_int_fast32_t packetSubsampleRendering;
 	int32_t packetSubsampleCount;
 };
 
+static void updateDisplaySize(caerVisualizerState state, float zoomFactor, bool showStatistics);
+static void caerVisualizerConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 static bool caerVisualizerInitGraphics(caerVisualizerState state);
 static void caerVisualizerUpdateScreen(caerVisualizerState state);
 static void caerVisualizerExitGraphics(caerVisualizerState state);
@@ -173,13 +178,15 @@ caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisu
 	sshsNodePutBoolIfAbsent(parentModule->moduleNode, "showStatistics", defaultShowStatistics);
 	sshsNodePutFloatIfAbsent(parentModule->moduleNode, "zoomFactor", defaultZoomFactor);
 
-	state->packetSubsampleRendering = sshsNodeGetInt(parentModule->moduleNode, "subsampleRendering");
-	state->showStatistics = sshsNodeGetBool(parentModule->moduleNode, "showStatistics");
-	state->displayWindowZoomFactor = sshsNodeGetFloat(parentModule->moduleNode, "zoomFactor");
+	atomic_store(&state->packetSubsampleRendering, sshsNodeGetInt(parentModule->moduleNode, "subsampleRendering"));
+	atomic_store(&state->showStatistics, sshsNodeGetBool(parentModule->moduleNode, "showStatistics"));
 
 	// Remember sizes.
 	state->bitmapRendererSizeX = bitmapSizeX;
 	state->bitmapRendererSizeY = bitmapSizeY;
+
+	updateDisplaySize(state, sshsNodeGetFloat(parentModule->moduleNode, "zoomFactor"),
+		atomic_load(&state->showStatistics));
 
 	// Remember rendering and event handling function.
 	state->renderer = renderer;
@@ -217,9 +224,56 @@ caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisu
 		return (NULL);
 	}
 
-	caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Visualizer: Initialized successfully.");
+	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
+	sshsNodeAddAttributeListener(parentModule->moduleNode, state, &caerVisualizerConfigListener);
+
+	caerLog(CAER_LOG_DEBUG, parentModule->moduleSubSystemString, "Visualizer: Initialized successfully.");
 
 	return (state);
+}
+
+static void updateDisplaySize(caerVisualizerState state, float zoomFactor, bool showStatistics) {
+	int32_t displayWindowSizeX = I32T((float ) state->bitmapRendererSizeX * zoomFactor);
+	int32_t displayWindowSizeY = I32T((float ) state->bitmapRendererSizeY * zoomFactor);
+
+	// When statistics are turned on, we need to add some space to the
+	// X axis for displaying the whole line and the Y axis for spacing.
+	if (showStatistics) {
+		if (STATISTICS_WIDTH > displayWindowSizeX) {
+			displayWindowSizeX = STATISTICS_WIDTH;
+		}
+
+		displayWindowSizeY += STATISTICS_HEIGHT;
+	}
+
+	state->displayWindowSizeX = displayWindowSizeX;
+	state->displayWindowSizeY = displayWindowSizeY;
+}
+
+static void caerVisualizerConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
+	caerVisualizerState state = userData;
+
+	if (event == ATTRIBUTE_MODIFIED) {
+		if (changeType == FLOAT && caerStrEquals(changeKey, "zoomFactor")) {
+			updateDisplaySize(state, changeValue.ffloat, sshsNodeGetBool(node, "showStatistics"));
+
+			// Set resize flag.
+			atomic_store(&state->displayWindowResize, true);
+		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "showStatistics")) {
+			// Set statistics flag.
+			atomic_store(&state->showStatistics, changeValue.boolean);
+
+			updateDisplaySize(state, sshsNodeGetFloat(node, "zoomFactor"), changeValue.boolean);
+
+			// Set resize flag.
+			atomic_store(&state->displayWindowResize, true);
+		}
+		else if (changeType == INT && caerStrEquals(changeKey, "subsampleRendering")) {
+			atomic_store(&state->packetSubsampleRendering, changeValue.iint);
+		}
+	}
 }
 
 void caerVisualizerUpdate(caerVisualizerState state, caerEventPacketHeader packetHeader) {
@@ -233,7 +287,7 @@ void caerVisualizerUpdate(caerVisualizerState state, caerEventPacketHeader packe
 	// Only render every Nth packet.
 	state->packetSubsampleCount++;
 
-	if (state->packetSubsampleCount >= state->packetSubsampleRendering) {
+	if (state->packetSubsampleCount >= atomic_load_explicit(&state->packetSubsampleRendering, memory_order_relaxed)) {
 		state->packetSubsampleCount = 0;
 	}
 	else {
@@ -260,6 +314,9 @@ void caerVisualizerExit(caerVisualizerState state) {
 	if (state == NULL) {
 		return;
 	}
+
+	// Remove listener, which can reference invalid memory in userData.
+	sshsNodeRemoveAttributeListener(state->parentModule->moduleNode, state, &caerVisualizerConfigListener);
 
 	// Shut down rendering thread and wait on it to finish.
 	atomic_store(&state->running, false);
@@ -289,24 +346,11 @@ void caerVisualizerExit(caerVisualizerState state) {
 
 static bool caerVisualizerInitGraphics(caerVisualizerState state) {
 	// Create display window.
-	// When statistics are turned on, we need to add some space to the
-	// X axis for displaying the whole line and the Y axis for spacing.
-	int32_t displaySizeX = I32T((float ) state->bitmapRendererSizeX * state->displayWindowZoomFactor);
-	int32_t displaySizeY = I32T((float ) state->bitmapRendererSizeY * state->displayWindowZoomFactor);
-
-	if (state->showStatistics) {
-		if (STATISTICS_WIDTH > displaySizeX) {
-			displaySizeX = STATISTICS_WIDTH;
-		}
-
-		displaySizeY += STATISTICS_HEIGHT;
-	}
-
-	state->displayWindow = al_create_display(displaySizeX, displaySizeY);
+	state->displayWindow = al_create_display(state->displayWindowSizeX, state->displayWindowSizeY);
 	if (state->displayWindow == NULL) {
 		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
-			"Visualizer: Failed to create display window with sizeX=%d, sizeY=%d, zoomFactor=%f.", displaySizeX,
-			displaySizeY, (double) state->displayWindowZoomFactor);
+			"Visualizer: Failed to create display window with sizeX=%d, sizeY=%d.", state->displayWindowSizeX,
+			state->displayWindowSizeY);
 		return (false);
 	}
 
@@ -410,7 +454,6 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 	}
 
 	bool redraw = false;
-	bool resize = false;
 	ALLEGRO_EVENT displayEvent;
 
 	handleEvents: al_wait_for_event(state->displayEventQueue, &displayEvent);
@@ -421,26 +464,75 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 	else if (displayEvent.type == ALLEGRO_EVENT_DISPLAY_CLOSE) {
 		sshsNodePutBool(state->parentModule->moduleNode, "shutdown", true);
 	}
-	else if (displayEvent.type == ALLEGRO_EVENT_KEY_DOWN) {
+	else if (displayEvent.type == ALLEGRO_EVENT_KEY_CHAR || displayEvent.type == ALLEGRO_EVENT_KEY_DOWN
+		|| displayEvent.type == ALLEGRO_EVENT_KEY_UP) {
 		// React to key presses, but only if they came from the corresponding display.
 		if (displayEvent.keyboard.display == state->displayWindow) {
-			if (displayEvent.keyboard.keycode == ALLEGRO_KEY_UP) {
-				state->displayWindowZoomFactor++;
-				resize = true;
+			if (displayEvent.type == ALLEGRO_EVENT_KEY_DOWN && displayEvent.keyboard.keycode == ALLEGRO_KEY_UP) {
+				float currentZoomFactor = sshsNodeGetFloat(state->parentModule->moduleNode, "zoomFactor");
+
+				currentZoomFactor += 0.5f;
 
 				// Clip zoom factor.
-				if (state->displayWindowZoomFactor > 50) {
-					state->displayWindowZoomFactor = 50;
+				if (currentZoomFactor > 50) {
+					currentZoomFactor = 50;
+				}
+
+				sshsNodePutFloat(state->parentModule->moduleNode, "zoomFactor", currentZoomFactor);
+			}
+			else if (displayEvent.type == ALLEGRO_EVENT_KEY_DOWN && displayEvent.keyboard.keycode == ALLEGRO_KEY_DOWN) {
+				float currentZoomFactor = sshsNodeGetFloat(state->parentModule->moduleNode, "zoomFactor");
+
+				currentZoomFactor -= 0.5f;
+
+				// Clip zoom factor.
+				if (currentZoomFactor < 0.5f) {
+					currentZoomFactor = 0.5f;
+				}
+
+				sshsNodePutFloat(state->parentModule->moduleNode, "zoomFactor", currentZoomFactor);
+			}
+			else if (displayEvent.type == ALLEGRO_EVENT_KEY_DOWN && displayEvent.keyboard.keycode == ALLEGRO_KEY_LEFT) {
+				int32_t currentSubsampling = sshsNodeGetInt(state->parentModule->moduleNode, "subsampleRendering");
+
+				currentSubsampling--;
+
+				// Clip subsampling factor.
+				if (currentSubsampling < 1) {
+					currentSubsampling = 1;
+				}
+
+				sshsNodePutInt(state->parentModule->moduleNode, "subsampleRendering", currentSubsampling);
+			}
+			else if (displayEvent.type == ALLEGRO_EVENT_KEY_DOWN
+				&& displayEvent.keyboard.keycode == ALLEGRO_KEY_RIGHT) {
+				int32_t currentSubsampling = sshsNodeGetInt(state->parentModule->moduleNode, "subsampleRendering");
+
+				currentSubsampling++;
+
+				// Clip subsampling factor.
+				if (currentSubsampling > 100000) {
+					currentSubsampling = 100000;
+				}
+
+				sshsNodePutInt(state->parentModule->moduleNode, "subsampleRendering", currentSubsampling);
+			}
+			else {
+				// Forward event to user-defined event handler.
+				if (state->eventHandler != NULL) {
+					(*state->eventHandler)(state, displayEvent);
 				}
 			}
-			else if (displayEvent.keyboard.keycode == ALLEGRO_KEY_DOWN) {
-				state->displayWindowZoomFactor--;
-				resize = true;
-
-				// Clip zoom factor.
-				if (state->displayWindowZoomFactor < 1) {
-					state->displayWindowZoomFactor = 1;
-				}
+		}
+	}
+	else if (displayEvent.type == ALLEGRO_EVENT_MOUSE_AXES || displayEvent.type == ALLEGRO_EVENT_MOUSE_BUTTON_DOWN
+		|| displayEvent.type == ALLEGRO_EVENT_MOUSE_BUTTON_UP || displayEvent.type == ALLEGRO_EVENT_MOUSE_ENTER_DISPLAY
+		|| displayEvent.type == ALLEGRO_EVENT_MOUSE_LEAVE_DISPLAY || displayEvent.type == ALLEGRO_EVENT_MOUSE_WARPED) {
+		// React to mouse movements, but only if they came from the corresponding display.
+		if (displayEvent.mouse.display == state->displayWindow) {
+			// Forward event to user-defined event handler.
+			if (state->eventHandler != NULL) {
+				(*state->eventHandler)(state, displayEvent);
 			}
 		}
 	}
@@ -452,19 +544,8 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 	}
 
 	// Handle display resize (zoom).
-	if (resize) {
-		int32_t displaySizeX = I32T((float ) state->bitmapRendererSizeX * state->displayWindowZoomFactor);
-		int32_t displaySizeY = I32T((float ) state->bitmapRendererSizeY * state->displayWindowZoomFactor);
-
-		if (state->showStatistics) {
-			if (STATISTICS_WIDTH > displaySizeX) {
-				displaySizeX = STATISTICS_WIDTH;
-			}
-
-			displaySizeY += STATISTICS_HEIGHT;
-		}
-
-		al_resize_display(state->displayWindow, displaySizeX, displaySizeY);
+	if (atomic_load_explicit(&state->displayWindowResize, memory_order_relaxed)) {
+		al_resize_display(state->displayWindow, state->displayWindowSizeX, state->displayWindowSizeY);
 	}
 
 	// Render content to display.
@@ -475,7 +556,8 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		al_clear_to_color(al_map_rgb(0, 0, 0));
 
 		// Render statistics string.
-		bool doStatistics = (state->showStatistics && state->displayFont != NULL);
+		bool doStatistics = (atomic_load_explicit(&state->showStatistics, memory_order_relaxed)
+			&& state->displayFont != NULL);
 
 		if (doStatistics) {
 			al_draw_text(state->displayFont, al_map_rgb(255, 255, 255), GLOBAL_FONT_SPACING,
@@ -485,8 +567,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		// Blit bitmap to screen, taking zoom factor into consideration.
 		al_draw_scaled_bitmap(state->bitmapRenderer, 0, 0, (float) state->bitmapRendererSizeX,
 			(float) state->bitmapRendererSizeY, 0, (doStatistics) ? ((float) STATISTICS_HEIGHT) : (0),
-			(float) state->bitmapRendererSizeX * state->displayWindowZoomFactor,
-			(float) state->bitmapRendererSizeY * state->displayWindowZoomFactor, 0);
+			(float) state->displayWindowSizeX, (float) state->displayWindowSizeY, 0);
 
 		al_flip_display();
 	}
