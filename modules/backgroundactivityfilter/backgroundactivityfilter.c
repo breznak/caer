@@ -39,12 +39,13 @@ static bool caerBackgroundActivityFilterInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "deltaT", 30000);
 	sshsNodePutByteIfAbsent(moduleData->moduleNode, "subSampleBy", 0);
 
-	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
-
 	BAFilterState state = moduleData->moduleState;
 
 	state->deltaT = sshsNodeGetInt(moduleData->moduleNode, "deltaT");
 	state->subSampleBy = sshsNodeGetByte(moduleData->moduleNode, "subSampleBy");
+
+	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
 	// Nothing that can fail here.
 	return (true);
@@ -133,6 +134,9 @@ static void caerBackgroundActivityFilterConfig(caerModuleData moduleData) {
 }
 
 static void caerBackgroundActivityFilterExit(caerModuleData moduleData) {
+	// Remove listener, which can reference invalid memory in userData.
+	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
+
 	BAFilterState state = moduleData->moduleState;
 
 	// Ensure map is freed.

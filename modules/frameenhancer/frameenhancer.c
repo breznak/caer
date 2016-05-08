@@ -51,9 +51,10 @@ static bool caerFrameEnhancerInit(caerModuleData moduleData) {
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "whiteBalanceType", "standard");
 #endif
 
-	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
-
 	FrameEnhancerState state = moduleData->moduleState;
+
+	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
 	// Nothing that can fail here.
 	return (true);
@@ -146,6 +147,9 @@ static void caerFrameEnhancerConfig(caerModuleData moduleData) {
 }
 
 static void caerFrameEnhancerExit(caerModuleData moduleData) {
+	// Remove listener, which can reference invalid memory in userData.
+	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
+
 	FrameEnhancerState state = moduleData->moduleState;
 
 }

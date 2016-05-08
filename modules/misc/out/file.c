@@ -137,9 +137,6 @@ static bool caerOutputFileInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "excludeHeader", false);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "maxBytesPerPacket", 0);
 
-	// Install default listener to signal configuration updates asynchronously.
-	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerOutputFileConfigListener);
-
 	// Generate current file name and open it.
 	char *directory = sshsNodeGetString(moduleData->moduleNode, "directory");
 	char *prefix = sshsNodeGetString(moduleData->moduleNode, "prefix");
@@ -190,6 +187,9 @@ static bool caerOutputFileInit(caerModuleData moduleData) {
 		write(state->fileDescriptor, "#Format: RAW\r\n", 14);
 		write(state->fileDescriptor, "#!END-HEADER\r\n", 14);
 	}
+
+	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerOutputFileConfigListener);
 
 	return (true);
 }
@@ -286,6 +286,9 @@ static void caerOutputFileConfig(caerModuleData moduleData) {
 }
 
 static void caerOutputFileExit(caerModuleData moduleData) {
+	// Remove listener, which can reference invalid memory in userData.
+	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerOutputFileConfigListener);
+
 	fileState state = moduleData->moduleState;
 
 	// Close open file.

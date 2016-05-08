@@ -46,9 +46,6 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "excludeHeader", false);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "maxBytesPerPacket", 0);
 
-	// Install default listener to signal configuration updates asynchronously.
-	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerOutputNetUDPConfigListener);
-
 	// Open a UDP socket to the remote client, to which we'll send data packets.
 	state->netUDPDescriptor = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (state->netUDPDescriptor < 0) {
@@ -92,6 +89,9 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	else {
 		state->sgioMemory = NULL;
 	}
+
+	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerOutputNetUDPConfigListener);
 
 	caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "UDP socket connected to %s:%" PRIu16 ".",
 		inet_ntoa(udpClient.sin_addr), ntohs(udpClient.sin_port));
@@ -195,6 +195,9 @@ static void caerOutputNetUDPConfig(caerModuleData moduleData) {
 }
 
 static void caerOutputNetUDPExit(caerModuleData moduleData) {
+	// Remove listener, which can reference invalid memory in userData.
+	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerOutputNetUDPConfigListener);
+
 	netUDPState state = moduleData->moduleState;
 
 	// Close open UDP socket.

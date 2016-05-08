@@ -44,9 +44,6 @@ static bool caerOutputUnixSInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "excludeHeader", false);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "maxBytesPerPacket", 0);
 
-	// Install default listener to signal configuration updates asynchronously.
-	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerOutputUnixSConfigListener);
-
 	// Open a Unix local socket on a known path, to be accessed by other processes.
 	state->unixSocketDescriptor = socket(AF_UNIX, SOCK_DGRAM, 0);
 	if (state->unixSocketDescriptor < 0) {
@@ -90,6 +87,9 @@ static bool caerOutputUnixSInit(caerModuleData moduleData) {
 	else {
 		state->sgioMemory = NULL;
 	}
+
+	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerOutputUnixSConfigListener);
 
 	caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Local Unix socket ready at %s.",
 		unixSocketAddr.sun_path);
@@ -192,6 +192,9 @@ static void caerOutputUnixSConfig(caerModuleData moduleData) {
 }
 
 static void caerOutputUnixSExit(caerModuleData moduleData) {
+	// Remove listener, which can reference invalid memory in userData.
+	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerOutputUnixSConfigListener);
+
 	unixsState state = moduleData->moduleState;
 
 	// Close open local Unix socket.

@@ -46,9 +46,6 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "excludeHeader", false);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "maxBytesPerPacket", 0);
 
-	// Install default listener to signal configuration updates asynchronously.
-	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerOutputNetTCPConfigListener);
-
 	// Open a TCP socket to the remote client, to which we'll send data packets.
 	state->netTCPDescriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (state->netTCPDescriptor < 0) {
@@ -92,6 +89,9 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 	else {
 		state->sgioMemory = NULL;
 	}
+
+	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerOutputNetTCPConfigListener);
 
 	caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "TCP socket connected to %s:%" PRIu16 ".",
 		inet_ntoa(tcpClient.sin_addr), ntohs(tcpClient.sin_port));
@@ -195,6 +195,9 @@ static void caerOutputNetTCPConfig(caerModuleData moduleData) {
 }
 
 static void caerOutputNetTCPExit(caerModuleData moduleData) {
+	// Remove listener, which can reference invalid memory in userData.
+	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerOutputNetTCPConfigListener);
+
 	netTCPState state = moduleData->moduleState;
 
 	// Close open TCP socket.

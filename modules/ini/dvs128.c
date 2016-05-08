@@ -115,10 +115,36 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 		return (false);
 	}
 
+	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
+	sshsNode biasNode = sshsGetRelativeNode(moduleData->moduleNode, "bias/");
+	sshsNodeAddAttributeListener(biasNode, moduleData, &biasConfigListener);
+
+	sshsNode dvsNode = sshsGetRelativeNode(moduleData->moduleNode, "dvs/");
+	sshsNodeAddAttributeListener(dvsNode, moduleData, &dvsConfigListener);
+
+	sshsNode usbNode = sshsGetRelativeNode(moduleData->moduleNode, "usb/");
+	sshsNodeAddAttributeListener(usbNode, moduleData, &usbConfigListener);
+
+	sshsNode sysNode = sshsGetRelativeNode(moduleData->moduleNode, "system/");
+	sshsNodeAddAttributeListener(sysNode, moduleData, &systemConfigListener);
+
 	return (true);
 }
 
 static void caerInputDVS128Exit(caerModuleData moduleData) {
+	// Remove listener, which can reference invalid memory in userData.
+	sshsNode biasNode = sshsGetRelativeNode(moduleData->moduleNode, "bias/");
+	sshsNodeRemoveAttributeListener(biasNode, moduleData, &biasConfigListener);
+
+	sshsNode dvsNode = sshsGetRelativeNode(moduleData->moduleNode, "dvs/");
+	sshsNodeRemoveAttributeListener(dvsNode, moduleData, &dvsConfigListener);
+
+	sshsNode usbNode = sshsGetRelativeNode(moduleData->moduleNode, "usb/");
+	sshsNodeRemoveAttributeListener(usbNode, moduleData, &usbConfigListener);
+
+	sshsNode sysNode = sshsGetRelativeNode(moduleData->moduleNode, "system/");
+	sshsNodeRemoveAttributeListener(sysNode, moduleData, &systemConfigListener);
+
 	caerDeviceDataStop(moduleData->moduleState);
 
 	caerDeviceClose((caerDeviceHandle *) &moduleData->moduleState);
@@ -161,22 +187,16 @@ static void createDefaultConfiguration(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(biasNode, "foll", 271);
 	sshsNodePutIntIfAbsent(biasNode, "pr", 217);
 
-	sshsNodeAddAttributeListener(biasNode, moduleData, &biasConfigListener);
-
 	// DVS settings.
 	sshsNode dvsNode = sshsGetRelativeNode(moduleData->moduleNode, "dvs/");
 	sshsNodePutBoolIfAbsent(dvsNode, "Run", true);
 	sshsNodePutBoolIfAbsent(dvsNode, "TimestampReset", false);
 	sshsNodePutBoolIfAbsent(dvsNode, "ArrayReset", false);
 
-	sshsNodeAddAttributeListener(dvsNode, moduleData, &dvsConfigListener);
-
 	// USB buffer settings.
 	sshsNode usbNode = sshsGetRelativeNode(moduleData->moduleNode, "usb/");
 	sshsNodePutIntIfAbsent(usbNode, "BufferNumber", 8);
 	sshsNodePutIntIfAbsent(usbNode, "BufferSize", 4096);
-
-	sshsNodeAddAttributeListener(usbNode, moduleData, &usbConfigListener);
 
 	sshsNode sysNode = sshsGetRelativeNode(moduleData->moduleNode, "system/");
 
@@ -190,8 +210,6 @@ static void createDefaultConfiguration(caerModuleData moduleData) {
 
 	// Ring-buffer setting (only changes value on module init/shutdown cycles).
 	sshsNodePutIntIfAbsent(sysNode, "DataExchangeBufferSize", 64);
-
-	sshsNodeAddAttributeListener(sysNode, moduleData, &systemConfigListener);
 }
 
 static void sendDefaultConfiguration(caerModuleData moduleData) {

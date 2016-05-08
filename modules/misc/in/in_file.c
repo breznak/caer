@@ -153,9 +153,6 @@ static bool caerInputFileInit(caerModuleData moduleData) {
 
 	// NOTE: add here other fields that seem reasonable for input control (playback param, time window)
 
-	// Install default listener to signal configuration updates asynchronously.
-	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerInputFileConfigListener);
-
 	// Take actual values
 	userHomeDir = sshsNodeGetString(moduleData->moduleNode, "directory");
 	fileName = sshsNodeGetString(moduleData->moduleNode, "filename");
@@ -193,6 +190,9 @@ static bool caerInputFileInit(caerModuleData moduleData) {
 		return (false);
 	}
 
+	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerInputFileConfigListener);
+
 	return (true);
 }
 
@@ -218,6 +218,9 @@ static void caerInputFileRun(caerModuleData moduleData, size_t argsNumber, va_li
 }
 
 static void caerInputFileExit(caerModuleData moduleData) {
+	// Remove listener, which can reference invalid memory in userData.
+	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerInputFileConfigListener);
+
 	inputFileState state = moduleData->moduleState;
 
 	// Tell the input thread to stop. Main thread waits until it stopped

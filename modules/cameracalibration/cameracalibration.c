@@ -54,13 +54,17 @@ static bool caerCameraCalibrationInit(caerModuleData moduleData) {
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "loadFileName", "camera_calib.xml"); // The name of the file from which to load the calibration settings for undistortion
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "fitAllPixels", false); // Whether to fit all the input pixels (black borders) or maximize the image, at the cost of loosing some pixels.
 
-	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
-
 	// Update all settings.
 	updateSettings(moduleData);
 
 	// Initialize C++ class for OpenCV integration.
 	state->cpp_class = calibration_init(&state->settings);
+	if (state->cpp_class == NULL) {
+		return (false);
+	}
+
+	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
 	return (true);
 }
@@ -133,6 +137,9 @@ static void caerCameraCalibrationConfig(caerModuleData moduleData) {
 }
 
 static void caerCameraCalibrationExit(caerModuleData moduleData) {
+	// Remove listener, which can reference invalid memory in userData.
+	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
+
 	CameraCalibrationState state = moduleData->moduleState;
 
 	calibration_destroy(state->cpp_class);

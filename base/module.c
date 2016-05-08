@@ -94,25 +94,30 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	sshsString[nameLength] = '/';
 	sshsString[nameLength + 1] = '\0';
 
-	// Initialize configuration, shutdown hooks.
+	// Initialize configuration.
 	moduleData->moduleNode = sshsGetRelativeNode(mainloopNode, sshsString);
 	if (moduleData->moduleNode == NULL) {
+		free(moduleData);
+
 		caerLog(CAER_LOG_ALERT, nameString, "Failed to allocate configuration node for module.");
 		thrd_exit(EXIT_FAILURE);
 	}
 
-	sshsNodePutBool(moduleData->moduleNode, "shutdown", false); // Always reset to false.
-	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleShutdownListener);
-
 	// Setup default full log string name.
 	moduleData->moduleSubSystemString = malloc(nameLength + 1);
 	if (moduleData->moduleSubSystemString == NULL) {
+		free(moduleData);
+
 		caerLog(CAER_LOG_ALERT, nameString, "Failed to allocate subsystem string for module.");
 		thrd_exit(EXIT_FAILURE);
 	}
 
 	strncpy(moduleData->moduleSubSystemString, nameString, nameLength);
 	moduleData->moduleSubSystemString[nameLength] = '\0';
+
+	// Initialize shutdown hooks.
+	sshsNodePutBool(moduleData->moduleNode, "shutdown", false); // Always reset to false.
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleShutdownListener);
 
 	atomic_thread_fence(memory_order_release);
 

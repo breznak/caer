@@ -96,9 +96,6 @@ static bool caerInputNetTCPServerInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "keepLatestContainer", false);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "waitForFullContainer", false);
 
-	// Install default listener to signal configuration updates asynchronously.
-	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerInputNetTCPServerConfigListener);
-
 	state->stop = false;
 	state->connected = false;
 	state->stopInput = false;
@@ -117,6 +114,9 @@ static bool caerInputNetTCPServerInit(caerModuleData moduleData) {
 			"Failed to start data acquisition thread. Error: %d.",
 			errno);
 	}
+
+	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
+	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerInputNetTCPServerConfigListener);
 
 	return (true);
 }
@@ -196,6 +196,9 @@ static void caerInputNetTCPServerConfig(caerModuleData moduleData) {
 }
 
 static void caerInputNetTCPServerExit(caerModuleData moduleData) {
+	// Remove listener, which can reference invalid memory in userData.
+	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerInputNetTCPServerConfigListener);
+
 	netTCPState state = moduleData->moduleState;
 
 	// Tell the input thread to stop. Main thread waits until it stopped
