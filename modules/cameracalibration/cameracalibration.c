@@ -87,13 +87,13 @@ static void updateSettings(caerModuleData moduleData) {
 	// Parse calibration pattern string.
 	char *calibPattern = sshsNodeGetString(moduleData->moduleNode, "calibrationPattern");
 
-	if (strcmp(calibPattern, "chessboard") == 0) {
+	if (caerStrEquals(calibPattern, "chessboard")) {
 		state->settings.calibrationPattern = CAMCALIB_CHESSBOARD;
 	}
-	else if (strcmp(calibPattern, "circlesGrid") == 0) {
+	else if (caerStrEquals(calibPattern, "circlesGrid")) {
 		state->settings.calibrationPattern = CAMCALIB_CIRCLES_GRID;
 	}
-	else if (strcmp(calibPattern, "asymmetricCirclesGrid") == 0) {
+	else if (caerStrEquals(calibPattern, "asymmetricCirclesGrid")) {
 		state->settings.calibrationPattern = CAMCALIB_ASYMMETRIC_CIRCLES_GRID;
 	}
 	else {
