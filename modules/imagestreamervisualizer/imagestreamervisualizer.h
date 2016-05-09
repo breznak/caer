@@ -13,6 +13,7 @@
 #define TRAINING_POSITIVES 1	// keyboard "p" (positives) record pngs and store them in positive folder
 #define TRAINING_NEGATIVES 2	// keyboard "n" (negatives) record pngs and store them in negative folder
 // keyboard "s" stop saving png, generations on visualizer keeps going
+#define AUDIO_BEEP_FILE "modules/imagestreamervisualizer/beep5.ogg"  
 
 static int8_t savepng_state = 0;     //default state -> do not save png
 static int8_t mode = 0;		 //default mode -> do nothing

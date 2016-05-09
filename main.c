@@ -236,8 +236,11 @@ static bool mainloop_1(void) {
 	// for example, we now classify the latest image
 	// only run CNN if we have a file to classify
 	if(*file_strings_classify != NULL) {
-		caerCaffeWrapper(21, file_strings_classify, classification_results, (int) MAX_IMG_QTY);
-	}
+	    caerCaffeWrapper(21, file_strings_classify, classification_results, (int) MAX_IMG_QTY);  
+	    if( remove(*file_strings_classify) != 0){
+		    caerLog(CAER_LOG_ERROR, mainString, "Failed to remove temporary image of accumulated spikes from /tmp/ folder.. keep accumulating\n");
+	    }
+    	}
 #endif
 #endif
 

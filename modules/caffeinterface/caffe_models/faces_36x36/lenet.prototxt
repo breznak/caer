@@ -16,8 +16,8 @@ layer {
     lr_mult: 2
   }
   convolution_param {
-    num_output: 6 
-    kernel_size: 9 
+    num_output: 8 
+    kernel_size: 7
     stride: 1
     weight_filler {
       type: "xavier"
@@ -56,8 +56,8 @@ layer {
     lr_mult: 2
   }
   convolution_param {
-    num_output: 12  
-    kernel_size: 3 
+    num_output: 8  
+    kernel_size: 4 
     stride: 1
     weight_filler {
       type: "xavier"
@@ -96,7 +96,7 @@ layer {
     lr_mult: 2
   }
   inner_product_param {
-    num_output: 60 
+    num_output: 120 
     weight_filler {
       type: "xavier"
     }

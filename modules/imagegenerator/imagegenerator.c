@@ -30,7 +30,7 @@
 // keyboard "s" stop saving png, generations on visualizer keeps going
 
 //define if you want to save frames to disk into FRAME_IMG_DIRECTORY (for analyzing and debugging)
-static bool SAVE_FRAME = true;
+static bool SAVE_FRAME = false;
 
 struct imagegenerator_state {
     uint32_t *eventRenderer;

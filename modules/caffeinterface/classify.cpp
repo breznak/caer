@@ -59,11 +59,11 @@ void MyClass::init_network() {
 
 void MyClass::Classifier(const string& model_file, const string& trained_file, const string& mean_file,
 	const string& label_file) {
-#ifdef CAFFE_CPU_ONLY
+//#ifdef CAFFE_CPU_ONLY
 	Caffe::set_mode(Caffe::CPU);
-#else
-	Caffe::set_mode(Caffe::GPU);
-#endif
+//#else
+//	Caffe::set_mode(Caffe::GPU);
+//#endif
 
 	/* Load the network. */
 	net_.reset(new Net<float>(model_file, TEST));

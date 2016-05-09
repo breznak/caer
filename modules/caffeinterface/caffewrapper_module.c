@@ -33,7 +33,7 @@ const char * caerCaffeWrapper(uint16_t moduleID, char ** file_string, double *cl
 
 static bool caerCaffeWrapperInit(caerModuleData moduleData) {
 
-    caffewrapperState state = moduleData->moduleState;
+    	caffewrapperState state = moduleData->moduleState;
 	sshsNodePutDoubleIfAbsent(moduleData->moduleNode, "detThreshold", 0.5);
 	state->detThreshold = sshsNodeGetDouble(moduleData->moduleNode, "detThreshold");
 
