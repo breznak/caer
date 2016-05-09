@@ -925,6 +925,12 @@ static mxml_node_t **sshsNodeXMLFilterChildNodes(mxml_node_t *node, const char *
 		}
 	}
 
+	// If none, exit gracefully.
+	if (matchedChildren == 0) {
+		*numChildren = 0;
+		return (NULL);
+	}
+
 	// Now allocate appropriate memory for list.
 	mxml_node_t **filteredNodes = malloc(matchedChildren * sizeof(mxml_node_t *));
 	SSHS_MALLOC_CHECK_EXIT(filteredNodes);
