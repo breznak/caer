@@ -15,6 +15,8 @@ struct caer_visualizer_state {
 	atomic_bool displayWindowResize;
 	int32_t displayWindowSizeX;
 	int32_t displayWindowSizeY;
+	int32_t displayWindowStretchSizeX;
+	int32_t displayWindowStretchSizeY;
 	ALLEGRO_DISPLAY *displayWindow;
 	ALLEGRO_EVENT_QUEUE *displayEventQueue;
 	ALLEGRO_TIMER *displayTimer;
@@ -235,6 +237,10 @@ caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisu
 static void updateDisplaySize(caerVisualizerState state, float zoomFactor, bool showStatistics) {
 	int32_t displayWindowSizeX = I32T((float ) state->bitmapRendererSizeX * zoomFactor);
 	int32_t displayWindowSizeY = I32T((float ) state->bitmapRendererSizeY * zoomFactor);
+
+	// Remember just bitmap stretch size for scale operation!
+	state->displayWindowStretchSizeX = displayWindowSizeX;
+	state->displayWindowStretchSizeY = displayWindowSizeY;
 
 	// When statistics are turned on, we need to add some space to the
 	// X axis for displaying the whole line and the Y axis for spacing.
@@ -572,7 +578,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		// Blit bitmap to screen, taking zoom factor into consideration.
 		al_draw_scaled_bitmap(state->bitmapRenderer, 0, 0, (float) state->bitmapRendererSizeX,
 			(float) state->bitmapRendererSizeY, 0, (doStatistics) ? ((float) STATISTICS_HEIGHT) : (0),
-			(float) state->displayWindowSizeX, (float) state->displayWindowSizeY, 0);
+			(float) state->displayWindowStretchSizeX, (float) state->displayWindowStretchSizeY, 0);
 
 		al_flip_display();
 	}
