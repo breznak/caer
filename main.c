@@ -45,6 +45,9 @@
 #ifdef ENABLE_BAFILTER
 	#include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
 #endif
+#ifdef ENABLE_ACCFILTER
+        #include "modules/accumulatefilter/accumulatefilter.h"
+#endif
 #ifdef ENABLE_CAMERACALIBRATION
 	#include "modules/cameracalibration/cameracalibration.h"
 #endif
@@ -107,6 +110,10 @@ static bool mainloop_1(void) {
 	// look to be uncorrelated with real scene changes (noise reduction).
 #ifdef ENABLE_BAFILTER
 	caerBackgroundActivityFilter(2, polarity);
+#endif
+#ifdef ENABLE_ACCFILTER
+       caerAccumulateFilter(21, polarity);
+       printf("Acc filter");
 #endif
 
 	// Filters can also extract information from event packets: for example

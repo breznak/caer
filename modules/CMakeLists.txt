@@ -1,4 +1,5 @@
 # Add all modules
+ADD_SUBDIRECTORY(accumulatefilter)
 ADD_SUBDIRECTORY(backgroundactivityfilter)
 ADD_SUBDIRECTORY(caffeinterface)
 ADD_SUBDIRECTORY(cameracalibration)
