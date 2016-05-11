@@ -124,6 +124,9 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_CAMERACALIBRATION
 	caerCameraCalibration(5, polarity, frame);
 #endif
+#ifdef ENABLE_POSEESTIMATION
+	caerPoseCalibration(6, polarity, frame);
+#endif
 
 	// A small visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
