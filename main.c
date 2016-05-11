@@ -124,8 +124,13 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_CAMERACALIBRATION
 	caerCameraCalibration(5, polarity, frame);
 #endif
+	//Enable camera pose estimation
 #ifdef ENABLE_POSEESTIMATION
-	caerPoseCalibration(6, polarity, frame);
+	#if defined(DAVISFX2) || defined(DAVISFX3)
+		caerPoseCalibration(6, polarity, frame);
+	#else
+		caerPoseCalibration(6, polarity, NULL);
+	#endif
 #endif
 
 	// A small visualizer exists to show what the output looks like.

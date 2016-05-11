@@ -27,7 +27,7 @@ static struct caer_module_functions caerPoseCalibrationFunctions = { .moduleInit
 		&caerPoseCalibrationExit };
 
 void caerPoseCalibration(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "CameraCalibration");
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "PoseEstimation");
 
 	caerModuleSM(&caerPoseCalibrationFunctions, moduleData, sizeof(struct PoseCalibrationState_struct), 2, polarity,
 		frame);
@@ -80,7 +80,7 @@ static void caerPoseCalibrationExit(caerModuleData moduleData) {
 
 	PoseCalibrationState state = moduleData->moduleState;
 
-	calibration_destroy(state->cpp_class);
+	//posecalibration_destroy(state->cpp_class);
 
 	free(state->settings.saveFileName);
 	free(state->settings.loadFileName);
