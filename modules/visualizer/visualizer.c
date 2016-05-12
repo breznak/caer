@@ -30,7 +30,7 @@ struct caer_visualizer_state {
 	caerVisualizerRenderer renderer;
 	caerVisualizerEventHandler eventHandler;
 	caerModuleData parentModule;
-	atomic_bool showStatistics;
+	bool showStatistics;
 	struct caer_statistics_state packetStatistics;
 	atomic_int_fast32_t packetSubsampleRendering;
 	int32_t packetSubsampleCount;
@@ -181,14 +181,14 @@ caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisu
 	sshsNodePutFloatIfAbsent(parentModule->moduleNode, "zoomFactor", defaultZoomFactor);
 
 	atomic_store(&state->packetSubsampleRendering, sshsNodeGetInt(parentModule->moduleNode, "subsampleRendering"));
-	atomic_store(&state->showStatistics, sshsNodeGetBool(parentModule->moduleNode, "showStatistics"));
+
+	state->showStatistics = sshsNodeGetBool(parentModule->moduleNode, "showStatistics");
 
 	// Remember sizes.
 	state->bitmapRendererSizeX = bitmapSizeX;
 	state->bitmapRendererSizeY = bitmapSizeY;
 
-	updateDisplaySize(state, sshsNodeGetFloat(parentModule->moduleNode, "zoomFactor"),
-		atomic_load(&state->showStatistics));
+	updateDisplaySize(state, sshsNodeGetFloat(parentModule->moduleNode, "zoomFactor"), state->showStatistics);
 
 	// Remember rendering and event handling function.
 	state->renderer = renderer;
@@ -258,22 +258,18 @@ static void updateDisplaySize(caerVisualizerState state, float zoomFactor, bool 
 
 static void caerVisualizerConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
+	UNUSED_ARGUMENT(node);
+
 	caerVisualizerState state = userData;
 
 	if (event == ATTRIBUTE_MODIFIED) {
 		if (changeType == FLOAT && caerStrEquals(changeKey, "zoomFactor")) {
-			updateDisplaySize(state, changeValue.ffloat, sshsNodeGetBool(node, "showStatistics"));
-
 			// Set resize flag.
 			atomic_store(&state->displayWindowResize, true);
 		}
 		else if (changeType == BOOL && caerStrEquals(changeKey, "showStatistics")) {
-			// Set statistics flag.
-			atomic_store(&state->showStatistics, changeValue.boolean);
-
-			updateDisplaySize(state, sshsNodeGetFloat(node, "zoomFactor"), changeValue.boolean);
-
-			// Set resize flag.
+			// Set resize flag. This will then also update the showStatistics flag, ensuring
+			// statistics are never shown without the screen having been properly resized first.
 			atomic_store(&state->displayWindowResize, true);
 		}
 		else if (changeType == INT && caerStrEquals(changeKey, "subsampleRendering")) {
@@ -555,7 +551,14 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 	}
 
 	// Handle display resize (zoom).
-	if (atomic_load_explicit(&state->displayWindowResize, memory_order_acquire)) {
+	if (atomic_load_explicit(&state->displayWindowResize, memory_order_relaxed)) {
+		// Update statistics flag. We do this here to ensure screen is always properly
+		// sized for statistics display.
+		state->showStatistics = sshsNodeGetBool(state->parentModule->moduleNode, "showStatistics");
+
+		updateDisplaySize(state, sshsNodeGetFloat(state->parentModule->moduleNode, "zoomFactor"),
+			state->showStatistics);
+
 		al_resize_display(state->displayWindow, state->displayWindowSizeX, state->displayWindowSizeY);
 	}
 
@@ -567,8 +570,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		al_clear_to_color(al_map_rgb(0, 0, 0));
 
 		// Render statistics string.
-		bool doStatistics = (atomic_load_explicit(&state->showStatistics, memory_order_relaxed)
-			&& state->displayFont != NULL);
+		bool doStatistics = (state->showStatistics && state->displayFont != NULL);
 
 		if (doStatistics) {
 			al_draw_text(state->displayFont, al_map_rgb(255, 255, 255), GLOBAL_FONT_SPACING,
