@@ -13,7 +13,7 @@ PoseCalibration *posecalibration_init(PoseCalibrationSettings settings);
 void posecalibration_destroy(PoseCalibration *calibClass);
 void posecalibration_updateSettings(PoseCalibration *calibClass);
 bool posecalibration_findMarkers(PoseCalibration *calibClass, caerFrameEvent frame);
-bool posecalibration_loadCalibrationFile(PoseCalibration *calibClass, PoseCalibrationSettings settings);
+bool posecalibration_loadCalibrationFile(PoseCalibration *calibClass,PoseCalibrationSettings settings);
 
 #ifdef __cplusplus
 }

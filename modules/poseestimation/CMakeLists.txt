@@ -11,9 +11,10 @@ IF (ENABLE_POSEESTIMATION)
 	SET(CALIB_INCDIRS ${OPENCV3_INCLUDE_DIRS})
 	SET(CALIB_LIBDIRS ${OPENCV3_LIBRARY_DIRS})
 
-	SET(CMAKE_MODULE_PATH ${CMAKE_INSTALL_PREFIX}/lib/cmake/ )
-	find_package(aruco REQUIRED )
-	SET(CALIB_C_LIBS ${aruco_LIBS})
+	#aruco is included in opencv_contrib..
+	#SET(CMAKE_MODULE_PATH ${CMAKE_INSTALL_PREFIX}/lib/cmake/ )
+	#find_package(aruco REQUIRED )
+	#SET(CALIB_C_LIBS ${aruco_LIBS})
 
 	SET(CALIB_C_SRC_FILES  modules/poseestimation/cameracalibration.c)
 	SET(CALIB_CXX_SRC_FILES  modules/poseestimation/calibration.cpp  modules/poseestimation/calibration_wrapper.cpp)

@@ -48,7 +48,7 @@ bool PoseCalibration::findMarkers(caerFrameEvent frame) {
         aruco::drawDetectedMarkers(view, corners, ids);
     } 
        
-    // estimate markers' pose
+    // estimate pose of  markers
     if( corners.size() > 0){
         Mat rvecs, tvecs;
         aruco::estimatePoseSingleMarkers(corners, 0.05, undistortCameraMatrix, undistortDistCoeffs, rvecs, tvecs); // draw axis for each marker 

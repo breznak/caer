@@ -10,7 +10,6 @@ struct PoseCalibrationState_struct {
 	struct PoseCalibrarion *cpp_class; // Pointer to cpp_class_object
 	uint64_t lastFrameTimestamp;
 	size_t lastFoundPoints;
-	bool calibrationCompleted;
 	bool calibrationLoaded;
 };
 
@@ -44,15 +43,17 @@ static bool caerPoseCalibrationInit(caerModuleData moduleData) {
 
 	// Update all settings.
 	updateSettings(moduleData);
-
+	
 	// Initialize C++ class for OpenCV integration.
-	state->cpp_class = calibration_init(&state->settings);
+	state->cpp_class = posecalibration_init(&state->settings);
 	if (state->cpp_class == NULL) {
 		return (false);
 	}
-
+	
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
+	//not loaded at the init
+    state->calibrationLoaded = false;
 
 	return (true);
 }
@@ -61,7 +62,6 @@ static void updateSettings(caerModuleData moduleData) {
 	PoseCalibrationState state = moduleData->moduleState;
 	
     state->settings.detectMarkers = sshsNodeGetBool(moduleData->moduleNode, "detectMarkers");
-	state->settings.captureDelay = U32T(sshsNodeGetInt(moduleData->moduleNode, "captureDelay"));
 	state->settings.saveFileName = sshsNodeGetString(moduleData->moduleNode, "saveFileName");
 	state->settings.loadFileName = sshsNodeGetString(moduleData->moduleNode, "loadFileName");
 
@@ -105,15 +105,21 @@ static void caerPoseCalibrationRun(caerModuleData moduleData, size_t argsNumber,
 			if ((currTimestamp - state->lastFrameTimestamp) >= state->settings.captureDelay) {
 				state->lastFrameTimestamp = currTimestamp;
 
-				bool foundPoint = calibration_findMarkers(state->cpp_class, caerFrameIteratorElement);
+				bool foundPoint = posecalibration_findMarkers(state->cpp_class, caerFrameIteratorElement);
 				caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString,
 					"Searching for markers in the aruco set, result = %d.", foundPoint);
 			}
 		CAER_FRAME_ITERATOR_VALID_END
 
-
+	}
+	
+    // At this point we always try to load the calibration settings for undistortion.
+	// Maybe they just got created or exist from a previous run.
+	if (!state->calibrationLoaded) {
+		state->calibrationLoaded = posecalibration_loadCalibrationFile(state->cpp_class, &state->settings);
 	}
 
-
+    // update settings 
+    updateSettings(moduleData);
 
 }

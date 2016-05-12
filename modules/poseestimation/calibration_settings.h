@@ -11,4 +11,5 @@ struct PoseCalibrationSettings_struct {
 
 typedef struct PoseCalibrationSettings_struct *PoseCalibrationSettings;
 
+
 #endif /* POSEESTIMATION_SETTINGS_H_ */
