@@ -32,8 +32,6 @@ bool PoseCalibration::findMarkers(caerFrameEvent frame) {
     cv::Ptr<aruco::DetectorParameters> parameters;
     cv::Ptr<aruco::Dictionary> dictionary = aruco::getPredefinedDictionary(aruco::DICT_ARUCO_ORIGINAL);
     
-    //cv::aruco::drawMarker(dictionary, 23, 200, markerImage, 1);
-    
     vector<int> ids; 
     vector<std::vector<cv::Point2f> > corners, rejected; 
     
@@ -51,17 +49,35 @@ bool PoseCalibration::findMarkers(caerFrameEvent frame) {
     // estimate markers' pose
     if( corners.size() > 0){
         Mat rvecs, tvecs;
-        aruco::estimatePoseSingleMarkers(corners, 0.05, undistortCameraMatrix, undistortDistCoeffs, rvecs, tvecs); // draw axis for each marker 
+        aruco::estimatePoseSingleMarkers(corners, 0.05, undistortCameraMatrix, undistortDistCoeffs, rvecs, tvecs); 
         
         for(int i=0; i<corners.size(); i++){
             aruco::drawAxis(view, undistortCameraMatrix, undistortDistCoeffs, rvecs.row(i), tvecs.row(i), 0.07); 
+            //cout<< rvecs.row(i) <<endl;
+            //cout<< tvecs.row(i) <<endl;
+            
+            // We need inverse of the world->camera transform (camera->world) to calculate
+            // camera's location
+            Mat R;
+            Rodrigues(rvecs.row(i), R);
+            Mat cameraRotationVector;
+            Rodrigues(R.t(),cameraRotationVector);
+            Mat cameraTranslationVector;
+            multiply(-cameraRotationVector.t(), tvecs.row(i), cameraTranslationVector);
+            cout << endl;
+            cout << "##############$$$$$$$$$$$$################" << endl;
+            cout << "Camera position: " <<  cameraTranslationVector << endl;
+            cout << "Camera pose: " << cameraRotationVector << endl;
+            cout << "##############$$$$$$$$$$$$################" << endl;   
+            cout << endl;
+                
         }    
     }    
 
     //place back the markers in the frame
     view.convertTo(orig, CV_16UC(orig.channels()), 256.0);
 
-    return(1);
+    return(true);
 
 }
 
