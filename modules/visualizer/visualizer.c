@@ -552,6 +552,8 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 
 	// Handle display resize (zoom).
 	if (atomic_load_explicit(&state->displayWindowResize, memory_order_relaxed)) {
+		atomic_store(&state->displayWindowResize, false);
+
 		// Update statistics flag. We do this here to ensure screen is always properly
 		// sized for statistics display.
 		state->showStatistics = sshsNodeGetBool(state->parentModule->moduleNode, "showStatistics");
