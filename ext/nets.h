@@ -54,15 +54,15 @@ static inline bool socketReuseAddr(int fd, bool reuseAddr) {
 // Return true on success, false on failure.
 static inline bool sendUntilDone(int sock, void *buffer, size_t toWrite) {
 	uint8_t *dataBuffer = buffer;
-	size_t written = 0;
+	size_t curWritten = 0;
 
-	while (written < toWrite) {
-		ssize_t sendResult = send(sock, dataBuffer + written, toWrite - written, 0);
+	while (curWritten < toWrite) {
+		ssize_t sendResult = send(sock, dataBuffer + curWritten, toWrite - curWritten, 0);
 		if (sendResult <= 0) {
 			return (false);
 		}
 
-		written += (size_t) sendResult;
+		curWritten += (size_t) sendResult;
 	}
 
 	return (true);
@@ -72,15 +72,51 @@ static inline bool sendUntilDone(int sock, void *buffer, size_t toWrite) {
 // Return true on success, false on failure.
 static inline bool recvUntilDone(int sock, void *buffer, size_t toRead) {
 	uint8_t *dataBuffer = buffer;
-	size_t read = 0;
+	size_t curRead = 0;
 
-	while (read < toRead) {
-		ssize_t recvResult = recv(sock, dataBuffer + read, toRead - read, 0);
+	while (curRead < toRead) {
+		ssize_t recvResult = recv(sock, dataBuffer + curRead, toRead - curRead, 0);
 		if (recvResult <= 0) {
 			return (false);
 		}
 
-		read += (size_t) recvResult;
+		curRead += (size_t) recvResult;
+	}
+
+	return (true);
+}
+
+// Write toWrite bytes to the file descriptor fd from buffer.
+// Return true on success, false on failure.
+static inline bool writeUntilDone(int fd, void *buffer, size_t toWrite) {
+	uint8_t *dataBuffer = buffer;
+	size_t curWritten = 0;
+
+	while (curWritten < toWrite) {
+		ssize_t writeResult = write(fd, dataBuffer + curWritten, toWrite - curWritten);
+		if (writeResult <= 0) {
+			return (false);
+		}
+
+		curWritten += (size_t) writeResult;
+	}
+
+	return (true);
+}
+
+// Read toRead bytes from the file descriptor fd into buffer.
+// Return true on success, false on failure.
+static inline bool readUntilDone(int fd, void *buffer, size_t toRead) {
+	uint8_t *dataBuffer = buffer;
+	size_t curRead = 0;
+
+	while (curRead < toRead) {
+		ssize_t readResult = read(fd, dataBuffer + curRead, toRead - curRead);
+		if (readResult <= 0) {
+			return (false);
+		}
+
+		curRead += (size_t) readResult;
 	}
 
 	return (true);
