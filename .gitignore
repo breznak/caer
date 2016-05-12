@@ -8,3 +8,6 @@
 /*.log
 /*.sh
 /caer-bin
+*~
+*.swp
+*.swo
