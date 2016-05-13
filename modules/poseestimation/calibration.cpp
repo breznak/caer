@@ -46,10 +46,20 @@ bool PoseCalibration::findMarkers(caerFrameEvent frame) {
         aruco::drawDetectedMarkers(view, corners, ids);
     } 
        
-    // estimate markers' pose
+    // estimate markers pose
     if( corners.size() > 0){
         Mat rvecs, tvecs;
         aruco::estimatePoseSingleMarkers(corners, 0.05, undistortCameraMatrix, undistortDistCoeffs, rvecs, tvecs); 
+        for(int k=0; k<corners.size(); k++){          //goes through all cv::Point2f in the vector
+                        cv::Point2f p = corners[0][k]; // still do not know why [0]
+                        float x = p.x;   //first value
+                        float y = p.x;   //second value
+                        //stuff
+                        cout << "#####################" << endl;
+                        cout << x << endl;
+                        cout << y << endl;
+                        cout << "#####################" << endl;
+        }
         
         for(int i=0; i<corners.size(); i++){
             aruco::drawAxis(view, undistortCameraMatrix, undistortDistCoeffs, rvecs.row(i), tvecs.row(i), 0.07); 
@@ -79,6 +89,30 @@ bool PoseCalibration::findMarkers(caerFrameEvent frame) {
 
     return(true);
 
+}
+
+/* convert2dto3dworldunit converts 2d point into a homogenous point
+* 
+* it gives it a third coordinate equal to 1 
+* and then multiply by the inverse of your camera intrinsics matrix.
+* Origin and direction will be define the ray in world space corresponding to that image point. 
+* Note that here the origin is centered on the camera, you can use your camera pose to transform to a different origin. 
+* Distortion coefficients map from your actual camera to the pinhole camera model and should be used 
+* at the very beginning to find your actual 2d coordinate. 
+* The steps then are 1) Undistort 2d coordinate with distortion coefficients
+* 2) Convert to ray (as shown above) 3) Move that ray to whatever coordinate system you like. 
+*/
+Point3f PoseCalibration::convert2dto3dworldunit(Point2f point_in_image){
+
+    cv::Matx31f hom_pt(point_in_image.x, point_in_image.y, 1);
+    cv::Matx31f hom_pt1(1,1,1);
+    multiply(undistortCameraMatrix.inv(), hom_pt, hom_pt1); //put in world coordinates
+    cv::Point3f origin(0,0,0);
+    cv::Point3f direction(hom_pt1(0),hom_pt1(1),hom_pt1(2));
+    //To get a unit vector, direction just needs to be normalized
+    direction *= 1/cv::norm(direction);
+
+    return direction;
 }
 
 bool PoseCalibration::loadCalibrationFile(PoseCalibrationSettings settings) {

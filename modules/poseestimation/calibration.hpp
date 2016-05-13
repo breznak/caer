@@ -29,6 +29,7 @@ public:
 	bool findMarkers(caerFrameEvent frame);
 	bool loadCalibrationFile(PoseCalibrationSettings settings);
 	void updateSettings(PoseCalibrationSettings settings);
+	Point3f convert2dto3dworldunit(Point2f point_in_image);
 	
 private:
 	PoseCalibrationSettings settings = NULL;
