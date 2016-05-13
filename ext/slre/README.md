@@ -19,7 +19,6 @@ most.
 
 ## Supported Syntax
 
-    (?i)    Must be at the beginning of the regex. Makes match case-insensitive
     ^       Match beginning of a buffer
     $       Match end of a buffer
     ()      Grouping and substring capturing
@@ -78,6 +77,9 @@ is no match. Negative return codes are as follows:
     #define SLRE_TOO_MANY_BRANCHES      -8
     #define SLRE_TOO_MANY_BRACKETS      -9
 
+Valid flags are:
+
+    SLRE_IGNORE_CASE    do case-insensitive match
 
 ## Example: parsing HTTP request line
 
@@ -99,12 +101,12 @@ is no match. Negative return codes are as follows:
       "<img src=\"HTTPS://FOO.COM/x?b#c=tab1\"/> "
       "  <a href=\"http://cesanta.com\">some link</a>";
 
-    static const char *regex = "(?i)((https?://)[^\\s/'\"<>]+/?[^\\s'\"<>]*)";
+    static const char *regex = "((https?://)[^\\s/'\"<>]+/?[^\\s'\"<>]*)";
     struct slre_cap caps[2];
     int i, j = 0, str_len = strlen(str);
 
     while (j < str_len &&
-           (i = slre_match(regex, str + j, str_len - j, caps, 2, 0)) > 0) {
+           (i = slre_match(regex, str + j, str_len - j, caps, 2, SLRE_IGNORE_CASE)) > 0) {
       printf("Found URL: [%.*s]\n", caps[0].len, caps[0].ptr);
       j += i;
     }
@@ -122,10 +124,13 @@ can make contributions. Note that the CLA isn't a copyright
 _assigment_ but rather a copyright _license_.
 You retain the copyright on your contributions.
 
-# License
+# Licensing
 
-SLRE is released under
-[GNU GPL v.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
-Businesses have an option to get non-restrictive, royalty-free commercial
-license and professional support from [Cesanta](http://cesanta.com).
+SLRE is released under commercial and [GNU GPL v.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html) open source licenses. 
+
+Commercial Projects: 
+Once your project becomes commercialised GPLv2 licensing dictates that you need to either open your source fully or purchase a commercial license. Cesanta offer full, royalty-free commercial licenses without any GPL restrictions. If your needs require a custom license, we’d be happy to work on a solution with you. [Contact us for pricing.] (https://www.cesanta.com/contact) 
+
+Prototyping: 
+While your project is still in prototyping stage and not for sale, you can use SLRE’s open source code without license restrictions. 
 
