@@ -53,12 +53,14 @@ bool PoseCalibration::findMarkers(caerFrameEvent frame) {
         for(int k=0; k<corners.size(); k++){          //goes through all cv::Point2f in the vector
                         cv::Point2f p = corners[0][k]; // still do not know why [0]
                         float x = p.x;   //first value
-                        float y = p.x;   //second value
+                        float y = p.y;   //second value
                         //stuff
+                        cout << endl;
                         cout << "#####################" << endl;
                         cout << x << endl;
                         cout << y << endl;
                         cout << "#####################" << endl;
+                        cout << endl;
         }
         
         for(int i=0; i<corners.size(); i++){
