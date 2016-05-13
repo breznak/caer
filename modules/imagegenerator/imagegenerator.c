@@ -15,7 +15,7 @@
 #include "main.h"
 #include <libcaer/events/polarity.h>
 
-/* inlude std image library */
+/* inlude stblib image library */
 #include "ext/stblib/stb_image_write.h"
 #include "ext/stblib/stb_image_resize.h"
 
