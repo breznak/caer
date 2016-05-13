@@ -16,7 +16,14 @@ struct event_packet_mapper {
 	RingBuffer transferRing;
 };
 
-typedef struct event_packet_mapper *eventPacketMapper;
+struct event_packet_mapper_array {
+	mtx_shared_t globalLock;
+	size_t mappersUsedSize;
+	size_t mappersSize;
+	struct event_packet_mapper mappers[];
+};
+
+typedef struct event_packet_mapper_array *eventPacketMapperArray;
 
 struct output_common_state {
 	/// Control flag for output handling thread.
@@ -38,7 +45,7 @@ struct output_common_state {
 	/// Track maximum number of different types allowed (cannot change!).
 	size_t packetAmount;
 	/// Map packets to ring-buffers based on type information.
-	eventPacketMapper packetMapper;
+	eventPacketMapperArray packetMapper;
 	/// Data buffer for writing to file descriptor (buffered I/O).
 	uint8_t *buffer;
 	/// Size of data write buffer, in bytes.
@@ -59,8 +66,9 @@ struct output_common_state {
 typedef struct output_common_state *outputCommonState;
 
 static void copyPacketToTransferRing(outputCommonState state, caerEventPacketHeader eventPacket);
-static eventPacketMapper initializePacketMapper(size_t packetAmount, size_t transferBufferSize);
-static void destroyPacketMapper(eventPacketMapper packetMapper, size_t packetAmount);
+static eventPacketMapperArray initializePacketMapper(size_t packetAmount, size_t transferBufferSize);
+static void destroyPacketMapper(eventPacketMapperArray packetMapper);
+static int eventPacketMapperCmp(const void *a, const void *b);
 static bool newOutputBuffer(outputCommonState state);
 static bool commitOutputBuffer(outputCommonState state);
 static int outputHandlerThread(void *stateArg);
@@ -100,27 +108,42 @@ static void copyPacketToTransferRing(outputCommonState state, caerEventPacketHea
 	RingBuffer transferRing = NULL;
 
 	// Map it to a transfer ring buffer.
-	for (size_t i = 0; i < state->packetAmount; i++) {
+	mtx_shared_lock_shared(&state->packetMapper->globalLock);
+
+	size_t mappersUsedSize = state->packetMapper->mappersUsedSize;
+
+	for (size_t i = 0; i < mappersUsedSize; i++) {
 		// Check that there is a unique mapping to a transfer ring, or if not,
 		// create a new one in a free mapper slot. Slots are filled up in increasing
 		// index order, so if we reach empty slots, there can't be a match afterwards.
-		if (state->packetMapper[i].typeID == eventType) {
+		if (state->packetMapper->mappers[i].typeID == eventType) {
 			// Found match, use it.
-			transferRing = state->packetMapper[i].transferRing;
-			break;
-		}
-
-		// Reached empty slot, use it.
-		if (state->packetMapper[i].typeID == -1) {
-			state->packetMapper[i].typeID = eventType;
-
-			transferRing = state->packetMapper[i].transferRing;
+			transferRing = state->packetMapper->mappers[i].transferRing;
 			break;
 		}
 	}
 
-	// Check that a valid index was found, else complain.
-	if (transferRing == NULL) {
+	mtx_shared_unlock_shared(&state->packetMapper->globalLock);
+
+	// If no valid mapping was found, if there is still space we go and add a new
+	// mapping, else we complain and exit.
+	if (transferRing == NULL && state->packetMapper->mappersSize != mappersUsedSize) {
+		mtx_shared_lock_exclusive(&state->packetMapper->globalLock);
+
+		// Add new mapping after last used slot.
+		state->packetMapper->mappers[mappersUsedSize].typeID = eventType;
+		transferRing = state->packetMapper->mappers[mappersUsedSize].transferRing;
+
+		state->packetMapper->mappersUsedSize++;
+
+		// Sort event_packet_mapper structures by their Type ID. This makes later
+		// lookups in the output handler thread easier and more efficient.
+		qsort(state->packetMapper->mappers, state->packetMapper->mappersUsedSize, sizeof(struct event_packet_mapper),
+			&eventPacketMapperCmp);
+
+		mtx_shared_unlock_exclusive(&state->packetMapper->globalLock);
+	}
+	else {
 		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
 			"New packet type %d for source %d and no more free slots available; this means an unexpected event "
 				"packet made its way to this output module, one that was not declared at compile time.", eventType,
@@ -160,19 +183,31 @@ static void copyPacketToTransferRing(outputCommonState state, caerEventPacketHea
 	}
 }
 
-static eventPacketMapper initializePacketMapper(size_t packetAmount, size_t transferBufferSize) {
-	eventPacketMapper mapper = calloc(packetAmount, sizeof(*mapper));
+static eventPacketMapperArray initializePacketMapper(size_t packetAmount, size_t transferBufferSize) {
+	eventPacketMapperArray mapper = calloc(1, sizeof(*mapper) + (packetAmount * sizeof(struct event_packet_mapper)));
 	if (mapper == NULL) {
 		// Allocation error.
 		return (NULL);
 	}
 
-	// Initialize all the ring-buffers.
+	// Initialize values and locks.
+	mapper->mappersSize = packetAmount;
+	mapper->mappersUsedSize = 0;
+
+	if (mtx_shared_init(&mapper->globalLock) != thrd_success) {
+		free(mapper);
+
+		return (NULL);
+	}
+
+	// Initialize all the event_packet_mapper structures.
 	bool initFail = false;
 
-	for (size_t i = 0; i < packetAmount; i++) {
-		mapper[i].transferRing = ringBufferInit(transferBufferSize);
-		if (mapper[i].transferRing == NULL) {
+	for (size_t i = 0; i < mapper->mappersSize; i++) {
+		mapper->mappers[i].typeID = -1; // Invalid Type ID to start with.
+
+		mapper->mappers[i].transferRing = ringBufferInit(transferBufferSize);
+		if (mapper->mappers[i].transferRing == NULL) {
 			// Failed to initialize.
 			initFail = true;
 			break;
@@ -182,7 +217,7 @@ static eventPacketMapper initializePacketMapper(size_t packetAmount, size_t tran
 	// Check that all ring-buffers were initialized correctly.
 	if (initFail) {
 		// Free everything.
-		destroyPacketMapper(mapper, packetAmount);
+		destroyPacketMapper(mapper);
 
 		return (NULL);
 	}
@@ -190,20 +225,37 @@ static eventPacketMapper initializePacketMapper(size_t packetAmount, size_t tran
 	return (mapper);
 }
 
-static void destroyPacketMapper(eventPacketMapper packetMapper, size_t packetAmount) {
+static void destroyPacketMapper(eventPacketMapperArray packetMapper) {
 	// Free additional memory used for ring-buffers.
-	for (size_t i = 0; i < packetAmount; i++) {
-		if (packetMapper[i].transferRing != NULL) {
+	for (size_t i = 0; i < packetMapper->mappersSize; i++) {
+		if (packetMapper->mappers[i].transferRing != NULL) {
 			caerEventPacketHeader header;
-			while ((header = ringBufferGet(packetMapper[i].transferRing)) != NULL) {
+			while ((header = ringBufferGet(packetMapper->mappers[i].transferRing)) != NULL) {
 				free(header); // Free unused packet copies.
 			}
 
-			ringBufferFree(packetMapper[i].transferRing);
+			ringBufferFree(packetMapper->mappers[i].transferRing);
 		}
 	}
 
+	mtx_shared_destroy(&packetMapper->globalLock);
+
 	free(packetMapper);
+}
+
+static int eventPacketMapperCmp(const void *a, const void *b) {
+	const struct event_packet_mapper *aa = a;
+	const struct event_packet_mapper *bb = b;
+
+	if (aa->typeID < bb->typeID) {
+		return (-1);
+	}
+	else if (aa->typeID > bb->typeID) {
+		return (1);
+	}
+	else {
+		return (0);
+	}
 }
 
 static bool newOutputBuffer(outputCommonState state) {
@@ -262,6 +314,9 @@ static int outputHandlerThread(void *stateArg) {
 		// timestamp decides its ordering with regards to other packets. If equal,
 		// order by ascending type ID.
 		// TODO: implement this.
+		mtx_shared_lock_shared(&state->packetMapper->globalLock);
+
+		mtx_shared_unlock_shared(&state->packetMapper->globalLock);
 	}
 
 	// TODO: handle shutdown, write out all content of ring-buffers and commit data buffers.
@@ -334,7 +389,7 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 	}
 
 	if (state->packetMapper != NULL) {
-		destroyPacketMapper(state->packetMapper, state->packetAmount);
+		destroyPacketMapper(state->packetMapper);
 	}
 
 	if (state->buffer != NULL) {
@@ -367,7 +422,7 @@ void caerOutputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list a
 		return;
 	}
 
-	for (size_t i = 0; i < state->packetAmount; i++) {
+	for (size_t i = 0; i < argsNumber; i++) {
 		caerEventPacketHeader packetHeader = va_arg(args, caerEventPacketHeader);
 
 		copyPacketToTransferRing(state, packetHeader);
