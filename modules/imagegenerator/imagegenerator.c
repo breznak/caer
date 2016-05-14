@@ -15,10 +15,7 @@
 #include "main.h"
 #include <libcaer/events/polarity.h>
 
-/* federico's matrix minimal lib */
-#include "ext/simplematrix/simple_matrix.h"
-
-/* inlude std image library */
+/* inlude stblib image library */
 #include "ext/stblib/stb_image_write.h"
 #include "ext/stblib/stb_image_resize.h"
 

@@ -3,6 +3,12 @@ Assorted information on installing OpenCV 3.1.0 properly on a system:
 - cd opencv-3.1.0
 - mkdir build
 - cd build
-- cmake -DCMAKE_INSTALL_PREFIX=/usr -DLIB_SUFFIX=64 -DWITH_IPP=ON -DINSTALL_CREATE_DISTRIB=ON ..
+- cmake -DCMAKE_INSTALL_PREFIX=/usr -DLIB_SUFFIX=64 -DWITH_IPP=ON -DINSTALL_CREATE_DISTRIB=ON -DOPENCV_EXTRA_MODULES_PATH=<opencv_contrib>/modules ..
 - make -j4 -s
 - sudo make install
+
+
+NB: -DOPENCV_EXTRA_MODULES_PATH=<opencv_contrib>/modules is required for -DENABLE_POSEESTIMATION=1 
+	you can download opencv_contrib from https://github.com/Itseez/opencv_contrib 
+	and place it in the opencv directory
+
