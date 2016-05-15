@@ -105,7 +105,7 @@ struct output_common_state {
 	/// keep track of the data we do want to transfer and are part of libcaer.
 	RingBuffer transferRing;
 	/// Track last event packet container gotten in output handler thread.
-	caerEventPacketContainer lastEventPackets;
+	caerEventPacketContainer lastPacketContainer;
 	/// Data buffer for writing to file descriptor (buffered I/O).
 	uint8_t *buffer;
 	/// Size of data write buffer, in bytes.
@@ -316,6 +316,10 @@ static bool commitOutputBuffer(outputCommonState state) {
 static int outputHandlerThread(void *stateArg) {
 	outputCommonState state = stateArg;
 
+	// If no data is available on the transfer ring-buffer, sleep for 500µs (0.5 ms)
+	// to avoid wasting resources in a busy loop.
+	struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 500000 };
+
 	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
 		// Handle configuration changes affecting buffer management.
 		if (atomic_load_explicit(&state->bufferUpdate, memory_order_relaxed)) {
@@ -330,10 +334,37 @@ static int outputHandlerThread(void *stateArg) {
 		}
 
 		// Fill output data buffer with data from incoming packets.
-		// Respect time order as specified in AEDAT 3.X format: first event's main 64-bit
-		// timestamp decides its ordering with regards to other packets. If equal,
-		// order by ascending type ID.
-		// TODO: implement this.
+		// Respect time order as specified in AEDAT 3.X format: first event's main
+		// timestamp decides its ordering with regards to other packets. Smaller
+		// comes first. If equal, order by increasing type ID.
+
+		// Get the newest event packet container from the transfer ring-buffer.
+		caerEventPacketContainer currPacketContainer = ringBufferGet(state->transferRing);
+		if (currPacketContainer == NULL) {
+			// There is none, so we can't work on and commit the last container either.
+			// We just sleep here a little and then try again, as we need that data!
+			thrd_sleep(&noDataSleep, NULL);
+			continue;
+		}
+
+		// Sort container by first timestamp and by type ID.
+		qsort(currPacketContainer->eventPackets, (size_t) currPacketContainer->eventPacketsNumber,
+			sizeof(caerEventPacketHeader), &packetsTypeCmp);
+
+		// We got new data. If this is the first time, we can only store that data, and then
+		// go and wait on the second container to arrive, before taking any decisions.
+		if (state->lastPacketContainer == NULL) {
+			state->lastPacketContainer = currPacketContainer;
+			continue;
+		}
+
+		// We have both packet containers, we can now get the needed data, order them, send
+		// them out, and put the remaining ones into lastPacketContainer for the next run.
+		size_t currPacketContainerSize = (size_t) caerEventPacketContainerGetEventPacketsNumber(currPacketContainer);
+		size_t lastPacketContainerSize = (size_t) caerEventPacketContainerGetEventPacketsNumber(
+			state->lastPacketContainer);
+
+		// TODO: continue.
 	}
 
 	// TODO: handle shutdown, write out all content of ring-buffers and commit data buffers.
