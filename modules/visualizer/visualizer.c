@@ -298,8 +298,15 @@ void caerVisualizerUpdate(caerVisualizerState state, caerEventPacketHeader packe
 
 	caerEventPacketHeader packetHeaderCopy = caerCopyEventPacketOnlyEvents(packetHeader);
 	if (packetHeaderCopy == NULL) {
-		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
-			"Visualizer: Failed to copy event packet for rendering.");
+		if (caerEventPacketHeaderGetEventNumber(packetHeader) == 0) {
+			caerLog(CAER_LOG_NOTICE, state->parentModule->moduleSubSystemString,
+				"Visualizer: Submitted empty event packet for rendering. Ignoring empty event packet.");
+		}
+		else {
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+				"Visualizer: Failed to copy event packet for rendering.");
+		}
+
 		return;
 	}
 
