@@ -306,10 +306,14 @@ static bool newOutputBuffer(outputCommonState state) {
 static bool commitOutputBuffer(outputCommonState state) {
 	if (state->bufferUsedSize != 0) {
 		for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
-			if (state->fileDescriptors->fds[i] >= 0) {
-				if (!writeUntilDone(state->fileDescriptors->fds[i], state->buffer, state->bufferUsedSize)) {
-					// TODO: maybe close() and set to -1 here?
-					return (false);
+			int fd = state->fileDescriptors->fds[i];
+
+			if (fd >= 0) {
+				if (!writeUntilDone(fd, state->buffer, state->bufferUsedSize)) {
+					// Write failed, most of the reasons for that to happen are
+					// not recoverable from, so we just disable this file descriptor.
+					close(fd);
+					fd = -1;
 				}
 			}
 		}
@@ -331,6 +335,7 @@ static void sendEventPacket(outputCommonState state, caerEventPacketHeader packe
 	// Send it out until none is left!
 	size_t packetIndex = 0;
 
+	// TODO: handle message-based formats like UDP, need magic number + sequence number.
 	while (packetSize > 0) {
 		// Calculate remaining space in current buffer.
 		size_t usableBufferSpace = state->bufferSize - state->bufferUsedSize;
