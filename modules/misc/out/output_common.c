@@ -404,10 +404,11 @@ static int outputHandlerThread(void *stateArg) {
 				if (cpFirstEventTimestamp < lpFirstEventTimestamp) {
 					// Strictly smaller, packet from current container has precedence.
 					sendEventPacket(state, cpPacket);
+					state->lastPacketTimestamp = cpFirstEventTimestamp;
 
 					// Mark as sent.
-					state->lastPacketTimestamp = cpFirstEventTimestamp;
 					caerEventPacketContainerSetEventPacket(currPacketContainer, (int32_t) cpIdx, NULL);
+					free(cpPacket);
 				}
 				else if (cpFirstEventTimestamp == lpFirstEventTimestamp) {
 					// Timestamps are equal between the packets from the two packet containers.
@@ -418,10 +419,11 @@ static int outputHandlerThread(void *stateArg) {
 					if (cpTypeID < lpTypeID) {
 						// Strictly smaller, packet from current container has precedence.
 						sendEventPacket(state, cpPacket);
+						state->lastPacketTimestamp = cpFirstEventTimestamp;
 
 						// Mark as sent.
-						state->lastPacketTimestamp = cpFirstEventTimestamp;
 						caerEventPacketContainerSetEventPacket(currPacketContainer, (int32_t) cpIdx, NULL);
+						free(cpPacket);
 					}
 					else {
 						// Equal or bigger, in this case we stop and let the packet from the
@@ -440,10 +442,11 @@ static int outputHandlerThread(void *stateArg) {
 			// Send the packet from last event container, there are guaranteed none in the current
 			// event container with smaller timestamp, or equal timestamp but smaller type ID.
 			sendEventPacket(state, lpPacket);
+			state->lastPacketTimestamp = lpFirstEventTimestamp;
 
 			// Mark as sent.
-			state->lastPacketTimestamp = lpFirstEventTimestamp;
 			caerEventPacketContainerSetEventPacket(state->lastPacketContainer, (int32_t) lpIdx, NULL);
+			free(lpPacket);
 		}
 
 		// Check that lastPacketContainer is empty and everything has been sent (sanity check).
