@@ -381,7 +381,7 @@ static int outputHandlerThread(void *stateArg) {
 			}
 
 			void *lpFirstEvent = caerGenericEventGetEvent(lpPacket, 0);
-			int32_t lpFirstEventTimestamp = caerGenericEventGetTimestamp(lpFirstEvent, lpPacket);
+			int64_t lpFirstEventTimestamp = caerGenericEventGetTimestamp64(lpFirstEvent, lpPacket);
 
 			// Check, based on first event timestamp, that there is no event packet in the current
 			// (second) packet container with lower timestamp than the one in the last (first)
@@ -397,7 +397,7 @@ static int outputHandlerThread(void *stateArg) {
 				}
 
 				void *cpFirstEvent = caerGenericEventGetEvent(cpPacket, 0);
-				int32_t cpFirstEventTimestamp = caerGenericEventGetTimestamp(cpFirstEvent, cpPacket);
+				int64_t cpFirstEventTimestamp = caerGenericEventGetTimestamp64(cpFirstEvent, cpPacket);
 
 				if (cpFirstEventTimestamp < lpFirstEventTimestamp) {
 					// Strictly smaller, packet from current container has precedence.
