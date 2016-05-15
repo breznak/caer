@@ -256,9 +256,15 @@ static int packetsTypeCmp(const void *a, const void *b) {
 }
 
 static bool newOutputBuffer(outputCommonState state) {
-	// Allocate new buffer first.
+	// First check if the size really changed.
 	size_t newBufferSize = (size_t) sshsNodeGetInt(state->parentModule->moduleNode, "bufferSize");
 
+	if (newBufferSize == state->bufferSize) {
+		// Yeah, we're already where we want to be!
+		return (true);
+	}
+
+	// Allocate new buffer.
 	uint8_t *newBuffer = calloc(newBufferSize, sizeof(uint8_t));
 	if (newBuffer == NULL) {
 		return (false);
