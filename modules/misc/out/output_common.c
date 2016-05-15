@@ -389,6 +389,13 @@ static int outputHandlerThread(void *stateArg) {
 			for (size_t cpIdx = 0; cpIdx < currPacketContainerSize; cpIdx++) {
 				caerEventPacketHeader cpPacket = caerEventPacketContainerGetEventPacket(currPacketContainer,
 					(int32_t) cpIdx);
+
+				// Packets in the currPacketContainer can be NULL, as they could have been marked as
+				// sent in the following code.
+				if (cpPacket == NULL) {
+					continue;
+				}
+
 				void *cpFirstEvent = caerGenericEventGetEvent(cpPacket, 0);
 				int32_t cpFirstEventTimestamp = caerGenericEventGetTimestamp(cpFirstEvent, cpPacket);
 
