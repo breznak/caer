@@ -129,6 +129,7 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 static int packetsTypeCmp(const void *a, const void *b);
 static bool newOutputBuffer(outputCommonState state);
 static bool commitOutputBuffer(outputCommonState state);
+static void sendEventPacket(outputCommonState state, caerEventPacketHeader packet);
 static int outputHandlerThread(void *stateArg);
 static void caerOutputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
@@ -313,6 +314,10 @@ static bool commitOutputBuffer(outputCommonState state) {
 	return (true);
 }
 
+static void sendEventPacket(outputCommonState state, caerEventPacketHeader packet) {
+
+}
+
 static int outputHandlerThread(void *stateArg) {
 	outputCommonState state = stateArg;
 
@@ -348,8 +353,10 @@ static int outputHandlerThread(void *stateArg) {
 		}
 
 		// Sort container by first timestamp and by type ID.
-		qsort(currPacketContainer->eventPackets, (size_t) currPacketContainer->eventPacketsNumber,
-			sizeof(caerEventPacketHeader), &packetsTypeCmp);
+		size_t currPacketContainerSize = (size_t) caerEventPacketContainerGetEventPacketsNumber(currPacketContainer);
+
+		qsort(currPacketContainer->eventPackets, currPacketContainerSize, sizeof(caerEventPacketHeader),
+			&packetsTypeCmp);
 
 		// We got new data. If this is the first time, we can only store that data, and then
 		// go and wait on the second container to arrive, before taking any decisions.
@@ -360,11 +367,90 @@ static int outputHandlerThread(void *stateArg) {
 
 		// We have both packet containers, we can now get the needed data, order them, send
 		// them out, and put the remaining ones into lastPacketContainer for the next run.
-		size_t currPacketContainerSize = (size_t) caerEventPacketContainerGetEventPacketsNumber(currPacketContainer);
 		size_t lastPacketContainerSize = (size_t) caerEventPacketContainerGetEventPacketsNumber(
 			state->lastPacketContainer);
 
-		// TODO: continue.
+		for (size_t lpIdx = 0; lpIdx < lastPacketContainerSize; lpIdx++) {
+			caerEventPacketHeader lpPacket = caerEventPacketContainerGetEventPacket(state->lastPacketContainer,
+				(int32_t) lpIdx);
+
+			// Packets in the lastPacketContainer can be NULL, as they could have been marked as sent
+			// in the following code, when they were part of currPacketContainer.
+			if (lpPacket == NULL) {
+				continue;
+			}
+
+			void *lpFirstEvent = caerGenericEventGetEvent(lpPacket, 0);
+			int32_t lpFirstEventTimestamp = caerGenericEventGetTimestamp(lpFirstEvent, lpPacket);
+
+			// Check, based on first event timestamp, that there is no event packet in the current
+			// (second) packet container with lower timestamp than the one in the last (first)
+			// packet container. Since they are ordered by timestamp already, simple linear search.
+			for (size_t cpIdx = 0; cpIdx < currPacketContainerSize; cpIdx++) {
+				caerEventPacketHeader cpPacket = caerEventPacketContainerGetEventPacket(currPacketContainer,
+					(int32_t) cpIdx);
+				void *cpFirstEvent = caerGenericEventGetEvent(cpPacket, 0);
+				int32_t cpFirstEventTimestamp = caerGenericEventGetTimestamp(cpFirstEvent, cpPacket);
+
+				if (cpFirstEventTimestamp < lpFirstEventTimestamp) {
+					// Strictly smaller, packet from current container has precedence.
+					sendEventPacket(state, cpPacket);
+
+					// Mark as sent.
+					caerEventPacketContainerSetEventPacket(currPacketContainer, (int32_t) cpIdx, NULL);
+				}
+				else if (cpFirstEventTimestamp == lpFirstEventTimestamp) {
+					// Timestamps are equal between the packets from the two packet containers.
+					// We order by Type ID then, as the format specification mandates.
+					int16_t lpTypeID = caerEventPacketHeaderGetEventType(lpPacket);
+					int16_t cpTypeID = caerEventPacketHeaderGetEventType(cpPacket);
+
+					if (cpTypeID < lpTypeID) {
+						// Strictly smaller, packet from current container has precedence.
+						sendEventPacket(state, cpPacket);
+
+						// Mark as sent.
+						caerEventPacketContainerSetEventPacket(currPacketContainer, (int32_t) cpIdx, NULL);
+					}
+					else {
+						// Equal or bigger, in this case we stop and let the packet from the
+						// last container be sent. This current packet will be sent on the
+						// next iteration.
+						break;
+					}
+				}
+				else {
+					// Strictly bigger, since ordered by timestamp, all further current packets
+					// will also be bigger, so we can stop checking the current packet container.
+					break;
+				}
+			}
+
+			// Send the packet from last event container, there are guaranteed none in the current
+			// event container with smaller timestamp, or equal timestamp but smaller type ID.
+			sendEventPacket(state, lpPacket);
+
+			// Mark as sent.
+			caerEventPacketContainerSetEventPacket(state->lastPacketContainer, (int32_t) lpIdx, NULL);
+		}
+
+		// Check that lastPacketContainer is empty and everything has been sent (sanity check).
+		for (size_t lpIdx = 0; lpIdx < lastPacketContainerSize; lpIdx++) {
+			caerEventPacketHeader lpPacket = caerEventPacketContainerGetEventPacket(state->lastPacketContainer,
+				(int32_t) lpIdx);
+
+			if (lpPacket != NULL) {
+				// This should never happen!
+				caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
+					"Failed to send all packets in lastPacketContainer.");
+			}
+		}
+
+		// Free all remaining lastPacketContainer memory.
+		caerEventPacketContainerFree(state->lastPacketContainer);
+
+		// Switch lastPacketContainer with currPacketContainer for next loop iteration.
+		state->lastPacketContainer = currPacketContainer;
 	}
 
 	// TODO: handle shutdown, write out all content of ring-buffers and commit data buffers.
