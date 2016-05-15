@@ -175,9 +175,6 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 		return;
 	}
 
-	// Sort list by type ID. Helps when there are first-TS-ties later on.
-	qsort(packets, packetsSize, sizeof(caerEventPacketHeader), &packetsTypeCmp);
-
 	// Allocate memory for event packet array structure that will get passed to output handler thread.
 	caerEventPacketContainer eventPackets = caerEventPacketContainerAllocate((int32_t) packetsSize);
 	if (eventPackets == NULL) {
@@ -245,17 +242,30 @@ static int packetsTypeCmp(const void *a, const void *b) {
 	const caerEventPacketHeader *aa = a;
 	const caerEventPacketHeader *bb = b;
 
-	int16_t eventTypeA = caerEventPacketHeaderGetEventType(*aa);
-	int16_t eventTypeB = caerEventPacketHeaderGetEventType(*bb);
+	// Sort first by timestamp of the first event.
+	int32_t eventTimestampA = caerGenericEventGetTimestamp(caerGenericEventGetEvent(*aa, 0), *aa);
+	int32_t eventTimestampB = caerGenericEventGetTimestamp(caerGenericEventGetEvent(*bb, 0), *bb);
 
-	if (eventTypeA < eventTypeB) {
+	if (eventTimestampA < eventTimestampB) {
 		return (-1);
 	}
-	else if (eventTypeA > eventTypeB) {
+	else if (eventTimestampA > eventTimestampB) {
 		return (1);
 	}
 	else {
-		return (0);
+		// If equal, further sort by type ID.
+		int16_t eventTypeA = caerEventPacketHeaderGetEventType(*aa);
+		int16_t eventTypeB = caerEventPacketHeaderGetEventType(*bb);
+
+		if (eventTypeA < eventTypeB) {
+			return (-1);
+		}
+		else if (eventTypeA > eventTypeB) {
+			return (1);
+		}
+		else {
+			return (0);
+		}
 	}
 }
 
