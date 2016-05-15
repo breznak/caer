@@ -583,6 +583,9 @@ bool caerOutputCommonInit(caerModuleData moduleData, outputCommonFDs fds) {
 		return (false);
 	}
 
+	// Initialize to current time.
+	portable_clock_gettime_monotonic(&state->bufferLastCommitTime);
+
 	// Start output handling thread.
 	atomic_store(&state->running, true);
 
