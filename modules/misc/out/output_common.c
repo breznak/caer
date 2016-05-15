@@ -73,14 +73,10 @@
 
 #include "output_common.h"
 #include "base/mainloop.h"
-#include "ext/ringbuffer/ringbuffer.h"
 #include "ext/c11threads_posix.h"
 #include "ext/portable_time.h"
+#include "ext/ringbuffer/ringbuffer.h"
 #include "ext/nets.h"
-
-#include <stdatomic.h>
-#include <unistd.h>
-#include <sys/uio.h>
 
 #include <libcaer/events/common.h>
 #include <libcaer/events/packetContainer.h>
@@ -128,6 +124,8 @@ struct output_common_state {
 };
 
 typedef struct output_common_state *outputCommonState;
+
+size_t CAER_OUTPUT_COMMON_STATE_STRUCT_SIZE = sizeof(struct output_common_state);
 
 static void copyPacketsToTransferRing(outputCommonState state, size_t packetsListSize, va_list packetsList);
 static int packetsTypeCmp(const void *a, const void *b);

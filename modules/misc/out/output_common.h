@@ -4,6 +4,11 @@
 #include "main.h"
 #include "base/module.h"
 
+#include <stdatomic.h>
+#include <unistd.h>
+
+extern size_t CAER_OUTPUT_COMMON_STATE_STRUCT_SIZE;
+
 struct output_common_fds {
 	size_t fdsSize;
 	int fds[];
