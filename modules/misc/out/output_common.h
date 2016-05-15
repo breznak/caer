@@ -4,7 +4,14 @@
 #include "main.h"
 #include "base/module.h"
 
-bool caerOutputCommonInit(caerModuleData moduleData, int fd);
+struct output_common_fds {
+	size_t fdsSize;
+	int fds[];
+};
+
+typedef struct output_common_fds *outputCommonFDs;
+
+bool caerOutputCommonInit(caerModuleData moduleData, outputCommonFDs fds);
 void caerOutputCommonExit(caerModuleData moduleData);
 void caerOutputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 

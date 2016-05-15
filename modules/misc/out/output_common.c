@@ -92,8 +92,8 @@ struct output_common_state {
 	thrd_t outputThread;
 	/// Track source ID (cannot change!). One source per I/O module!
 	int16_t sourceID;
-	/// The file descriptor for send().
-	int fileDescriptor;
+	/// The file descriptors for send().
+	outputCommonFDs fileDescriptors;
 	/// Filter out invalidated events or not.
 	atomic_bool validOnly;
 	/// Force all incoming packets to be committed to the transfer ring-buffers.
@@ -305,8 +305,13 @@ static bool newOutputBuffer(outputCommonState state) {
 
 static bool commitOutputBuffer(outputCommonState state) {
 	if (state->bufferUsedSize != 0) {
-		if (!writeUntilDone(state->fileDescriptor, state->buffer, state->bufferUsedSize)) {
-			return (false);
+		for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
+			if (state->fileDescriptors->fds[i] >= 0) {
+				if (!writeUntilDone(state->fileDescriptors->fds[i], state->buffer, state->bufferUsedSize)) {
+					// TODO: maybe close() and set to -1 here?
+					return (false);
+				}
+			}
 		}
 
 		state->bufferUsedSize = 0;
@@ -523,18 +528,31 @@ static int outputHandlerThread(void *stateArg) {
 	return (thrd_success);
 }
 
-bool caerOutputCommonInit(caerModuleData moduleData, int fd) {
+bool caerOutputCommonInit(caerModuleData moduleData, outputCommonFDs fds) {
 	outputCommonState state = moduleData->moduleState;
 
 	state->parentModule = moduleData;
 
-	// Check for invalid file descriptor.
-	if (fd < 0) {
-		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Invalid file descriptor.");
+	// Check for invalid file descriptors.
+	if (fds == NULL) {
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Invalid file descriptor array.");
 		return (false);
 	}
 
-	state->fileDescriptor = fd;
+	if (fds->fdsSize == 0) {
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Empty file descriptor array.");
+		return (false);
+	}
+
+	for (size_t i = 0; i < fds->fdsSize; i++) {
+		// Allow values of -1 to signal "not in use" slot.
+		if (fds->fds[i] < -1) {
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Invalid file descriptor.");
+			return (false);
+		}
+	}
+
+	state->fileDescriptors = fds;
 
 	// Initial source ID has to be -1 (invalid).
 	state->sourceID = -1;
@@ -600,9 +618,6 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 	free(state->buffer);
 
 	ringBufferFree(state->transferRing);
-
-	// Close file descriptor.
-	close(state->fileDescriptor);
 }
 
 void caerOutputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
