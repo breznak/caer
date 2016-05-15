@@ -369,6 +369,52 @@ static int outputHandlerThread(void *stateArg) {
 			continue;
 		}
 
+		// Since we just got new data, let's first check that it does conform to our expectations.
+		// This means the timestamp didn't slide back, or if equal, the type ID didn't get smaller.
+		// These checks are needed to avoid illegal ordering. Normal operation will never trigger
+		// these, as stated in the assumptions at the start of file, but erroneous usage or mixing
+		// or reordering of packet containers is possible, and has to be caught here.
+		for (size_t cpIdx = 0; cpIdx < currPacketContainerSize; cpIdx++) {
+			caerEventPacketHeader cpPacket = caerEventPacketContainerGetEventPacket(currPacketContainer,
+				(int32_t) cpIdx);
+
+			void *cpFirstEvent = caerGenericEventGetEvent(cpPacket, 0);
+			int64_t cpFirstEventTimestamp = caerGenericEventGetTimestamp64(cpFirstEvent, cpPacket);
+			int16_t cpTypeID = caerEventPacketHeaderGetEventType(cpPacket);
+
+			if (cpFirstEventTimestamp < state->lastPacketTimestamp) {
+				// Smaller TS than already sent, illegal, delete packet.
+				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+					"Detected timestamp going back, ignoring this packet!");
+
+				// Mark as deleted.
+				caerEventPacketContainerSetEventPacket(currPacketContainer, (int32_t) cpIdx, NULL);
+				free(cpPacket);
+			}
+			else if (cpFirstEventTimestamp == state->lastPacketTimestamp) {
+				// Same TS, so check that we don't have a smaller type ID, which would be illegal.
+				if (cpTypeID < state->lastPacketTypeID) {
+					// Smaller Type ID than already sent, illegal, delete packet.
+					caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+						"Detected type ID going back, ignoring this packet!");
+
+					// Mark as deleted.
+					caerEventPacketContainerSetEventPacket(currPacketContainer, (int32_t) cpIdx, NULL);
+					free(cpPacket);
+				}
+				else {
+					// Equal or bigger Type ID, this is good. Strict Type ID ordering ensures
+					// that all other packets in this container are the same, so exit loop.
+					break;
+				}
+			}
+			else {
+				// Bigger TS than already sent, this is good. Strict TS ordering ensures
+				// that all other packets in this container are the same, so exit loop.
+				break;
+			}
+		}
+
 		// We have both packet containers, we can now get the needed data, order them, send
 		// them out, and put the remaining ones into lastPacketContainer for the next run.
 		size_t lastPacketContainerSize = (size_t) caerEventPacketContainerGetEventPacketsNumber(
