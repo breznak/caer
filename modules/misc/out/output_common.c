@@ -106,6 +106,8 @@ struct output_common_state {
 	RingBuffer transferRing;
 	/// Track last event packet container gotten in output handler thread.
 	caerEventPacketContainer lastPacketContainer;
+	/// Track last event packet timestamp that was sent out.
+	int64_t lastPacketTimestamp;
 	/// Data buffer for writing to file descriptor (buffered I/O).
 	uint8_t *buffer;
 	/// Size of data write buffer, in bytes.
@@ -404,6 +406,7 @@ static int outputHandlerThread(void *stateArg) {
 					sendEventPacket(state, cpPacket);
 
 					// Mark as sent.
+					state->lastPacketTimestamp = cpFirstEventTimestamp;
 					caerEventPacketContainerSetEventPacket(currPacketContainer, (int32_t) cpIdx, NULL);
 				}
 				else if (cpFirstEventTimestamp == lpFirstEventTimestamp) {
@@ -417,6 +420,7 @@ static int outputHandlerThread(void *stateArg) {
 						sendEventPacket(state, cpPacket);
 
 						// Mark as sent.
+						state->lastPacketTimestamp = cpFirstEventTimestamp;
 						caerEventPacketContainerSetEventPacket(currPacketContainer, (int32_t) cpIdx, NULL);
 					}
 					else {
@@ -438,6 +442,7 @@ static int outputHandlerThread(void *stateArg) {
 			sendEventPacket(state, lpPacket);
 
 			// Mark as sent.
+			state->lastPacketTimestamp = lpFirstEventTimestamp;
 			caerEventPacketContainerSetEventPacket(state->lastPacketContainer, (int32_t) lpIdx, NULL);
 		}
 
