@@ -195,24 +195,29 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 	caerEventPacketContainerSetEventPacketsNumber(eventPackets, 0);
 
 	for (size_t i = 0; i < packetsSize; i++) {
+		int32_t idx = caerEventPacketContainerGetEventPacketsNumber(eventPackets);
+
 		if (validOnly) {
-			caerEventPacketContainerSetEventPacket(eventPackets,
-				caerEventPacketContainerGetEventPacketsNumber(eventPackets),
-				caerCopyEventPacketOnlyValidEvents(packets[i]));
+			caerEventPacketContainerSetEventPacket(eventPackets, idx, caerCopyEventPacketOnlyValidEvents(packets[i]));
 		}
 		else {
-			caerEventPacketContainerSetEventPacket(eventPackets,
-				caerEventPacketContainerGetEventPacketsNumber(eventPackets), caerCopyEventPacketOnlyEvents(packets[i]));
+			caerEventPacketContainerSetEventPacket(eventPackets, idx, caerCopyEventPacketOnlyEvents(packets[i]));
 		}
 
-		if (caerEventPacketContainerGetEventPacket(eventPackets,
-			caerEventPacketContainerGetEventPacketsNumber(eventPackets)) == NULL) {
+		if (caerEventPacketContainerGetEventPacket(eventPackets, idx) == NULL) {
 			// Failed to copy packet. Signal but try to continue anyway.
-			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to copy packet.");
+			if ((validOnly && (caerEventPacketHeaderGetEventValid(packets[i]) == 0))
+				|| (!validOnly && (caerEventPacketHeaderGetEventNumber(packets[i]) == 0))) {
+				caerLog(CAER_LOG_NOTICE, state->parentModule->moduleSubSystemString,
+					"Submitted empty event packet to output. Ignoring empty event packet.");
+			}
+			else {
+				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+					"Failed to copy event packet to output.");
+			}
 		}
 		else {
-			caerEventPacketContainerSetEventPacketsNumber(eventPackets,
-				caerEventPacketContainerGetEventPacketsNumber(eventPackets) + 1);
+			caerEventPacketContainerSetEventPacketsNumber(eventPackets, idx + 1);
 		}
 	}
 
