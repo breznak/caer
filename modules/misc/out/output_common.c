@@ -134,12 +134,11 @@ static void caerOutputCommonConfigListener(sshsNode node, void *userData, enum s
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
 /**
- * Copy event packets to the right ring buffer for transfer
- * to the external output handling thread based on type information.
+ * Copy event packets to the ring buffer for transfer to the output handler thread.
  *
- * @param packetMapper array of packet mapper structures: Type -> Transfer-Ring.
- * @param packetAmount length of array, amount of expected different event packets.
- * @param eventPacket an event packet.
+ * @param state output module state.
+ * @param packetsListSize the length of the variable-length argument list of event packets.
+ * @param packetsList a variable-length argument list of event packets.
  */
 static void copyPacketsToTransferRing(outputCommonState state, size_t packetsListSize, va_list packetsList) {
 	caerEventPacketHeader packets[packetsListSize];
@@ -163,7 +162,7 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 					"An output module can only handle packets from the same source! "
 						"A packet with source %d was sent, but this output module expects only packets from source %d.",
 					eventSource, state->sourceID);
-				return;
+				continue;
 			}
 
 			// Source ID is correct, packet is not empty, we got it!
