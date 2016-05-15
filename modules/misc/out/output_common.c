@@ -118,7 +118,7 @@ struct output_common_state {
 	size_t bufferUsedSize;
 	/// Maximum interval without sending data, in µs.
 	/// How long to wait if buffer not full before committing it anyway.
-	size_t bufferMaxInterval;
+	uint64_t bufferMaxInterval;
 	/// Time of last buffer commit to file descriptor (send() call).
 	struct timespec bufferLastCommitTime;
 	/// Flag to signal update to buffer configuration asynchronously.
@@ -324,7 +324,52 @@ static bool commitOutputBuffer(outputCommonState state) {
 }
 
 static void sendEventPacket(outputCommonState state, caerEventPacketHeader packet) {
+	// Calculate total size of data to send out in bytes.
+	size_t packetSize = CAER_EVENT_PACKET_HEADER_SIZE
+		+ (size_t) (caerEventPacketHeaderGetEventCapacity(packet) * caerEventPacketHeaderGetEventSize(packet));
 
+	// Send it out until none is left!
+	size_t packetIndex = 0;
+
+	while (packetSize > 0) {
+		// Calculate remaining space in current buffer.
+		size_t usableBufferSpace = state->bufferSize - state->bufferUsedSize;
+
+		// Let's see how much of it (or all of it!) we need.
+		if (packetSize < usableBufferSpace) {
+			usableBufferSpace = packetSize;
+		}
+
+		// Copy memory from packet to buffer.
+		memcpy(state->buffer + state->bufferUsedSize, ((uint8_t *) packet) + packetIndex, usableBufferSpace);
+
+		// Update indexes.
+		state->bufferUsedSize += usableBufferSpace;
+		packetIndex += usableBufferSpace;
+		packetSize -= usableBufferSpace;
+
+		if (state->bufferUsedSize == state->bufferSize) {
+			// Commit buffer once full.
+			commitOutputBuffer(state);
+		}
+	}
+
+	// Each commit operation updates the last committed buffer time.
+	// The above code resulted in some commits, with the time being updated,
+	// or in no commits at all, with the time remaining as before.
+	// Here we check that the time difference between now and the last actual
+	// commit doesn't exceed the allowed maximum interval.
+	struct timespec currentTime;
+	portable_clock_gettime_monotonic(&currentTime);
+
+	uint64_t diffNanoTime = (uint64_t) (((int64_t) (currentTime.tv_sec - state->bufferLastCommitTime.tv_sec)
+		* 1000000000LL) + (int64_t) (currentTime.tv_nsec - state->bufferLastCommitTime.tv_nsec));
+
+	// DiffNanoTime is the difference in nanoseconds; we want to trigger after
+	// the user provided interval has elapsed (also in nanoseconds).
+	if (diffNanoTime >= state->bufferMaxInterval) {
+		commitOutputBuffer(state);
+	}
 }
 
 static int outputHandlerThread(void *stateArg) {
@@ -339,7 +384,8 @@ static int outputHandlerThread(void *stateArg) {
 		if (atomic_load_explicit(&state->bufferUpdate, memory_order_relaxed)) {
 			atomic_store(&state->bufferUpdate, false);
 
-			state->bufferMaxInterval = (size_t) sshsNodeGetInt(state->parentModule->moduleNode, "bufferMaxInterval");
+			state->bufferMaxInterval = U64T(sshsNodeGetInt(state->parentModule->moduleNode, "bufferMaxInterval"));
+			state->bufferMaxInterval *= 1000LLU; // Convert from microseconds to nanoseconds.
 
 			if (!newOutputBuffer(state)) {
 				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
@@ -566,7 +612,8 @@ bool caerOutputCommonInit(caerModuleData moduleData, outputCommonFDs fds) {
 
 	atomic_store(&state->validOnly, sshsNodeGetBool(moduleData->moduleNode, "validOnly"));
 	atomic_store(&state->keepPackets, sshsNodeGetBool(moduleData->moduleNode, "keepPackets"));
-	state->bufferMaxInterval = (size_t) sshsNodeGetInt(moduleData->moduleNode, "bufferMaxInterval");
+	state->bufferMaxInterval = U64T(sshsNodeGetInt(moduleData->moduleNode, "bufferMaxInterval"));
+	state->bufferMaxInterval *= 1000LLU; // Convert from microseconds to nanoseconds.
 
 	// Initialize transfer ring-buffer. transferBufferSize only changes here at init time!
 	state->transferRing = ringBufferInit((size_t) sshsNodeGetInt(moduleData->moduleNode, "transferBufferSize"));
