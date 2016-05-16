@@ -462,9 +462,23 @@ static void sendFileHeader(outputCommonState state) {
 	length = 14;
 	memcpy(state->buffer + offset, "#Format: RAW\r\n", length);
 
-	// TODO: write source, time (see strftime()).
+	// TODO: write source info.
 	// #Source <ID>: <DESCRIPTION>\r\n
-	// #Start-Time: %Y-%m-%d %H:%M:%S (TZ%z)\r\n
+
+	time_t currentTimeEpoch = time(NULL);
+	tzset();
+	struct tm currentTime;
+	localtime_r(&currentTimeEpoch, &currentTime);
+
+	// Following time format uses exactly 44 characters (25 separators/characters,
+	// 4 year, 2 month, 2 day, 2 hours, 2 minutes, 2 seconds, 5 time-zone).
+	size_t currentTimeStringLength = 44;
+	char currentTimeString[currentTimeStringLength + 1]; // + 1 for terminating NUL byte.
+	strftime(currentTimeString, currentTimeStringLength + 1, "#Start-Time: %Y-%m-%d %H:%M:%S (TZ%z)\r\n", &currentTime);
+
+	offset += length;
+	length = currentTimeStringLength;
+	memcpy(state->buffer + offset, currentTimeString, length);
 
 	offset += length;
 	length = 14;
