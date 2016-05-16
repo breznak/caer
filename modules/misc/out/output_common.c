@@ -81,6 +81,8 @@
 #include <libcaer/events/common.h>
 #include <libcaer/events/packetContainer.h>
 
+// TODO: check handling of timestamp-reset events from camera!
+
 struct output_common_state {
 	/// Control flag for output handling thread.
 	atomic_bool running;
@@ -368,7 +370,6 @@ static void sendEventPacket(outputCommonState state, caerEventPacketHeader packe
 	// Send it out until none is left!
 	size_t packetIndex = 0;
 
-	// TODO: handle message-based formats like UDP, need magic number + sequence number.
 	while (packetSize > 0) {
 		// Calculate remaining space in current buffer.
 		size_t usableBufferSpace = state->bufferSize - state->bufferUsedSize;
@@ -453,14 +454,62 @@ static void handleNewServerConnections(outputCommonState state) {
 
 static void sendFileHeader(outputCommonState state) {
 	// Write AEDAT 3.1 header (RAW format).
-	memcpy(state->buffer, "#!AER-DAT3.1\r\n", 14);
-	memcpy(state->buffer + 14, "#Format: RAW\r\n", 14);
-	memcpy(state->buffer + 28, "#!END-HEADER\r\n", 14);
-	state->bufferUsedSize = 3 * 14;
+	size_t offset = 0;
+	size_t length = 11 + strlen(AEDAT3_FILE_VERSION);
+	memcpy(state->buffer + offset, "#!AER-DAT" AEDAT3_FILE_VERSION "\r\n", length);
+
+	offset += length;
+	length = 14;
+	memcpy(state->buffer + offset, "#Format: RAW\r\n", length);
+
+	// TODO: write source, time (see strftime()).
+	// #Source <ID>: <DESCRIPTION>\r\n
+	// #Start-Time: %Y-%m-%d %H:%M:%S (TZ%z)\r\n
+
+	offset += length;
+	length = 14;
+	memcpy(state->buffer + offset, "#!END-HEADER\r\n", length);
+
+	state->bufferUsedSize = (offset + length);
 }
 
 static void sendNetworkHeader(outputCommonState state) {
-	// TODO: handle writing header. Just update buffer here.
+	// Send AEDAT 3.1 header (RAW format) for network streams (20 bytes total).
+	int64_t magicNumber = htole64(AEDAT3_NETWORK_MAGIC_NUMBER);
+
+	int64_t sequenceNumber = htole64(state->networkSequenceNumber);
+
+	int8_t versionNumber = AEDAT3_NETWORK_VERSION;
+	int8_t formatNumber = 0x00; // RAW format.
+	int16_t sourceNumber = htole16(1); // Always one source per output module.
+
+	size_t offset = 0;
+	size_t length = sizeof(int64_t);
+	memcpy(state->buffer + offset, &magicNumber, length);
+
+	offset += length;
+	length = sizeof(int64_t);
+	memcpy(state->buffer + offset, &sequenceNumber, length);
+
+	offset += length;
+	length = sizeof(int8_t);
+	memcpy(state->buffer + offset, &versionNumber, length);
+
+	offset += length;
+	length = sizeof(int8_t);
+	memcpy(state->buffer + offset, &formatNumber, length);
+
+	offset += length;
+	length = sizeof(int16_t);
+	memcpy(state->buffer + offset, &sourceNumber, length);
+
+	state->bufferUsedSize = (offset + length);
+
+	// Increase sequence number for successive headers, if this is a
+	// message-based network protocol (UDP for example).
+	if (state->isNetworkMessageBased) {
+		state->networkSequenceNumber++;
+	}
 }
 
 static int outputHandlerThread(void *stateArg) {
