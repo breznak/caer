@@ -209,13 +209,10 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 	// the same for all packets from the same mainloop run, avoiding mid-way changes.
 	bool validOnly = atomic_load_explicit(&state->validOnly, memory_order_relaxed);
 
-	// Now copy each event packet and send the array out. We reset the packets number to
-	// zero here, so we can increase it as we loop and track how many packets there are.
-	caerEventPacketContainerSetEventPacketsNumber(eventPackets, 0);
+	// Now copy each event packet and send the array out. Track how many packets there are.
+	int32_t idx = 0;
 
 	for (size_t i = 0; i < packetsSize; i++) {
-		int32_t idx = caerEventPacketContainerGetEventPacketsNumber(eventPackets);
-
 		if (validOnly) {
 			caerEventPacketContainerSetEventPacket(eventPackets, idx, caerCopyEventPacketOnlyValidEvents(packets[i]));
 		}
@@ -236,16 +233,20 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 			}
 		}
 		else {
-			caerEventPacketContainerSetEventPacketsNumber(eventPackets, idx + 1);
+			idx++;
 		}
 	}
 
 	// We might have failed to copy all packets (unlikely).
-	if (caerEventPacketContainerGetEventPacketsNumber(eventPackets) == 0) {
+	if (idx == 0) {
 		caerEventPacketContainerFree(eventPackets);
 
 		return;
 	}
+
+	// Reset packet container size so we only consider the packets we managed
+	// to successfully copy.
+	caerEventPacketContainerSetEventPacketsNumber(eventPackets, idx);
 
 	retry: if (!ringBufferPut(state->transferRing, eventPackets)) {
 		if (atomic_load_explicit(&state->keepPackets, memory_order_relaxed)) {
