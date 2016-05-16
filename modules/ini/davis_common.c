@@ -2417,11 +2417,19 @@ static uint16_t generateCoarseFineBiasParent(sshsNode biasNode, const char *bias
 
 static uint16_t generateCoarseFineBias(sshsNode biasNode) {
 	// Build up bias value from all its components.
+	char *sexString = sshsNodeGetString(biasNode, "sex");
+	char *typeString = sshsNodeGetString(biasNode, "type");
+	char *currentLevelString = sshsNodeGetString(biasNode, "currentLevel");
+
 	struct caer_bias_coarsefine biasValue = { .coarseValue = U8T(sshsNodeGetByte(biasNode, "coarseValue")), .fineValue =
 		U8T(sshsNodeGetShort(biasNode, "fineValue")), .enabled = sshsNodeGetBool(biasNode, "enabled"), .sexN =
-		caerStrEquals(sshsNodeGetString(biasNode, "sex"), "N"), .typeNormal = caerStrEquals(
-		sshsNodeGetString(biasNode, "type"), "Normal"), .currentLevelNormal = caerStrEquals(
-		sshsNodeGetString(biasNode, "currentLevel"), "Normal"), };
+		caerStrEquals(sexString, "N"), .typeNormal = caerStrEquals(typeString, "Normal"), .currentLevelNormal =
+		caerStrEquals(currentLevelString, "Normal"), };
+
+	// Free strings to avoid memory leaks.
+	free(sexString);
+	free(typeString);
+	free(currentLevelString);
 
 	return (caerBiasCoarseFineGenerate(biasValue));
 }
@@ -2461,17 +2469,20 @@ static uint16_t generateShiftedSourceBiasParent(sshsNode biasNode, const char *b
 
 static uint16_t generateShiftedSourceBias(sshsNode biasNode) {
 	// Build up bias value from all its components.
+	char *operatingModeString = sshsNodeGetString(biasNode, "operatingMode");
+	char *voltageLevelString = sshsNodeGetString(biasNode, "voltageLevel");
+
 	struct caer_bias_shiftedsource biasValue = { .refValue = U8T(sshsNodeGetByte(biasNode, "refValue")), .regValue =
 		U8T(sshsNodeGetByte(biasNode, "regValue")), .operatingMode =
-		(caerStrEquals(sshsNodeGetString(biasNode, "operatingMode"), "HiZ")) ?
-			(HI_Z) :
-			((caerStrEquals(sshsNodeGetString(biasNode, "operatingMode"), "TiedToRail")) ?
-				(TIED_TO_RAIL) : (SHIFTED_SOURCE)),
+		(caerStrEquals(operatingModeString, "HiZ")) ?
+			(HI_Z) : ((caerStrEquals(operatingModeString, "TiedToRail")) ? (TIED_TO_RAIL) : (SHIFTED_SOURCE)),
 		.voltageLevel =
-			(caerStrEquals(sshsNodeGetString(biasNode, "voltageLevel"), "SingleDiode")) ?
-				(SINGLE_DIODE) :
-				((caerStrEquals(sshsNodeGetString(biasNode, "voltageLevel"), "DoubleDiode")) ?
-					(DOUBLE_DIODE) : (SPLIT_GATE)), };
+			(caerStrEquals(voltageLevelString, "SingleDiode")) ?
+				(SINGLE_DIODE) : ((caerStrEquals(voltageLevelString, "DoubleDiode")) ? (DOUBLE_DIODE) : (SPLIT_GATE)), };
+
+	// Free strings to avoid memory leaks.
+	free(operatingModeString);
+	free(voltageLevelString);
 
 	return (caerBiasShiftedSourceGenerate(biasValue));
 }
