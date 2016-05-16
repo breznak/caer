@@ -136,6 +136,25 @@ static int outputHandlerThread(void *stateArg);
 static void caerOutputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
+outputCommonFDs caerOutputCommonAllocateFdArray(size_t size) {
+	// Allocate memory for file descriptor array structure.
+	outputCommonFDs fileDescriptors = malloc(sizeof(*fileDescriptors) + (size * sizeof(int)));
+	if (fileDescriptors == NULL) {
+		return (NULL);
+	}
+
+	// Initialize all values, FDs to -1.
+	fileDescriptors->fdsSize = size;
+
+	fileDescriptors->serverFd = -1;
+
+	for (size_t i = 0; i < size; i++) {
+		fileDescriptors->fds[i] = -1;
+	}
+
+	return (fileDescriptors);
+}
+
 /**
  * Copy event packets to the ring buffer for transfer to the output handler thread.
  *
@@ -590,6 +609,11 @@ bool caerOutputCommonInit(caerModuleData moduleData, outputCommonFDs fds) {
 
 	if (fds->fdsSize == 0) {
 		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Empty file descriptor array.");
+		return (false);
+	}
+
+	if (fds->serverFd < -1) {
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Invalid server file descriptor.");
 		return (false);
 	}
 
