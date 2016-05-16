@@ -46,24 +46,35 @@ bool PoseCalibration::findMarkers(caerFrameEvent frame) {
         aruco::drawDetectedMarkers(view, corners, ids);
     } 
        
+    // from camera calibration 
+    double fx, fy, cx, cy, m, distance, avr_size, x, object_image_sensor_mm;
+    fx = undistortCameraMatrix.at<double>(0,0);
+    fy = undistortCameraMatrix.at<double>(1,1);
+    cx = undistortCameraMatrix.at<double>(0,2);
+    cy = undistortCameraMatrix.at<double>(1,2);
+    // from zhang method we estimate pixels per mm (focal lenght))
+    m = ( (fx+fy)/2.0 ) / focal_lenght_mm ;
     // estimate markers pose
     if( corners.size() > 0){
         Mat rvecs, tvecs;
         aruco::estimatePoseSingleMarkers(corners, 0.05, undistortCameraMatrix, undistortDistCoeffs, rvecs, tvecs); 
-        for(int k=0; k<corners.size(); k++){          //goes through all cv::Point2f in the vector
-                        cv::Point2f p = corners[0][k]; // still do not know why [0]
-                        float x = p.x;   //first value
-                        float y = p.y;   //second value
-                        //stuff
-                        cout << endl;
-                        cout << "#####################" << endl;
-                        cout << x << endl;
-                        cout << y << endl;
-                        cout << "#####################" << endl;
-                        cout << endl;
+        for(int k=0; k<corners.size(); k++){ 
+            // draw camera pose
+            aruco::drawAxis(view, undistortCameraMatrix, undistortDistCoeffs, rvecs.row(k), tvecs.row(k), 0.07); 
+            // get first [0] object size in pixels
+            cv::RotatedRect box = cv::minAreaRect(cv::Mat(corners[k]));
+            cv::Point2f p = box.size;
+            avr_size = ( p.x + p.y ) / 2.0; //in pixels
+            // convert px/mm in the lower resolution
+            // 3264/m = camera_y_resolution/x
+            x = (camera_y_resolution*m)/camera_y_resolution;
+            object_image_sensor_mm = avr_size / x ;
+            // calculate distance from object
+            // distance_mm = object_real_world_mm * focal-length_mm / object_image_sensor_mm
+            distance = object_real_world_mm * focal_lenght_mm / object_image_sensor_mm;
+            cout << endl << "distance to maker id " << corners[k][0] << " is " << distance  << endl << endl;
         }
-        
-        for(int i=0; i<corners.size(); i++){
+        /*for(int i=0; i<corners.size(); i++){
             aruco::drawAxis(view, undistortCameraMatrix, undistortDistCoeffs, rvecs.row(i), tvecs.row(i), 0.07); 
             //cout<< rvecs.row(i) <<endl;
             //cout<< tvecs.row(i) <<endl;
@@ -83,7 +94,7 @@ bool PoseCalibration::findMarkers(caerFrameEvent frame) {
             cout << "##############$$$$$$$$$$$$################" << endl;   
             cout << endl;
                 
-        }    
+        }*/    
     }    
 
     //place back the markers in the frame
