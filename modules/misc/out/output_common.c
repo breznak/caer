@@ -90,6 +90,13 @@ struct output_common_state {
 	int16_t sourceID;
 	/// The file descriptors for send().
 	outputCommonFDs fileDescriptors;
+	/// Network-like stream or file-like stream. Matters for header format.
+	bool isNetworkStream;
+	/// For network-like outputs, we differentiate between stream and message
+	/// based protocols, like TCP and UDP. Matters for header/sequence number.
+	bool isNetworkMessageBased;
+	/// Keep track of the sequence number for message-based protocols.
+	int64_t networkSequenceNumber;
 	/// Filter out invalidated events or not.
 	atomic_bool validOnly;
 	/// Force all incoming packets to be committed to the transfer ring-buffers.
@@ -133,6 +140,8 @@ static bool newOutputBuffer(outputCommonState state);
 static void commitOutputBuffer(outputCommonState state);
 static void sendEventPacket(outputCommonState state, caerEventPacketHeader packet);
 static void handleNewServerConnections(outputCommonState state);
+static void sendFileHeader(outputCommonState state);
+static void sendNetworkHeader(outputCommonState state);
 static int outputHandlerThread(void *stateArg);
 static void caerOutputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
@@ -339,6 +348,12 @@ static void commitOutputBuffer(outputCommonState state) {
 		}
 
 		state->bufferUsedSize = 0;
+
+		// If message-based protocol, we fill in the now empty buffer with the
+		// appropriate header.
+		if (state->isNetworkMessageBased) {
+			sendNetworkHeader(state);
+		}
 	}
 
 	// Update last commit time.
@@ -436,19 +451,26 @@ static void handleNewServerConnections(outputCommonState state) {
 	}
 }
 
+static void sendFileHeader(outputCommonState state) {
+	// Write AEDAT 3.1 header (RAW format).
+	memcpy(state->buffer, "#!AER-DAT3.1\r\n", 14);
+	memcpy(state->buffer + 14, "#Format: RAW\r\n", 14);
+	memcpy(state->buffer + 28, "#!END-HEADER\r\n", 14);
+	state->bufferUsedSize = 3 * 14;
+}
+
+static void sendNetworkHeader(outputCommonState state) {
+	// TODO: handle writing header. Just update buffer here.
+}
+
 static int outputHandlerThread(void *stateArg) {
 	outputCommonState state = stateArg;
 
-	// TODO: handle writing header.
-	for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
-		int fd = state->fileDescriptors->fds[i];
-
-		if (fd >= 0) {
-			// Write AEDAT 3.1 header (RAW format).
-			write(fd, "#!AER-DAT3.1\r\n", 14);
-			write(fd, "#Format: RAW\r\n", 14);
-			write(fd, "#!END-HEADER\r\n", 14);
-		}
+	if (state->isNetworkStream) {
+		sendNetworkHeader(state);
+	}
+	else {
+		sendFileHeader(state);
 	}
 
 	// If no data is available on the transfer ring-buffer, sleep for 500µs (0.5 ms)
