@@ -438,6 +438,18 @@ static void handleNewServerConnections(outputCommonState state) {
 static int outputHandlerThread(void *stateArg) {
 	outputCommonState state = stateArg;
 
+	// TODO: handle writing header.
+	for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
+		int fd = state->fileDescriptors->fds[i];
+
+		if (fd >= 0) {
+			// Write AEDAT 3.1 header (RAW format).
+			write(fd, "#!AER-DAT3.1\r\n", 14);
+			write(fd, "#Format: RAW\r\n", 14);
+			write(fd, "#!END-HEADER\r\n", 14);
+		}
+	}
+
 	// If no data is available on the transfer ring-buffer, sleep for 500µs (0.5 ms)
 	// to avoid wasting resources in a busy loop.
 	struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 500000 };
