@@ -132,6 +132,7 @@ static int packetsTypeCmp(const void *a, const void *b);
 static bool newOutputBuffer(outputCommonState state);
 static void commitOutputBuffer(outputCommonState state);
 static void sendEventPacket(outputCommonState state, caerEventPacketHeader packet);
+static void handleNewServerConnections(outputCommonState state);
 static int outputHandlerThread(void *stateArg);
 static void caerOutputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
@@ -393,6 +394,47 @@ static void sendEventPacket(outputCommonState state, caerEventPacketHeader packe
 	}
 }
 
+static void handleNewServerConnections(outputCommonState state) {
+	// First let's see if any new connections are waiting on the listening
+	// socket to be accepted. This returns right away (non-blocking).
+	int acceptResult = accept(state->fileDescriptors->serverFd, NULL, NULL);
+	if (acceptResult < 0) {
+		if (errno != EAGAIN && errno != EWOULDBLOCK) {
+			// Only log real failure. EAGAIN/EWOULDBLOCK just mean no
+			// connections are present for non-blocking accept().
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+				"TCP server accept() failed. Error: %d.", errno);
+		}
+
+		return;
+	}
+
+	// New connection present!
+	// Put it in the list of FDs if possible, or close.
+	bool putInFDList = false;
+
+	for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
+		if (state->fileDescriptors->fds[i] == -1) {
+			// Empty place in FD list, add this one.
+			state->fileDescriptors->fds[i] = acceptResult;
+			putInFDList = true;
+			break;
+		}
+	}
+
+	// No space for new connection, just close it (client will exit).
+	if (!putInFDList) {
+		close(acceptResult);
+
+		caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
+			"Rejected TCP client (fd %d), max connections reached.", acceptResult);
+	}
+	else {
+		caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
+			"Accepted new TCP connection from client (fd %d).", acceptResult);
+	}
+}
+
 static int outputHandlerThread(void *stateArg) {
 	outputCommonState state = stateArg;
 
@@ -401,6 +443,11 @@ static int outputHandlerThread(void *stateArg) {
 	struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 500000 };
 
 	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
+		// Handle new connections in server mode.
+		if (state->fileDescriptors->serverFd >= 0) {
+			handleNewServerConnections(state);
+		}
+
 		// Handle configuration changes affecting buffer management.
 		if (atomic_load_explicit(&state->bufferUpdate, memory_order_relaxed)) {
 			atomic_store(&state->bufferUpdate, false);
