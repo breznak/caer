@@ -103,6 +103,11 @@ int main(int argc, char *argv[]) {
 	char commandHistoryFilePath[1024];
 
 	char *userHomeDir = getUserHomeDirectory();
+	if (userHomeDir == NULL) {
+		fprintf(stderr, "Failed to determine user's home directory.\n");
+		return (EXIT_FAILURE);
+	}
+
 	snprintf(commandHistoryFilePath, 1024, "%s/.caerctl_history", userHomeDir);
 	free(userHomeDir);
 
