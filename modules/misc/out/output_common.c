@@ -738,9 +738,34 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 			"Failed to join output handling thread. Error: %d.", errno);
 	}
 
-	free(state->buffer);
+	// Now clean up the ring-buffer and its contents.
+	caerEventPacketHeader packetHeader;
+	while ((packetHeader = ringBufferGet(state->transferRing)) != NULL) {
+		free(packetHeader);
+
+		// This should never happen!
+		caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString, "Transfer ring-buffer was not empty!");
+	}
 
 	ringBufferFree(state->transferRing);
+
+	// Close file descriptors.
+	for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
+		int fd = state->fileDescriptors->fds[i];
+
+		if (fd >= 0) {
+			close(fd);
+		}
+	}
+
+	if (state->fileDescriptors->serverFd >= 0) {
+		close(state->fileDescriptors->serverFd);
+	}
+
+	// Free allocated memory.
+	free(state->fileDescriptors);
+
+	free(state->buffer);
 }
 
 void caerOutputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
