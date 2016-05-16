@@ -577,6 +577,10 @@ union sshs_node_attr_value sshsNodeGetAttribute(sshsNode node, const char *key, 
 	// Verify that we're getting values from a valid attribute.
 	// Valid means it already exists and has a well-defined default.
 	if (attr == NULL) {
+		if (type == STRING) {
+			free(value.string);
+		}
+
 		char errorMsg[1024];
 		snprintf(errorMsg, 1024, "Attribute '%s' of type '%s' not present, please initialize it first.", key,
 			sshsHelperTypeToStringConverter(type));
