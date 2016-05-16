@@ -8,7 +8,7 @@
 #ifndef NET_UDP_H_
 #define NET_UDP_H_
 
-#include "out_common.h"
+#include "main.h"
 
 void caerOutputNetUDP(uint16_t moduleID, size_t outputTypesNumber, ...);
 

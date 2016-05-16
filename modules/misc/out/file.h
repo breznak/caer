@@ -1,7 +1,7 @@
 #ifndef FILE_H_
 #define FILE_H_
 
-#include "out_common.h"
+#include "main.h"
 
 #define DEFAULT_PREFIX "caer_out"
 
