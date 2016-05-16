@@ -130,7 +130,7 @@ size_t CAER_OUTPUT_COMMON_STATE_STRUCT_SIZE = sizeof(struct output_common_state)
 static void copyPacketsToTransferRing(outputCommonState state, size_t packetsListSize, va_list packetsList);
 static int packetsTypeCmp(const void *a, const void *b);
 static bool newOutputBuffer(outputCommonState state);
-static bool commitOutputBuffer(outputCommonState state);
+static void commitOutputBuffer(outputCommonState state);
 static void sendEventPacket(outputCommonState state, caerEventPacketHeader packet);
 static int outputHandlerThread(void *stateArg);
 static void caerOutputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
@@ -320,7 +320,7 @@ static bool newOutputBuffer(outputCommonState state) {
 	return (true);
 }
 
-static bool commitOutputBuffer(outputCommonState state) {
+static void commitOutputBuffer(outputCommonState state) {
 	if (state->bufferUsedSize != 0) {
 		for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
 			int fd = state->fileDescriptors->fds[i];
@@ -329,8 +329,9 @@ static bool commitOutputBuffer(outputCommonState state) {
 				if (!writeUntilDone(fd, state->buffer, state->bufferUsedSize)) {
 					// Write failed, most of the reasons for that to happen are
 					// not recoverable from, so we just disable this file descriptor.
+					// This also detects client-side close() for TCP server connections.
 					close(fd);
-					fd = -1;
+					state->fileDescriptors->fds[i] = -1;
 				}
 			}
 		}
@@ -340,8 +341,6 @@ static bool commitOutputBuffer(outputCommonState state) {
 
 	// Update last commit time.
 	portable_clock_gettime_monotonic(&state->bufferLastCommitTime);
-
-	return (true);
 }
 
 static void sendEventPacket(outputCommonState state, caerEventPacketHeader packet) {
