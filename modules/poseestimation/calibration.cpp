@@ -56,11 +56,12 @@ bool PoseCalibration::findMarkers(caerFrameEvent frame) {
     } 
        
     // from camera calibration 
-    double fx, fy, cx, cy, m, distance, avr_size, x, object_image_sensor_mm;
+    double fx, fy, m, distance, avr_size, x, object_image_sensor_mm;
+    //double cx,cy //planned to be used
     fx = undistortCameraMatrix.at<double>(0,0);
     fy = undistortCameraMatrix.at<double>(1,1);
-    cx = undistortCameraMatrix.at<double>(0,2);
-    cy = undistortCameraMatrix.at<double>(1,2);
+    //cx = undistortCameraMatrix.at<double>(0,2);
+    //cy = undistortCameraMatrix.at<double>(1,2);
     // from zhang method we estimate pixels per mm (focal lenght))
     m = ( (fx+fy)/2.0 ) / focal_lenght_mm ;
     // estimate markers pose
