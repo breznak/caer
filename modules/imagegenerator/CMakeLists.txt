@@ -6,9 +6,7 @@ IF (ENABLE_IMAGEGENERATOR)
 	SET(CAER_COMPILE_DEFINITIONS ${CAER_COMPILE_DEFINITIONS} -DENABLE_IMAGEGENERATOR=1 PARENT_SCOPE)
 
 	SET(CAER_IMAGEGENERATOR_FILES
-		modules/imagegenerator/imagegenerator.c
-		ext/stblib/stb_image_resize.c
-		ext/stblib/stb_image_write.c)
+		modules/imagegenerator/imagegenerator.c)
 
 	SET(CAER_C_SRC_FILES ${CAER_C_SRC_FILES} ${CAER_IMAGEGENERATOR_FILES} PARENT_SCOPE)
 ENDIF()
