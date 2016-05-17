@@ -15,7 +15,7 @@
  * The other stipulation in the AEDAT 3.X specifications is on ordering of
  * events from the same source: the first timestamp of a packet determines
  * its order in the packet stream, from smallest timestamp to largest, which
- * is the logical increasing time ordering you'd expect.
+ * is the logical monotonic increasing time ordering you'd expect.
  * This kind of ordering is useful and simplifies reading back data later on;
  * if you read a packet of type A with TS A-TS1, when you next read a packet of
  * the same type A, with TS A-TS2, you know you must also have read all other
@@ -23,15 +23,16 @@
  * and (A-TS2 - 1). This makes time-based reading and replaying of data very easy
  * and efficient, so time-slice playback or real-time playback get relatively
  * simple to implement. Data-amount based playback is always relatively easy.
+ *
  * Now, outputting event packets in this particular order from an output module
  * requires some additional processing: before you can write out packet A with TS
- * A-TS1, you need to be sure no other packets with a timestamp equal or smaller
- * to A-TS1 can come afterwards (the only solution would be to discard them at
+ * A-TS1, you need to be sure no other packets with a timestamp smaller than
+ * A-TS1 can come afterwards (the only solution would be to discard them at
  * that point to maintain the correct ordering, and you'd want to avoid that).
  * We cannot assume a constant and quick data flow, since at any point during a
  * recording, data producers can be turned off, packet size etc. configuration
  * changed, or some events, like Special ones, are rare to begin with during
- * normal camera operation (one approx. every 35 minutes).
+ * normal camera operation (the TIMESTAMP_WRAP every 35 minutes).
  * But we'd like to write data continuously and as soon as possible!
  * Thankfully cAER/libcaer come to the rescue thanks to a small but important
  * detail of how input modules are implemented (input modules are all those
@@ -45,24 +46,18 @@
  * keeping related events of differing types, such as DVS and IMU data,
  * together. Such a relation is usually based on time intervals, trying
  * to keep groups of event happening in a certain time-slice together.
- * All conforming input modules keep to this rule, with *one* possible
- * exception: for example IMU6 and Frame packets cannot guarantee this
- * always; it is possible that *one* such event is moved to the successive
- * packet container, since these are composite events and can take a long
- * time to be completed/created, and in that time any of the other packet
- * container commit triggers may happen, and waiting is not an option to
- * maintain those contracts, and thus the event may be incomplete at that
- * time and has to be deferred to the next packet container."
+ * This time-order is based on the *main* time-stamp of an event, the one
+ * whose offset is referenced in the event packet header and that is
+ * used by the caerGenericEvent*() functions. It's guaranteed that all
+ * conforming input modules keep to this rule, generating containers
+ * that include all events from all types within the given time-slice."
  *
  * Understanding this gives a simple solution to the problem above: if we
  * see all the packets contained in a packet container, which is the case
  * for each run through of the cAER mainloop (as it fetches *one* new packet
- * container each time from an input module), we only have to also see the
- * next packet container from that input module; at which point we can order
- * the packets of the first container correctly (with maybe some of the second
- * container interspersed in), and write them out to a file descriptor.
- * Then we just rinse and repeat with the remaining packets of the second
- * container, and its own successor.
+ * container each time from an input module), we can order the packets of
+ * the container correctly, and write them out to a file descriptor.
+ * Then we just rinse and repeat for every new packet container.
  * The assumption of one run of the mainloop getting at most one packet
  * container from each Source is correct with the current implementation,
  * and future designs of Sources should take this into account! Delays in
