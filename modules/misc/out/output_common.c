@@ -338,21 +338,25 @@ static bool newOutputBuffer(outputCommonState state) {
 	return (true);
 }
 
-static void commitOutputBuffer(outputCommonState state) {
-	if (state->dataBuffer->bufferUsedSize != 0) {
-		for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
-			int fd = state->fileDescriptors->fds[i];
+static inline void writeBufferToAll(outputCommonState state, const uint8_t *buffer, size_t bufferSize) {
+	for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
+		int fd = state->fileDescriptors->fds[i];
 
-			if (fd >= 0) {
-				if (!writeUntilDone(fd, state->dataBuffer->buffer, state->dataBuffer->bufferUsedSize)) {
-					// Write failed, most of the reasons for that to happen are
-					// not recoverable from, so we just disable this file descriptor.
-					// This also detects client-side close() for TCP server connections.
-					close(fd);
-					state->fileDescriptors->fds[i] = -1;
-				}
+		if (fd >= 0) {
+			if (!writeUntilDone(fd, buffer, bufferSize)) {
+				// Write failed, most of the reasons for that to happen are
+				// not recoverable from, so we just disable this file descriptor.
+				// This also detects client-side close() for TCP server connections.
+				close(fd);
+				state->fileDescriptors->fds[i] = -1;
 			}
 		}
+	}
+}
+
+static void commitOutputBuffer(outputCommonState state) {
+	if (state->dataBuffer->bufferUsedSize != 0) {
+		writeBufferToAll(state, state->dataBuffer->buffer, state->dataBuffer->bufferUsedSize);
 
 		state->dataBuffer->bufferUsedSize = 0;
 
@@ -456,17 +460,16 @@ static void handleNewServerConnections(outputCommonState state) {
 		caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
 			"Accepted new TCP connection from client (fd %d).", acceptResult);
 	}
+
+	// Successfully connected, send header to client.
+	sendNetworkHeader(state);
 }
 
 static void sendFileHeader(outputCommonState state) {
 	// Write AEDAT 3.1 header (RAW format).
-	size_t offset = 0;
-	size_t length = 11 + strlen(AEDAT3_FILE_VERSION);
-	memcpy(state->dataBuffer->buffer + offset, "#!AER-DAT" AEDAT3_FILE_VERSION "\r\n", length);
+	writeBufferToAll(state, (const uint8_t *) "#!AER-DAT" AEDAT3_FILE_VERSION "\r\n", 11 + strlen(AEDAT3_FILE_VERSION));
 
-	offset += length;
-	length = 14;
-	memcpy(state->dataBuffer->buffer + offset, "#Format: RAW\r\n", length);
+	writeBufferToAll(state, (const uint8_t *) "#Format: RAW\r\n", 14);
 
 	// TODO: write source info.
 	// #Source <ID>: <DESCRIPTION>\r\n
@@ -482,15 +485,9 @@ static void sendFileHeader(outputCommonState state) {
 	char currentTimeString[currentTimeStringLength + 1]; // + 1 for terminating NUL byte.
 	strftime(currentTimeString, currentTimeStringLength + 1, "#Start-Time: %Y-%m-%d %H:%M:%S (TZ%z)\r\n", &currentTime);
 
-	offset += length;
-	length = currentTimeStringLength;
-	memcpy(state->dataBuffer->buffer + offset, currentTimeString, length);
+	writeBufferToAll(state, (const uint8_t *) currentTimeString, currentTimeStringLength);
 
-	offset += length;
-	length = 14;
-	memcpy(state->dataBuffer->buffer + offset, "#!END-HEADER\r\n", length);
-
-	state->dataBuffer->bufferUsedSize = (offset + length);
+	writeBufferToAll(state, (const uint8_t *) "#!END-HEADER\r\n", 14);
 }
 
 static void sendNetworkHeader(outputCommonState state) {
@@ -503,32 +500,27 @@ static void sendNetworkHeader(outputCommonState state) {
 	int8_t formatNumber = 0x00; // RAW format.
 	int16_t sourceNumber = htole16(1); // Always one source per output module.
 
-	size_t offset = 0;
-	size_t length = sizeof(int64_t);
-	memcpy(state->dataBuffer->buffer + offset, &magicNumber, length);
+	uint8_t networkHeader[AEDAT3_NETWORK_HEADER_LENGTH] = { 0 };
 
-	offset += length;
-	length = sizeof(int64_t);
-	memcpy(state->dataBuffer->buffer + offset, &sequenceNumber, length);
+	*((int64_t *) (networkHeader + 0)) = magicNumber;
+	*((int64_t *) (networkHeader + 8)) = sequenceNumber;
+	*((int64_t *) (networkHeader + 16)) = versionNumber;
+	*((int64_t *) (networkHeader + 17)) = formatNumber;
+	*((int64_t *) (networkHeader + 18)) = sourceNumber;
 
-	offset += length;
-	length = sizeof(int8_t);
-	memcpy(state->dataBuffer->buffer + offset, &versionNumber, length);
-
-	offset += length;
-	length = sizeof(int8_t);
-	memcpy(state->dataBuffer->buffer + offset, &formatNumber, length);
-
-	offset += length;
-	length = sizeof(int16_t);
-	memcpy(state->dataBuffer->buffer + offset, &sourceNumber, length);
-
-	state->dataBuffer->bufferUsedSize = (offset + length);
-
-	// Increase sequence number for successive headers, if this is a
-	// message-based network protocol (UDP for example).
+	// If message-based, we copy the header at the start of the buffer,
+	// because we want it in each message (and each buffer is a message!).
 	if (state->isNetworkMessageBased) {
+		memcpy(state->dataBuffer->buffer, networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
+		state->dataBuffer->bufferUsedSize = AEDAT3_NETWORK_HEADER_LENGTH;
+
+		// Increase sequence number for successive headers, if this is a
+		// message-based network protocol (UDP for example).
 		state->networkSequenceNumber++;
+	}
+	else {
+		// Else, not message-based, so we just write it once at start directly.
+		writeBufferToAll(state, networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
 	}
 }
 
@@ -548,7 +540,7 @@ static int outputHandlerThread(void *stateArg) {
 
 	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
 		// Handle new connections in server mode.
-		if (state->fileDescriptors->serverFd >= 0) {
+		if (state->isNetworkStream && state->fileDescriptors->serverFd >= 0) {
 			handleNewServerConnections(state);
 		}
 
@@ -747,7 +739,7 @@ static int outputHandlerThread(void *stateArg) {
 }
 
 bool caerOutputCommonInit(caerModuleData moduleData, outputCommonFDs fds, bool isNetworkStream,
-	bool isNetworkMessageBased) {
+bool isNetworkMessageBased) {
 	outputCommonState state = moduleData->moduleState;
 
 	state->parentModule = moduleData;
