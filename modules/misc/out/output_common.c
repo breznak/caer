@@ -78,6 +78,17 @@
 
 // TODO: check handling of timestamp-reset events from camera!
 
+struct output_common_buffer {
+	/// Size of data currently inside buffer, in bytes.
+	size_t bufferUsedSize;
+	/// Size of buffer, in bytes.
+	size_t bufferSize;
+	/// Buffer for writing to file descriptor (buffered I/O).
+	uint8_t buffer[];
+};
+
+typedef struct output_common_buffer *outputCommonBuffer;
+
 struct output_common_state {
 	/// Control flag for output handling thread.
 	atomic_bool running;
@@ -111,11 +122,7 @@ struct output_common_state {
 	/// Track last event packet type ID that was sent out.
 	int16_t lastPacketTypeID;
 	/// Data buffer for writing to file descriptor (buffered I/O).
-	uint8_t *buffer;
-	/// Size of data write buffer, in bytes.
-	size_t bufferSize;
-	/// Size of data currently inside data write buffer, in bytes.
-	size_t bufferUsedSize;
+	outputCommonBuffer dataBuffer;
 	/// Maximum interval without sending data, in µs.
 	/// How long to wait if buffer not full before committing it anyway.
 	uint64_t bufferMaxInterval;
@@ -303,38 +310,41 @@ static bool newOutputBuffer(outputCommonState state) {
 	// First check if the size really changed.
 	size_t newBufferSize = (size_t) sshsNodeGetInt(state->parentModule->moduleNode, "bufferSize");
 
-	if (newBufferSize == state->bufferSize) {
+	if (state->dataBuffer != NULL && state->dataBuffer->bufferSize == newBufferSize) {
 		// Yeah, we're already where we want to be!
 		return (true);
 	}
 
 	// Allocate new buffer.
-	uint8_t *newBuffer = calloc(newBufferSize, sizeof(uint8_t));
+	outputCommonBuffer newBuffer = malloc(sizeof(*newBuffer) + (newBufferSize * sizeof(uint8_t)));
 	if (newBuffer == NULL) {
 		return (false);
 	}
 
+	// Update new buffer size information.
+	newBuffer->bufferSize = newBufferSize;
+	newBuffer->bufferUsedSize = 0;
+
 	// Commit previous buffer content and then free the memory.
-	if (state->buffer != NULL) {
+	if (state->dataBuffer != NULL) {
 		commitOutputBuffer(state);
 
-		free(state->buffer);
+		free(state->dataBuffer);
 	}
 
 	// Use new buffer.
-	state->buffer = newBuffer;
-	state->bufferSize = newBufferSize;
+	state->dataBuffer = newBuffer;
 
 	return (true);
 }
 
 static void commitOutputBuffer(outputCommonState state) {
-	if (state->bufferUsedSize != 0) {
+	if (state->dataBuffer->bufferUsedSize != 0) {
 		for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
 			int fd = state->fileDescriptors->fds[i];
 
 			if (fd >= 0) {
-				if (!writeUntilDone(fd, state->buffer, state->bufferUsedSize)) {
+				if (!writeUntilDone(fd, state->dataBuffer->buffer, state->dataBuffer->bufferUsedSize)) {
 					// Write failed, most of the reasons for that to happen are
 					// not recoverable from, so we just disable this file descriptor.
 					// This also detects client-side close() for TCP server connections.
@@ -344,7 +354,7 @@ static void commitOutputBuffer(outputCommonState state) {
 			}
 		}
 
-		state->bufferUsedSize = 0;
+		state->dataBuffer->bufferUsedSize = 0;
 
 		// If message-based protocol, we fill in the now empty buffer with the
 		// appropriate header.
@@ -367,7 +377,7 @@ static void sendEventPacket(outputCommonState state, caerEventPacketHeader packe
 
 	while (packetSize > 0) {
 		// Calculate remaining space in current buffer.
-		size_t usableBufferSpace = state->bufferSize - state->bufferUsedSize;
+		size_t usableBufferSpace = state->dataBuffer->bufferSize - state->dataBuffer->bufferUsedSize;
 
 		// Let's see how much of it (or all of it!) we need.
 		if (packetSize < usableBufferSpace) {
@@ -375,14 +385,15 @@ static void sendEventPacket(outputCommonState state, caerEventPacketHeader packe
 		}
 
 		// Copy memory from packet to buffer.
-		memcpy(state->buffer + state->bufferUsedSize, ((uint8_t *) packet) + packetIndex, usableBufferSpace);
+		memcpy(state->dataBuffer->buffer + state->dataBuffer->bufferUsedSize, ((uint8_t *) packet) + packetIndex,
+			usableBufferSpace);
 
 		// Update indexes.
-		state->bufferUsedSize += usableBufferSpace;
+		state->dataBuffer->bufferUsedSize += usableBufferSpace;
 		packetIndex += usableBufferSpace;
 		packetSize -= usableBufferSpace;
 
-		if (state->bufferUsedSize == state->bufferSize) {
+		if (state->dataBuffer->bufferUsedSize == state->dataBuffer->bufferSize) {
 			// Commit buffer once full.
 			commitOutputBuffer(state);
 		}
@@ -451,11 +462,11 @@ static void sendFileHeader(outputCommonState state) {
 	// Write AEDAT 3.1 header (RAW format).
 	size_t offset = 0;
 	size_t length = 11 + strlen(AEDAT3_FILE_VERSION);
-	memcpy(state->buffer + offset, "#!AER-DAT" AEDAT3_FILE_VERSION "\r\n", length);
+	memcpy(state->dataBuffer->buffer + offset, "#!AER-DAT" AEDAT3_FILE_VERSION "\r\n", length);
 
 	offset += length;
 	length = 14;
-	memcpy(state->buffer + offset, "#Format: RAW\r\n", length);
+	memcpy(state->dataBuffer->buffer + offset, "#Format: RAW\r\n", length);
 
 	// TODO: write source info.
 	// #Source <ID>: <DESCRIPTION>\r\n
@@ -473,13 +484,13 @@ static void sendFileHeader(outputCommonState state) {
 
 	offset += length;
 	length = currentTimeStringLength;
-	memcpy(state->buffer + offset, currentTimeString, length);
+	memcpy(state->dataBuffer->buffer + offset, currentTimeString, length);
 
 	offset += length;
 	length = 14;
-	memcpy(state->buffer + offset, "#!END-HEADER\r\n", length);
+	memcpy(state->dataBuffer->buffer + offset, "#!END-HEADER\r\n", length);
 
-	state->bufferUsedSize = (offset + length);
+	state->dataBuffer->bufferUsedSize = (offset + length);
 }
 
 static void sendNetworkHeader(outputCommonState state) {
@@ -494,25 +505,25 @@ static void sendNetworkHeader(outputCommonState state) {
 
 	size_t offset = 0;
 	size_t length = sizeof(int64_t);
-	memcpy(state->buffer + offset, &magicNumber, length);
+	memcpy(state->dataBuffer->buffer + offset, &magicNumber, length);
 
 	offset += length;
 	length = sizeof(int64_t);
-	memcpy(state->buffer + offset, &sequenceNumber, length);
+	memcpy(state->dataBuffer->buffer + offset, &sequenceNumber, length);
 
 	offset += length;
 	length = sizeof(int8_t);
-	memcpy(state->buffer + offset, &versionNumber, length);
+	memcpy(state->dataBuffer->buffer + offset, &versionNumber, length);
 
 	offset += length;
 	length = sizeof(int8_t);
-	memcpy(state->buffer + offset, &formatNumber, length);
+	memcpy(state->dataBuffer->buffer + offset, &formatNumber, length);
 
 	offset += length;
 	length = sizeof(int16_t);
-	memcpy(state->buffer + offset, &sourceNumber, length);
+	memcpy(state->dataBuffer->buffer + offset, &sourceNumber, length);
 
-	state->bufferUsedSize = (offset + length);
+	state->dataBuffer->bufferUsedSize = (offset + length);
 
 	// Increase sequence number for successive headers, if this is a
 	// message-based network protocol (UDP for example).
@@ -809,7 +820,7 @@ bool caerOutputCommonInit(caerModuleData moduleData, outputCommonFDs fds, bool i
 
 	if (thrd_create(&state->outputThread, &outputHandlerThread, state) != thrd_success) {
 		ringBufferFree(state->transferRing);
-		free(state->buffer);
+		free(state->dataBuffer);
 
 		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to start output handling thread.");
 		return (false);
@@ -863,7 +874,7 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 	// Free allocated memory.
 	free(state->fileDescriptors);
 
-	free(state->buffer);
+	free(state->dataBuffer);
 }
 
 void caerOutputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
