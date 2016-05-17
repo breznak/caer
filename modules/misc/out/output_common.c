@@ -733,10 +733,10 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 			"Failed to join output handling thread. Error: %d.", errno);
 	}
 
-	// Now clean up the ring-buffer and its contents.
-	caerEventPacketHeader packetHeader;
-	while ((packetHeader = ringBufferGet(state->transferRing)) != NULL) {
-		free(packetHeader);
+	// Now clean up the transfer ring-buffer and its contents.
+	caerEventPacketContainer packetContainer;
+	while ((packetContainer = ringBufferGet(state->transferRing)) != NULL) {
+		caerEventPacketContainerFree(packetContainer);
 
 		// This should never happen!
 		caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString, "Transfer ring-buffer was not empty!");
