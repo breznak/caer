@@ -735,7 +735,8 @@ static int outputHandlerThread(void *stateArg) {
 	return (thrd_success);
 }
 
-bool caerOutputCommonInit(caerModuleData moduleData, outputCommonFDs fds) {
+bool caerOutputCommonInit(caerModuleData moduleData, outputCommonFDs fds, bool isNetworkStream,
+	bool isNetworkMessageBased) {
 	outputCommonState state = moduleData->moduleState;
 
 	state->parentModule = moduleData;
@@ -765,6 +766,10 @@ bool caerOutputCommonInit(caerModuleData moduleData, outputCommonFDs fds) {
 	}
 
 	state->fileDescriptors = fds;
+
+	// Store network/file, message-based or not information.
+	state->isNetworkStream = isNetworkStream;
+	state->isNetworkMessageBased = isNetworkMessageBased;
 
 	// Initial source ID has to be -1 (invalid).
 	state->sourceID = -1;

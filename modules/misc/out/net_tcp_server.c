@@ -90,7 +90,7 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 
 	fileDescriptors->serverFd = serverSockFd;
 
-	if (!caerOutputCommonInit(moduleData, fileDescriptors)) {
+	if (!caerOutputCommonInit(moduleData, fileDescriptors, true, false)) {
 		close(serverSockFd);
 		free(fileDescriptors);
 

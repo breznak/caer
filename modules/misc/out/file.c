@@ -156,7 +156,7 @@ static bool caerOutputFileInit(caerModuleData moduleData) {
 
 	fileDescriptors->fds[0] = fileFd;
 
-	if (!caerOutputCommonInit(moduleData, fileDescriptors)) {
+	if (!caerOutputCommonInit(moduleData, fileDescriptors, false, false)) {
 		close(fileFd);
 		free(fileDescriptors);
 

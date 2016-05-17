@@ -64,7 +64,7 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 
 	fileDescriptors->fds[0] = sockFd;
 
-	if (!caerOutputCommonInit(moduleData, fileDescriptors)) {
+	if (!caerOutputCommonInit(moduleData, fileDescriptors, true, true)) {
 		close(sockFd);
 		free(fileDescriptors);
 
