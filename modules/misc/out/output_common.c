@@ -115,12 +115,8 @@ struct output_common_state {
 	/// We use EventPacketContainers as data structure for convenience, they do exactly
 	/// keep track of the data we do want to transfer and are part of libcaer.
 	RingBuffer transferRing;
-	/// Track last event packet container gotten in output handler thread.
-	caerEventPacketContainer lastPacketContainer;
-	/// Track last event packet timestamp that was sent out.
-	int64_t lastPacketTimestamp;
-	/// Track last event packet type ID that was sent out.
-	int16_t lastPacketTypeID;
+	/// Track last packet container's highest event timestamp that was sent out.
+	int64_t lastTimestamp;
 	/// Data buffer for writing to file descriptor (buffered I/O).
 	outputCommonBuffer dataBuffer;
 	/// Maximum interval without sending data, in µs.
@@ -560,7 +556,8 @@ static int outputHandlerThread(void *stateArg) {
 		// Fill output data buffer with data from incoming packets.
 		// Respect time order as specified in AEDAT 3.X format: first event's main
 		// timestamp decides its ordering with regards to other packets. Smaller
-		// comes first. If equal, order by increasing type ID.
+		// comes first. If equal, order by increasing type ID as a convenience,
+		// not required by specification!
 
 		// Get the newest event packet container from the transfer ring-buffer.
 		caerEventPacketContainer currPacketContainer = ringBufferGet(state->transferRing);
