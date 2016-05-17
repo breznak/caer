@@ -15,6 +15,8 @@
 #include "main.h"
 #include <libcaer/events/polarity.h>
 
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 /* inlude stblib image library */
 #include "ext/stblib/stb_image_write.h"
 #include "ext/stblib/stb_image_resize.h"
@@ -23,6 +25,9 @@
 #define TRAINING_POSITIVES 1 // keyboard "p" (positives) record pngs and store them in positive folder
 #define TRAINING_NEGATIVES 2 // keyboard "n" (negatives) record pngs and store them in negative folder
 #define FRAME_SAVE_MODE 3       // used for saving frames with the save_img function, the file name contains "_frame_"
+
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
 // keyboard "s" stop saving png, generations on visualizer keeps going
 

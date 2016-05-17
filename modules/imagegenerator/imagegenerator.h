@@ -18,7 +18,6 @@
 //#define FRAME_IMG_DIRECTORY "/home/user/inilabs/caer/images/frames/"
 //#define CLASSIFY_IMG_DIRECTORY "/home/user/inilabs/caer/images/classify/"
 
-
 //we cut out a quadratic part of the spike image from the rectangular input of the camera
 #define SIZE_QUADRATIC_MAP 180
 
