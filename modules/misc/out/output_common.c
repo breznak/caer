@@ -139,6 +139,7 @@ static int packetsTypeCmp(const void *a, const void *b);
 static bool newOutputBuffer(outputCommonState state);
 static void commitOutputBuffer(outputCommonState state);
 static void sendEventPacket(outputCommonState state, caerEventPacketHeader packet);
+static void orderAndSendEventPackets(outputCommonState state, caerEventPacketContainer currPacketContainer);
 static void handleNewServerConnections(outputCommonState state);
 static void sendFileHeader(outputCommonState state);
 static void sendNetworkHeader(outputCommonState state, int onlyOneClientFD);
@@ -417,6 +418,56 @@ static void sendEventPacket(outputCommonState state, caerEventPacketHeader packe
 	}
 }
 
+static void orderAndSendEventPackets(outputCommonState state, caerEventPacketContainer currPacketContainer) {
+	// Sort container by first timestamp (required) and by type ID (convenience).
+	size_t currPacketContainerSize = (size_t) caerEventPacketContainerGetEventPacketsNumber(currPacketContainer);
+
+	qsort(currPacketContainer->eventPackets, currPacketContainerSize, sizeof(caerEventPacketHeader), &packetsTypeCmp);
+
+	// Since we just got new data, let's first check that it does conform to our expectations.
+	// This means the timestamp didn't slide back! So new smallest TS is >= than last highest TS.
+	// These checks are needed to avoid illegal ordering. Normal operation will never trigger
+	// these, as stated in the assumptions at the start of file, but erroneous usage or mixing
+	// or reordering of packet containers is possible, and has to be caught here.
+	int64_t highestTimestamp = 0;
+
+	for (size_t cpIdx = 0; cpIdx < currPacketContainerSize; cpIdx++) {
+		caerEventPacketHeader cpPacket = caerEventPacketContainerGetEventPacket(currPacketContainer, (int32_t) cpIdx);
+
+		void *cpFirstEvent = caerGenericEventGetEvent(cpPacket, 0);
+		int64_t cpFirstEventTimestamp = caerGenericEventGetTimestamp64(cpFirstEvent, cpPacket);
+
+		if (cpFirstEventTimestamp < state->lastTimestamp) {
+			// Smaller TS than already sent, illegal, ignore packet.
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+				"Detected timestamp going back, expected at least %" PRIi64 " but got %" PRIi64 "."
+				"Ignoring packet of type %" PRIi16 " from source %" PRIi16 ", with %" PRIi16 " events!",
+				state->lastTimestamp, cpFirstEventTimestamp, caerEventPacketHeaderGetEventType(cpPacket),
+				caerEventPacketHeaderGetEventSource(cpPacket), caerEventPacketHeaderGetEventNumber(cpPacket));
+		}
+		else {
+			// Bigger or equal TS than already sent, this is good. Strict TS ordering ensures
+			// that all other packets in this container are the same, so we can start sending
+			// the packets from here on out to the file descriptor.
+			sendEventPacket(state, cpPacket);
+
+			// Update highest timestamp for this packet container, based upon its valid packets.
+			void *cpLastEvent = caerGenericEventGetEvent(cpPacket, caerEventPacketHeaderGetEventNumber(cpPacket) - 1);
+			int64_t cpLastEventTimestamp = caerGenericEventGetTimestamp64(cpLastEvent, cpPacket);
+
+			if (cpLastEventTimestamp > highestTimestamp) {
+				highestTimestamp = cpLastEventTimestamp;
+			}
+		}
+	}
+
+	// Remember highest timestamp for check in next iteration.
+	state->lastTimestamp = highestTimestamp;
+
+	// Free all remaining packet container memory.
+	caerEventPacketContainerFree(currPacketContainer);
+}
+
 static void handleNewServerConnections(outputCommonState state) {
 	// First let's see if any new connections are waiting on the listening
 	// socket to be accepted. This returns right away (non-blocking).
@@ -575,59 +626,15 @@ static int outputHandlerThread(void *stateArg) {
 			continue;
 		}
 
-		// Sort container by first timestamp (required) and by type ID (convenience).
-		size_t currPacketContainerSize = (size_t) caerEventPacketContainerGetEventPacketsNumber(currPacketContainer);
-
-		qsort(currPacketContainer->eventPackets, currPacketContainerSize, sizeof(caerEventPacketHeader),
-			&packetsTypeCmp);
-
-		// Since we just got new data, let's first check that it does conform to our expectations.
-		// This means the timestamp didn't slide back! So new smallest TS is >= than last highest TS.
-		// These checks are needed to avoid illegal ordering. Normal operation will never trigger
-		// these, as stated in the assumptions at the start of file, but erroneous usage or mixing
-		// or reordering of packet containers is possible, and has to be caught here.
-		int64_t highestTimestamp = 0;
-
-		for (size_t cpIdx = 0; cpIdx < currPacketContainerSize; cpIdx++) {
-			caerEventPacketHeader cpPacket = caerEventPacketContainerGetEventPacket(currPacketContainer,
-				(int32_t) cpIdx);
-
-			void *cpFirstEvent = caerGenericEventGetEvent(cpPacket, 0);
-			int64_t cpFirstEventTimestamp = caerGenericEventGetTimestamp64(cpFirstEvent, cpPacket);
-
-			if (cpFirstEventTimestamp < state->lastTimestamp) {
-				// Smaller TS than already sent, illegal, ignore packet.
-				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
-					"Detected timestamp going back, expected at least %" PRIi64 " but got %" PRIi64 "."
-					"Ignoring packet of type %" PRIi16 " from source %" PRIi16 ", with %" PRIi16 " events!",
-					state->lastTimestamp, cpFirstEventTimestamp, caerEventPacketHeaderGetEventType(cpPacket),
-					caerEventPacketHeaderGetEventSource(cpPacket), caerEventPacketHeaderGetEventNumber(cpPacket));
-			}
-			else {
-				// Bigger or equal TS than already sent, this is good. Strict TS ordering ensures
-				// that all other packets in this container are the same, so we can start sending
-				// the packets from here on out to the file descriptor.
-				sendEventPacket(state, cpPacket);
-
-				// Update highest timestamp for this packet container, based upon its valid packets.
-				void *cpLastEvent = caerGenericEventGetEvent(cpPacket,
-					caerEventPacketHeaderGetEventNumber(cpPacket) - 1);
-				int64_t cpLastEventTimestamp = caerGenericEventGetTimestamp64(cpLastEvent, cpPacket);
-
-				if (cpLastEventTimestamp > highestTimestamp) {
-					highestTimestamp = cpLastEventTimestamp;
-				}
-			}
-		}
-
-		// Remember highest timestamp for check in next iteration.
-		state->lastTimestamp = highestTimestamp;
-
-		// Free all remaining packet container memory.
-		caerEventPacketContainerFree(currPacketContainer);
+		orderAndSendEventPackets(state, currPacketContainer);
 	}
 
-	// TODO: handle shutdown, write out all content of ring-buffers and commit data buffers.
+	// Handle shutdown, write out all content remaining in the transfer ring-buffer
+	// and write the packets out to the file descriptor.
+	caerEventPacketContainer packetContainer;
+	while ((packetContainer = ringBufferGet(state->transferRing)) != NULL) {
+		orderAndSendEventPackets(state, packetContainer);
+	}
 
 	return (thrd_success);
 }
