@@ -39,7 +39,7 @@ static bool caerPoseCalibrationInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "detectMarkers", false); // Do calibration using live images
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "saveFileName", "camera_calib.xml"); // The name of the file where to write the calculated calibration settings
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "loadFileName", "camera_calib.xml"); // The name of the file from which to load the calibration
-    sshsNodePutIntIfAbsent(moduleData->moduleNode, "captureDelay", 500000);
+        sshsNodePutIntIfAbsent(moduleData->moduleNode, "captureDelay", 500000);
 
 	// Update all settings.
 	updateSettings(moduleData);
@@ -53,7 +53,7 @@ static bool caerPoseCalibrationInit(caerModuleData moduleData) {
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 	//not loaded at the init
-    state->calibrationLoaded = false;
+         state->calibrationLoaded = false;
 
 	return (true);
 }
@@ -61,10 +61,9 @@ static bool caerPoseCalibrationInit(caerModuleData moduleData) {
 static void updateSettings(caerModuleData moduleData) {
 	PoseCalibrationState state = moduleData->moduleState;
 	
-    state->settings.detectMarkers = sshsNodeGetBool(moduleData->moduleNode, "detectMarkers");
+        state->settings.detectMarkers = sshsNodeGetBool(moduleData->moduleNode, "detectMarkers");
 	state->settings.saveFileName = sshsNodeGetString(moduleData->moduleNode, "saveFileName");
 	state->settings.loadFileName = sshsNodeGetString(moduleData->moduleNode, "loadFileName");
-
 }
 
 static void caerPoseCalibrationConfig(caerModuleData moduleData) {
@@ -94,8 +93,14 @@ static void caerPoseCalibrationRun(caerModuleData moduleData, size_t argsNumber,
 	caerFrameEventPacket frame = va_arg(args, caerFrameEventPacket);
 
 	PoseCalibrationState state = moduleData->moduleState;
+ 
+        // At this point we always try to load the calibration settings for undistortion.
+	// Maybe they just got created or exist from a previous run.
+	if (!state->calibrationLoaded) {
+		state->calibrationLoaded = posecalibration_loadCalibrationFile(state->cpp_class, &state->settings);
+	}
 
-    // Marker pose estimation is done only using frames.
+        // Marker pose estimation is done only using frames.
 	if (state->settings.detectMarkers && frame != NULL) {
 		CAER_FRAME_ITERATOR_VALID_START(frame)
 			// Only work on new frames if enough time has passed between this and the last used one.
@@ -113,13 +118,7 @@ static void caerPoseCalibrationRun(caerModuleData moduleData, size_t argsNumber,
 
 	}
 	
-    // At this point we always try to load the calibration settings for undistortion.
-	// Maybe they just got created or exist from a previous run.
-	if (!state->calibrationLoaded) {
-		state->calibrationLoaded = posecalibration_loadCalibrationFile(state->cpp_class, &state->settings);
-	}
-
-    // update settings 
-    updateSettings(moduleData);
+        // update settings 
+        updateSettings(moduleData);
 
 }

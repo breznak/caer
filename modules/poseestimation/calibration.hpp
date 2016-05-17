@@ -41,6 +41,7 @@ private:
         int camera_x_resolution = 180;
         int camera_y_resolution = 240;
         double object_real_world_mm = 40; // obejct is 40 mm 
+        bool calibrationLoaded = false;
 };
 
 #endif /* CALIBRATION_HPP_ */

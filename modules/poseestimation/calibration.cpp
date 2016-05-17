@@ -1,7 +1,7 @@
 #include "calibration.hpp"
 
 PoseCalibration::PoseCalibration(PoseCalibrationSettings settings) {
-	this->settings = settings;
+    this->settings = settings;
 
     updateSettings(this->settings);
 }
@@ -10,12 +10,19 @@ void PoseCalibration::updateSettings(PoseCalibrationSettings settings) {
     this->settings = settings;
     
     // Load calibration files keep this in the constructor
-    loadCalibrationFile(this->settings);
+    if(loadCalibrationFile(this->settings)){
+        this->calibrationLoaded = true;
+    }else{
+        this->calibrationLoaded = false;
+    }
 
 }
 
 bool PoseCalibration::findMarkers(caerFrameEvent frame) {
-    if (frame == NULL || !caerFrameEventIsValid(frame)) {
+    if (frame == NULL || !caerFrameEventIsValid(frame) || this->calibrationLoaded == false) {
+        if(this->calibrationLoaded == false){
+            caerLog(CAER_LOG_NOTICE, "Pose Calibration findMarkers", "Camera matrix and distorsion coefficients not loaded, exit from filter!");
+        }
 	    return (false);
     }
 
@@ -44,6 +51,8 @@ bool PoseCalibration::findMarkers(caerFrameEvent frame) {
     // if at least one marker has been detected
     if (ids.size() > 0){ 
         aruco::drawDetectedMarkers(view, corners, ids);
+    }else{
+        return false;
     } 
        
     // from camera calibration 
@@ -61,12 +70,12 @@ bool PoseCalibration::findMarkers(caerFrameEvent frame) {
         for(int k=0; k<corners.size(); k++){ 
             // draw camera pose
             aruco::drawAxis(view, undistortCameraMatrix, undistortDistCoeffs, rvecs.row(k), tvecs.row(k), 0.07); 
-            // get first [0] object size in pixels
+            // get maker size in pixels
             cv::RotatedRect box = cv::minAreaRect(cv::Mat(corners[k]));
             cv::Point2f p = box.size;
             avr_size = ( p.x + p.y ) / 2.0; //in pixels
             // convert px/mm in the lower resolution
-            // 3264/m = camera_y_resolution/x
+            // camera_max_resolution/m = camera_y_resolution/x
             x = (camera_y_resolution*m)/camera_y_resolution;
             object_image_sensor_mm = avr_size / x ;
             // calculate distance from object
@@ -142,18 +151,16 @@ bool PoseCalibration::loadCalibrationFile(PoseCalibrationSettings settings) {
 	fs["distortion_coefficients"] >> undistortDistCoeffs;
 	fs["use_fisheye_model"] >> useFisheyeModel;
 
-    if (!fs["camera_matrix"].empty() && !fs["distortion_coefficients"].empty()) 
-    {
-        caerLog(CAER_LOG_NOTICE, "PoseCalibration CXX loadCalibrationFile()", "Camera matrix and distorsion coefficients succesfully loaded");
-    }else{
-        caerLog(CAER_LOG_ERROR, "PoseCalibration CXX loadCalibrationFile()", "Camera matrix and distorsion coefficients not loaded");    
-    }    
-    
+	if (!fs["camera_matrix"].empty() && !fs["distortion_coefficients"].empty()) 
+	{
+	    caerLog(CAER_LOG_NOTICE, "PoseCalibration CXX loadCalibrationFile()", "Camera matrix and distorsion coefficients succesfully loaded");
+	}else{
+	    caerLog(CAER_LOG_ERROR, "PoseCalibration CXX loadCalibrationFile()", "Camera matrix and distorsion coefficients not loaded");    
+	}    
+	    
 	// Close file.
 	fs.release();
 
 	return (true);
 }
-
-
 
