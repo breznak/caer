@@ -52,12 +52,11 @@ static inline bool socketReuseAddr(int fd, bool reuseAddr) {
 
 // Write toWrite bytes to the socket sock from buffer.
 // Return true on success, false on failure.
-static inline bool sendUntilDone(int sock, void *buffer, size_t toWrite) {
-	uint8_t *dataBuffer = buffer;
+static inline bool sendUntilDone(int sock, const uint8_t *buffer, size_t bytesToWrite) {
 	size_t curWritten = 0;
 
-	while (curWritten < toWrite) {
-		ssize_t sendResult = send(sock, dataBuffer + curWritten, toWrite - curWritten, 0);
+	while (curWritten < bytesToWrite) {
+		ssize_t sendResult = send(sock, buffer + curWritten, bytesToWrite - curWritten, 0);
 		if (sendResult <= 0) {
 			return (false);
 		}
@@ -70,12 +69,11 @@ static inline bool sendUntilDone(int sock, void *buffer, size_t toWrite) {
 
 // Read toRead bytes from the socket sock into buffer.
 // Return true on success, false on failure.
-static inline bool recvUntilDone(int sock, void *buffer, size_t toRead) {
-	uint8_t *dataBuffer = buffer;
+static inline bool recvUntilDone(int sock, uint8_t *buffer, size_t bytesToRead) {
 	size_t curRead = 0;
 
-	while (curRead < toRead) {
-		ssize_t recvResult = recv(sock, dataBuffer + curRead, toRead - curRead, 0);
+	while (curRead < bytesToRead) {
+		ssize_t recvResult = recv(sock, buffer + curRead, bytesToRead - curRead, 0);
 		if (recvResult <= 0) {
 			return (false);
 		}
@@ -88,12 +86,11 @@ static inline bool recvUntilDone(int sock, void *buffer, size_t toRead) {
 
 // Write toWrite bytes to the file descriptor fd from buffer.
 // Return true on success, false on failure.
-static inline bool writeUntilDone(int fd, void *buffer, size_t toWrite) {
-	uint8_t *dataBuffer = buffer;
+static inline bool writeUntilDone(int fd, const uint8_t *buffer, size_t bytesToWrite) {
 	size_t curWritten = 0;
 
-	while (curWritten < toWrite) {
-		ssize_t writeResult = write(fd, dataBuffer + curWritten, toWrite - curWritten);
+	while (curWritten < bytesToWrite) {
+		ssize_t writeResult = write(fd, buffer + curWritten, bytesToWrite - curWritten);
 		if (writeResult <= 0) {
 			return (false);
 		}
@@ -106,12 +103,11 @@ static inline bool writeUntilDone(int fd, void *buffer, size_t toWrite) {
 
 // Read toRead bytes from the file descriptor fd into buffer.
 // Return true on success, false on failure.
-static inline bool readUntilDone(int fd, void *buffer, size_t toRead) {
-	uint8_t *dataBuffer = buffer;
+static inline bool readUntilDone(int fd, uint8_t *buffer, size_t bytesToRead) {
 	size_t curRead = 0;
 
-	while (curRead < toRead) {
-		ssize_t readResult = read(fd, dataBuffer + curRead, toRead - curRead);
+	while (curRead < bytesToRead) {
+		ssize_t readResult = read(fd, buffer + curRead, bytesToRead - curRead);
 		if (readResult <= 0) {
 			return (false);
 		}
