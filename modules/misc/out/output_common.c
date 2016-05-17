@@ -6,7 +6,7 @@
  * and putting them on a transfer ring-buffer. A second thread, called the
  * output handler, gets the packet groups from there, orders them according
  * to the AEDAT 3.X format specification, and breaks them up into chunks as
- * directed to write() them to a file descriptor efficiently (buffered I/O).
+ * directed to write them to a file descriptor efficiently (buffered I/O).
  * The AEDAT 3.X format specification specifically states that there is no
  * relation at all between packets from different sources at the output level,
  * that they behave as if independent, which we do here to simplify the system
@@ -141,7 +141,7 @@ static void commitOutputBuffer(outputCommonState state);
 static void sendEventPacket(outputCommonState state, caerEventPacketHeader packet);
 static void handleNewServerConnections(outputCommonState state);
 static void sendFileHeader(outputCommonState state);
-static void sendNetworkHeader(outputCommonState state);
+static void sendNetworkHeader(outputCommonState state, int onlyOneClientFD);
 static int outputHandlerThread(void *stateArg);
 static void caerOutputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
@@ -359,7 +359,7 @@ static void commitOutputBuffer(outputCommonState state) {
 		// If message-based protocol, we fill in the now empty buffer with the
 		// appropriate header.
 		if (state->isNetworkMessageBased) {
-			sendNetworkHeader(state);
+			sendNetworkHeader(state, -1);
 		}
 	}
 
@@ -423,8 +423,8 @@ static void handleNewServerConnections(outputCommonState state) {
 	int acceptResult = accept(state->fileDescriptors->serverFd, NULL, NULL);
 	if (acceptResult < 0) {
 		if (errno != EAGAIN && errno != EWOULDBLOCK) {
-			// Only log real failure. EAGAIN/EWOULDBLOCK just mean no
-			// connections are present for non-blocking accept().
+			// Only log real failure. EAGAIN/EWOULDBLOCK just means no
+			// connections are present for non-blocking accept() right now.
 			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
 				"TCP server accept() failed. Error: %d.", errno);
 		}
@@ -433,7 +433,7 @@ static void handleNewServerConnections(outputCommonState state) {
 	}
 
 	// New connection present!
-	// Put it in the list of FDs if possible, or close.
+	// Put it in the list of FDs and send header, if there is space left, or close.
 	bool putInFDList = false;
 
 	for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
@@ -445,20 +445,20 @@ static void handleNewServerConnections(outputCommonState state) {
 		}
 	}
 
-	// No space for new connection, just close it (client will exit).
-	if (!putInFDList) {
+	if (putInFDList) {
+		// Successfully connected, send header to client.
+		sendNetworkHeader(state, acceptResult);
+
+		caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
+			"Accepted new TCP connection from client (fd %d).", acceptResult);
+	}
+	else {
+		// No space for new connection, just close it (client will exit).
 		close(acceptResult);
 
 		caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
 			"Rejected TCP client (fd %d), max connections reached.", acceptResult);
 	}
-	else {
-		caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
-			"Accepted new TCP connection from client (fd %d).", acceptResult);
-	}
-
-	// Successfully connected, send header to client.
-	sendNetworkHeader(state);
 }
 
 static void sendFileHeader(outputCommonState state) {
@@ -486,7 +486,7 @@ static void sendFileHeader(outputCommonState state) {
 	writeBufferToAll(state, (const uint8_t *) "#!END-HEADER\r\n", 14);
 }
 
-static void sendNetworkHeader(outputCommonState state) {
+static void sendNetworkHeader(outputCommonState state, int onlyOneClientFD) {
 	// Send AEDAT 3.1 header (RAW format) for network streams (20 bytes total).
 	int64_t magicNumber = htole64(AEDAT3_NETWORK_MAGIC_NUMBER);
 
@@ -500,9 +500,9 @@ static void sendNetworkHeader(outputCommonState state) {
 
 	*((int64_t *) (networkHeader + 0)) = magicNumber;
 	*((int64_t *) (networkHeader + 8)) = sequenceNumber;
-	*((int64_t *) (networkHeader + 16)) = versionNumber;
-	*((int64_t *) (networkHeader + 17)) = formatNumber;
-	*((int64_t *) (networkHeader + 18)) = sourceNumber;
+	*((int8_t *) (networkHeader + 16)) = versionNumber;
+	*((int8_t *) (networkHeader + 17)) = formatNumber;
+	*((int16_t *) (networkHeader + 18)) = sourceNumber;
 
 	// If message-based, we copy the header at the start of the buffer,
 	// because we want it in each message (and each buffer is a message!).
@@ -516,7 +516,14 @@ static void sendNetworkHeader(outputCommonState state) {
 	}
 	else {
 		// Else, not message-based, so we just write it once at start directly.
-		writeBufferToAll(state, networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
+		// We support writing to all clients, or only to one specified client.
+		// This one-client mode is only used for server mode operation.
+		if (onlyOneClientFD >= 0) {
+			writeUntilDone(onlyOneClientFD, networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
+		}
+		else {
+			writeBufferToAll(state, networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
+		}
 	}
 }
 
@@ -524,7 +531,7 @@ static int outputHandlerThread(void *stateArg) {
 	outputCommonState state = stateArg;
 
 	if (state->isNetworkStream) {
-		sendNetworkHeader(state);
+		sendNetworkHeader(state, -1);
 	}
 	else {
 		sendFileHeader(state);
