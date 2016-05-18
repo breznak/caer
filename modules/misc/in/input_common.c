@@ -44,6 +44,8 @@ struct input_common_state {
 	atomic_bool bufferUpdate;
 	/// Reference to parent module's original data.
 	caerModuleData parentModule;
+	/// Reference to module's mainloop (for data availability signaling).
+	caerMainloopData mainloopReference;
 };
 
 typedef struct input_common_state *inputCommonState;
@@ -108,11 +110,16 @@ static int inputHandlerThread(void *stateArg) {
 			// Error or EOF with no data. Let's just stop at this point.
 			close(state->fileDescriptor);
 			state->fileDescriptor = -1;
+
+			caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
+				"End of file reached or error while reading data.");
 			break;
 		}
 
+		// TODO: parse data, create new packet containers with content.
+
 		// Signal availability of new data to the mainloop.
-		atomic_fetch_add_explicit(&(caerMainloopGetReference())->dataAvailable, 1, memory_order_release);
+		atomic_fetch_add_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_release);
 	}
 
 	return (thrd_success);
@@ -123,6 +130,7 @@ bool isNetworkMessageBased) {
 	inputCommonState state = moduleData->moduleState;
 
 	state->parentModule = moduleData;
+	state->mainloopReference = caerMainloopGetReference();
 
 	// Check for invalid file descriptors.
 	if (readFd < -1) {
@@ -200,7 +208,7 @@ void caerInputCommonExit(caerModuleData moduleData) {
 	while ((packetContainer = ringBufferGet(state->transferRing)) != NULL) {
 		caerEventPacketContainerFree(packetContainer);
 
-		atomic_fetch_sub_explicit(&(caerMainloopGetReference())->dataAvailable, 1, memory_order_relaxed);
+		atomic_fetch_sub_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_relaxed);
 	}
 
 	ringBufferFree(state->transferRing);
@@ -230,7 +238,7 @@ void caerInputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list ar
 
 		// No special memory order for decrease, because the acquire load to even start running
 		// through a mainloop already synchronizes with the release store above.
-		atomic_fetch_sub_explicit(&(caerMainloopGetReference())->dataAvailable, 1, memory_order_relaxed);
+		atomic_fetch_sub_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_relaxed);
 	}
 }
 
