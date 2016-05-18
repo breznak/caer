@@ -23,9 +23,15 @@ static inline bool simpleBufferWrite(int fd, simpleBuffer buffer) {
 
 static inline bool simpleBufferRead(int fd, simpleBuffer buffer) {
 	// Try to fill whole buffer.
-	buffer->bufferUsedSize = buffer->bufferSize;
+	ssize_t result = readUntilDone(fd, buffer->buffer, buffer->bufferSize);
+	if (result <= 0) {
+		// Error or EOF with no data.
+		return (false);
+	}
 
-	return (readUntilDone(fd, buffer->buffer, buffer->bufferUsedSize));
+	// Actual data, update UsedSize.
+	buffer->bufferUsedSize = (size_t) result;
+	return (true);
 }
 
 #endif /* BUFFERS_H_ */

@@ -84,15 +84,20 @@ static inline bool recvUntilDone(int sock, uint8_t *buffer, size_t bytesToRead) 
 	return (true);
 }
 
-// Write toWrite bytes to the file descriptor fd from buffer.
+// Write bytesToWrite bytes to the file descriptor fd from buffer.
 // Return true on success, false on failure.
 static inline bool writeUntilDone(int fd, const uint8_t *buffer, size_t bytesToWrite) {
 	size_t curWritten = 0;
 
 	while (curWritten < bytesToWrite) {
 		ssize_t writeResult = write(fd, buffer + curWritten, bytesToWrite - curWritten);
-		if (writeResult <= 0) {
+		if (writeResult < 0) {
+			// Error.
 			return (false);
+		}
+		else if (writeResult == 0) {
+			// Nothing was written, but also no errors, so we try again.
+			continue;
 		}
 
 		curWritten += (size_t) writeResult;
@@ -101,21 +106,28 @@ static inline bool writeUntilDone(int fd, const uint8_t *buffer, size_t bytesToW
 	return (true);
 }
 
-// Read toRead bytes from the file descriptor fd into buffer.
-// Return true on success, false on failure.
-static inline bool readUntilDone(int fd, uint8_t *buffer, size_t bytesToRead) {
+// Read bytesToRead bytes from the file descriptor fd into buffer.
+// Return bytesToRead if all bytes were successfully read, or a smaller
+// value (down to and including zero) if EOF is reached. Return -1
+// on any kind of error.
+static inline ssize_t readUntilDone(int fd, uint8_t *buffer, size_t bytesToRead) {
 	size_t curRead = 0;
 
 	while (curRead < bytesToRead) {
 		ssize_t readResult = read(fd, buffer + curRead, bytesToRead - curRead);
-		if (readResult <= 0) {
-			return (false);
+		if (readResult < 0) {
+			// Error.
+			return (-1);
+		}
+		else if (readResult == 0) {
+			// End-of-file (also for sockets).
+			break;
 		}
 
 		curRead += (size_t) readResult;
 	}
 
-	return (true);
+	return ((ssize_t) curRead);
 }
 
 #endif /* NETS_H_ */
