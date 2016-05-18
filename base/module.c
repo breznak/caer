@@ -90,9 +90,8 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	// Set module ID for later identification (hash-table key).
 	moduleData->moduleID = moduleID;
 
-	// Put module into startup state.
+	// Put module into startup state. 'running' flag is updated later based on user startup wishes.
 	moduleData->moduleStatus = STOPPED;
-	atomic_store_explicit(&moduleData->running, true, memory_order_relaxed);
 
 	// Determine SSHS module node. Use short name for better human recognition.
 	char sshsString[nameLength + 2];
@@ -124,6 +123,8 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	// Initialize shutdown controls. By default modules always run.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "runAtStartup", true); // Allow for users to disable a module at start.
 	bool runModule = sshsNodeGetBool(moduleData->moduleNode, "runAtStartup");
+
+	atomic_store_explicit(&moduleData->running, runModule, memory_order_relaxed);
 	sshsNodePutBool(moduleData->moduleNode, "running", runModule);
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleShutdownListener);
 
