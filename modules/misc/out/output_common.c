@@ -71,23 +71,12 @@
 #include "ext/c11threads_posix.h"
 #include "ext/portable_time.h"
 #include "ext/ringbuffer/ringbuffer.h"
-#include "ext/nets.h"
+#include "ext/buffers.h"
 
 #include <libcaer/events/common.h>
 #include <libcaer/events/packetContainer.h>
 
 // TODO: check handling of timestamp-reset events from camera!
-
-struct output_common_buffer {
-	/// Size of data currently inside buffer, in bytes.
-	size_t bufferUsedSize;
-	/// Size of buffer, in bytes.
-	size_t bufferSize;
-	/// Buffer for writing to file descriptor (buffered I/O).
-	uint8_t buffer[];
-};
-
-typedef struct output_common_buffer *outputCommonBuffer;
 
 struct output_common_state {
 	/// Control flag for output handling thread.
@@ -96,7 +85,7 @@ struct output_common_state {
 	thrd_t outputThread;
 	/// Track source ID (cannot change!). One source per I/O module!
 	int16_t sourceID;
-	/// The file descriptors for send().
+	/// The file descriptors for writing and server mode.
 	outputCommonFDs fileDescriptors;
 	/// Network-like stream or file-like stream. Matters for header format.
 	bool isNetworkStream;
@@ -107,7 +96,7 @@ struct output_common_state {
 	int64_t networkSequenceNumber;
 	/// Filter out invalidated events or not.
 	atomic_bool validOnly;
-	/// Force all incoming packets to be committed to the transfer ring-buffers.
+	/// Force all incoming packets to be committed to the transfer ring-buffer.
 	/// This results in no loss of data, but may slow down processing considerably.
 	/// It may also block it altogether, if the output goes away for any reason.
 	atomic_bool keepPackets;
@@ -118,7 +107,7 @@ struct output_common_state {
 	/// Track last packet container's highest event timestamp that was sent out.
 	int64_t lastTimestamp;
 	/// Data buffer for writing to file descriptor (buffered I/O).
-	outputCommonBuffer dataBuffer;
+	simpleBuffer dataBuffer;
 	/// Maximum interval without sending data, in µs.
 	/// How long to wait if buffer not full before committing it anyway.
 	uint64_t bufferMaxInterval;
@@ -313,7 +302,7 @@ static bool newOutputBuffer(outputCommonState state) {
 	}
 
 	// Allocate new buffer.
-	outputCommonBuffer newBuffer = malloc(sizeof(*newBuffer) + (newBufferSize * sizeof(uint8_t)));
+	simpleBuffer newBuffer = malloc(sizeof(*newBuffer) + (newBufferSize * sizeof(uint8_t)));
 	if (newBuffer == NULL) {
 		return (false);
 	}
