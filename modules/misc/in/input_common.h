@@ -14,17 +14,8 @@
 
 extern size_t CAER_INPUT_COMMON_STATE_STRUCT_SIZE;
 
-struct input_common_fds {
-	int serverFd;
-	size_t fdsSize;
-	int fds[];
-};
-
-typedef struct input_common_fds *inputCommonFDs;
-
-inputCommonFDs caerInputCommonAllocateFdArray(size_t size);
-bool caerInputCommonInit(caerModuleData moduleData, inputCommonFDs fds, bool isNetworkStream,
-	bool isNetworkMessageBased);
+bool caerInputCommonInit(caerModuleData moduleData, int readFd, bool isNetworkStream,
+bool isNetworkMessageBased);
 void caerInputCommonExit(caerModuleData moduleData);
 void caerInputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 
