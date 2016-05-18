@@ -90,6 +90,8 @@ static bool newInputBuffer(inputCommonState state) {
 static int inputHandlerThread(void *stateArg) {
 	inputCommonState state = stateArg;
 
+	struct timespec waitSleep = { .tv_sec = 0, .tv_nsec = 1000000 }; // Wait 1ms.
+
 	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
 		// Handle configuration changes affecting buffer management.
 		if (atomic_load_explicit(&state->bufferUpdate, memory_order_relaxed)) {
@@ -99,6 +101,14 @@ static int inputHandlerThread(void *stateArg) {
 				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
 					"Failed to allocate new input data buffer. Continue using old one.");
 			}
+		}
+
+		// Read data from disk or socket.
+		if (!simpleBufferRead(state->fileDescriptor, state->dataBuffer)) {
+			// Error or EOF with no data. Let's just stop at this point.
+			close(state->fileDescriptor);
+			state->fileDescriptor = -1;
+			break;
 		}
 
 		// Signal availability of new data to the mainloop.
