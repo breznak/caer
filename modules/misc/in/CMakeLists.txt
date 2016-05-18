@@ -3,13 +3,13 @@ IF (NOT ENABLE_FILE_INPUT)
 ENDIF()
 
 IF (NOT ENABLE_NETWORK_INPUT)
-	SET(ENABLE_NETWORK_INPUT 0 CACHE BOOL "Enable the network input modules (TCP server)")
+	SET(ENABLE_NETWORK_INPUT 0 CACHE BOOL "Enable the network input modules (TCP, UnixSockets)")
 ENDIF()
 
 IF (ENABLE_FILE_INPUT)
 	SET(CAER_COMPILE_DEFINITIONS ${CAER_COMPILE_DEFINITIONS} -DENABLE_FILE_INPUT=1)
 
-	SET(CAER_FILE_INPUT_FILES modules/misc/in/in_file.c)
+	SET(CAER_FILE_INPUT_FILES modules/misc/in/input_common.c modules/misc/in/file.c)
 
 	SET(CAER_C_SRC_FILES ${CAER_C_SRC_FILES} ${CAER_FILE_INPUT_FILES})
 ENDIF()
@@ -17,7 +17,10 @@ ENDIF()
 IF (ENABLE_NETWORK_INPUT)
 	SET(CAER_COMPILE_DEFINITIONS ${CAER_COMPILE_DEFINITIONS} -DENABLE_NETWORK_INPUT=1)
 
-	SET(CAER_NETWORK_INPUT_FILES modules/misc/in/in_net_tcp_server.c)
+	SET(CAER_NETWORK_INPUT_FILES
+		modules/misc/in/input_common.c
+		modules/misc/in/net_tcp.c
+		modules/misc/in/unixs.c)
 
 	SET(CAER_C_SRC_FILES ${CAER_C_SRC_FILES} ${CAER_NETWORK_INPUT_FILES})
 ENDIF()
