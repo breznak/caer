@@ -31,6 +31,14 @@
 #endif
 
 // Input/Output support.
+#ifdef ENABLE_FILE_INPUT
+	#include "modules/misc/in/file.h"
+#endif
+#ifdef ENABLE_NETWORK_INPUT
+	#include "modules/misc/in/net_tcp.h"
+	#include "modules/misc/in/unixs.h"
+#endif
+
 #ifdef ENABLE_FILE_OUTPUT
 	#include "modules/misc/out/file.h"
 #endif
@@ -76,30 +84,51 @@ static bool mainloop_1(void);
 static bool mainloop_1(void) {
 	// An eventPacketContainer bundles event packets of different types together,
 	// to maintain time-coherence between the different events.
-	caerEventPacketContainer container;
+	caerEventPacketContainer container = NULL;
+	caerSpecialEventPacket special = NULL;
+	caerPolarityEventPacket polarity = NULL;
+	caerFrameEventPacket frame = NULL;
+	caerIMU6EventPacket imu = NULL;
 
 	// Input modules grab data from outside sources (like devices, files, ...)
 	// and put events into an event packet.
 #ifdef DVS128
 	container = caerInputDVS128(1);
+
+	// Typed EventPackets contain events of a certain type.
+	special = (caerSpecialEventPacket) caerEventPacketContainerGetEventPacket(container, SPECIAL_EVENT);
+	polarity = (caerPolarityEventPacket) caerEventPacketContainerGetEventPacket(container, POLARITY_EVENT);
 #endif
+
 #ifdef DAVISFX2
 	container = caerInputDAVISFX2(1);
 #endif
 #ifdef DAVISFX3
 	container = caerInputDAVISFX3(1);
 #endif
-
-#if defined(DVS128) || defined(DAVISFX2) || defined(DAVISFX3)
+#if defined(DAVISFX2) || defined(DAVISFX3)
 	// Typed EventPackets contain events of a certain type.
-	caerSpecialEventPacket special = (caerSpecialEventPacket) caerEventPacketContainerGetEventPacket(container, SPECIAL_EVENT);
-	caerPolarityEventPacket polarity = (caerPolarityEventPacket) caerEventPacketContainerGetEventPacket(container, POLARITY_EVENT);
+	special = (caerSpecialEventPacket) caerEventPacketContainerGetEventPacket(container, SPECIAL_EVENT);
+	polarity = (caerPolarityEventPacket) caerEventPacketContainerGetEventPacket(container, POLARITY_EVENT);
+
+	// Frame and IMU events exist only with DAVIS cameras.
+	frame = (caerFrameEventPacket) caerEventPacketContainerGetEventPacket(container, FRAME_EVENT);
+	imu = (caerIMU6EventPacket) caerEventPacketContainerGetEventPacket(container, IMU6_EVENT);
 #endif
 
-#if defined(DAVISFX2) || defined(DAVISFX3)
-	// Frame and IMU events exist only with DAVIS cameras.
-	caerFrameEventPacket frame = (caerFrameEventPacket) caerEventPacketContainerGetEventPacket(container, FRAME_EVENT);
-	caerIMU6EventPacket imu = (caerIMU6EventPacket) caerEventPacketContainerGetEventPacket(container, IMU6_EVENT);
+#ifdef ENABLE_FILE_INPUT
+	container = caerInputFile(10);
+#endif
+#ifdef ENABLE_NETWORK_INPUT
+	container = caerInputNetTCP(11);
+#endif
+#if defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT)
+	// Typed EventPackets contain events of a certain type.
+	// We search for them by type here, because input modules may not have all or any of them.
+	special = (caerSpecialEventPacket) caerEventPacketContainerGetEventPacketForType(container, SPECIAL_EVENT);
+	polarity = (caerPolarityEventPacket) caerEventPacketContainerGetEventPacketForType(container, POLARITY_EVENT);
+	frame = (caerFrameEventPacket) caerEventPacketContainerGetEventPacketForType(container, FRAME_EVENT);
+	imu = (caerIMU6EventPacket) caerEventPacketContainerGetEventPacketForType(container, IMU6_EVENT);
 #endif
 
 	// Filters process event packets: for example to suppress certain events,
@@ -124,29 +153,22 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_CAMERACALIBRATION
 	caerCameraCalibration(5, polarity, frame);
 #endif
+
 	//Enable camera pose estimation
 #ifdef ENABLE_POSEESTIMATION
-	#if defined(DAVISFX2) || defined(DAVISFX3)
-		caerPoseCalibration(6, polarity, frame);
-	#else
-		caerPoseCalibration(6, polarity, NULL);
-	#endif
+	caerPoseCalibration(6, polarity, frame);
 #endif
 
-	// A small visualizer exists to show what the output looks like.
+	// A simple visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
-	#if defined(DAVISFX2) || defined(DAVISFX3)
-		caerVisualizer(60, "Polarity", &caerVisualizerRendererPolarityEvents, NULL, (caerEventPacketHeader) polarity);
-		caerVisualizer(61, "Frame", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) frame);
-		caerVisualizer(62, "IMU6", &caerVisualizerRendererIMU6Events, NULL, (caerEventPacketHeader) imu);
-	#else
-		caerVisualizer(60, "Polarity", &caerVisualizerRendererPolarityEvents, NULL, (caerEventPacketHeader) polarity);
-	#endif
+	caerVisualizer(60, "Polarity", &caerVisualizerRendererPolarityEvents, NULL, (caerEventPacketHeader) polarity);
+	caerVisualizer(61, "Frame", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) frame);
+	caerVisualizer(62, "IMU6", &caerVisualizerRendererIMU6Events, NULL, (caerEventPacketHeader) imu);
 #endif
 
 #ifdef ENABLE_FILE_OUTPUT
-	// Enable output to file (AER2 format).
-	caerOutputFile(7, 1, polarity);// or (7, 2, polarity, frame) for polarity and frames
+	// Enable output to file (AEDAT 3.X format).
+	caerOutputFile(7, 4, polarity, frame, imu, special);
 #endif
 
 #ifdef ENABLE_NETWORK_OUTPUT
@@ -154,10 +176,10 @@ static bool mainloop_1(void) {
 	// External clients connect to cAER, and we send them the data.
 	// WARNING: slow clients can dramatically slow this and the whole
 	// processing pipeline down!
-	caerOutputNetTCPServer(8, 1, polarity);// or (8, 2, polarity, frame) for polarity and frames
+	caerOutputNetTCPServer(8, 4, polarity, frame, imu, special);
 
 	// And also send them via UDP. This is fast, as it doesn't care what is on the other side.
-	caerOutputNetUDP(9, 1, polarity);// or (9, 2, polarity, frame) for polarity and frames
+	caerOutputNetUDP(9, 4, polarity, frame, imu, special);
 #endif
 
 #ifdef ENABLE_IMAGEGENERATOR
@@ -244,11 +266,11 @@ static bool mainloop_1(void) {
 	// for example, we now classify the latest image
 	// only run CNN if we have a file to classify
 	if(*file_strings_classify != NULL) {
-	    caerCaffeWrapper(21, file_strings_classify, classification_results, (int) MAX_IMG_QTY);  
-	    if( remove(*file_strings_classify) != 0){
-		    caerLog(CAER_LOG_ERROR, mainString, "Failed to remove temporary image of accumulated spikes from /tmp/ folder.. keep accumulating\n");
-	    }
-    	}
+		caerCaffeWrapper(21, file_strings_classify, classification_results, (int) MAX_IMG_QTY);
+		if( remove(*file_strings_classify) != 0) {
+			caerLog(CAER_LOG_ERROR, mainString, "Failed to remove temporary image of accumulated spikes from /tmp/ folder.. keep accumulating\n");
+		}
+	}
 #endif
 #endif
 
