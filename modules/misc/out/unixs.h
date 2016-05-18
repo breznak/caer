@@ -1,8 +1,8 @@
-#ifndef UNIXS_H_
-#define UNIXS_H_
+#ifndef OUTPUT_UNIXS_H_
+#define OUTPUT_UNIXS_H_
 
 #include "main.h"
 
 void caerOutputUnixS(uint16_t moduleID, size_t outputTypesNumber, ...);
 
-#endif /* UNIXS_H_ */
+#endif /* OUTPUT_UNIXS_H_ */

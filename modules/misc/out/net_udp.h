@@ -1,15 +1,8 @@
-/*
- * net_udp.h
- *
- *  Created on: Nov 26, 2013
- *      Author: chtekk
- */
-
-#ifndef NET_UDP_H_
-#define NET_UDP_H_
+#ifndef OUTPUT_NET_UDP_H_
+#define OUTPUT_NET_UDP_H_
 
 #include "main.h"
 
 void caerOutputNetUDP(uint16_t moduleID, size_t outputTypesNumber, ...);
 
-#endif /* NET_UDP_H_ */
+#endif /* OUTPUT_NET_UDP_H_ */

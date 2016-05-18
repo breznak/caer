@@ -1,5 +1,5 @@
-#ifndef FILE_H_
-#define FILE_H_
+#ifndef OUTPUT_FILE_H_
+#define OUTPUT_FILE_H_
 
 #include "main.h"
 
@@ -7,4 +7,4 @@
 
 void caerOutputFile(uint16_t moduleID, size_t outputTypesNumber, ...);
 
-#endif /* FILE_H_ */
+#endif /* OUTPUT_FILE_H_ */
