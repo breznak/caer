@@ -4,7 +4,7 @@ size_t CAER_INPUT_COMMON_STATE_STRUCT_SIZE = 0;
 
 bool caerInputCommonInit(caerModuleData moduleData, int readFd, bool isNetworkStream,
 bool isNetworkMessageBased) {
-
+	return (true);
 }
 
 void caerInputCommonExit(caerModuleData moduleData) {
