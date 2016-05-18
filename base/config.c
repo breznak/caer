@@ -70,7 +70,7 @@ void caerConfigWriteBack(void) {
 
 		if (configFileFd >= 0) {
 			sshsNodeExportSubTreeToXML(sshsGetNode(sshsGetGlobal(), "/"), configFileFd,
-				(const char *[] ) { "shutdown" }, 1, (const char *[] ) { "sourceInfo" }, 1);
+				(const char *[] ) { "running" }, 1, (const char *[] ) { "sourceInfo" }, 1);
 
 			close(configFileFd);
 		}

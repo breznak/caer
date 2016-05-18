@@ -471,7 +471,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		redraw = true;
 	}
 	else if (displayEvent.type == ALLEGRO_EVENT_DISPLAY_CLOSE) {
-		sshsNodePutBool(state->parentModule->moduleNode, "shutdown", true);
+		sshsNodePutBool(state->parentModule->moduleNode, "running", false);
 	}
 	else if (displayEvent.type == ALLEGRO_EVENT_KEY_CHAR || displayEvent.type == ALLEGRO_EVENT_KEY_DOWN
 		|| displayEvent.type == ALLEGRO_EVENT_KEY_UP) {

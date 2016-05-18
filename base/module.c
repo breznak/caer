@@ -122,7 +122,7 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	moduleData->moduleSubSystemString[nameLength] = '\0';
 
 	// Initialize shutdown hooks.
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "shutdown", false); // Allow for users to disable a module at start.
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "running", true); // Allow for users to disable a module at start.
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleShutdownListener);
 
 	atomic_thread_fence(memory_order_release);
@@ -187,13 +187,13 @@ static void caerModuleShutdownListener(sshsNode node, void *userData, enum sshs_
 
 	caerModuleData data = userData;
 
-	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && caerStrEquals(changeKey, "shutdown")) {
-		// Shutdown changed, let's see.
+	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && caerStrEquals(changeKey, "running")) {
+		// Running changed, let's see.
 		if (changeValue.boolean == true) {
-			atomic_store(&data->running, false);
+			atomic_store(&data->running, true);
 		}
 		else {
-			atomic_store(&data->running, true);
+			atomic_store(&data->running, false);
 		}
 	}
 }

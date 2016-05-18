@@ -151,7 +151,7 @@ static void caerInputDVS128Exit(caerModuleData moduleData) {
 
 	if (sshsNodeGetBool(moduleData->moduleNode, "Auto-Restart")) {
 		// Prime input module again so that it will try to restart if new devices detected.
-		sshsNodePutBool(moduleData->moduleNode, "shutdown", false);
+		sshsNodePutBool(moduleData->moduleNode, "running", true);
 	}
 }
 
@@ -238,7 +238,7 @@ static void moduleShutdownNotify(void *p) {
 	sshsNode moduleNode = p;
 
 	// Ensure parent also shuts down (on disconnected device for example).
-	sshsNodePutBool(moduleNode, "shutdown", true);
+	sshsNodePutBool(moduleNode, "running", false);
 }
 
 static void biasConfigSend(sshsNode node, caerModuleData moduleData) {

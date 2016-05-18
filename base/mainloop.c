@@ -57,7 +57,7 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 	atomic_store(&mainloopThreads.running, true);
 
 	// Add shutdown hook to SSHS for external control.
-	sshsNodePutBool(rootNode, "shutdown", false); // Always reset to false.
+	sshsNodePutBool(rootNode, "running", true); // Always reset to true.
 	sshsNodeAddAttributeListener(rootNode, &mainloopThreads.running, &caerMainloopShutdownListener);
 
 	// Allocate memory for main-loops.
@@ -84,7 +84,7 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 		atomic_store(&mainloopThreads.loopThreads[i].running, true);
 
 		// Add per-mainloop shutdown hooks to SSHS for external control.
-		sshsNodePutBool(mainloopThreads.loopThreads[i].mainloopNode, "shutdown", false); // Always reset to false.
+		sshsNodePutBool(mainloopThreads.loopThreads[i].mainloopNode, "running", true); // Always reset to true.
 		sshsNodeAddAttributeListener(mainloopThreads.loopThreads[i].mainloopNode, &mainloopThreads.loopThreads[i].running,
 			&caerMainloopShutdownListener);
 
@@ -108,7 +108,7 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 	// Notify shutdown to the main-loops ...
 	for (size_t i = 0; i < mainloopThreads.loopThreadsLength; i++) {
 		// Shutdown all loops that are still active.
-		sshsNodePutBool(mainloopThreads.loopThreads[i].mainloopNode, "shutdown", true);
+		sshsNodePutBool(mainloopThreads.loopThreads[i].mainloopNode, "running", false);
 	}
 
 	// ... and then wait for their clean shutdown.
@@ -200,7 +200,7 @@ static int caerMainloopRunner(void *inPtr) {
 
 	// Shutdown all modules.
 	for (caerModuleData m = mainloopData->modules; m != NULL; m = m->hh.next) {
-		sshsNodePutBool(m->moduleNode, "shutdown", true);
+		sshsNodePutBool(m->moduleNode, "running", false);
 	}
 
 	// Run through the loop one last time to correctly shutdown all the modules.
@@ -286,10 +286,10 @@ static void caerMainloopShutdownListener(sshsNode node, void *userData, enum ssh
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
 	UNUSED_ARGUMENT(node);
 
-	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && caerStrEquals(changeKey, "shutdown")) {
-		// Shutdown changed, let's see.
-		if (changeValue.boolean == true) {
-			// Shutdown requested!
+	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && caerStrEquals(changeKey, "running")) {
+		// Running changed, let's see.
+		if (changeValue.boolean == false) {
+			// Shutdown requested! This goes to the mainloop/system 'running' atomic flags.
 			atomic_store((atomic_bool * ) userData, false);
 		}
 	}
