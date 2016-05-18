@@ -121,8 +121,10 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	strncpy(moduleData->moduleSubSystemString, nameString, nameLength);
 	moduleData->moduleSubSystemString[nameLength] = '\0';
 
-	// Initialize shutdown hooks.
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "running", true); // Allow for users to disable a module at start.
+	// Initialize shutdown controls. By default modules always run.
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "runAtStartup", true); // Allow for users to disable a module at start.
+	bool runModule = sshsNodeGetBool(moduleData->moduleNode, "runAtStartup");
+	sshsNodePutBool(moduleData->moduleNode, "running", runModule);
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleShutdownListener);
 
 	atomic_thread_fence(memory_order_release);
