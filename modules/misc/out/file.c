@@ -26,43 +26,48 @@ static char *getFullFilePath(const char *subSystemString, const char *directory,
 
 // Remember to free strings returned by this.
 static char *getUserHomeDirectory(const char *subSystemString) {
+	char *homeDir = NULL;
+
 	// First check the environment for $HOME.
 	char *homeVar = getenv("HOME");
 
 	if (homeVar != NULL) {
-		char *retVar = strdup(homeVar);
-		if (retVar == NULL) {
-			caerLog(CAER_LOG_CRITICAL, subSystemString, "Unable to allocate memory for user home directory path.");
-			return (NULL);
-		}
-
-		return (retVar);
+		homeDir = strdup(homeVar);
 	}
 
 	// Else try to get it from the user data storage.
-	struct passwd userPasswd;
-	struct passwd *userPasswdPtr;
-	char userPasswdBuf[2048];
+	if (homeDir == NULL) {
+		struct passwd userPasswd;
+		struct passwd *userPasswdPtr;
+		char userPasswdBuf[2048];
 
-	if (getpwuid_r(getuid(), &userPasswd, userPasswdBuf, sizeof(userPasswdBuf), &userPasswdPtr) == 0) {
-		// Success!
-		char *retVar = strdup(userPasswd.pw_dir);
-		if (retVar == NULL) {
-			caerLog(CAER_LOG_CRITICAL, subSystemString, "Unable to allocate memory for user home directory path.");
-			return (NULL);
+		if (getpwuid_r(getuid(), &userPasswd, userPasswdBuf, sizeof(userPasswdBuf), &userPasswdPtr) == 0) {
+			homeDir = strdup(userPasswd.pw_dir);
 		}
-
-		return (retVar);
 	}
 
-	// Else just return /tmp as a place to write to.
-	char *retVar = strdup("/tmp");
-	if (retVar == NULL) {
-		caerLog(CAER_LOG_CRITICAL, subSystemString, "Unable to allocate memory for user home directory path.");
+	if (homeDir == NULL) {
+		// Else just return /tmp as a place to write to.
+		homeDir = strdup("/tmp");
+	}
+
+	// Check if anything worked.
+	if (homeDir == NULL) {
+		caerLog(CAER_LOG_CRITICAL, subSystemString, "Unable to find user home directory path.");
 		return (NULL);
 	}
 
-	return (retVar);
+	char *realHomeDir = realpath(homeDir, NULL);
+	if (realHomeDir == NULL) {
+		caerLog(CAER_LOG_CRITICAL, subSystemString, "Could not get real path for home directory '%s'.", homeDir);
+		free(homeDir);
+
+		return (NULL);
+	}
+
+	free(homeDir);
+
+	return (realHomeDir);
 }
 
 static char *getFullFilePath(const char *subSystemString, const char *directory, const char *prefix) {
