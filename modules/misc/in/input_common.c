@@ -8,6 +8,14 @@
 #include <libcaer/events/common.h>
 #include <libcaer/events/packetContainer.h>
 
+struct input_common_header_info {
+	bool isValidHeader;
+	bool isAEDAT3;
+	uint32_t majorVersion;
+	uint32_t minorVersion;
+	uint32_t formatID;
+};
+
 struct input_common_state {
 	/// Control flag for input handling thread.
 	atomic_bool running;
@@ -35,11 +43,12 @@ struct input_common_state {
 	/// We use EventPacketContainers, as that is the standard data structure
 	/// returned from an input module.
 	RingBuffer transferRing;
+	/// Header parsing results.
+	struct input_common_header_info header;
 	/// Track last packet container's highest event timestamp that was sent out.
 	int64_t lastTimestamp;
 	/// Data buffer for reading from file descriptor (buffered I/O).
 	simpleBuffer dataBuffer;
-
 	/// Flag to signal update to buffer configuration asynchronously.
 	atomic_bool bufferUpdate;
 	/// Reference to parent module's original data.
@@ -54,6 +63,10 @@ size_t CAER_INPUT_COMMON_STATE_STRUCT_SIZE = sizeof(struct input_common_state);
 
 static int inputHandlerThread(void *stateArg);
 static bool newInputBuffer(inputCommonState state);
+static bool parseNetworkHeader(inputCommonState state);
+static char *getFileHeaderLine(inputCommonState state);
+static bool parseFileHeader(inputCommonState state);
+static bool parseHeader(inputCommonState state);
 static void caerInputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
@@ -85,6 +98,202 @@ static bool newInputBuffer(inputCommonState state) {
 	return (true);
 }
 
+static bool parseNetworkHeader(inputCommonState state) {
+	// TODO: handle this.
+	return (true);
+}
+
+#define MAX_HEADER_LINE_SIZE 1024
+
+static char *getFileHeaderLine(inputCommonState state) {
+	simpleBuffer buf = state->dataBuffer;
+
+	if (buf->buffer[buf->bufferPosition] == '#') {
+		size_t headerLinePos = 0;
+		char *headerLine = malloc(MAX_HEADER_LINE_SIZE);
+		if (headerLine == NULL) {
+			// Failed to allocate memory.
+			return (NULL);
+		}
+
+		headerLine[headerLinePos++] = '#';
+		buf->bufferPosition++;
+
+		while (buf->buffer[buf->bufferPosition] != '\n') {
+			if (headerLinePos >= (MAX_HEADER_LINE_SIZE - 2)) { // -1 for terminating new-line, -1 for end NUL char.
+				// Overlong header line, refuse it.
+				free(headerLine);
+				return (NULL);
+			}
+
+			headerLine[headerLinePos++] = (char) buf->buffer[buf->bufferPosition];
+			buf->bufferPosition++;
+		}
+
+		// Found terminating new-line character.
+		headerLine[headerLinePos++] = '\n';
+		buf->bufferPosition++;
+
+		// Now let's just verify that the previous character was indeed a carriage-return.
+		if (headerLine[headerLinePos - 2] == '\r') {
+			// Valid, terminate it and return it.
+			headerLine[headerLinePos] = '\0';
+
+			return (headerLine);
+		}
+		else {
+			// Invalid header line. No Windows line-ending.
+			free(headerLine);
+			return (NULL);
+		}
+	}
+
+	// Invalid header line. Doesn't begin with #.
+	return (NULL);
+}
+
+static bool parseFileHeader(inputCommonState state) {
+	// We expect that the full header part is contained within
+	// this one data buffer.
+	// File headers are part of the AEDAT 3.X specification.
+	// Start with #, go until '\r\n' (Windows EOL). First must be
+	// version header !AER-DATx.y, last must be end-of-header
+	// marker with !END-HEADER.
+	bool versionHeader = false;
+	bool formatHeader = false;
+	bool endHeader = false;
+
+	while (!endHeader) {
+		char *headerLine = getFileHeaderLine(state);
+		if (headerLine == NULL) {
+			// Failed to parse header line; this is an invalid header for AEDAT 3.1!
+			// For AEDAT 2.0, since there is no END-HEADER, this might be
+			// the right way for headers to stop, so we consider this valid IFF we
+			// already got at least the version header.
+			if (versionHeader && !state->header.isAEDAT3) {
+				// Got an AEDAT 2.0 version header, that's fine.
+				state->header.isValidHeader = true;
+				return (true);
+			}
+
+			return (false);
+		}
+
+		if (!versionHeader) {
+			// First thing we expect is the version header. We don't support files not having it.
+			if (sscanf(headerLine, "#!AER-DAT%" SCNu32 ".%" SCNu32 "\r\n", &state->header.majorVersion,
+				&state->header.minorVersion) == 2) {
+				versionHeader = true;
+
+				// Check valid versions.
+				switch (state->header.majorVersion) {
+					case 2:
+						// AEDAT 2.0 is supported. No revisions exist.
+						if (state->header.minorVersion != 0) {
+							goto noValidVersionHeader;
+						}
+						break;
+
+					case 3:
+						state->header.isAEDAT3 = true;
+
+						// AEDAT 3.1 is supported. AEDAT 3.0 was not in active use.
+						if (state->header.minorVersion != 1) {
+							goto noValidVersionHeader;
+						}
+						break;
+
+					default:
+						// Versions other than 2.0 and 3.1 are not supported.
+						goto noValidVersionHeader;
+						break;
+				}
+
+				caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
+					"Found AEDAT%" PRIu32 ".%" PRIu32 " version header.", state->header.majorVersion,
+					state->header.minorVersion);
+			}
+			else {
+				noValidVersionHeader: free(headerLine);
+
+				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+					"No compliant AEDAT version header found. Invalid file.");
+				return (false);
+			}
+		}
+		else if (state->header.isAEDAT3 && !formatHeader) {
+			// Then the format header. Only with AEDAT 3.X.
+			char *formatString = NULL;
+
+			if (sscanf(headerLine, "#Format: %ms\r\n", &formatString) == 1) {
+				formatHeader = true;
+
+				// Parse format string to format ID.
+				if (caerStrEquals(formatString, "RAW")) {
+					state->header.formatID = 0x00;
+				}
+				else if (caerStrEquals(formatString, "Serial-TS")) {
+					state->header.formatID = 0x01;
+				}
+				else if (caerStrEquals(formatString, "Compressed")) {
+					state->header.formatID = 0x02;
+				}
+				else {
+					// No valid format found.
+					free(headerLine);
+
+					caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+						"No compliant Format type found. Format '%s' is invalid.", formatString);
+
+					free(formatString);
+					return (false);
+				}
+
+				caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
+					"Found Format header with value '%s', Format ID %" PRIu32 ".", formatString,
+					state->header.formatID);
+
+				free(formatString);
+			}
+			else {
+				free(headerLine);
+
+				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+					"No compliant Format header found. Invalid file.");
+				return (false);
+			}
+		}
+		else {
+			// Now we either have other header lines with AEDAT 2.0, or the END-HEADER with
+			// AEDAT 3.1. We check this before the other possible header lines.
+			if (caerStrEquals(headerLine, "#!END-HEADER\r\n")) {
+				endHeader = true;
+
+				caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Found END-HEADER header.");
+			}
+			else {
+				// Then other headers, like Source or Start-Time.
+				// TODO: parse these.
+				caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Header line: '%s'.", headerLine);
+			}
+		}
+
+		free(headerLine);
+	}
+
+	state->header.isValidHeader = true;
+	return (true);
+}
+
+static bool parseHeader(inputCommonState state) {
+	if (state->isNetworkStream) {
+		return (parseNetworkHeader(state));
+	}
+	else {
+		return (parseFileHeader(state));
+	}
+}
+
 static int inputHandlerThread(void *stateArg) {
 	inputCommonState state = stateArg;
 
@@ -107,8 +316,21 @@ static int inputHandlerThread(void *stateArg) {
 			close(state->fileDescriptor);
 			state->fileDescriptor = -1;
 
-			caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
-				"End of file reached or error while reading data.");
+			// Distinguish EOF from errors based upon errno value.
+			if (errno == 0) {
+				caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString, "End of file reached.");
+			}
+			else {
+				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+					"Error while reading data, error: %d.", errno);
+			}
+			break;
+		}
+
+		// Parse header and setup header info structure.
+		if (!state->header.isValidHeader && !parseHeader(state)) {
+			// Header not complete yet, so get more data.
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to parse header.");
 			break;
 		}
 
