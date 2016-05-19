@@ -12,12 +12,35 @@
 #define STD_PACKET_SIZE 10240
 
 struct input_common_header_info {
+	/// Header has been completely read and is valid.
 	bool isValidHeader;
+	/// Format is AEDAT 3.
 	bool isAEDAT3;
+	/// Major AEDAT format version (X.y).
 	int16_t majorVersion;
+	/// Minor AEDAT format version (x.Y)
 	int8_t minorVersion;
+	/// AEDAT 3 Format ID (from Format header), used for decoding.
 	int8_t formatID;
-	int64_t lastSequenceNumber;
+	/// Keep track of the sequence number for message-based protocols.
+	int64_t networkSequenceNumber;
+};
+
+struct input_common_packet_data {
+	/// Track source ID (cannot change!) to read data for. One source per I/O module!
+	int16_t sourceID;
+	/// Track last packet container's highest event timestamp that was sent out.
+	int64_t lastTimestamp;
+	/// Current packet header, to support headers being split across buffers.
+	uint8_t currPacketHeader[CAER_EVENT_PACKET_HEADER_SIZE];
+	/// Current packet header length (determines if complete or not).
+	size_t currPacketHeaderSize;
+	/// Current packet, to get filled up with data.
+	caerEventPacketHeader currPacket;
+	/// Current packet data length.
+	size_t currPacketDataSize;
+	/// Current packet offset, index into data.
+	size_t currPacketDataOffset;
 };
 
 struct input_common_state {
@@ -26,8 +49,6 @@ struct input_common_state {
 	/// The input handling thread (separate as to only wake up mainloop
 	/// processing when there is new data available).
 	thrd_t inputThread;
-	/// Track source ID (cannot change!) to read data for. One source per I/O module!
-	int16_t sourceID;
 	/// The file descriptor for reading.
 	int fileDescriptor;
 	/// Network-like stream or file-like stream. Matters for header format.
@@ -35,8 +56,6 @@ struct input_common_state {
 	/// For network-like inputs, we differentiate between stream and message
 	/// based protocols, like TCP and UDP. Matters for header/sequence number.
 	bool isNetworkMessageBased;
-	/// Keep track of the sequence number for message-based protocols.
-	int64_t networkSequenceNumber;
 	/// Filter out invalidated events or not.
 	atomic_bool validOnly;
 	/// Force all incoming packets to be committed to the transfer ring-buffer.
@@ -49,8 +68,8 @@ struct input_common_state {
 	RingBuffer transferRing;
 	/// Header parsing results.
 	struct input_common_header_info header;
-	/// Track last packet container's highest event timestamp that was sent out.
-	int64_t lastTimestamp;
+	/// Packet data parsing structures.
+	struct input_common_packet_data packets;
 	/// Data buffer for reading from file descriptor (buffered I/O).
 	simpleBuffer dataBuffer;
 	/// Flag to signal update to buffer configuration asynchronously.
@@ -82,6 +101,15 @@ static bool newInputBuffer(inputCommonState state) {
 	if (state->dataBuffer != NULL && state->dataBuffer->bufferSize == newBufferSize) {
 		// Yeah, we're already where we want to be!
 		return (true);
+	}
+
+	// So we have to change the size, let's see if the new number makes any sense.
+	// We want reasonably sized buffers as minimum, that must fit at least the
+	// event packet header and the network header fully (so 28 bytes), as well as
+	// the standard AEDAT 2.0 and 3.1 headers, so a couple hundred bytes, and that
+	// will maintain good performance. 512 seems a good compromise.
+	if (newBufferSize < 512) {
+		newBufferSize = 512;
 	}
 
 	// Allocate new buffer.
@@ -175,8 +203,7 @@ static bool parseFileHeader(inputCommonState state) {
 			// already got at least the version header.
 			if (versionHeader && !state->header.isAEDAT3) {
 				// Got an AEDAT 2.0 version header, that's fine.
-				state->header.isValidHeader = true;
-				return (true);
+				goto headerGood;
 			}
 
 			return (false);
@@ -283,7 +310,8 @@ static bool parseFileHeader(inputCommonState state) {
 		free(headerLine);
 	}
 
-	state->header.isValidHeader = true;
+	headerGood: state->header.isValidHeader = true;
+
 	return (true);
 }
 
@@ -304,8 +332,156 @@ static bool parsePackets(inputCommonState state) {
 		return (false);
 	}
 
-	// Signal availability of new data to the mainloop on packet container commit.
-	//atomic_fetch_add_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_release);
+	simpleBuffer buf = state->dataBuffer;
+
+	while (buf->bufferPosition < buf->bufferUsedSize) {
+		// So now we're somewhere inside the buffer (usually at start), and want to
+		// read in a very long sequence of event packets.
+		// An event packet is made up of header + data, and the header contains the
+		// information needed to decode the data and its length, to know then where
+		// the next event packet boundary is. So we get the full header first, then
+		// the data, but careful, it can all be split across two (header+data) or
+		// more (data) buffers, so we need to reassemble!
+		size_t remainingData = buf->bufferUsedSize - buf->bufferPosition;
+
+		if (state->packets.currPacketHeaderSize != CAER_EVENT_PACKET_HEADER_SIZE) {
+			if (remainingData < CAER_EVENT_PACKET_HEADER_SIZE) {
+				// Reaching end of buffer, the header is split across two buffers!
+				memcpy(state->packets.currPacketHeader, buf->buffer + buf->bufferPosition, remainingData);
+
+				state->packets.currPacketHeaderSize = remainingData;
+
+				// Go and get next buffer. bufferPosition is reset.
+				return (true);
+			}
+			else {
+				// Either a full header, or the second part of one.
+				size_t dataToRead = CAER_EVENT_PACKET_HEADER_SIZE - state->packets.currPacketHeaderSize;
+
+				memcpy(state->packets.currPacketHeader + state->packets.currPacketHeaderSize,
+					buf->buffer + buf->bufferPosition, dataToRead);
+
+				state->packets.currPacketHeaderSize += dataToRead;
+				buf->bufferPosition += dataToRead;
+				remainingData -= dataToRead;
+			}
+
+			// So now that we have a full header, let's look at it.
+			caerEventPacketHeader packet = (caerEventPacketHeader) state->packets.currPacketHeader;
+
+			int16_t eventSource = caerEventPacketHeaderGetEventSource(packet);
+			int32_t eventNumber = caerEventPacketHeaderGetEventNumber(packet);
+			int32_t eventValid = caerEventPacketHeaderGetEventValid(packet);
+			int32_t eventSize = caerEventPacketHeaderGetEventSize(packet);
+
+			// First we verify that the source ID remained unique (only one source per I/O module supported!).
+			if (state->packets.sourceID == -1) {
+				state->packets.sourceID = eventSource; // Remember this!
+			}
+			else if (state->packets.sourceID != eventSource) {
+				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+					"An input module can only handle packets from the same source! "
+						"A packet with source %" PRIi16 " was read, but this input module expects only packets from source %" PRIi16 ".",
+					eventSource, state->packets.sourceID);
+
+				// Skip packet.
+				// TODO: implement this.
+				return (false);
+			}
+
+			// Now let's get the right number of events, depending on user settings.
+			bool validOnly = atomic_load_explicit(&state->validOnly, memory_order_relaxed);
+			int32_t eventCapacity = (validOnly) ? (eventValid) : (eventNumber);
+
+			// Allocate space for the full packet, so we can reassemble it.
+			state->packets.currPacketDataSize = (size_t) (eventCapacity * eventSize);
+
+			state->packets.currPacket = malloc(CAER_EVENT_PACKET_HEADER_SIZE + state->packets.currPacketDataSize);
+			if (state->packets.currPacket == NULL) {
+				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+					"Failed to allocate memory for newly read event packet.");
+				return (false);
+			}
+
+			// First we copy the header in.
+			memcpy(state->packets.currPacket, state->packets.currPacketHeader, CAER_EVENT_PACKET_HEADER_SIZE);
+
+			state->packets.currPacketDataOffset = CAER_EVENT_PACKET_HEADER_SIZE;
+
+			// Rewrite event source to reflect this module, not the original one.
+			caerEventPacketHeaderSetEventSource(state->packets.currPacket, I16T(state->parentModule->moduleID));
+
+			// And set the event numbers to the correct value for the valid-only mode.
+			if (validOnly) {
+				caerEventPacketHeaderSetEventNumber(state->packets.currPacket, eventCapacity);
+				caerEventPacketHeaderSetEventCapacity(state->packets.currPacket, eventCapacity);
+			}
+		}
+
+		// And then the data, from the buffer to the new event packet. We have to take care of
+		// date being split across multiple buffers, as well as what data we want to copy. In
+		// validOnly mode, we only want to copy valid events, which means either checking and
+		// copying, or in the case of already receiving a packet where eventValid == eventNumber
+		// just copying. For the non-validOnly case, we always just copy.
+		int32_t eventNumberOriginal = caerEventPacketHeaderGetEventNumber(
+			(caerEventPacketHeader) state->packets.currPacketHeader);
+		int32_t eventNumber = caerEventPacketHeaderGetEventNumber(state->packets.currPacket);
+
+		if (eventNumberOriginal == eventNumber) {
+			// Original packet header and new packet header have the same event number, this
+			// means that either there was no change due to validOnly (eventValid == eventNumber),
+			// or that validOnly mode is disabled. Just copy data!
+			if (state->packets.currPacketDataSize >= remainingData) {
+				// We need to copy more data than in this buffer.
+				memcpy(state->packets.currPacket + state->packets.currPacketDataOffset,
+					buf->buffer + buf->bufferPosition, remainingData);
+
+				state->packets.currPacketDataOffset += remainingData;
+				state->packets.currPacketDataSize -= remainingData;
+
+				// Go and get next buffer. bufferPosition is reset.
+				return (true);
+			}
+			else {
+				// We copy the last bytes of data and we're done.
+				memcpy(state->packets.currPacket + state->packets.currPacketDataOffset,
+					buf->buffer + buf->bufferPosition, state->packets.currPacketDataSize);
+
+				// This packet is fully copied and done, so reset variables for next iteration.
+				state->packets.currPacketHeaderSize = 0;
+				buf->bufferPosition += state->packets.currPacketDataSize;
+			}
+		}
+		else {
+			// Valid-only mode, iterate over events and copy only the valid ones.
+			int32_t eventSize = caerEventPacketHeaderGetEventSize(state->packets.currPacket);
+
+			// TODO: implement this.
+			return (false);
+		}
+
+		// We've got a full event packet, store it.
+		// TODO: improve this.
+		caerEventPacketContainer eventPackets = caerEventPacketContainerAllocate(1);
+
+		caerEventPacketContainerSetEventPacket(eventPackets, 0, state->packets.currPacket);
+
+		retry: if (!ringBufferPut(state->transferRing, eventPackets)) {
+			if (atomic_load_explicit(&state->keepPackets, memory_order_relaxed)) {
+				// Retry forever if requested.
+				goto retry;
+			}
+
+			caerEventPacketContainerFree(eventPackets);
+
+			caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
+				"Failed to put new packet container on transfer ring-buffer: full.");
+		}
+		else {
+			// Signal availability of new data to the mainloop on packet container commit.
+			atomic_fetch_add_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_release);
+		}
+	}
 
 	return (true);
 }
@@ -387,7 +563,7 @@ bool isNetworkMessageBased) {
 	state->isNetworkMessageBased = isNetworkMessageBased;
 
 	// Initial source ID has to be -1 (invalid).
-	state->sourceID = -1;
+	state->packets.sourceID = -1;
 
 	// Handle configuration.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "validOnly", false); // only send valid events
@@ -412,6 +588,16 @@ bool isNetworkMessageBased) {
 		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to allocate input data buffer.");
 		return (false);
 	}
+
+	// Create SourceInfo node.
+	sshsNode sourceInfoNode = sshsGetRelativeNode(state->parentModule->moduleNode, "sourceInfo/");
+
+	// TODO: this needs to be dynamic!
+	sshsNodePutShort(sourceInfoNode, "dvsSizeX", 640);
+	sshsNodePutShort(sourceInfoNode, "dvsSizeY", 480);
+
+	sshsNodePutShort(sourceInfoNode, "apsSizeX", 640);
+	sshsNodePutShort(sourceInfoNode, "apsSizeY", 480);
 
 	// Start input handling thread.
 	atomic_store(&state->running, true);
