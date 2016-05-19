@@ -65,12 +65,13 @@ typedef struct input_common_state *inputCommonState;
 
 size_t CAER_INPUT_COMMON_STATE_STRUCT_SIZE = sizeof(struct input_common_state);
 
-static int inputHandlerThread(void *stateArg);
 static bool newInputBuffer(inputCommonState state);
 static bool parseNetworkHeader(inputCommonState state);
 static char *getFileHeaderLine(inputCommonState state);
 static bool parseFileHeader(inputCommonState state);
 static bool parseHeader(inputCommonState state);
+static bool parsePackets(inputCommonState state);
+static int inputHandlerThread(void *stateArg);
 static void caerInputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
@@ -91,8 +92,8 @@ static bool newInputBuffer(inputCommonState state) {
 
 	// Commit previous buffer content and then free the memory.
 	if (state->dataBuffer != NULL) {
-		// TODO: handle this.
-
+		// We just free here, there's nothing to do, since the buffer can only get
+		// reallocated when it's empty (either at start or after it has been read).
 		free(state->dataBuffer);
 	}
 
@@ -252,8 +253,7 @@ static bool parseFileHeader(inputCommonState state) {
 				}
 
 				caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
-					"Found Format header with value '%s', Format ID %" PRIi8 ".", formatString,
-					state->header.formatID);
+					"Found Format header with value '%s', Format ID %" PRIi8 ".", formatString, state->header.formatID);
 
 				free(formatString);
 			}
@@ -296,6 +296,20 @@ static bool parseHeader(inputCommonState state) {
 	}
 }
 
+static bool parsePackets(inputCommonState state) {
+	if (!state->header.isAEDAT3) {
+		// TODO: AEDAT 2.0 not yet supported.
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+			"Reading AEDAT 2.0 data not yet supported.");
+		return (false);
+	}
+
+	// Signal availability of new data to the mainloop on packet container commit.
+	//atomic_fetch_add_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_release);
+
+	return (true);
+}
+
 static int inputHandlerThread(void *stateArg) {
 	inputCommonState state = stateArg;
 
@@ -331,22 +345,17 @@ static int inputHandlerThread(void *stateArg) {
 
 		// Parse header and setup header info structure.
 		if (!state->header.isValidHeader && !parseHeader(state)) {
-			// Header not complete yet, so get more data.
+			// Header invalid, exit.
 			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to parse header.");
 			break;
 		}
 
-		if (!state->header.isAEDAT3) {
-			// TODO: AEDAT 2.0 not yet supported.
-			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
-				"Reading AEDAT 2.0 data not yet supported.");
+		// Parse event packets now.
+		if (!parsePackets(state)) {
+			// Packets invalid, exit.
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to parse event packets.");
 			break;
 		}
-
-		// TODO: parse data, create new packet containers with content.
-
-		// Signal availability of new data to the mainloop on packet container commit.
-		//atomic_fetch_add_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_release);
 
 		// Go and get a full buffer on next iteration again, starting at position 0.
 		state->dataBuffer->bufferPosition = 0;
