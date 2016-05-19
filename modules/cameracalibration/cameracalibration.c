@@ -172,6 +172,13 @@ static void caerCameraCalibrationRun(caerModuleData moduleData, size_t argsNumbe
 		// At this point we must have a valid source ID.
 		// Get size information from source.
 		sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
+		if (sourceInfoNode == NULL) {
+			// This should never happen, but we handle it gracefully.
+			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+				"Failed to get source info to setup calibration settings.");
+			return;
+		}
+
 		state->settings.imageWidth = U32T(sshsNodeGetShort(sourceInfoNode, "apsSizeX"));
 		state->settings.imageHeigth = U32T(sshsNodeGetShort(sourceInfoNode, "apsSizeY"));
 	}

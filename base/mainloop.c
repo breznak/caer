@@ -85,8 +85,8 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 
 		// Add per-mainloop shutdown hooks to SSHS for external control.
 		sshsNodePutBool(mainloopThreads.loopThreads[i].mainloopNode, "running", true); // Always reset to true.
-		sshsNodeAddAttributeListener(mainloopThreads.loopThreads[i].mainloopNode, &mainloopThreads.loopThreads[i].running,
-			&caerMainloopShutdownListener);
+		sshsNodeAddAttributeListener(mainloopThreads.loopThreads[i].mainloopNode,
+			&mainloopThreads.loopThreads[i].running, &caerMainloopShutdownListener);
 
 		if ((errno = thrd_create(&mainloopThreads.loopThreads[i].mainloop, &caerMainloopRunner,
 			&mainloopThreads.loopThreads[i])) != thrd_success) {
@@ -256,7 +256,7 @@ static inline caerModuleData findSourceModule(uint16_t source) {
 		// an event source X and that event source doesn't exist ...
 		caerLog(CAER_LOG_ALERT, sshsNodeGetName(mainloopData->mainloopNode),
 			"Impossible to get module data for source ID %" PRIu16 ".", source);
-		thrd_exit(EXIT_FAILURE);
+		return (NULL);
 	}
 
 	return (moduleData);
@@ -264,6 +264,9 @@ static inline caerModuleData findSourceModule(uint16_t source) {
 
 sshsNode caerMainloopGetSourceInfo(uint16_t source) {
 	caerModuleData moduleData = findSourceModule(source);
+	if (moduleData == NULL) {
+		return (NULL);
+	}
 
 	// All sources have a sub-node in SSHS called 'sourceInfo/'.
 	return (sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"));
@@ -271,6 +274,9 @@ sshsNode caerMainloopGetSourceInfo(uint16_t source) {
 
 void *caerMainloopGetSourceState(uint16_t source) {
 	caerModuleData moduleData = findSourceModule(source);
+	if (moduleData == NULL) {
+		return (NULL);
+	}
 
 	return (moduleData->moduleState);
 }

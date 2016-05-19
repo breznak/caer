@@ -676,7 +676,14 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRe
 	caerVisualizerEventHandler eventHandler, caerEventPacketHeader packetHeader) {
 	// Get size information from source.
 	int16_t sourceID = caerEventPacketHeaderGetEventSource(packetHeader);
+
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
+	if (sourceInfoNode == NULL) {
+		// This should never happen, but we handle it gracefully.
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+			"Failed to get source info to setup visualizer resolution.");
+		return (false);
+	}
 
 	// Default sizes if nothing else is specified in sourceInfo node.
 	int16_t sizeX = 320;
