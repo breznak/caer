@@ -116,7 +116,7 @@ static inline ssize_t readUntilDone(int fd, uint8_t *buffer, size_t bytesToRead)
 	while (curRead < bytesToRead) {
 		ssize_t readResult = read(fd, buffer + curRead, bytesToRead - curRead);
 		if (readResult < 0) {
-			// Error.
+			// Error. Sets errno.
 			return (-1);
 		}
 		else if (readResult == 0) {
