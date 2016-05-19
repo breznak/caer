@@ -131,7 +131,7 @@ static void sendEventPacket(outputCommonState state, caerEventPacketHeader packe
 static void orderAndSendEventPackets(outputCommonState state, caerEventPacketContainer currPacketContainer);
 static void handleNewServerConnections(outputCommonState state);
 static void sendFileHeader(outputCommonState state);
-static void sendNetworkHeader(outputCommonState state, int onlyOneClientFD);
+static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD);
 static int outputHandlerThread(void *stateArg);
 static void caerOutputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
@@ -349,7 +349,7 @@ static void commitOutputBuffer(outputCommonState state) {
 		// If message-based protocol, we fill in the now empty buffer with the
 		// appropriate header.
 		if (state->isNetworkMessageBased) {
-			sendNetworkHeader(state, -1);
+			sendNetworkHeader(state, NULL);
 		}
 	}
 
@@ -474,31 +474,26 @@ static void handleNewServerConnections(outputCommonState state) {
 
 	// New connection present!
 	// Put it in the list of FDs and send header, if there is space left, or close.
-	bool putInFDList = false;
-
 	for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
 		if (state->fileDescriptors->fds[i] == -1) {
+			caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
+				"Accepted new TCP connection from client (fd %d).", acceptResult);
+
 			// Empty place in FD list, add this one.
 			state->fileDescriptors->fds[i] = acceptResult;
-			putInFDList = true;
-			break;
+
+			// Successfully connected, send header to client.
+			sendNetworkHeader(state, &state->fileDescriptors->fds[i]);
+
+			return;
 		}
 	}
 
-	if (putInFDList) {
-		// Successfully connected, send header to client.
-		sendNetworkHeader(state, acceptResult);
+	// No space for new connection, just close it (client will exit).
+	caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
+		"Rejected TCP client (fd %d), max connections reached.", acceptResult);
 
-		caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
-			"Accepted new TCP connection from client (fd %d).", acceptResult);
-	}
-	else {
-		// No space for new connection, just close it (client will exit).
-		close(acceptResult);
-
-		caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
-			"Rejected TCP client (fd %d), max connections reached.", acceptResult);
-	}
+	close(acceptResult);
 }
 
 static void sendFileHeader(outputCommonState state) {
@@ -526,7 +521,7 @@ static void sendFileHeader(outputCommonState state) {
 	writeBufferToAll(state, (const uint8_t *) "#!END-HEADER\r\n", 14);
 }
 
-static void sendNetworkHeader(outputCommonState state, int onlyOneClientFD) {
+static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD) {
 	// Send AEDAT 3.1 header (RAW format) for network streams (20 bytes total).
 	int64_t magicNumber = htole64(AEDAT3_NETWORK_MAGIC_NUMBER);
 
@@ -558,8 +553,11 @@ static void sendNetworkHeader(outputCommonState state, int onlyOneClientFD) {
 		// Else, not message-based, so we just write it once at start directly.
 		// We support writing to all clients, or only to one specified client.
 		// This one-client mode is only used for server mode operation.
-		if (onlyOneClientFD >= 0) {
-			writeUntilDone(onlyOneClientFD, networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
+		if (onlyOneClientFD != NULL && *onlyOneClientFD >= 0) {
+			if (!writeUntilDone(*onlyOneClientFD, networkHeader, AEDAT3_NETWORK_HEADER_LENGTH)) {
+				close(*onlyOneClientFD);
+				*onlyOneClientFD = -1;
+			}
 		}
 		else {
 			writeBufferToAll(state, networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
@@ -571,7 +569,7 @@ static int outputHandlerThread(void *stateArg) {
 	outputCommonState state = stateArg;
 
 	if (state->isNetworkStream) {
-		sendNetworkHeader(state, -1);
+		sendNetworkHeader(state, NULL);
 	}
 	else {
 		sendFileHeader(state);
