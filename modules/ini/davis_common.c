@@ -83,7 +83,7 @@ static inline const char *chipIDToName(int16_t chipID) {
 			break;
 
 		case 9:
-			return ("DAVIS346C/");
+			return ("DAVIS346Cbsi/");
 			break;
 	}
 
