@@ -62,15 +62,31 @@ bool PoseCalibration::findMarkers(caerFrameEvent frame) {
     fy = undistortCameraMatrix.at<double>(1,1);
     //cx = undistortCameraMatrix.at<double>(0,2);
     //cy = undistortCameraMatrix.at<double>(1,2);
-    // from zhang method we estimate pixels per mm (focal lenght))
+    // from zhang method we ervecs tvecs to 3d pointsstimate pixels per mm (focal lenght))
     m = ( (fx+fy)/2.0 ) / focal_lenght_mm ;
     // estimate markers pose
     if( corners.size() > 0){
         Mat rvecs, tvecs;
         aruco::estimatePoseSingleMarkers(corners, 0.05, undistortCameraMatrix, undistortDistCoeffs, rvecs, tvecs); 
+        // rvecs tvecs tell us where the marker is in camera coordinates [R T; 0 1] (for homogenous coordinates)
+        // the inverse is [R^t -R^t*T; 0 1]
         for(int k=0; k<corners.size(); k++){ 
-            // draw camera pose
-            aruco::drawAxis(view, undistortCameraMatrix, undistortDistCoeffs, rvecs.row(k), tvecs.row(k), 0.07); 
+        
+            // draw camera pose in respect to marker
+            // aruco::drawAxis(view, undistortCameraMatrix, undistortDistCoeffs, rvecs.row(k), tvecs.row(k), 0.07);                              
+            // project camera pose axis points ..
+            float length = 0.07;
+            vector< Point3f > axisPoints;
+            axisPoints.push_back(Point3f(0, 0, 0));
+            axisPoints.push_back(Point3f(length, 0, 0));
+            axisPoints.push_back(Point3f(0, length, 0));
+            axisPoints.push_back(Point3f(0, 0, length));
+            vector< Point2f > imagePoints;
+            projectPoints(axisPoints, rvecs.row(k), tvecs.row(k), undistortCameraMatrix, undistortDistCoeffs, imagePoints);
+            // draw axis lines
+            line(view, imagePoints[0], imagePoints[1], Scalar(0, 0, 255), 3);
+            line(view, imagePoints[0], imagePoints[2], Scalar(0, 255, 0), 3);
+            line(view, imagePoints[0], imagePoints[3], Scalar(255, 0, 0), 3);                                     
             // get maker size in pixels
             cv::RotatedRect box = cv::minAreaRect(cv::Mat(corners[k]));
             cv::Point2f p = box.size;
@@ -82,29 +98,60 @@ bool PoseCalibration::findMarkers(caerFrameEvent frame) {
             // calculate distance from object
             // distance_mm = object_real_world_mm * focal-length_mm / object_image_sensor_mm
             distance = object_real_world_mm * focal_lenght_mm / object_image_sensor_mm;
-            cout << endl << "distance to maker id " << corners[k][0] << " is " << distance  << endl << endl;
-        }
-        /*for(int i=0; i<corners.size(); i++){
-            aruco::drawAxis(view, undistortCameraMatrix, undistortDistCoeffs, rvecs.row(i), tvecs.row(i), 0.07); 
-            //cout<< rvecs.row(i) <<endl;
-            //cout<< tvecs.row(i) <<endl;
-            
+            //cout << endl << "distance to maker id " << corners[k][0] << " is " << distance  << endl << endl;
+
             // We need inverse of the world->camera transform (camera->world) to calculate
             // camera's location
             Mat R;
-            Rodrigues(rvecs.row(i), R);
+            Rodrigues(rvecs.row(k), R); // rvecs to rotation matrix 
             Mat cameraRotationVector;
-            Rodrigues(R.t(),cameraRotationVector);
+            Rodrigues(R.t(),cameraRotationVector); 
             Mat cameraTranslationVector;
-            multiply(-cameraRotationVector.t(), tvecs.row(i), cameraTranslationVector);
+            multiply(-cameraRotationVector.t(), tvecs.row(k), cameraTranslationVector);
+            
             cout << endl;
             cout << "##############$$$$$$$$$$$$################" << endl;
-            cout << "Camera position: " <<  cameraTranslationVector << endl;
-            cout << "Camera pose: " << cameraRotationVector << endl;
+            cout << "Translation: " <<  cameraTranslationVector << endl;
+            cout << "Roll: " << cameraRotationVector.row(0) << " Pitch: " << cameraRotationVector.row(1) << " Yaw: " << cameraRotationVector.row(2) << endl;
             cout << "##############$$$$$$$$$$$$################" << endl;   
             cout << endl;
+               
+            if(k == 0){   
+                float length = 0.07;
+                vector< Point3f > axisPoints;
+                axisPoints.push_back(Point3f(0, 0, 0));
+                axisPoints.push_back(Point3f(length, 0, 0));
+                axisPoints.push_back(Point3f(0, length, 0));
+                axisPoints.push_back(Point3f(0, 0, length));
+                vector< Point2f > imagePoints;
+                projectPoints(axisPoints, rvecs.row(k), tvecs.row(k), undistortCameraMatrix, undistortDistCoeffs, imagePoints);
+                // draw axis lines
+                //line(view, imagePoints[0], imagePoints[1], Scalar(0, 255, 255), 3);
+                //line(view, imagePoints[0], imagePoints[2], Scalar(0, 255, 255), 3);
+                //line(view, imagePoints[0], imagePoints[3], Scalar(0, 255, 255), 3);    
+                Mat m(imagePoints); 
+                //cerr << m.rows << " " << m.cols << " "<< m.channels() << endl;
+                //cerr << m << endl;
+               
+                //http://stackoverflow.com/questions/12299870/computing-x-y-coordinate-3d-from-image-point
+                cv::Mat uvPoint = cv::Mat::ones(3,1,cv::DataType<double>::type); //u,v,1
+                uvPoint.at<double>(0,0) = m.at<double>(0,0); 
+                uvPoint.at<double>(1,0) = m.at<double>(0,1);
+                cv::Mat tempMat, tempMat2;
+                double s;
+                cv::Mat rotationMatrix(3,3,cv::DataType<double>::type);
+                cv::Rodrigues(rvecs.row(k),rotationMatrix);
+                tempMat = rotationMatrix.inv() * undistortCameraMatrix.inv() * uvPoint;
+                //multiply(rotationMatrix.inv(),tvecs.row(k),tempMat2);
+                //tempMat2 = rotationMatrix.inv() * tvecs.row(k);
+                //s = 285 + tempMat2.at<double>(2,0); //285 represents the height Zconst
+                //s /= tempMat.at<double>(2,0);
+                //std::cout << "P = " << rotationMatrix.inv() * (s * undistortCameraMatrix.inv() * uvPoint - tvecs.row(k)) << std::endl;
                 
-        }*/    
+            }
+                
+        }   
+        
     }    
 
     //place back the markers in the frame
@@ -113,6 +160,7 @@ bool PoseCalibration::findMarkers(caerFrameEvent frame) {
     return(true);
 
 }
+
 
 /* convert2dto3dworldunit converts 2d point into a homogenous point
 * 
