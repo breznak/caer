@@ -8,12 +8,16 @@
 #include <libcaer/events/common.h>
 #include <libcaer/events/packetContainer.h>
 
+#define MAX_HEADER_LINE_SIZE 1024
+#define STD_PACKET_SIZE 10240
+
 struct input_common_header_info {
 	bool isValidHeader;
 	bool isAEDAT3;
-	uint32_t majorVersion;
-	uint32_t minorVersion;
-	uint32_t formatID;
+	int16_t majorVersion;
+	int8_t minorVersion;
+	int8_t formatID;
+	int64_t lastSequenceNumber;
 };
 
 struct input_common_state {
@@ -103,8 +107,6 @@ static bool parseNetworkHeader(inputCommonState state) {
 	return (true);
 }
 
-#define MAX_HEADER_LINE_SIZE 1024
-
 static char *getFileHeaderLine(inputCommonState state) {
 	simpleBuffer buf = state->dataBuffer;
 
@@ -181,7 +183,7 @@ static bool parseFileHeader(inputCommonState state) {
 
 		if (!versionHeader) {
 			// First thing we expect is the version header. We don't support files not having it.
-			if (sscanf(headerLine, "#!AER-DAT%" SCNu32 ".%" SCNu32 "\r\n", &state->header.majorVersion,
+			if (sscanf(headerLine, "#!AER-DAT%" SCNi16 ".%" SCNi8 "\r\n", &state->header.majorVersion,
 				&state->header.minorVersion) == 2) {
 				versionHeader = true;
 
@@ -210,7 +212,7 @@ static bool parseFileHeader(inputCommonState state) {
 				}
 
 				caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
-					"Found AEDAT%" PRIu32 ".%" PRIu32 " version header.", state->header.majorVersion,
+					"Found AEDAT%" PRIi16 ".%" PRIi8 " version header.", state->header.majorVersion,
 					state->header.minorVersion);
 			}
 			else {
@@ -250,7 +252,7 @@ static bool parseFileHeader(inputCommonState state) {
 				}
 
 				caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
-					"Found Format header with value '%s', Format ID %" PRIu32 ".", formatString,
+					"Found Format header with value '%s', Format ID %" PRIi8 ".", formatString,
 					state->header.formatID);
 
 				free(formatString);
@@ -272,7 +274,7 @@ static bool parseFileHeader(inputCommonState state) {
 				caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Found END-HEADER header.");
 			}
 			else {
-				// Then other headers, like Source or Start-Time.
+				// Then other headers, like Source or Start-Time. We only support one active source.
 				// TODO: parse these.
 				caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Header line: '%s'.", headerLine);
 			}
