@@ -99,7 +99,7 @@ static bool newInputBuffer(inputCommonState state) {
 }
 
 static bool parseNetworkHeader(inputCommonState state) {
-	// TODO: handle this.
+	// TODO: handle network header.
 	return (true);
 }
 
@@ -334,11 +334,24 @@ static int inputHandlerThread(void *stateArg) {
 			break;
 		}
 
+		if (!state->header.isAEDAT3) {
+			// TODO: AEDAT 2.0 not yet supported.
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+				"Reading AEDAT 2.0 data not yet supported.");
+			break;
+		}
+
 		// TODO: parse data, create new packet containers with content.
 
-		// Signal availability of new data to the mainloop.
-		atomic_fetch_add_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_release);
+		// Signal availability of new data to the mainloop on packet container commit.
+		//atomic_fetch_add_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_release);
+
+		// Go and get a full buffer on next iteration again, starting at position 0.
+		state->dataBuffer->bufferPosition = 0;
 	}
+
+	// Ensure parent also shuts down, for example on read failures.
+	sshsNodePutBool(state->parentModule->moduleNode, "running", false);
 
 	return (thrd_success);
 }
