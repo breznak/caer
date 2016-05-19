@@ -302,14 +302,10 @@ static bool newOutputBuffer(outputCommonState state) {
 	}
 
 	// Allocate new buffer.
-	simpleBuffer newBuffer = malloc(sizeof(*newBuffer) + (newBufferSize * sizeof(uint8_t)));
+	simpleBuffer newBuffer = simpleBufferInit(newBufferSize);
 	if (newBuffer == NULL) {
 		return (false);
 	}
-
-	// Update new buffer size information.
-	newBuffer->bufferSize = newBufferSize;
-	newBuffer->bufferUsedSize = 0;
 
 	// Commit previous buffer content and then free the memory.
 	if (state->dataBuffer != NULL) {
