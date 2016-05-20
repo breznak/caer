@@ -578,6 +578,9 @@ bool isNetworkMessageBased) {
 	// Initial source ID has to be -1 (invalid).
 	state->packets.sourceID = -1;
 
+	// Add auto-restart setting.
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "autoRestart", true);
+
 	// Handle configuration.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "validOnly", false); // only send valid events
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "keepPackets", false); // ensure all packets are kept
@@ -651,6 +654,11 @@ void caerInputCommonExit(caerModuleData moduleData) {
 
 	// Free allocated memory.
 	free(state->dataBuffer);
+
+	if (sshsNodeGetBool(moduleData->moduleNode, "autoRestart")) {
+		// Prime input module again so that it will try to restart if new devices detected.
+		sshsNodePutBool(moduleData->moduleNode, "running", true);
+	}
 }
 
 void caerInputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
