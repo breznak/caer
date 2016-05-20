@@ -41,6 +41,8 @@ struct input_common_packet_data {
 	size_t currPacketDataSize;
 	/// Current packet offset, index into data.
 	size_t currPacketDataOffset;
+	/// Skip over packets coming from other sources. We only support one!
+	size_t skipSize;
 };
 
 struct input_common_state {
@@ -445,6 +447,21 @@ static bool parsePackets(inputCommonState state) {
 		// more (data) buffers, so we need to reassemble!
 		size_t remainingData = buf->bufferUsedSize - buf->bufferPosition;
 
+		// First thing, handle skip packet requests.
+		if (state->packets.skipSize != 0) {
+			if (state->packets.skipSize >= remainingData) {
+				state->packets.skipSize -= remainingData;
+
+				// Go and get next buffer. bufferPosition is reset.
+				return (true);
+			}
+			else {
+				buf->bufferPosition += state->packets.skipSize;
+				remainingData -= state->packets.skipSize;
+				state->packets.skipSize = 0; // Don't skip anymore, continue as usual.
+			}
+		}
+
 		if (state->packets.currPacketHeaderSize != CAER_EVENT_PACKET_HEADER_SIZE) {
 			if (remainingData < CAER_EVENT_PACKET_HEADER_SIZE) {
 				// Reaching end of buffer, the header is split across two buffers!
@@ -483,8 +500,10 @@ static bool parsePackets(inputCommonState state) {
 					eventSource, state->header.sourceID);
 
 				// Skip packet.
-				// TODO: implement this.
-				return (false);
+				state->packets.skipSize = (size_t) (eventNumber * eventSize);
+				state->packets.currPacketHeaderSize = 0; // Get new header after skipping.
+
+				continue;
 			}
 
 			// Now let's get the right number of events, depending on user settings.
@@ -550,7 +569,7 @@ static bool parsePackets(inputCommonState state) {
 					buf->buffer + buf->bufferPosition, state->packets.currPacketDataSize);
 
 				// This packet is fully copied and done, so reset variables for next iteration.
-				state->packets.currPacketHeaderSize = 0;
+				state->packets.currPacketHeaderSize = 0; // Get new header next iteration.
 				buf->bufferPosition += state->packets.currPacketDataSize;
 			}
 		}
