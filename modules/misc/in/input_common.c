@@ -406,6 +406,10 @@ static bool parsePackets(inputCommonState state) {
 			// Allocate space for the full packet, so we can reassemble it.
 			state->packets.currPacketDataSize = (size_t) (eventCapacity * eventSize);
 
+			caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
+				"Allocating %zu bytes for newly read event packet.",
+				CAER_EVENT_PACKET_HEADER_SIZE + state->packets.currPacketDataSize);
+
 			state->packets.currPacket = malloc(CAER_EVENT_PACKET_HEADER_SIZE + state->packets.currPacketDataSize);
 			if (state->packets.currPacket == NULL) {
 				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
@@ -654,6 +658,8 @@ void caerInputCommonExit(caerModuleData moduleData) {
 
 	// Free allocated memory.
 	free(state->dataBuffer);
+
+	free(state->packets.currPacket);
 
 	if (sshsNodeGetBool(moduleData->moduleNode, "autoRestart")) {
 		// Prime input module again so that it will try to restart if new devices detected.
