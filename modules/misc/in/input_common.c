@@ -22,13 +22,13 @@ struct input_common_header_info {
 	int8_t minorVersion;
 	/// AEDAT 3 Format ID (from Format header), used for decoding.
 	int8_t formatID;
+	/// Track source ID (cannot change!) to read data for. One source per I/O module!
+	int16_t sourceID;
 	/// Keep track of the sequence number for message-based protocols.
 	int64_t networkSequenceNumber;
 };
 
 struct input_common_packet_data {
-	/// Track source ID (cannot change!) to read data for. One source per I/O module!
-	int16_t sourceID;
 	/// Track last packet container's highest event timestamp that was sent out.
 	int64_t lastTimestamp;
 	/// Current packet header, to support headers being split across buffers.
@@ -87,6 +87,7 @@ size_t CAER_INPUT_COMMON_STATE_STRUCT_SIZE = sizeof(struct input_common_state);
 static bool newInputBuffer(inputCommonState state);
 static bool parseNetworkHeader(inputCommonState state);
 static char *getFileHeaderLine(inputCommonState state);
+static void parseSourceString(char *sourceString, inputCommonState state);
 static bool parseFileHeader(inputCommonState state);
 static bool parseHeader(inputCommonState state);
 static bool parsePackets(inputCommonState state);
@@ -183,6 +184,67 @@ static char *getFileHeaderLine(inputCommonState state) {
 	return (NULL);
 }
 
+static void parseSourceString(char *sourceString, inputCommonState state) {
+	// TODO: implement sourceString itself for files, and some way to parse sizes then.
+
+	// Create SourceInfo node.
+	sshsNode sourceInfoNode = sshsGetRelativeNode(state->parentModule->moduleNode, "sourceInfo/");
+
+	int16_t dvsSizeX = 0, dvsSizeY = 0;
+	int16_t apsSizeX = 0, apsSizeY = 0;
+
+	// Determine sizes via known chip information.
+	if (caerStrEquals(sourceString, "DVS128")) {
+		dvsSizeX = dvsSizeY = 128;
+	}
+	else if (caerStrEquals(sourceString, "DAVIS240A") || caerStrEquals(sourceString, "DAVIS240B")
+		|| caerStrEquals(sourceString, "DAVIS240C")) {
+		dvsSizeX = apsSizeX = 240;
+		dvsSizeY = apsSizeY = 180;
+	}
+	else if (caerStrEquals(sourceString, "DAVIS128")) {
+		dvsSizeX = apsSizeX = dvsSizeY = apsSizeY = 128;
+	}
+	else if (caerStrEquals(sourceString, "DAVIS346A") || caerStrEquals(sourceString, "DAVIS346B")
+		|| caerStrEquals(sourceString, "DAVIS346Cbsi")) {
+		dvsSizeX = apsSizeX = 346;
+		dvsSizeY = apsSizeY = 260;
+	}
+	else if (caerStrEquals(sourceString, "DAVIS640")) {
+		dvsSizeX = apsSizeX = 640;
+		dvsSizeY = apsSizeY = 480;
+	}
+	else if (caerStrEquals(sourceString, "DAVISHet640")) {
+		dvsSizeX = 320;
+		dvsSizeY = 240;
+		apsSizeX = 640;
+		apsSizeY = 480;
+	}
+	else if (caerStrEquals(sourceString, "DAVIS208")) {
+		dvsSizeX = apsSizeX = 208;
+		dvsSizeY = apsSizeY = 192;
+	}
+	else {
+		// Default fall-back of 640x480 (VGA).
+		caerLog(CAER_LOG_WARNING, state->parentModule->moduleSubSystemString,
+			"Impossible to determine display sizes from Source information/string. Falling back to 640x480 (VGA).");
+		dvsSizeX = apsSizeX = 640;
+		dvsSizeY = apsSizeY = 480;
+	}
+
+	// Put size information inside sourceInfo node.
+	sshsNodePutShort(sourceInfoNode, "dvsSizeX", dvsSizeX);
+	sshsNodePutShort(sourceInfoNode, "dvsSizeY", dvsSizeY);
+
+	if (apsSizeX != 0 && apsSizeY != 0) {
+		sshsNodePutShort(sourceInfoNode, "apsSizeX", apsSizeX);
+		sshsNodePutShort(sourceInfoNode, "apsSizeY", apsSizeY);
+	}
+
+	sshsNodePutShort(sourceInfoNode, "dataSizeX", (dvsSizeX > apsSizeX) ? (dvsSizeX) : (apsSizeX));
+	sshsNodePutShort(sourceInfoNode, "dataSizeY", (dvsSizeY > apsSizeY) ? (dvsSizeY) : (apsSizeY));
+}
+
 static bool parseFileHeader(inputCommonState state) {
 	// We expect that the full header part is contained within
 	// this one data buffer.
@@ -192,6 +254,7 @@ static bool parseFileHeader(inputCommonState state) {
 	// marker with !END-HEADER.
 	bool versionHeader = false;
 	bool formatHeader = false;
+	bool sourceHeader = false;
 	bool endHeader = false;
 
 	while (!endHeader) {
@@ -202,8 +265,9 @@ static bool parseFileHeader(inputCommonState state) {
 			// the right way for headers to stop, so we consider this valid IFF we
 			// already got at least the version header.
 			if (versionHeader && !state->header.isAEDAT3) {
-				// Got an AEDAT 2.0 version header, that's fine.
-				goto headerGood;
+				// Parsed AEDAT 2.0 header successfully.
+				state->header.isValidHeader = true;
+				return (true);
 			}
 
 			return (false);
@@ -292,36 +356,63 @@ static bool parseFileHeader(inputCommonState state) {
 				return (false);
 			}
 		}
+		else if (state->header.isAEDAT3 && !sourceHeader) {
+			// Then the source header. Only with AEDAT 3.X. We only support one active source.
+			char *sourceString = NULL;
+
+			if (sscanf(headerLine, "#Source %" SCNi16 ": %ms\r\n", &state->header.sourceID, &sourceString) == 2) {
+				sourceHeader = true;
+
+				// Parse source string to get needed sourceInfo parameters.
+				parseSourceString(sourceString, state);
+
+				caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
+					"Found Source header with value '%s', Source ID %" PRIi16 ".", sourceString,
+					state->header.sourceID);
+
+				free(sourceString);
+			}
+			else {
+				free(headerLine);
+
+				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+					"No compliant Source header found. Invalid file.");
+				return (false);
+			}
+		}
 		else {
-			// Now we either have other header lines with AEDAT 2.0, or the END-HEADER with
-			// AEDAT 3.1. We check this before the other possible header lines.
+			// Now we either have other header lines with AEDAT 2.0/AEDAT 3.1, or
+			// the END-HEADER with AEDAT 3.1. We check this before the other possible,
+			// because it terminates the AEDAT 3.1 header, so we stop in that case.
 			if (caerStrEquals(headerLine, "#!END-HEADER\r\n")) {
 				endHeader = true;
 
 				caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Found END-HEADER header.");
 			}
 			else {
-				// Then other headers, like Source or Start-Time. We only support one active source.
-				// TODO: parse these.
-				caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Header line: '%s'.", headerLine);
+				// Then other headers, like Start-Time.
+				if (caerStrEqualsUpTo(headerLine, "#Start-Time: %s", 13)) {
+					char *startTimeString = NULL;
+
+					if (sscanf(headerLine, "#Start-Time: %m[^\r]s\n", &startTimeString) == 1) {
+						caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString, "Recording was taken on %s.",
+							startTimeString);
+						free(startTimeString);
+					}
+				}
+				else {
+					headerLine[strlen(headerLine) - 2] = '\0'; // Shorten string to avoid printing ending \r\n.
+					caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Header line: '%s'.",
+						headerLine);
+				}
 			}
 		}
 
 		free(headerLine);
 	}
 
-	headerGood: state->header.isValidHeader = true;
-
-	// Create SourceInfo node.
-	sshsNode sourceInfoNode = sshsGetRelativeNode(state->parentModule->moduleNode, "sourceInfo/");
-
-	// TODO: this needs to be dynamic!
-	sshsNodePutShort(sourceInfoNode, "dvsSizeX", 640);
-	sshsNodePutShort(sourceInfoNode, "dvsSizeY", 480);
-
-	sshsNodePutShort(sourceInfoNode, "apsSizeX", 640);
-	sshsNodePutShort(sourceInfoNode, "apsSizeY", 480);
-
+	// Parsed AEDAT 3.1 header successfully.
+	state->header.isValidHeader = true;
 	return (true);
 }
 
@@ -385,14 +476,11 @@ static bool parsePackets(inputCommonState state) {
 			int32_t eventSize = caerEventPacketHeaderGetEventSize(packet);
 
 			// First we verify that the source ID remained unique (only one source per I/O module supported!).
-			if (state->packets.sourceID == -1) {
-				state->packets.sourceID = eventSource; // Remember this!
-			}
-			else if (state->packets.sourceID != eventSource) {
+			if (state->header.sourceID != eventSource) {
 				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
 					"An input module can only handle packets from the same source! "
 						"A packet with source %" PRIi16 " was read, but this input module expects only packets from source %" PRIi16 ".",
-					eventSource, state->packets.sourceID);
+					eventSource, state->header.sourceID);
 
 				// Skip packet.
 				// TODO: implement this.
@@ -578,9 +666,6 @@ bool isNetworkMessageBased) {
 	// Store network/file, message-based or not information.
 	state->isNetworkStream = isNetworkStream;
 	state->isNetworkMessageBased = isNetworkMessageBased;
-
-	// Initial source ID has to be -1 (invalid).
-	state->packets.sourceID = -1;
 
 	// Add auto-restart setting.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "autoRestart", true);
