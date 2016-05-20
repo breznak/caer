@@ -84,7 +84,10 @@ struct output_common_state {
 	/// The output handling thread (separate as to not hold up processing).
 	thrd_t outputThread;
 	/// Track source ID (cannot change!). One source per I/O module!
-	int16_t sourceID;
+	atomic_int_fast16_t sourceID;
+	/// Source information node for that particular source ID.
+	/// Must be set by mainloop, external threads cannot get it directly!
+	sshsNode sourceInfoNode;
 	/// The file descriptors for writing and server mode.
 	outputCommonFDs fileDescriptors;
 	/// Network-like stream or file-like stream. Matters for header format.
@@ -176,14 +179,24 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 			int16_t eventSource = caerEventPacketHeaderGetEventSource(packetHeader);
 
 			// Check that source is unique.
-			if (state->sourceID == -1) {
-				state->sourceID = eventSource; // Remember this!
+			int16_t sourceID = I16T(atomic_load_explicit(&state->sourceID, memory_order_relaxed));
+
+			if (sourceID == -1) {
+				state->sourceInfoNode = caerMainloopGetSourceInfo(U16T(eventSource));
+				if (state->sourceInfoNode == NULL) {
+					// This should never happen, but we handle it gracefully.
+					caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+						"Failed to get source info to setup output module.");
+					return;
+				}
+
+				atomic_store(&state->sourceID, eventSource); // Remember this!
 			}
-			else if (state->sourceID != eventSource) {
+			else if (sourceID != eventSource) {
 				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
 					"An output module can only handle packets from the same source! "
-						"A packet with source %d was sent, but this output module expects only packets from source %d.",
-					eventSource, state->sourceID);
+						"A packet with source %" PRIi16 " was sent, but this output module expects only packets from source %" PRIi16 ".",
+					eventSource, sourceID);
 				continue;
 			}
 
@@ -426,7 +439,7 @@ static void orderAndSendEventPackets(outputCommonState state, caerEventPacketCon
 			// Smaller TS than already sent, illegal, ignore packet.
 			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
 				"Detected timestamp going back, expected at least %" PRIi64 " but got %" PRIi64 "."
-				"Ignoring packet of type %" PRIi16 " from source %" PRIi16 ", with %" PRIi16 " events!",
+				"Ignoring packet of type %" PRIi16 " from source %" PRIi16 ", with %" PRIi32 " events!",
 				state->lastTimestamp, cpFirstEventTimestamp, caerEventPacketHeaderGetEventType(cpPacket),
 				caerEventPacketHeaderGetEventSource(cpPacket), caerEventPacketHeaderGetEventNumber(cpPacket));
 		}
@@ -448,9 +461,6 @@ static void orderAndSendEventPackets(outputCommonState state, caerEventPacketCon
 
 	// Remember highest timestamp for check in next iteration.
 	state->lastTimestamp = highestTimestamp;
-
-	// Free all remaining packet container memory.
-	caerEventPacketContainerFree(currPacketContainer);
 }
 
 static void handleNewServerConnections(outputCommonState state) {
@@ -498,8 +508,9 @@ static void sendFileHeader(outputCommonState state) {
 
 	writeBufferToAll(state, (const uint8_t *) "#Format: RAW\r\n", 14);
 
-	// TODO: write source info.
-	// #Source <ID>: <DESCRIPTION>\r\n
+	char *sourceString = sshsNodeGetString(state->sourceInfoNode, "sourceString");
+	writeBufferToAll(state, (const uint8_t *) sourceString, strlen(sourceString));
+	free(sourceString);
 
 	time_t currentTimeEpoch = time(NULL);
 	tzset();
@@ -564,18 +575,32 @@ static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD) {
 static int outputHandlerThread(void *stateArg) {
 	outputCommonState state = stateArg;
 
-	if (state->isNetworkStream) {
-		sendNetworkHeader(state, NULL);
-	}
-	else {
-		sendFileHeader(state);
+	bool headerSent = false;
+
+	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
+		// Wait for source to be defined.
+		int16_t sourceID = I16T(atomic_load_explicit(&state->sourceID, memory_order_relaxed));
+		if (sourceID == -1) {
+			continue;
+		}
+
+		// Send appropriate header.
+		if (state->isNetworkStream) {
+			sendNetworkHeader(state, NULL);
+		}
+		else {
+			sendFileHeader(state);
+		}
+
+		headerSent = true;
+		break;
 	}
 
 	// If no data is available on the transfer ring-buffer, sleep for 500µs (0.5 ms)
 	// to avoid wasting resources in a busy loop.
 	struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 500000 };
 
-	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
+	while (atomic_load_explicit(&state->running, memory_order_relaxed) && headerSent) {
 		// Handle new connections in server mode.
 		if (state->isNetworkStream && state->fileDescriptors->serverFd >= 0) {
 			handleNewServerConnections(state);
@@ -610,13 +635,21 @@ static int outputHandlerThread(void *stateArg) {
 		}
 
 		orderAndSendEventPackets(state, currPacketContainer);
+
+		// Free all remaining packet container memory.
+		caerEventPacketContainerFree(currPacketContainer);
 	}
 
 	// Handle shutdown, write out all content remaining in the transfer ring-buffer
 	// and write the packets out to the file descriptor.
 	caerEventPacketContainer packetContainer;
 	while ((packetContainer = ringBufferGet(state->transferRing)) != NULL) {
-		orderAndSendEventPackets(state, packetContainer);
+		if (headerSent) {
+			orderAndSendEventPackets(state, packetContainer);
+		}
+
+		// Free all remaining packet container memory.
+		caerEventPacketContainerFree(packetContainer);
 	}
 
 	return (thrd_success);
@@ -659,7 +692,7 @@ bool isNetworkMessageBased) {
 	state->isNetworkMessageBased = isNetworkMessageBased;
 
 	// Initial source ID has to be -1 (invalid).
-	state->sourceID = -1;
+	atomic_store(&state->sourceID, -1);
 
 	// Handle configuration.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "validOnly", false); // only send valid events
