@@ -902,13 +902,13 @@ bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacket
 	//al_draw_text(state->displayFont, accelColor, accelXScaled, accelYScaled, 0, valStr);
 
 	// Gyroscope pitch(X), yaw(Y), roll(Z) as lines.
-	float gyroXScaled = centerPointY - gyroX * scaleFactorGyro;
+	float gyroXScaled = centerPointY + gyroX * scaleFactorGyro;
 	RESET_LIMIT_POS(gyroXScaled, maxSizeY - 2 - lineThickness);
 	RESET_LIMIT_NEG(gyroXScaled, 1 + lineThickness);
 	float gyroYScaled = centerPointX + gyroY * scaleFactorGyro;
 	RESET_LIMIT_POS(gyroYScaled, maxSizeX - 2 - lineThickness);
 	RESET_LIMIT_NEG(gyroYScaled, 1 + lineThickness);
-	float gyroZScaled = centerPointX + gyroZ * scaleFactorGyro;
+	float gyroZScaled = centerPointX - gyroZ * scaleFactorGyro;
 	RESET_LIMIT_POS(gyroZScaled, maxSizeX - 2 - lineThickness);
 	RESET_LIMIT_NEG(gyroZScaled, 1 + lineThickness);
 
