@@ -443,7 +443,7 @@ static bool parsePackets(inputCommonState state) {
 			// or that validOnly mode is disabled. Just copy data!
 			if (state->packets.currPacketDataSize >= remainingData) {
 				// We need to copy more data than in this buffer.
-				memcpy(state->packets.currPacket + state->packets.currPacketDataOffset,
+				memcpy(((uint8_t *) state->packets.currPacket) + state->packets.currPacketDataOffset,
 					buf->buffer + buf->bufferPosition, remainingData);
 
 				state->packets.currPacketDataOffset += remainingData;
@@ -454,7 +454,7 @@ static bool parsePackets(inputCommonState state) {
 			}
 			else {
 				// We copy the last bytes of data and we're done.
-				memcpy(state->packets.currPacket + state->packets.currPacketDataOffset,
+				memcpy(((uint8_t *) state->packets.currPacket) + state->packets.currPacketDataOffset,
 					buf->buffer + buf->bufferPosition, state->packets.currPacketDataSize);
 
 				// This packet is fully copied and done, so reset variables for next iteration.
