@@ -53,19 +53,19 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 
 	// USB port/bus/SN settings/restrictions.
 	// These can be used to force connection to one specific device at startup.
-	sshsNodePutShortIfAbsent(moduleData->moduleNode, "BusNumber", 0);
-	sshsNodePutShortIfAbsent(moduleData->moduleNode, "DevAddress", 0);
-	sshsNodePutStringIfAbsent(moduleData->moduleNode, "SerialNumber", "");
+	sshsNodePutShortIfAbsent(moduleData->moduleNode, "busNumber", 0);
+	sshsNodePutShortIfAbsent(moduleData->moduleNode, "devAddress", 0);
+	sshsNodePutStringIfAbsent(moduleData->moduleNode, "serialNumber", "");
 
 	// Add auto-restart setting.
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "Auto-Restart", true);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "autoRestart", true);
 
 	// Start data acquisition, and correctly notify mainloop of new data and module of exceptional
 	// shutdown cases (device pulled, ...).
-	char *serialNumber = sshsNodeGetString(moduleData->moduleNode, "SerialNumber");
+	char *serialNumber = sshsNodeGetString(moduleData->moduleNode, "serialNumber");
 	moduleData->moduleState = caerDeviceOpen(moduleData->moduleID, CAER_DEVICE_DVS128,
-		U8T(sshsNodeGetShort(moduleData->moduleNode, "BusNumber")),
-		U8T(sshsNodeGetShort(moduleData->moduleNode, "DevAddress")), serialNumber);
+		U8T(sshsNodeGetShort(moduleData->moduleNode, "busNumber")),
+		U8T(sshsNodeGetShort(moduleData->moduleNode, "devAddress")), serialNumber);
 	free(serialNumber);
 
 	if (moduleData->moduleState == NULL) {
@@ -149,7 +149,7 @@ static void caerInputDVS128Exit(caerModuleData moduleData) {
 
 	caerDeviceClose((caerDeviceHandle *) &moduleData->moduleState);
 
-	if (sshsNodeGetBool(moduleData->moduleNode, "Auto-Restart")) {
+	if (sshsNodeGetBool(moduleData->moduleNode, "autoRestart")) {
 		// Prime input module again so that it will try to restart if new devices detected.
 		sshsNodePutBool(moduleData->moduleNode, "running", true);
 	}
