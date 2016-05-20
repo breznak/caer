@@ -141,6 +141,12 @@ bool caerInputDAVISInit(caerModuleData moduleData, uint16_t deviceType) {
 	sshsNodePutBool(sourceInfoNode, "extInputHasGenerator", devInfo.extInputHasGenerator);
 	sshsNodePutBool(sourceInfoNode, "extInputHasExtraDetectors", devInfo.extInputHasExtraDetectors);
 
+	// Put source information for generic visualization, to be used to display and debug filter information.
+	sshsNodePutShort(sourceInfoNode, "dataSizeX",
+		(devInfo.dvsSizeX > devInfo.apsSizeX) ? (devInfo.dvsSizeX) : (devInfo.apsSizeX));
+	sshsNodePutShort(sourceInfoNode, "dataSizeY",
+		(devInfo.dvsSizeY > devInfo.apsSizeY) ? (devInfo.dvsSizeY) : (devInfo.apsSizeY));
+
 	caerModuleSetSubSystemString(moduleData, devInfo.deviceString);
 
 	// Ensure good defaults for data acquisition settings.

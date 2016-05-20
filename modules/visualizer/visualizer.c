@@ -693,7 +693,8 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRe
 	int16_t sizeY = 240;
 
 	// Get sizes from sourceInfo node. visualizer prefix takes precedence,
-	// for APS and DVS images, alternative prefixes are provided.
+	// for APS and DVS images, alternative prefixes are provided, as well
+	// as for generic data visualization.
 	if (sshsNodeAttributeExists(sourceInfoNode, "visualizerSizeX", SHORT)) {
 		sizeX = sshsNodeGetShort(sourceInfoNode, "visualizerSizeX");
 		sizeY = sshsNodeGetShort(sourceInfoNode, "visualizerSizeY");
@@ -707,6 +708,10 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRe
 		&& caerEventPacketHeaderGetEventType(packetHeader) == FRAME_EVENT) {
 		sizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
 		sizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
+	}
+	else if (sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SHORT)) {
+		sizeX = sshsNodeGetShort(sourceInfoNode, "dataSizeX");
+		sizeY = sshsNodeGetShort(sourceInfoNode, "dataSizeY");
 	}
 
 	moduleData->moduleState = caerVisualizerInit(renderer, eventHandler, sizeX, sizeY, VISUALIZER_DEFAULT_ZOOM, true,

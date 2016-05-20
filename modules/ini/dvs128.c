@@ -87,9 +87,9 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 	sshsNodePutShort(sourceInfoNode, "dvsSizeX", devInfo.dvsSizeX);
 	sshsNodePutShort(sourceInfoNode, "dvsSizeY", devInfo.dvsSizeY);
 
-	// Put source information for "virtual" APS frame that can be used to display and debug filter information.
-	sshsNodePutShort(sourceInfoNode, "apsSizeX", devInfo.dvsSizeX);
-	sshsNodePutShort(sourceInfoNode, "apsSizeY", devInfo.dvsSizeY);
+	// Put source information for generic visualization, to be used to display and debug filter information.
+	sshsNodePutShort(sourceInfoNode, "dataSizeX", devInfo.dvsSizeX);
+	sshsNodePutShort(sourceInfoNode, "dataSizeY", devInfo.dvsSizeY);
 
 	caerModuleSetSubSystemString(moduleData, devInfo.deviceString);
 
