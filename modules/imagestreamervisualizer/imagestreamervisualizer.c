@@ -9,7 +9,7 @@
 #include "base/module.h"
 #include <allegro5/allegro_audio.h>
 #include <allegro5/allegro_acodec.h>
- 
+
 
 static bool caerImagestreamerVisualizerInit(caerModuleData moduleData);
 static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t argsNumber, va_list args);
@@ -22,6 +22,9 @@ NULL, .moduleExit = &caerImagestreamerVisualizerExit };
 void caerImagestreamerVisualizer(uint16_t moduleID, unsigned char * disp_img, const int disp_img_size,
 	double * classific_results, int * classific_sizes, int max_img_qty) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageStreamerVisualizer");
+	if (moduleData == NULL) {
+		return;
+	}
 
 	caerModuleSM(&caerImagestreamerVisualizerFunctions, moduleData, sizeof(struct imagestreamervisualizer_state), 5,
 		disp_img, disp_img_size, classific_results, classific_sizes, max_img_qty);
@@ -51,7 +54,7 @@ static bool caerImagestreamerVisualizerInit(caerModuleData moduleData) {
       fprintf(stderr, "failed to reserve samples!\n");
       return -1;
     }
- 
+
 
     return (true);
 }
@@ -112,7 +115,7 @@ static void caerImagestreamerVisualizerRun(caerModuleData moduleData, size_t arg
         sample = al_load_sample(AUDIO_BEEP_FILE);
         al_reserve_samples(1);
         if (!sample) {
-           printf( "Audio clip sample not loaded!\n" ); 
+           printf( "Audio clip sample not loaded!\n" );
         }else{
             al_play_sample(sample, 100.0, 0.0,1.0, ALLEGRO_PLAYMODE_ONCE, 0);
             al_rest(0.06);

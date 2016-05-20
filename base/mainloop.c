@@ -137,10 +137,11 @@ caerModuleData caerMainloopFindModule(uint16_t moduleID, const char *moduleShort
 	HASH_FIND(hh, mainloopData->modules, &moduleID, sizeof(uint16_t), moduleData);
 
 	if (moduleData == NULL) {
-		// Create module (will succeed! If errors happen, whole mainloop dies).
+		// Create module and initialize it. May fail!
 		moduleData = caerModuleInitialize(moduleID, moduleShortName, mainloopData->mainloopNode);
-
-		HASH_ADD(hh, mainloopData->modules, moduleID, sizeof(uint16_t), moduleData);
+		if (moduleData != NULL) {
+			HASH_ADD(hh, mainloopData->modules, moduleID, sizeof(uint16_t), moduleData);
+		}
 	}
 
 	return (moduleData);

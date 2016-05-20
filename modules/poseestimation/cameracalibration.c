@@ -27,6 +27,9 @@ static struct caer_module_functions caerPoseCalibrationFunctions = { .moduleInit
 
 void caerPoseCalibration(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "PoseEstimation");
+	if (moduleData == NULL) {
+		return;
+	}
 
 	caerModuleSM(&caerPoseCalibrationFunctions, moduleData, sizeof(struct PoseCalibrationState_struct), 2, polarity,
 		frame);
@@ -43,13 +46,13 @@ static bool caerPoseCalibrationInit(caerModuleData moduleData) {
 
 	// Update all settings.
 	updateSettings(moduleData);
-	
+
 	// Initialize C++ class for OpenCV integration.
 	state->cpp_class = posecalibration_init(&state->settings);
 	if (state->cpp_class == NULL) {
 		return (false);
 	}
-	
+
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 	//not loaded at the init
@@ -60,7 +63,7 @@ static bool caerPoseCalibrationInit(caerModuleData moduleData) {
 
 static void updateSettings(caerModuleData moduleData) {
 	PoseCalibrationState state = moduleData->moduleState;
-	
+
         state->settings.detectMarkers = sshsNodeGetBool(moduleData->moduleNode, "detectMarkers");
 	state->settings.saveFileName = sshsNodeGetString(moduleData->moduleNode, "saveFileName");
 	state->settings.loadFileName = sshsNodeGetString(moduleData->moduleNode, "loadFileName");
@@ -93,7 +96,7 @@ static void caerPoseCalibrationRun(caerModuleData moduleData, size_t argsNumber,
 	caerFrameEventPacket frame = va_arg(args, caerFrameEventPacket);
 
 	PoseCalibrationState state = moduleData->moduleState;
- 
+
         // At this point we always try to load the calibration settings for undistortion.
 	// Maybe they just got created or exist from a previous run.
 	if (!state->calibrationLoaded) {
@@ -117,8 +120,8 @@ static void caerPoseCalibrationRun(caerModuleData moduleData, size_t argsNumber,
 		CAER_FRAME_ITERATOR_VALID_END
 
 	}
-	
-        // update settings 
+
+        // update settings
         updateSettings(moduleData);
 
 }

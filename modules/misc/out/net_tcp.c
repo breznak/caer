@@ -13,6 +13,9 @@ static struct caer_module_functions caerOutputNetTCPFunctions = { .moduleInit = 
 
 void caerOutputNetTCP(uint16_t moduleID, size_t outputTypesNumber, ...) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "NetTCPOutput");
+	if (moduleData == NULL) {
+		return;
+	}
 
 	va_list args;
 	va_start(args, outputTypesNumber);

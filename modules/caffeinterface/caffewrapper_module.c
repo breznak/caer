@@ -24,8 +24,11 @@ static struct caer_module_functions caerCaffeWrapperFunctions = { .moduleInit = 
 NULL, .moduleExit = &caerCaffeWrapperExit };
 
 const char * caerCaffeWrapper(uint16_t moduleID, char ** file_string, double *classificationResults, int max_img_qty) {
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "caerCaffeWrapper");
+	if (moduleData == NULL) {
+		return (NULL);
+	}
 
-    caerModuleData moduleData = caerMainloopFindModule(moduleID, "caerCaffeWrapper");
 	caerModuleSM(&caerCaffeWrapperFunctions, moduleData, sizeof(struct caffewrapper_state), 3, file_string, classificationResults, max_img_qty);
 
 	return (NULL);

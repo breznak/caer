@@ -12,6 +12,9 @@ static struct caer_module_functions caerOutputUnixSFunctions = { .moduleInit = &
 
 void caerOutputUnixS(uint16_t moduleID, size_t outputTypesNumber, ...) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "UnixSocketOutput");
+	if (moduleData == NULL) {
+		return;
+	}
 
 	va_list args;
 	va_start(args, outputTypesNumber);

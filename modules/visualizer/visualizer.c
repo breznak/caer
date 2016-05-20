@@ -668,6 +668,9 @@ void caerVisualizer(uint16_t moduleID, const char *name, caerVisualizerRenderer 
 	visualizerName[10 + nameLength] = '\0';
 
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, visualizerName);
+	if (moduleData == NULL) {
+		return;
+	}
 
 	caerModuleSM(&caerVisualizerFunctions, moduleData, 0, 3, renderer, eventHandler, packetHeader);
 }

@@ -12,6 +12,9 @@ static struct caer_module_functions caerInputFileFunctions = { .moduleInit = &ca
 
 caerEventPacketContainer caerInputFile(uint16_t moduleID) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "FileInput");
+	if (moduleData == NULL) {
+		return (NULL);
+	}
 
 	caerEventPacketContainer result = NULL;
 

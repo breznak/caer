@@ -7,11 +7,6 @@
 
 #include "module.h"
 
-// For thrd_exit(), since this all happens inside threads.
-#ifdef HAVE_PTHREADS
-	#include "ext/c11threads_posix.h"
-#endif
-
 static void caerModuleShutdownListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
@@ -84,7 +79,7 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	caerModuleData moduleData = calloc(1, sizeof(struct caer_module_data));
 	if (moduleData == NULL) {
 		caerLog(CAER_LOG_ALERT, nameString, "Failed to allocate memory for module. Error: %d.", errno);
-		thrd_exit(EXIT_FAILURE);
+		return (NULL);
 	}
 
 	// Set module ID for later identification (hash-table key).
@@ -105,7 +100,7 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 		free(moduleData);
 
 		caerLog(CAER_LOG_ALERT, nameString, "Failed to allocate configuration node for module.");
-		thrd_exit(EXIT_FAILURE);
+		return (NULL);
 	}
 
 	// Setup default full log string name.
@@ -114,7 +109,7 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 		free(moduleData);
 
 		caerLog(CAER_LOG_ALERT, nameString, "Failed to allocate subsystem string for module.");
-		thrd_exit(EXIT_FAILURE);
+		return (NULL);
 	}
 
 	strncpy(moduleData->moduleSubSystemString, nameString, nameLength);

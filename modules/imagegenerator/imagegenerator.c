@@ -76,6 +76,9 @@ void caerImageGenerator(uint16_t moduleID, caerPolarityEventPacket polarity, cha
     caerFrameEventPacket frame, char ** frame_ptr, int* frame_w, int* frame_h) {
 
     caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageGenerator");
+    if (moduleData == NULL) {
+    	return;
+    }
 
     caerModuleSM(&caerImageGeneratorFunctions, moduleData, sizeof (struct imagegenerator_state), 10,
             polarity, file_strings_classify, max_img_qty, classify_img_size, display_img_ptr, display_img_size, frame, frame_ptr, frame_w, frame_h);

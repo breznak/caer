@@ -13,6 +13,9 @@ static struct caer_module_functions caerOutputNetUDPFunctions = { .moduleInit = 
 
 void caerOutputNetUDP(uint16_t moduleID, size_t outputTypesNumber, ...) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "NetUDPOutput");
+	if (moduleData == NULL) {
+		return;
+	}
 
 	va_list args;
 	va_start(args, outputTypesNumber);
