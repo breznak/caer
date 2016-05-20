@@ -244,27 +244,27 @@ caerMainloopData caerMainloopGetReference(void) {
 	return (glMainloopData);
 }
 
-static inline caerModuleData findSourceModule(uint16_t source) {
+static inline caerModuleData findSourceModule(uint16_t sourceID) {
 	caerMainloopData mainloopData = glMainloopData;
 	caerModuleData moduleData;
 
 	// This is only ever called from within modules running in a main-loop.
 	// So always inside the same thread, needing thus no synchronization.
-	HASH_FIND(hh, mainloopData->modules, &source, sizeof(uint16_t), moduleData);
+	HASH_FIND(hh, mainloopData->modules, &sourceID, sizeof(uint16_t), moduleData);
 
 	if (moduleData == NULL) {
 		// This is impossible if used correctly, you can't have a packet with
 		// an event source X and that event source doesn't exist ...
 		caerLog(CAER_LOG_ALERT, sshsNodeGetName(mainloopData->mainloopNode),
-			"Impossible to get module data for source ID %" PRIu16 ".", source);
+			"Impossible to get module data for source ID %" PRIu16 ".", sourceID);
 		return (NULL);
 	}
 
 	return (moduleData);
 }
 
-sshsNode caerMainloopGetSourceInfo(uint16_t source) {
-	caerModuleData moduleData = findSourceModule(source);
+sshsNode caerMainloopGetSourceInfo(uint16_t sourceID) {
+	caerModuleData moduleData = findSourceModule(sourceID);
 	if (moduleData == NULL) {
 		return (NULL);
 	}
@@ -273,8 +273,8 @@ sshsNode caerMainloopGetSourceInfo(uint16_t source) {
 	return (sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"));
 }
 
-void *caerMainloopGetSourceState(uint16_t source) {
-	caerModuleData moduleData = findSourceModule(source);
+void *caerMainloopGetSourceState(uint16_t sourceID) {
+	caerModuleData moduleData = findSourceModule(sourceID);
 	if (moduleData == NULL) {
 		return (NULL);
 	}

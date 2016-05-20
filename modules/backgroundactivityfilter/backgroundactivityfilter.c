@@ -152,7 +152,7 @@ static void caerBackgroundActivityFilterExit(caerModuleData moduleData) {
 
 static bool allocateTimestampMap(BAFilterState state, int16_t sourceID) {
 	// Get size information from source.
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
+	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
 	if (sourceInfoNode == NULL) {
 		// This should never happen, but we handle it gracefully.
 		caerLog(CAER_LOG_ERROR, __func__, "Failed to get source info to allocate timestamp map.");

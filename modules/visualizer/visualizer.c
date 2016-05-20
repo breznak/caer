@@ -680,7 +680,7 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRe
 	// Get size information from source.
 	int16_t sourceID = caerEventPacketHeaderGetEventSource(packetHeader);
 
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
+	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
 	if (sourceInfoNode == NULL) {
 		// This should never happen, but we handle it gracefully.
 		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
