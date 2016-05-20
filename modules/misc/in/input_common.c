@@ -312,6 +312,16 @@ static bool parseFileHeader(inputCommonState state) {
 
 	headerGood: state->header.isValidHeader = true;
 
+	// Create SourceInfo node.
+	sshsNode sourceInfoNode = sshsGetRelativeNode(state->parentModule->moduleNode, "sourceInfo/");
+
+	// TODO: this needs to be dynamic!
+	sshsNodePutShort(sourceInfoNode, "dvsSizeX", 640);
+	sshsNodePutShort(sourceInfoNode, "dvsSizeY", 480);
+
+	sshsNodePutShort(sourceInfoNode, "apsSizeX", 640);
+	sshsNodePutShort(sourceInfoNode, "apsSizeY", 480);
+
 	return (true);
 }
 
@@ -588,16 +598,6 @@ bool isNetworkMessageBased) {
 		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to allocate input data buffer.");
 		return (false);
 	}
-
-	// Create SourceInfo node.
-	sshsNode sourceInfoNode = sshsGetRelativeNode(state->parentModule->moduleNode, "sourceInfo/");
-
-	// TODO: this needs to be dynamic!
-	sshsNodePutShort(sourceInfoNode, "dvsSizeX", 640);
-	sshsNodePutShort(sourceInfoNode, "dvsSizeY", 480);
-
-	sshsNodePutShort(sourceInfoNode, "apsSizeX", 640);
-	sshsNodePutShort(sourceInfoNode, "apsSizeY", 480);
 
 	// Start input handling thread.
 	atomic_store(&state->running, true);
