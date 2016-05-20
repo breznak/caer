@@ -91,6 +91,15 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 	sshsNodePutShort(sourceInfoNode, "dataSizeX", devInfo.dvsSizeX);
 	sshsNodePutShort(sourceInfoNode, "dataSizeY", devInfo.dvsSizeY);
 
+	// Generate source string for output modules.
+	size_t sourceStringLength = (size_t) snprintf(NULL, 0, "#Source %" PRIu16 ": DVS128\r\n", moduleData->moduleID);
+
+	char sourceString[sourceStringLength + 1];
+	snprintf(sourceString, sourceStringLength + 1, "#Source %" PRIu16 ": DVS128\r\n", moduleData->moduleID);
+	sourceString[sourceStringLength] = '\0';
+
+	sshsNodePutString(sourceInfoNode, "sourceString", sourceString);
+
 	caerModuleSetSubSystemString(moduleData, devInfo.deviceString);
 
 	// Ensure good defaults for data acquisition settings.

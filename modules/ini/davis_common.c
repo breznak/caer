@@ -44,50 +44,50 @@ static void createShiftedSourceBiasSetting(sshsNode biasNode, const char *biasNa
 static uint16_t generateShiftedSourceBiasParent(sshsNode biasNode, const char *biasName);
 static uint16_t generateShiftedSourceBias(sshsNode biasNode);
 
-static inline const char *chipIDToName(int16_t chipID) {
+static inline const char *chipIDToName(int16_t chipID, bool withEndSlash) {
 	switch (chipID) {
 		case 0:
-			return ("DAVIS240A/");
+			return ((withEndSlash) ? ("DAVIS240A/") : ("DAVIS240A"));
 			break;
 
 		case 1:
-			return ("DAVIS240B/");
+			return ((withEndSlash) ? ("DAVIS240B/") : ("DAVIS240B"));
 			break;
 
 		case 2:
-			return ("DAVIS240C/");
+			return ((withEndSlash) ? ("DAVIS240C/") : ("DAVIS240C"));
 			break;
 
 		case 3:
-			return ("DAVIS128/");
+			return ((withEndSlash) ? ("DAVIS128/") : ("DAVIS128"));
 			break;
 
 		case 4:
-			return ("DAVIS346A/");
+			return ((withEndSlash) ? ("DAVIS346A/") : ("DAVIS346A"));
 			break;
 
 		case 5:
-			return ("DAVIS346B/");
+			return ((withEndSlash) ? ("DAVIS346B/") : ("DAVIS346B"));
 			break;
 
 		case 6:
-			return ("DAVIS640/");
+			return ((withEndSlash) ? ("DAVIS640/") : ("DAVIS640"));
 			break;
 
 		case 7:
-			return ("DAVISHet640/");
+			return ((withEndSlash) ? ("DAVISHet640/") : ("DAVISHet640"));
 			break;
 
 		case 8:
-			return ("DAVIS208/");
+			return ((withEndSlash) ? ("DAVIS208/") : ("DAVIS208"));
 			break;
 
 		case 9:
-			return ("DAVIS346Cbsi/");
+			return ((withEndSlash) ? ("DAVIS346Cbsi/") : ("DAVIS346Cbsi"));
 			break;
 	}
 
-	return ("Unknown/");
+	return ((withEndSlash) ? ("Unknown/") : ("Unknown"));
 }
 
 bool caerInputDAVISInit(caerModuleData moduleData, uint16_t deviceType) {
@@ -147,6 +147,17 @@ bool caerInputDAVISInit(caerModuleData moduleData, uint16_t deviceType) {
 	sshsNodePutShort(sourceInfoNode, "dataSizeY",
 		(devInfo.dvsSizeY > devInfo.apsSizeY) ? (devInfo.dvsSizeY) : (devInfo.apsSizeY));
 
+	// Generate source string for output modules.
+	size_t sourceStringLength = (size_t) snprintf(NULL, 0, "#Source %" PRIu16 ": %s\r\n", moduleData->moduleID,
+		chipIDToName(devInfo.chipID, false));
+
+	char sourceString[sourceStringLength + 1];
+	snprintf(sourceString, sourceStringLength + 1, "#Source %" PRIu16 ": %s\r\n", moduleData->moduleID,
+		chipIDToName(devInfo.chipID, false));
+	sourceString[sourceStringLength] = '\0';
+
+	sshsNodePutString(sourceInfoNode, "sourceString", sourceString);
+
 	caerModuleSetSubSystemString(moduleData, devInfo.deviceString);
 
 	// Ensure good defaults for data acquisition settings.
@@ -175,7 +186,7 @@ bool caerInputDAVISInit(caerModuleData moduleData, uint16_t deviceType) {
 	}
 
 	// Device related configuration has its own sub-node.
-	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(devInfo.chipID));
+	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(devInfo.chipID, true));
 
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
 	sshsNode chipNode = sshsGetRelativeNode(deviceConfigNode, "chip/");
@@ -222,7 +233,7 @@ bool caerInputDAVISInit(caerModuleData moduleData, uint16_t deviceType) {
 void caerInputDAVISExit(caerModuleData moduleData) {
 	// Device related configuration has its own sub-node.
 	struct caer_davis_info devInfo = caerDavisInfoGet(moduleData->moduleState);
-	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(devInfo.chipID));
+	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(devInfo.chipID, true));
 
 	// Remove listener, which can reference invalid memory in userData.
 	sshsNode chipNode = sshsGetRelativeNode(deviceConfigNode, "chip/");
@@ -291,7 +302,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 	// and add their listeners.
 
 	// Device related configuration has its own sub-node.
-	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(devInfo->chipID));
+	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(devInfo->chipID, true));
 
 	// Chip biases, based on testing defaults.
 	sshsNode biasNode = sshsGetRelativeNode(deviceConfigNode, "bias/");
@@ -664,7 +675,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 
 static void sendDefaultConfiguration(caerModuleData moduleData, struct caer_davis_info *devInfo) {
 	// Device related configuration has its own sub-node.
-	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(devInfo->chipID));
+	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(devInfo->chipID, true));
 
 	// Send cAER configuration to libcaer and device.
 	biasConfigSend(sshsGetRelativeNode(deviceConfigNode, "bias/"), moduleData, devInfo);
