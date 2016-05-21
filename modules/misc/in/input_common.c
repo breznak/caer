@@ -187,13 +187,13 @@ static char *getFileHeaderLine(inputCommonState state) {
 }
 
 static void parseSourceString(char *sourceString, inputCommonState state) {
-	// TODO: implement sourceString itself for files, and some way to parse sizes then.
-
 	// Create SourceInfo node.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(state->parentModule->moduleNode, "sourceInfo/");
 
 	int16_t dvsSizeX = 0, dvsSizeY = 0;
 	int16_t apsSizeX = 0, apsSizeY = 0;
+	int16_t dataSizeX = 0, dataSizeY = 0;
+	int16_t visualizerSizeX = 0, visualizerSizeY = 0;
 
 	// Determine sizes via known chip information.
 	if (caerStrEquals(sourceString, "DVS128")) {
@@ -226,6 +226,21 @@ static void parseSourceString(char *sourceString, inputCommonState state) {
 		dvsSizeX = apsSizeX = 208;
 		dvsSizeY = apsSizeY = 192;
 	}
+	else if (caerStrEqualsUpTo(sourceString, "File,", 5)) {
+		sscanf(sourceString + 5, "dvsSizeX=%" SCNi16 ",dvsSizeY=%" SCNi16 ",apsSizeX=%" SCNi16 ",apsSizeY=%" SCNi16 ","
+		"dataSizeX=%" SCNi16 ",dataSizeY=%" SCNi16 ",visualizerSizeX=%" SCNi16 ",visualizerSizeY=%" SCNi16 "\r\n",
+			&dvsSizeX, &dvsSizeY, &apsSizeX, &apsSizeY, &dataSizeX, &dataSizeY, &visualizerSizeX, &visualizerSizeY);
+	}
+	else if (caerStrEqualsUpTo(sourceString, "Network,", 8)) {
+		sscanf(sourceString + 8, "dvsSizeX=%" SCNi16 ",dvsSizeY=%" SCNi16 ",apsSizeX=%" SCNi16 ",apsSizeY=%" SCNi16 ","
+		"dataSizeX=%" SCNi16 ",dataSizeY=%" SCNi16 ",visualizerSizeX=%" SCNi16 ",visualizerSizeY=%" SCNi16 "\r\n",
+			&dvsSizeX, &dvsSizeY, &apsSizeX, &apsSizeY, &dataSizeX, &dataSizeY, &visualizerSizeX, &visualizerSizeY);
+	}
+	else if (caerStrEqualsUpTo(sourceString, "Processor,", 10)) {
+		sscanf(sourceString + 10, "dvsSizeX=%" SCNi16 ",dvsSizeY=%" SCNi16 ",apsSizeX=%" SCNi16 ",apsSizeY=%" SCNi16 ","
+		"dataSizeX=%" SCNi16 ",dataSizeY=%" SCNi16 ",visualizerSizeX=%" SCNi16 ",visualizerSizeY=%" SCNi16 "\r\n",
+			&dvsSizeX, &dvsSizeY, &apsSizeX, &apsSizeY, &dataSizeX, &dataSizeY, &visualizerSizeX, &visualizerSizeY);
+	}
 	else {
 		// Default fall-back of 640x480 (VGA).
 		caerLog(CAER_LOG_WARNING, state->parentModule->moduleSubSystemString,
@@ -235,16 +250,49 @@ static void parseSourceString(char *sourceString, inputCommonState state) {
 	}
 
 	// Put size information inside sourceInfo node.
-	sshsNodePutShort(sourceInfoNode, "dvsSizeX", dvsSizeX);
-	sshsNodePutShort(sourceInfoNode, "dvsSizeY", dvsSizeY);
+	if (dvsSizeX != 0 && dvsSizeY != 0) {
+		sshsNodePutShort(sourceInfoNode, "dvsSizeX", dvsSizeX);
+		sshsNodePutShort(sourceInfoNode, "dvsSizeY", dvsSizeY);
+	}
 
 	if (apsSizeX != 0 && apsSizeY != 0) {
 		sshsNodePutShort(sourceInfoNode, "apsSizeX", apsSizeX);
 		sshsNodePutShort(sourceInfoNode, "apsSizeY", apsSizeY);
 	}
 
-	sshsNodePutShort(sourceInfoNode, "dataSizeX", (dvsSizeX > apsSizeX) ? (dvsSizeX) : (apsSizeX));
-	sshsNodePutShort(sourceInfoNode, "dataSizeY", (dvsSizeY > apsSizeY) ? (dvsSizeY) : (apsSizeY));
+	if (dataSizeX == 0 && dataSizeY == 0) {
+		// Try to auto-discover dataSize, if it was not previously set, based on the
+		// presence of DVS or APS sizes. If they don't exist either, this will be 0.
+		dataSizeX = (dvsSizeX > apsSizeX) ? (dvsSizeX) : (apsSizeX);
+		dataSizeY = (dvsSizeY > apsSizeY) ? (dvsSizeY) : (apsSizeY);
+	}
+
+	if (dataSizeX != 0 && dataSizeY != 0) {
+		sshsNodePutShort(sourceInfoNode, "dataSizeX", dataSizeX);
+		sshsNodePutShort(sourceInfoNode, "dataSizeY", dataSizeY);
+	}
+
+	if (visualizerSizeX != 0 && visualizerSizeY != 0) {
+		sshsNodePutShort(sourceInfoNode, "visualizerSizeX", visualizerSizeX);
+		sshsNodePutShort(sourceInfoNode, "visualizerSizeY", visualizerSizeY);
+	}
+
+	// Generate source string for output modules.
+	size_t sourceStringFileLength = (size_t) snprintf(NULL, 0, "#Source %" PRIu16 ": File,"
+	"dvsSizeX=%" PRIi16 ",dvsSizeY=%" PRIi16 ",apsSizeX=%" PRIi16 ",apsSizeY=%" PRIi16 ","
+	"dataSizeX=%" PRIi16 ",dataSizeY=%" PRIi16 ",visualizerSizeX=%" PRIi16 ",visualizerSizeY=%" PRIi16 "\r\n"
+	"#-Source %" PRIi16 ": %s\r\n", state->parentModule->moduleID, dvsSizeX, dvsSizeY, apsSizeX, apsSizeY, dataSizeX,
+		dataSizeY, visualizerSizeX, visualizerSizeY, state->header.sourceID, sourceString);
+
+	char sourceStringFile[sourceStringFileLength + 1];
+	snprintf(sourceStringFile, sourceStringFileLength + 1, "#Source %" PRIu16 ": File,"
+	"dvsSizeX=%" PRIi16 ",dvsSizeY=%" PRIi16 ",apsSizeX=%" PRIi16 ",apsSizeY=%" PRIi16 ","
+	"dataSizeX=%" PRIi16 ",dataSizeY=%" PRIi16 ",visualizerSizeX=%" PRIi16 ",visualizerSizeY=%" PRIi16 "\r\n"
+	"#-Source %" PRIi16 ": %s\r\n", state->parentModule->moduleID, dvsSizeX, dvsSizeY, apsSizeX, apsSizeY, dataSizeX,
+		dataSizeY, visualizerSizeX, visualizerSizeY, state->header.sourceID, sourceString);
+	sourceStringFile[sourceStringFileLength] = '\0';
+
+	sshsNodePutString(sourceInfoNode, "sourceString", sourceStringFile);
 }
 
 static bool parseFileHeader(inputCommonState state) {
@@ -362,7 +410,7 @@ static bool parseFileHeader(inputCommonState state) {
 			// Then the source header. Only with AEDAT 3.X. We only support one active source.
 			char *sourceString = NULL;
 
-			if (sscanf(headerLine, "#Source %" SCNi16 ": %ms\r\n", &state->header.sourceID, &sourceString) == 2) {
+			if (sscanf(headerLine, "#Source %" SCNi16 ": %m[^\r]s\n", &state->header.sourceID, &sourceString) == 2) {
 				sourceHeader = true;
 
 				// Parse source string to get needed sourceInfo parameters.
@@ -393,7 +441,8 @@ static bool parseFileHeader(inputCommonState state) {
 			}
 			else {
 				// Then other headers, like Start-Time.
-				if (caerStrEqualsUpTo(headerLine, "#Start-Time: %s", 13)) {
+				// TODO: parse negative source strings (#-Source) and add them to sourceInfo.
+				if (caerStrEqualsUpTo(headerLine, "#Start-Time: ", 13)) {
 					char *startTimeString = NULL;
 
 					if (sscanf(headerLine, "#Start-Time: %m[^\r]s\n", &startTimeString) == 1) {
