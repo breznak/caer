@@ -134,7 +134,9 @@ bool PoseCalibration::findMarkers(caerFrameEvent frame) {
 
         }   
         
-    }    
+    } else {
+        cout << "no markers have been detected" << endl;
+    }   
 
     //place back the markers in the frame
     view.convertTo(orig, CV_16UC(orig.channels()), 256.0);
