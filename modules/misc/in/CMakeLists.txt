@@ -20,7 +20,7 @@ IF (ENABLE_NETWORK_INPUT)
 	SET(CAER_NETWORK_INPUT_FILES
 		modules/misc/in/input_common.c
 		modules/misc/in/net_tcp.c
-		modules/misc/in/unixs.c)
+		modules/misc/in/unix_socket.c)
 
 	SET(CAER_C_SRC_FILES ${CAER_C_SRC_FILES} ${CAER_NETWORK_INPUT_FILES})
 ENDIF()
