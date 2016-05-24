@@ -12,7 +12,7 @@ IF (ENABLE_POSEESTIMATION)
 	SET(POSECALIB_LIBDIRS ${OPENCV3_LIBRARY_DIRS})
 
 	SET(POSECALIB_C_LIBS "")
-	SET(POSECALIB_CXX_LIBS ${OPENCV3_LIBRARIES})
+	SET(POSECALIB_CXX_LIBS ${OPENCV3_LIBRARIES} -lopencv_aruco)
 
 	SET(POSECALIB_C_SRC_FILES  modules/poseestimation/cameracalibration.c)
 	SET(POSECALIB_CXX_SRC_FILES  modules/poseestimation/calibration.cpp  modules/poseestimation/calibration_wrapper.cpp)
