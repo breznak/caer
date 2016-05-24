@@ -86,8 +86,14 @@ static int caerConfigServerRunner(void *inPtr) {
 
 	configServerAddress.sin_family = AF_INET;
 	configServerAddress.sin_port = htons(U16T(sshsNodeGetInt(serverNode, "portNumber")));
+
 	char *ipAddress = sshsNodeGetString(serverNode, "ipAddress");
-	inet_aton(ipAddress, &configServerAddress.sin_addr); // htonl() is implicit here.
+	if (inet_pton(AF_INET, ipAddress, &configServerAddress.sin_addr) == 0) {
+		caerLog(CAER_LOG_CRITICAL, "Config Server", "No valid IP address found. '%s' is invalid!", ipAddress);
+
+		free(ipAddress);
+		return (EXIT_FAILURE);
+	}
 	free(ipAddress);
 
 	// Bind socket to above address.
@@ -112,7 +118,8 @@ static int caerConfigServerRunner(void *inPtr) {
 	uint8_t configServerBuffer[4096];
 
 	caerLog(CAER_LOG_NOTICE, "Config Server", "Ready and listening on %s:%" PRIu16 ".",
-		inet_ntoa(configServerAddress.sin_addr), ntohs(configServerAddress.sin_port));
+		inet_ntop(AF_INET, &configServerAddress.sin_addr, (char[INET_ADDRSTRLEN] ) { 0x00 }, INET_ADDRSTRLEN),
+		ntohs(configServerAddress.sin_port));
 
 	size_t connections = (size_t) sshsNodeGetShort(serverNode, "concurrentConnections") + 1;// +1 for listening socket.
 
