@@ -359,6 +359,9 @@ static inline void writeBufferToAll(outputCommonState state, const uint8_t *buff
 				// Write failed, most of the reasons for that to happen are
 				// not recoverable from, so we just disable this file descriptor.
 				// This also detects client-side close() for TCP server connections.
+				caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
+					"Disconnect or error on fd %d, closing and removing. Error: %d.", fd, errno);
+
 				close(fd);
 				state->fileDescriptors->fds[i] = -1;
 			}
@@ -695,6 +698,9 @@ static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD) {
 		// This one-client mode is only used for server mode operation.
 		if (onlyOneClientFD != NULL && *onlyOneClientFD >= 0) {
 			if (!writeUntilDone(*onlyOneClientFD, networkHeader, AEDAT3_NETWORK_HEADER_LENGTH)) {
+				caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
+					"Disconnect or error on fd %d, closing and removing. Error: %d.", *onlyOneClientFD, errno);
+
 				close(*onlyOneClientFD);
 				*onlyOneClientFD = -1;
 			}
