@@ -1,9 +1,11 @@
 #include "input_common.h"
 #include "base/mainloop.h"
-#include "ext/c11threads_posix.h"
 #include "ext/portable_time.h"
 #include "ext/ringbuffer/ringbuffer.h"
 #include "ext/buffers.h"
+#ifdef HAVE_PTHREADS
+	#include "ext/c11threads_posix.h"
+#endif
 
 #include <libcaer/events/common.h>
 #include <libcaer/events/packetContainer.h>
