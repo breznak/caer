@@ -36,7 +36,7 @@
 #endif
 #ifdef ENABLE_NETWORK_INPUT
 	#include "modules/misc/in/net_tcp.h"
-	#include "modules/misc/in/unixs.h"
+	#include "modules/misc/in/unix_socket.h"
 #endif
 
 #ifdef ENABLE_FILE_OUTPUT
@@ -46,7 +46,8 @@
 	#include "modules/misc/out/net_tcp_server.h"
 	#include "modules/misc/out/net_tcp.h"
 	#include "modules/misc/out/net_udp.h"
-	#include "modules/misc/out/unixs.h"
+	#include "modules/misc/out/unix_socket_server.h"
+	#include "modules/misc/out/unix_socket.h"
 #endif
 
 // Common filters support.
