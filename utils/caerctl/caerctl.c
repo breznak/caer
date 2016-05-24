@@ -84,9 +84,17 @@ int main(int argc, char *argv[]) {
 
 	configServerAddress.sin_family = AF_INET;
 	configServerAddress.sin_port = htons(portNumber);
-	inet_aton(ipAddress, &configServerAddress.sin_addr); // htonl() is implicit here.
+
+	if (inet_pton(AF_INET, ipAddress, &configServerAddress.sin_addr) == 0) {
+		close(sockFd);
+
+		fprintf(stderr, "No valid IP address found. '%s' is invalid!\n", ipAddress);
+		return (EXIT_FAILURE);
+	}
 
 	if (connect(sockFd, (struct sockaddr *) &configServerAddress, sizeof(struct sockaddr_in)) < 0) {
+		close(sockFd);
+
 		fprintf(stderr, "Failed to connect to remote config server.\n");
 		return (EXIT_FAILURE);
 	}
@@ -104,6 +112,8 @@ int main(int argc, char *argv[]) {
 
 	char *userHomeDir = getUserHomeDirectory();
 	if (userHomeDir == NULL) {
+		close(sockFd);
+
 		fprintf(stderr, "Failed to determine user's home directory.\n");
 		return (EXIT_FAILURE);
 	}

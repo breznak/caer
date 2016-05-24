@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include "ext/nets.h"
 
 #include <libcaer/events/common.h>
 
@@ -42,7 +43,7 @@ int main(int argc, char *argv[]) {
 		return (EXIT_FAILURE);
 	}
 
-	// First of all, parse the local path we need to listen on.
+	// First of all, parse the local path we need to connect to.
 	// That is the only parameter permitted at the moment.
 	// If none passed, attempt to connect to default local path.
 	const char *localSocket = "/tmp/caer.sock";
@@ -59,7 +60,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Create listening local Unix socket.
-	int listenUnixSocket = socket(AF_UNIX, SOCK_DGRAM, 0);
+	int listenUnixSocket = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (listenUnixSocket < 0) {
 		fprintf(stderr, "Failed to create local Unix socket.\n");
 		return (EXIT_FAILURE);
@@ -70,24 +71,49 @@ int main(int argc, char *argv[]) {
 
 	unixSocketAddr.sun_family = AF_UNIX;
 	strncpy(unixSocketAddr.sun_path, localSocket, sizeof(unixSocketAddr.sun_path) - 1);
+	unixSocketAddr.sun_path[sizeof(unixSocketAddr.sun_path) - 1] = '\0'; // Ensure NUL terminated string.
 
-	if (bind(listenUnixSocket, (struct sockaddr *) &unixSocketAddr, sizeof(struct sockaddr_un)) < 0) {
-		fprintf(stderr, "Failed to listen on local Unix socket.\n");
+	if (connect(listenUnixSocket, (struct sockaddr *) &unixSocketAddr, sizeof(struct sockaddr_un)) < 0) {
+		close(listenUnixSocket);
+
+		fprintf(stderr, "Failed to connect to local Unix socket.\n");
 		return (EXIT_FAILURE);
 	}
 
-	// 64K data buffer should be enough for the event packets..
-	size_t dataBufferLength = 1024 * 64;
+	// 1M data buffer should be enough for the TCP event packets. Frames are very big!
+	size_t dataBufferLength = 1024 * 1024;
 	uint8_t *dataBuffer = malloc(dataBufferLength);
+	if (dataBuffer == NULL) {
+		close(listenUnixSocket);
+
+		fprintf(stderr, "Failed to allocate memory for data buffer.\n");
+		return (EXIT_FAILURE);
+	}
+
+	// Get network header (20 bytes).
+	if (!recvUntilDone(listenUnixSocket, dataBuffer, 20)) {
+		free(dataBuffer);
+		close(listenUnixSocket);
+
+		fprintf(stderr, "Error in network header recv() call: %d\n", errno);
+		return (EXIT_FAILURE);
+	}
+
+	printf("Magic number: %" PRIi64 "\n", *((int64_t *) (dataBuffer + 0)));
+	printf("Sequence number: %" PRIi64 "\n", *((int64_t *) (dataBuffer + 8)));
+	printf("Version number: %" PRIi8 "\n", *((int8_t *) (dataBuffer + 16)));
+	printf("Format number: %" PRIi8 "\n", *((int8_t *) (dataBuffer + 17)));
+	printf("Source number: %" PRIi16 "\n", *((int16_t *) (dataBuffer + 18)));
 
 	while (!atomic_load_explicit(&globalShutdown, memory_order_relaxed)) {
-		ssize_t result = recv(listenUnixSocket, dataBuffer, dataBufferLength, 0);
-		if (result <= 0) {
-			fprintf(stderr, "Error in recv() call: %d\n", errno);
-			continue;
-		}
+		// Get packet header, to calculate packet size.
+		if (!recvUntilDone(listenUnixSocket, dataBuffer, CAER_EVENT_PACKET_HEADER_SIZE)) {
+			free(dataBuffer);
+			close(listenUnixSocket);
 
-		printf("Result of recv() call: %zd\n", result);
+			fprintf(stderr, "Error in header recv() call: %d\n", errno);
+			return (EXIT_FAILURE);
+		}
 
 		// Decode successfully received data.
 		caerEventPacketHeader header = (caerEventPacketHeader) dataBuffer;
@@ -96,13 +122,24 @@ int main(int argc, char *argv[]) {
 		int16_t eventSource = caerEventPacketHeaderGetEventSource(header);
 		int32_t eventSize = caerEventPacketHeaderGetEventSize(header);
 		int32_t eventTSOffset = caerEventPacketHeaderGetEventTSOffset(header);
+		int32_t eventTSOverflow = caerEventPacketHeaderGetEventTSOverflow(header);
 		int32_t eventCapacity = caerEventPacketHeaderGetEventCapacity(header);
 		int32_t eventNumber = caerEventPacketHeaderGetEventNumber(header);
 		int32_t eventValid = caerEventPacketHeaderGetEventValid(header);
 
 		printf(
-			"type = %" PRIi16 ", source = %" PRIi16 ", size = %" PRIi32 ", tsOffset = %" PRIi32 ", capacity = %" PRIi32 ", number = %" PRIi32 ", valid = %" PRIi32 ".\n",
-			eventType, eventSource, eventSize, eventTSOffset, eventCapacity, eventNumber, eventValid);
+			"type = %" PRIi16 ", source = %" PRIi16 ", size = %" PRIi32 ", tsOffset = %" PRIi32 ", tsOverflow = %" PRIi32 ", capacity = %" PRIi32 ", number = %" PRIi32 ", valid = %" PRIi32 ".\n",
+			eventType, eventSource, eventSize, eventTSOffset, eventTSOverflow, eventCapacity, eventNumber, eventValid);
+
+		// Get rest of event packet, the part with the events themselves.
+		if (!recvUntilDone(listenUnixSocket, dataBuffer + CAER_EVENT_PACKET_HEADER_SIZE,
+			(size_t) (eventCapacity * eventSize))) {
+			free(dataBuffer);
+			close(listenUnixSocket);
+
+			fprintf(stderr, "Error in data recv() call: %d\n", errno);
+			return (EXIT_FAILURE);
+		}
 
 		if (eventValid > 0) {
 			void *firstEvent = caerGenericEventGetEvent(header, 0);
@@ -122,9 +159,6 @@ int main(int argc, char *argv[]) {
 
 	// Close connection.
 	close(listenUnixSocket);
-
-	// Remove socket file.
-	unlink(localSocket);
 
 	free(dataBuffer);
 
