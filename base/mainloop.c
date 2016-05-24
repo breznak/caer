@@ -32,6 +32,9 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 		return;
 	}
 
+	// Ignore SIGPIPE.
+	signal(SIGPIPE, SIG_IGN);
+
 	// Install signal handler for global shutdown.
 	struct sigaction shutdown;
 
