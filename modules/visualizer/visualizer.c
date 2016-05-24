@@ -922,3 +922,22 @@ bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacket
 
 	return (true);
 }
+
+bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPacketHeader point2DEventPacketHeader) {
+	UNUSED_ARGUMENT(state);
+
+	if (caerEventPacketHeaderGetEventValid(point2DEventPacketHeader) == 0) {
+		return (false);
+	}
+
+	// Render all valid events.
+	CAER_POINT2D_ITERATOR_VALID_START((caerPoint2DEventPacket) point2DEventPacketHeader)
+		float x = caerPoint2DEventGetX(caerPoint2DIteratorElement);
+		float y = caerPoint2DEventGetY(caerPoint2DIteratorElement);
+
+		// Display points in blue.
+		al_put_pixel((int) x, (int) y, al_map_rgb(0, 0, 255));
+	CAER_POINT2D_ITERATOR_VALID_END
+
+	return (true);
+}
