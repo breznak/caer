@@ -1,8 +1,10 @@
 #include "visualizer.h"
 #include "base/mainloop.h"
-#include "ext/c11threads_posix.h"
 #include "ext/ringbuffer/ringbuffer.h"
 #include "modules/statistics/statistics.h"
+#ifdef HAVE_PTHREADS
+	#include "ext/c11threads_posix.h"
+#endif
 
 #include <math.h>
 #include <stdatomic.h>
