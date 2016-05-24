@@ -602,7 +602,11 @@ static void orderAndSendEventPackets(outputCommonState state, caerEventPacketCon
 static void handleNewServerConnections(outputCommonState state) {
 	// First let's see if any new connections are waiting on the listening
 	// socket to be accepted. This returns right away (non-blocking).
-	int acceptResult = accept(state->fileDescriptors->serverFd, NULL, NULL);
+	socklen_t clientAddrLength = sizeof(struct sockaddr_in);
+	struct sockaddr_in clientAddr;
+	memset(&clientAddr, 0, clientAddrLength);
+
+	int acceptResult = accept(state->fileDescriptors->serverFd, (struct sockaddr *) &clientAddr, &clientAddrLength);
 	if (acceptResult < 0) {
 		if (errno != EAGAIN && errno != EWOULDBLOCK) {
 			// Only log real failure. EAGAIN/EWOULDBLOCK just means no
@@ -626,6 +630,32 @@ static void handleNewServerConnections(outputCommonState state) {
 
 			// Successfully connected, send header to client.
 			sendNetworkHeader(state, &state->fileDescriptors->fds[i]);
+
+			// Add client IP to list. This is a comma separated string.
+			char *connectedClientsStr = sshsNodeGetString(state->parentModule->moduleNode, "connectedClients");
+
+			size_t newConnectedClientStrLength = strlen(connectedClientsStr) + 1 + INET_ADDRSTRLEN + 1;
+			char *newConnectedClientsStr = realloc(connectedClientsStr, newConnectedClientStrLength);
+			if (newConnectedClientsStr == NULL) {
+				free(connectedClientsStr);
+
+				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+					"Failed to update connectedClients information.");
+				return;
+			}
+
+			const char *clientAddrStr = inet_ntop(AF_INET, &clientAddr.sin_addr, (char[INET_ADDRSTRLEN] ) { 0x00 },
+				INET_ADDRSTRLEN);
+
+			if (!caerStrEquals(newConnectedClientsStr, "")) {
+				// Only prepend comma if the string wasn't empty before.
+				strncat(newConnectedClientsStr, ",", 1);
+			}
+			strncat(newConnectedClientsStr, clientAddrStr, INET_ADDRSTRLEN);
+
+			sshsNodePutString(state->parentModule->moduleNode, "connectedClients", newConnectedClientsStr);
+
+			free(newConnectedClientsStr);
 
 			return;
 		}
@@ -830,6 +860,11 @@ bool isNetworkMessageBased) {
 	state->isNetworkStream = isNetworkStream;
 	state->isNetworkMessageBased = isNetworkMessageBased;
 
+	// If in server mode, add SSHS attribute to track connected client IPs.
+	if (state->fileDescriptors->serverFd >= 0) {
+		sshsNodePutString(state->parentModule->moduleNode, "connectedClients", "");
+	}
+
 	// Initial source ID has to be -1 (invalid).
 	atomic_store(&state->sourceID, -1);
 
@@ -917,6 +952,9 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 
 	if (state->fileDescriptors->serverFd >= 0) {
 		close(state->fileDescriptors->serverFd);
+
+		// Server shut down, no more clients.
+		sshsNodePutString(state->parentModule->moduleNode, "connectedClients", "");
 	}
 
 	// Free allocated memory.
