@@ -82,6 +82,14 @@
 
 // TODO: check handling of timestamp-reset events from camera!
 
+struct output_common_statistics {
+	uint64_t packetsNumber;
+	uint64_t packetsTotalSize;
+	uint64_t packetsHeaderSize;
+	uint64_t packetsDataSize;
+	uint64_t dataWritten;
+};
+
 struct output_common_state {
 	/// Control flag for output handling thread.
 	atomic_bool running;
@@ -124,6 +132,8 @@ struct output_common_state {
 	atomic_bool bufferUpdate;
 	/// Support different formats, providing data compression.
 	int8_t format;
+	/// Output module statistics collection.
+	struct output_common_statistics statistics;
 	/// Reference to parent module's original data.
 	caerModuleData parentModule;
 };
@@ -480,9 +490,19 @@ static void sendEventPacket(outputCommonState state, caerEventPacketHeader packe
 	size_t packetSize = CAER_EVENT_PACKET_HEADER_SIZE
 		+ (size_t) (caerEventPacketHeaderGetEventCapacity(packet) * caerEventPacketHeaderGetEventSize(packet));
 
+	// Statistics support.
+	state->statistics.packetsNumber++;
+	state->statistics.packetsTotalSize += packetSize;
+	state->statistics.packetsHeaderSize += CAER_EVENT_PACKET_HEADER_SIZE;
+	state->statistics.packetsDataSize += (size_t) (caerEventPacketHeaderGetEventCapacity(packet)
+		* caerEventPacketHeaderGetEventSize(packet));
+
 	if (state->format != 0) {
 		packetSize = compressEventPacket(state, packet, packetSize);
 	}
+
+	// Statistics support (after compression).
+	state->statistics.dataWritten += packetSize;
 
 	// Send it out until none is left!
 	size_t packetIndex = 0;
@@ -897,6 +917,14 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 	free(state->fileDescriptors);
 
 	free(state->dataBuffer);
+
+	// Print final statistics results.
+	caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
+		"Statistics: wrote %" PRIu64 " packets, for a total uncompressed size of %" PRIu64 " bytes (%" PRIu64 " bytes header + %" PRIu64 " bytes data). "
+		"Actually written to output were %" PRIu64 " bytes (after compression), resulting in a saving of %" PRIu64 " bytes.",
+		state->statistics.packetsNumber, state->statistics.packetsTotalSize, state->statistics.packetsHeaderSize,
+		state->statistics.packetsDataSize, state->statistics.dataWritten,
+		(state->statistics.packetsTotalSize - state->statistics.dataWritten));
 }
 
 void caerOutputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
