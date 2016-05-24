@@ -60,7 +60,15 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	tcpServer.sin_port = htons(U16T(sshsNodeGetInt(moduleData->moduleNode, "portNumber")));
 
 	char *ipAddress = sshsNodeGetString(moduleData->moduleNode, "ipAddress");
-	inet_aton(ipAddress, &tcpServer.sin_addr); // htonl() is implicit here.
+	if (inet_pton(AF_INET, ipAddress, &tcpServer.sin_addr) == 0) {
+		close(serverSockFd);
+
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+			"No valid server IP address found. '%s' is invalid!", ipAddress);
+
+		free(ipAddress);
+		return (false);
+	}
 	free(ipAddress);
 
 	// Bind socket to above address.
@@ -101,7 +109,8 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	}
 
 	caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "TCP server socket connected to %s:%" PRIu16 ".",
-		inet_ntoa(tcpServer.sin_addr), ntohs(tcpServer.sin_port));
+		inet_ntop(AF_INET, &tcpServer.sin_addr, (char[INET_ADDRSTRLEN] ) { 0x00 }, INET_ADDRSTRLEN),
+		ntohs(tcpServer.sin_port));
 
 	return (true);
 }

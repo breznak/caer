@@ -44,14 +44,23 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 	tcpClient.sin_port = htons(U16T(sshsNodeGetInt(moduleData->moduleNode, "portNumber")));
 
 	char *ipAddress = sshsNodeGetString(moduleData->moduleNode, "ipAddress");
-	inet_aton(ipAddress, &tcpClient.sin_addr); // htonl() is implicit here.
+	if (inet_pton(AF_INET, ipAddress, &tcpClient.sin_addr) == 0) {
+		close(sockFd);
+
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "No valid IP address found. '%s' is invalid!",
+			ipAddress);
+
+		free(ipAddress);
+		return (false);
+	}
 	free(ipAddress);
 
 	if (connect(sockFd, (struct sockaddr *) &tcpClient, sizeof(struct sockaddr_in)) != 0) {
 		close(sockFd);
 
 		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"Could not connect to remote TCP client %s:%" PRIu16 ". Error: %d.", inet_ntoa(tcpClient.sin_addr),
+			"Could not connect to remote TCP client %s:%" PRIu16 ". Error: %d.",
+			inet_ntop(AF_INET, &tcpClient.sin_addr, (char[INET_ADDRSTRLEN] ) { 0x00 }, INET_ADDRSTRLEN),
 			ntohs(tcpClient.sin_port), errno);
 		return (false);
 	}
@@ -75,7 +84,8 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 	}
 
 	caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "TCP socket connected to %s:%" PRIu16 ".",
-		inet_ntoa(tcpClient.sin_addr), ntohs(tcpClient.sin_port));
+		inet_ntop(AF_INET, &tcpClient.sin_addr, (char[INET_ADDRSTRLEN] ) { 0x00 }, INET_ADDRSTRLEN),
+		ntohs(tcpClient.sin_port));
 
 	return (true);
 }
