@@ -156,6 +156,12 @@ static int outputHandlerThread(void *stateArg);
 static void caerOutputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
+int caerOutputCommonGetServerFd(void *statePtr) {
+	outputCommonState state = statePtr;
+
+	return (state->fileDescriptors->serverFd);
+}
+
 outputCommonFDs caerOutputCommonAllocateFdArray(size_t size) {
 	// Allocate memory for file descriptor array structure.
 	outputCommonFDs fileDescriptors = malloc(sizeof(*fileDescriptors) + (size * sizeof(int)));
