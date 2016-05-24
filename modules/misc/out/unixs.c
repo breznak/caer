@@ -5,12 +5,12 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-static bool caerOutputUnixSInit(caerModuleData moduleData);
+static bool caerOutputUnixSocketInit(caerModuleData moduleData);
 
-static struct caer_module_functions caerOutputUnixSFunctions = { .moduleInit = &caerOutputUnixSInit, .moduleRun =
-	&caerOutputCommonRun, .moduleConfig = NULL, .moduleExit = &caerOutputCommonExit };
+static struct caer_module_functions caerOutputUnixSocketFunctions = { .moduleInit = &caerOutputUnixSocketInit,
+	.moduleRun = &caerOutputCommonRun, .moduleConfig = NULL, .moduleExit = &caerOutputCommonExit };
 
-void caerOutputUnixS(uint16_t moduleID, size_t outputTypesNumber, ...) {
+void caerOutputUnixSocket(uint16_t moduleID, size_t outputTypesNumber, ...) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "UnixSocketOutput");
 	if (moduleData == NULL) {
 		return;
@@ -18,17 +18,18 @@ void caerOutputUnixS(uint16_t moduleID, size_t outputTypesNumber, ...) {
 
 	va_list args;
 	va_start(args, outputTypesNumber);
-	caerModuleSMv(&caerOutputUnixSFunctions, moduleData, CAER_OUTPUT_COMMON_STATE_STRUCT_SIZE, outputTypesNumber, args);
+	caerModuleSMv(&caerOutputUnixSocketFunctions, moduleData, CAER_OUTPUT_COMMON_STATE_STRUCT_SIZE, outputTypesNumber,
+		args);
 	va_end(args);
 }
 
-static bool caerOutputUnixSInit(caerModuleData moduleData) {
+static bool caerOutputUnixSocketInit(caerModuleData moduleData) {
 	// First, always create all needed setting nodes, set their default values
 	// and add their listeners.
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "socketPath", "/tmp/caer.sock");
 
-	// Open a Unix local socket on a known path, to be accessed by other processes.
-	int sockFd = socket(AF_UNIX, SOCK_DGRAM, 0);
+	// Open an existing Unix local socket at a known path, where we'll write to.
+	int sockFd = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (sockFd < 0) {
 		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create local Unix socket. Error: %d.",
 		errno);
@@ -42,6 +43,7 @@ static bool caerOutputUnixSInit(caerModuleData moduleData) {
 
 	char *socketPath = sshsNodeGetString(moduleData->moduleNode, "socketPath");
 	strncpy(unixSocketAddr.sun_path, socketPath, sizeof(unixSocketAddr.sun_path) - 1);
+	unixSocketAddr.sun_path[sizeof(unixSocketAddr.sun_path) - 1] = '\0'; // Ensure NUL terminated string.
 	free(socketPath);
 
 	// Connect socket to above address.
