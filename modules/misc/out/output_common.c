@@ -771,11 +771,25 @@ static int outputHandlerThread(void *stateArg) {
 		break;
 	}
 
+	// If no header sent, it means we exited (running=false) without ever getting any
+	// event packet with a source ID, so we don't have to process anything.
+	// But we make sure to empty the transfer ring-buffer, as something may have been
+	// put there in the meantime, so we ensure it's checked and freed.
+	if (!headerSent) {
+		caerEventPacketContainer packetContainer;
+		while ((packetContainer = ringBufferGet(state->transferRing)) != NULL) {
+			// Free all remaining packet container memory.
+			caerEventPacketContainerFree(packetContainer);
+		}
+
+		return (thrd_success);
+	}
+
 	// If no data is available on the transfer ring-buffer, sleep for 500µs (0.5 ms)
 	// to avoid wasting resources in a busy loop.
 	struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 500000 };
 
-	while (atomic_load_explicit(&state->running, memory_order_relaxed) && headerSent) {
+	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
 		// Handle new connections in server mode.
 		if (state->isNetworkStream && state->fileDescriptors->serverFd >= 0) {
 			handleNewServerConnections(state);
@@ -819,13 +833,14 @@ static int outputHandlerThread(void *stateArg) {
 	// and write the packets out to the file descriptor.
 	caerEventPacketContainer packetContainer;
 	while ((packetContainer = ringBufferGet(state->transferRing)) != NULL) {
-		if (headerSent) {
-			orderAndSendEventPackets(state, packetContainer);
-		}
+		orderAndSendEventPackets(state, packetContainer);
 
 		// Free all remaining packet container memory.
 		caerEventPacketContainerFree(packetContainer);
 	}
+
+	// Make sure last (incomplete) buffer is sent out.
+	commitOutputBuffer(state);
 
 	return (thrd_success);
 }
