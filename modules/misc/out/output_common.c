@@ -582,7 +582,7 @@ static void orderAndSendEventPackets(outputCommonState state, caerEventPacketCon
 			// Smaller TS than already sent, illegal, ignore packet.
 			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
 				"Detected timestamp going back, expected at least %" PRIi64 " but got %" PRIi64 "."
-				"Ignoring packet of type %" PRIi16 " from source %" PRIi16 ", with %" PRIi32 " events!",
+				" Ignoring packet of type %" PRIi16 " from source %" PRIi16 ", with %" PRIi32 " events!",
 				state->lastTimestamp, cpFirstEventTimestamp, caerEventPacketHeaderGetEventType(cpPacket),
 				caerEventPacketHeaderGetEventSource(cpPacket), caerEventPacketHeaderGetEventNumber(cpPacket));
 		}
