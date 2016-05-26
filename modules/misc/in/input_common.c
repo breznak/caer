@@ -653,6 +653,7 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 			// Erase slot from packets array.
 			utarray_erase(state->packetContainer.eventPackets,
 				utarray_eltidx(state->packetContainer.eventPackets, currPacket), 1);
+			currPacket = (caerEventPacketHeader *) utarray_prev(state->packetContainer.eventPackets, currPacket);
 			continue;
 		}
 
