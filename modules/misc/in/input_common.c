@@ -61,6 +61,14 @@ struct input_common_packet_container_data {
 	/// The timestamp up to which we want to (have to!) read, so that we can
 	/// output the next packet container (in time-slice mode).
 	int64_t wantedPacketTimestamp;
+	/// Time when the last packet container was sent out, used to calculate
+	/// sleep time to reach user configured 'timeDelay'.
+	struct timespec lastCommitTime;
+	/// Time slice (in µs), for which to generate a packet container.
+	atomic_int_fast32_t timeSlice;
+	/// Time delay (in µs) between the start of two consecutive time slices.
+	/// This is used for real-time slow-down.
+	atomic_int_fast32_t timeDelay;
 };
 
 struct input_common_state {
@@ -517,8 +525,6 @@ static bool parseHeader(inputCommonState state) {
 	}
 }
 
-#define TIME_SLICE_US (10 * 1000) // 10ms for now
-
 static caerEventPacketContainer generatePacketContainer(inputCommonState state, caerEventPacketHeader newPacket) {
 	int16_t newPacketType = caerEventPacketHeaderGetEventType(newPacket);
 	int64_t newPacketFirstTimestamp = caerGenericEventGetTimestamp64(caerGenericEventGetEvent(newPacket, 0), newPacket);
@@ -532,7 +538,10 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 	// Initialize with first packet.
 	if (state->packetContainer.wantedPacketTimestamp == -1) {
 		// -1 because newPacketFirstTimestamp is part of the set!
-		state->packetContainer.wantedPacketTimestamp = newPacketFirstTimestamp + (TIME_SLICE_US - 1);
+		state->packetContainer.wantedPacketTimestamp = newPacketFirstTimestamp
+			+ (atomic_load_explicit(&state->packetContainer.timeSlice, memory_order_relaxed) - 1);
+
+		portable_clock_gettime_monotonic(&state->packetContainer.lastCommitTime);
 	}
 
 	bool packetAlreadyExists = false;
@@ -624,7 +633,7 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 	// Let's generate a packet container, use the size of the event packets array as upper bound.
 	int32_t packetContainerPosition = 0;
 	caerEventPacketContainer packetContainer = caerEventPacketContainerAllocate(
-		utarray_len(state->packetContainer.eventPackets));
+		(int32_t) utarray_len(state->packetContainer.eventPackets));
 
 	// Iterate over each event packet, and slice out the relevant part in time.
 	caerEventPacketHeader *currPacket = NULL;
@@ -711,7 +720,8 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 	}
 
 	// Update wanted timestamp for next time slice.
-	state->packetContainer.wantedPacketTimestamp += TIME_SLICE_US;
+	state->packetContainer.wantedPacketTimestamp += atomic_load_explicit(&state->packetContainer.timeSlice,
+		memory_order_relaxed);
 
 	return (packetContainer);
 }
@@ -880,6 +890,40 @@ static bool parsePackets(inputCommonState state) {
 			continue;
 		}
 
+		// Got packet container, delay it until user-defined time.
+		uint64_t timeDelay = atomic_load_explicit(&state->packetContainer.timeDelay, memory_order_relaxed);
+
+		if (timeDelay != 0) {
+			// Get current time (nanosecond resolution).
+			struct timespec currentTime;
+			portable_clock_gettime_monotonic(&currentTime);
+
+			// Calculate elapsed time since last commit, based on that then either
+			// wait to meet timing, or log that it's impossible with current settings.
+			uint64_t diffNanoTime = (uint64_t) (((int64_t) (currentTime.tv_sec
+				- state->packetContainer.lastCommitTime.tv_sec) * 1000000000LL)
+				+ (int64_t) (currentTime.tv_nsec - state->packetContainer.lastCommitTime.tv_nsec));
+			uint64_t diffMicroTime = diffNanoTime / 1000;
+
+			if (diffMicroTime >= timeDelay) {
+				caerLog(CAER_LOG_WARNING, state->parentModule->moduleSubSystemString,
+					"Impossible to meet timeDelay timing specification with current settings.");
+			}
+			else {
+				// Sleep for the remaining time.
+				uint64_t sleepMicroTime = timeDelay - diffMicroTime;
+				uint64_t sleepMicroTimeSec = sleepMicroTime / 1000000; // Seconds part.
+				uint64_t sleepMicroTimeNsec = (sleepMicroTime * 1000) - (sleepMicroTimeSec * 1000000000); // Nanoseconds part.
+
+				struct timespec delaySleep = { .tv_sec = I64T(sleepMicroTimeSec), .tv_nsec = I64T(sleepMicroTimeNsec) };
+
+				thrd_sleep(&delaySleep, NULL);
+			}
+		}
+
+		// Update stored time.
+		portable_clock_gettime_monotonic(&state->packetContainer.lastCommitTime);
+
 		retry: if (!ringBufferPut(state->transferRing, packetContainer)) {
 			if (atomic_load_explicit(&state->keepPackets, memory_order_relaxed)) {
 				// Retry forever if requested.
@@ -986,8 +1030,14 @@ bool isNetworkMessageBased) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferSize", 65536); // in bytes, size of data buffer
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "transferBufferSize", 128); // in packet groups
 
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "timeSlice", 10000); // in µs, size of time slice to generate
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "timeDelay", 10000); // in µs, delay between consecutive slices
+
 	atomic_store(&state->validOnly, sshsNodeGetBool(moduleData->moduleNode, "validOnly"));
 	atomic_store(&state->keepPackets, sshsNodeGetBool(moduleData->moduleNode, "keepPackets"));
+
+	atomic_store(&state->packetContainer.timeSlice, sshsNodeGetInt(moduleData->moduleNode, "timeSlice"));
+	atomic_store(&state->packetContainer.timeDelay, sshsNodeGetInt(moduleData->moduleNode, "timeDelay"));
 
 	// Initialize transfer ring-buffer. transferBufferSize only changes here at init time!
 	state->transferRing = ringBufferInit((size_t) sshsNodeGetInt(moduleData->moduleNode, "transferBufferSize"));
@@ -1116,6 +1166,12 @@ static void caerInputCommonConfigListener(sshsNode node, void *userData, enum ss
 		else if (changeType == INT && caerStrEquals(changeKey, "bufferSize")) {
 			// Set buffer update flag.
 			atomic_store(&state->bufferUpdate, true);
+		}
+		else if (changeType == INT && caerStrEquals(changeKey, "timeSlice")) {
+			atomic_store(&state->packetContainer.timeSlice, changeValue.iint);
+		}
+		else if (changeType == INT && caerStrEquals(changeKey, "timeDelay")) {
+			atomic_store(&state->packetContainer.timeDelay, changeValue.iint);
 		}
 	}
 }
