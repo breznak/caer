@@ -143,7 +143,7 @@ typedef struct output_common_state *outputCommonState;
 size_t CAER_OUTPUT_COMMON_STATE_STRUCT_SIZE = sizeof(struct output_common_state);
 
 static void copyPacketsToTransferRing(outputCommonState state, size_t packetsListSize, va_list packetsList);
-static int packetsTypeCmp(const void *a, const void *b);
+static int packetsFirstTimestampThenTypeCmp(const void *a, const void *b);
 static bool newOutputBuffer(outputCommonState state);
 static void commitOutputBuffer(outputCommonState state);
 static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader packet, size_t packetSize);
@@ -297,7 +297,7 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 	}
 }
 
-static int packetsTypeCmp(const void *a, const void *b) {
+static int packetsFirstTimestampThenTypeCmp(const void *a, const void *b) {
 	const caerEventPacketHeader *aa = a;
 	const caerEventPacketHeader *bb = b;
 
@@ -562,7 +562,8 @@ static void orderAndSendEventPackets(outputCommonState state, caerEventPacketCon
 	// Sort container by first timestamp (required) and by type ID (convenience).
 	size_t currPacketContainerSize = (size_t) caerEventPacketContainerGetEventPacketsNumber(currPacketContainer);
 
-	qsort(currPacketContainer->eventPackets, currPacketContainerSize, sizeof(caerEventPacketHeader), &packetsTypeCmp);
+	qsort(currPacketContainer->eventPackets, currPacketContainerSize, sizeof(caerEventPacketHeader),
+		&packetsFirstTimestampThenTypeCmp);
 
 	// Since we just got new data, let's first check that it does conform to our expectations.
 	// This means the timestamp didn't slide back! So new smallest TS is >= than last highest TS.
