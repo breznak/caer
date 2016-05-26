@@ -673,6 +673,9 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 		CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (currPacketEventSize * nextPacketEventNumber));
 		if (nextPacket == NULL) {
 			// TODO: handle allocation failure.
+			caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
+				"Failed memory allocation for nextPacket.");
+			exit(EXIT_FAILURE);
 		}
 
 		// Copy header and remaining events to new packet, set header sizes correctly.
@@ -690,6 +693,9 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 		CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (currPacketEventSize * cutoffIndex));
 		if (currPacketResized == NULL) {
 			// TODO: handle allocation failure.
+			caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
+				"Failed memory allocation for currPacketResized.");
+			exit(EXIT_FAILURE);
 		}
 
 		// Set header sizes for resized packet correctly.
