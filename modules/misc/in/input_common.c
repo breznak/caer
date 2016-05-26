@@ -903,8 +903,6 @@ static bool parsePackets(inputCommonState state) {
 static int inputHandlerThread(void *stateArg) {
 	inputCommonState state = stateArg;
 
-	struct timespec waitSleep = { .tv_sec = 0, .tv_nsec = 10000000 }; // Wait 10ms.
-
 	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
 		// Handle configuration changes affecting buffer management.
 		if (atomic_load_explicit(&state->bufferUpdate, memory_order_relaxed)) {
@@ -947,9 +945,6 @@ static int inputHandlerThread(void *stateArg) {
 			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to parse event packets.");
 			break;
 		}
-
-		// Slow down generation of new packets to near real-time.
-		thrd_sleep(&waitSleep, NULL);
 
 		// Go and get a full buffer on next iteration again, starting at position 0.
 		state->dataBuffer->bufferPosition = 0;
