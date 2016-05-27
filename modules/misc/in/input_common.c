@@ -951,7 +951,10 @@ static int inputHandlerThread(void *stateArg) {
 	thrd_set_name(state->parentModule->moduleSubSystemString);
 
 	// Set thread priority to high. This may fail depending on your OS configuration.
-	thrd_set_priority(-1);
+	if (thrd_set_priority(-1) != thrd_success) {
+		caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
+			"Failed to raise thread priority for Input Handler thread. You may experience lags and delays.");
+	}
 
 	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
 		// Handle configuration changes affecting buffer management.
