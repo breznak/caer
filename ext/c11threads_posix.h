@@ -5,10 +5,13 @@
 #include <pthread.h>
 #include <time.h>
 #include <sys/time.h>
-#include <sys/prctl.h>
-#include <sys/resource.h>
 #include <sched.h>
 #include <errno.h>
+
+#if defined(OS_LINUX)
+	#include <sys/prctl.h>
+	#include <sys/resource.h>
+#endif
 
 typedef pthread_t thrd_t;
 typedef pthread_once_t once_flag;
@@ -340,22 +343,36 @@ static inline int mtx_shared_unlock_shared(mtx_shared_t *mutex) {
 	return (thrd_success);
 }
 
-// NON STANDARD! LINUX SPECIFIC!
+// NON STANDARD!
 static inline int thrd_set_name(const char *name) {
+#if defined(OS_LINUX)
 	if (prctl(PR_SET_NAME, name) != 0) {
 		return (thrd_error);
 	}
 
 	return (thrd_success);
+#elif defined(OS_MACOSX)
+	if (pthread_setname_np(name) != 0) {
+		return (thrd_error);
+	}
+
+	return (thrd_success);
+#else
+	return (thrd_error);
+#endif
 }
 
-// NON STANDARD! LINUX SPECIFIC!
+// NON STANDARD!
 static inline int thrd_set_priority(int priority) {
+#if defined(OS_LINUX)
 	if (setpriority(PRIO_PROCESS, 0, priority) != 0) {
 		return (thrd_error);
 	}
 
 	return (thrd_success);
+#else
+	return (thrd_error);
+#endif
 }
 
 #endif	/* C11THREADS_POSIX_H_ */
