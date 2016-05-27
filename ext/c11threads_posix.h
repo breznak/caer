@@ -5,6 +5,8 @@
 #include <pthread.h>
 #include <time.h>
 #include <sys/time.h>
+#include <sys/prctl.h>
+#include <sys/resource.h>
 #include <sched.h>
 #include <errno.h>
 
@@ -332,6 +334,24 @@ static inline int mtx_shared_timedlock_shared(mtx_shared_t *restrict mutex, cons
 // NON STANDARD!
 static inline int mtx_shared_unlock_shared(mtx_shared_t *mutex) {
 	if (pthread_rwlock_unlock(mutex) != 0) {
+		return (thrd_error);
+	}
+
+	return (thrd_success);
+}
+
+// NON STANDARD! LINUX SPECIFIC!
+static inline int thrd_set_name(const char *name) {
+	if (prctl(PR_SET_NAME, name) != 0) {
+		return (thrd_error);
+	}
+
+	return (thrd_success);
+}
+
+// NON STANDARD! LINUX SPECIFIC!
+static inline int thrd_set_priority(int priority) {
+	if (setpriority(PRIO_PROCESS, 0, priority) != 0) {
 		return (thrd_error);
 	}
 
