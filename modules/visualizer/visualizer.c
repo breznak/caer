@@ -635,6 +635,9 @@ static int caerVisualizerRenderThread(void *visualizerState) {
 
 	caerVisualizerState state = visualizerState;
 
+	// Set thread name.
+	thrd_set_name(state->parentModule->moduleSubSystemString);
+
 	if (!caerVisualizerInitGraphics(state)) {
 		return (thrd_error);
 	}

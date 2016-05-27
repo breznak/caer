@@ -160,6 +160,11 @@ static const UT_icd ut_genericFree_icd = { sizeof(struct genericFree), NULL, NUL
 static int caerMainloopRunner(void *inPtr) {
 	caerMainloopData mainloopData = inPtr;
 
+	// Set thread name.
+	char threadName[16];
+	snprintf(threadName, 16, "Mainloop-%" PRIu16, mainloopData->mainloopID);
+	thrd_set_name(threadName);
+
 	// Set global reference to main-loop memory for this thread (for modules).
 	glMainloopData = mainloopData;
 

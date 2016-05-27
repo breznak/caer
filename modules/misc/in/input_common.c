@@ -891,7 +891,7 @@ static bool parsePackets(inputCommonState state) {
 		}
 
 		// Got packet container, delay it until user-defined time.
-		uint64_t timeDelay = atomic_load_explicit(&state->packetContainer.timeDelay, memory_order_relaxed);
+		uint64_t timeDelay = U64T(atomic_load_explicit(&state->packetContainer.timeDelay, memory_order_relaxed));
 
 		if (timeDelay != 0) {
 			// Get current time (nanosecond resolution).
@@ -946,6 +946,12 @@ static bool parsePackets(inputCommonState state) {
 
 static int inputHandlerThread(void *stateArg) {
 	inputCommonState state = stateArg;
+
+	// Set thread name.
+	thrd_set_name(state->parentModule->moduleSubSystemString);
+
+	// Set thread priority to high. This may fail depending on your OS configuration.
+	thrd_set_priority(-1);
 
 	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
 		// Handle configuration changes affecting buffer management.

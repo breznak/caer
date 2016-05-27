@@ -751,6 +751,9 @@ static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD) {
 static int outputHandlerThread(void *stateArg) {
 	outputCommonState state = stateArg;
 
+	// Set thread name.
+	thrd_set_name(state->parentModule->moduleSubSystemString);
+
 	bool headerSent = false;
 
 	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {

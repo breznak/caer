@@ -61,6 +61,9 @@ void caerConfigServerStop(void) {
 static int caerConfigServerRunner(void *inPtr) {
 	UNUSED_ARGUMENT(inPtr);
 
+	// Set thread name.
+	thrd_set_name("ConfigServer");
+
 	// Get the right configuration node first.
 	sshsNode serverNode = sshsGetNode(sshsGetGlobal(), "/server/");
 
