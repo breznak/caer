@@ -707,6 +707,8 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state) 
 			}
 		CAER_ITERATOR_ALL_END
 
+		// TODO: handle TS_WRAP and TS_RESET as split points.
+
 		// If there is no cutoff point, we can just send on the whole packet with no changes.
 		if (cutoffIndex == -1) {
 			caerEventPacketContainerSetEventPacket(packetContainer, packetContainerPosition++, *currPacket);
