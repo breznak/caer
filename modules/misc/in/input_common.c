@@ -1027,8 +1027,19 @@ static int inputHandlerThread(void *stateArg) {
 		state->dataBuffer->bufferPosition = 0;
 	}
 
-	// Ensure parent also shuts down, for example on read failures.
-	sshsNodePutBool(state->parentModule->moduleNode, "running", false);
+	// At this point we either got terminated (running=false) or we stopped for some
+	// reason: parsing error or End-of-File.
+	// If we got hard-terminated, we empty the ring-buffer in the Exit() state.
+	// If we hit EOF/parse errors though, we want the consumers to be able to finish
+	// consuming the already produced data, so we wait for the ring-buffer to be empty.
+	if (atomic_load(&state->running)) {
+		while (atomic_load(&state->mainloopReference->dataAvailable) != 0) {
+			;
+		}
+
+		// Ensure parent also shuts down, for example on read failures.
+		sshsNodePutBool(state->parentModule->moduleNode, "running", false);
+	}
 
 	return (thrd_success);
 }
@@ -1129,6 +1140,7 @@ void caerInputCommonExit(caerModuleData moduleData) {
 	while ((packetContainer = ringBufferGet(state->transferRing)) != NULL) {
 		caerEventPacketContainerFree(packetContainer);
 
+		// If we're here, then nobody will consume this data afterwards.
 		atomic_fetch_sub_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_relaxed);
 	}
 
