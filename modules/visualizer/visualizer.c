@@ -941,7 +941,7 @@ bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPac
 		float y = caerPoint2DEventGetY(caerPoint2DIteratorElement);
 
 		// Display points in blue.
-		al_put_pixel((int) x, (int) y, al_map_rgb(0, 0, 255));
+		al_put_pixel((int) x, (int) y, al_map_rgb(0, 255, 255));
 	CAER_POINT2D_ITERATOR_VALID_END
 
 	return (true);
