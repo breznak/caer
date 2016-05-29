@@ -622,6 +622,62 @@ static void addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 	}
 }
 
+static inline void doPacketContainerCommit(inputCommonState state, caerEventPacketContainer packetContainer) {
+	retry: if (!ringBufferPut(state->transferRing, packetContainer)) {
+		if (atomic_load_explicit(&state->keepPackets, memory_order_relaxed)) {
+			// Retry forever if requested.
+			goto retry;
+		}
+
+		caerEventPacketContainerFree(packetContainer);
+
+		caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
+			"Failed to put new packet container on transfer ring-buffer: full.");
+	}
+	else {
+		// Signal availability of new data to the mainloop on packet container commit.
+		atomic_fetch_add_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_release);
+
+		caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Submitted packet container successfully.");
+	}
+}
+
+static inline void doTimeDelay(inputCommonState state) {
+	// Got packet container, delay it until user-defined time.
+	uint64_t timeDelay = U64T(atomic_load_explicit(&state->packetContainer.timeDelay, memory_order_relaxed));
+
+	if (timeDelay != 0) {
+		// Get current time (nanosecond resolution).
+		struct timespec currentTime;
+		portable_clock_gettime_monotonic(&currentTime);
+
+		// Calculate elapsed time since last commit, based on that then either
+		// wait to meet timing, or log that it's impossible with current settings.
+		uint64_t diffNanoTime = (uint64_t) (((int64_t) (currentTime.tv_sec
+			- state->packetContainer.lastCommitTime.tv_sec) * 1000000000LL)
+			+ (int64_t) (currentTime.tv_nsec - state->packetContainer.lastCommitTime.tv_nsec));
+		uint64_t diffMicroTime = diffNanoTime / 1000;
+
+		if (diffMicroTime >= timeDelay) {
+			caerLog(CAER_LOG_WARNING, state->parentModule->moduleSubSystemString,
+				"Impossible to meet timeDelay timing specification with current settings.");
+		}
+		else {
+			// Sleep for the remaining time.
+			uint64_t sleepMicroTime = timeDelay - diffMicroTime;
+			uint64_t sleepMicroTimeSec = sleepMicroTime / 1000000; // Seconds part.
+			uint64_t sleepMicroTimeNsec = (sleepMicroTime * 1000) - (sleepMicroTimeSec * 1000000000); // Nanoseconds part.
+
+			struct timespec delaySleep = { .tv_sec = I64T(sleepMicroTimeSec), .tv_nsec = I64T(sleepMicroTimeNsec) };
+
+			thrd_sleep(&delaySleep, NULL);
+		}
+	}
+
+	// Update stored time.
+	portable_clock_gettime_monotonic(&state->packetContainer.lastCommitTime);
+}
+
 static caerEventPacketContainer generatePacketContainer(inputCommonState state) {
 	// Let's generate a packet container, use the size of the event packets array as upper bound.
 	int32_t packetContainerPosition = 0;
@@ -895,58 +951,9 @@ static bool parsePackets(inputCommonState state) {
 			continue;
 		}
 
-		// Got packet container, delay it until user-defined time.
-		uint64_t timeDelay = U64T(atomic_load_explicit(&state->packetContainer.timeDelay, memory_order_relaxed));
+		doTimeDelay(state);
 
-		if (timeDelay != 0) {
-			// Get current time (nanosecond resolution).
-			struct timespec currentTime;
-			portable_clock_gettime_monotonic(&currentTime);
-
-			// Calculate elapsed time since last commit, based on that then either
-			// wait to meet timing, or log that it's impossible with current settings.
-			uint64_t diffNanoTime = (uint64_t) (((int64_t) (currentTime.tv_sec
-				- state->packetContainer.lastCommitTime.tv_sec) * 1000000000LL)
-				+ (int64_t) (currentTime.tv_nsec - state->packetContainer.lastCommitTime.tv_nsec));
-			uint64_t diffMicroTime = diffNanoTime / 1000;
-
-			if (diffMicroTime >= timeDelay) {
-				caerLog(CAER_LOG_WARNING, state->parentModule->moduleSubSystemString,
-					"Impossible to meet timeDelay timing specification with current settings.");
-			}
-			else {
-				// Sleep for the remaining time.
-				uint64_t sleepMicroTime = timeDelay - diffMicroTime;
-				uint64_t sleepMicroTimeSec = sleepMicroTime / 1000000; // Seconds part.
-				uint64_t sleepMicroTimeNsec = (sleepMicroTime * 1000) - (sleepMicroTimeSec * 1000000000); // Nanoseconds part.
-
-				struct timespec delaySleep = { .tv_sec = I64T(sleepMicroTimeSec), .tv_nsec = I64T(sleepMicroTimeNsec) };
-
-				thrd_sleep(&delaySleep, NULL);
-			}
-		}
-
-		// Update stored time.
-		portable_clock_gettime_monotonic(&state->packetContainer.lastCommitTime);
-
-		retry: if (!ringBufferPut(state->transferRing, packetContainer)) {
-			if (atomic_load_explicit(&state->keepPackets, memory_order_relaxed)) {
-				// Retry forever if requested.
-				goto retry;
-			}
-
-			caerEventPacketContainerFree(packetContainer);
-
-			caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
-				"Failed to put new packet container on transfer ring-buffer: full.");
-		}
-		else {
-			// Signal availability of new data to the mainloop on packet container commit.
-			atomic_fetch_add_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_release);
-
-			caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
-				"Submitted packet container successfully.");
-		}
+		doPacketContainerCommit(state, packetContainer);
 	}
 
 	return (true);
@@ -983,7 +990,14 @@ static int inputHandlerThread(void *stateArg) {
 
 			// Distinguish EOF from errors based upon errno value.
 			if (errno == 0) {
-				// TODO: flush last event packets/packet container on EOF.
+				// Flush last event packets/packet container on EOF.
+				caerEventPacketContainer packetContainer = generatePacketContainer(state);
+				if (packetContainer != NULL) {
+					doTimeDelay(state);
+
+					doPacketContainerCommit(state, packetContainer);
+				}
+
 				caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString, "End of file reached.");
 			}
 			else {
