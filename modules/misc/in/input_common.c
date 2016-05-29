@@ -121,7 +121,8 @@ static char *getFileHeaderLine(inputCommonState state);
 static void parseSourceString(char *sourceString, inputCommonState state);
 static bool parseFileHeader(inputCommonState state);
 static bool parseHeader(inputCommonState state);
-static caerEventPacketContainer generatePacketContainer(inputCommonState state, caerEventPacketHeader newPacket);
+static void addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket);
+static caerEventPacketContainer generatePacketContainer(inputCommonState state);
 static bool parsePackets(inputCommonState state);
 static int inputHandlerThread(void *stateArg);
 static void caerInputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
@@ -525,7 +526,7 @@ static bool parseHeader(inputCommonState state) {
 	}
 }
 
-static caerEventPacketContainer generatePacketContainer(inputCommonState state, caerEventPacketHeader newPacket) {
+static void addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket) {
 	int16_t newPacketType = caerEventPacketHeaderGetEventType(newPacket);
 	int64_t newPacketFirstTimestamp = caerGenericEventGetTimestamp64(caerGenericEventGetEvent(newPacket, 0), newPacket);
 	int64_t newPacketLastTimestamp = caerGenericEventGetTimestamp64(
@@ -576,7 +577,7 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 		if (mergedPacket == NULL) {
 			// Failed to allocate memory for merged packets, free newPacket and jump merge stage.
 			free(newPacket);
-			goto afterMergeStage;
+			return;
 		}
 
 		// Memory reallocation was successful, so we can update the header, copy over the new
@@ -619,21 +620,16 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 			state->packetContainer.highestTimestamp = newPacketLastTimestamp;
 		}
 	}
+}
 
-	afterMergeStage:
-	// Check if we have read and accumulated all the event packets with a main first timestamp smaller
-	// or equal than what we want. We know this is the case when the last seen main timestamp is clearly
-	// bigger than the wanted one. If this is true, it means we do have all the possible events of all
-	// types that happen up until that point, and we can split that time range off into a packet container.
-	// If not, we just return NULL, meaning no packet container, and go get the next event packet.
-	if (state->packetContainer.lastSeenPacketTimestamp <= state->packetContainer.wantedPacketTimestamp) {
-		return (NULL);
-	}
-
+static caerEventPacketContainer generatePacketContainer(inputCommonState state) {
 	// Let's generate a packet container, use the size of the event packets array as upper bound.
 	int32_t packetContainerPosition = 0;
 	caerEventPacketContainer packetContainer = caerEventPacketContainerAllocate(
 		(int32_t) utarray_len(state->packetContainer.eventPackets));
+	if (packetContainer == NULL) {
+		return (NULL);
+	}
 
 	// Iterate over each event packet, and slice out the relevant part in time.
 	caerEventPacketHeader *currPacket = NULL;
@@ -812,9 +808,9 @@ static bool parsePackets(inputCommonState state) {
 			// Allocate space for the full packet, so we can reassemble it.
 			state->packets.currPacketDataSize = (size_t) (eventCapacity * eventSize);
 
-			caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
-				"Allocating %zu bytes for newly read event packet.",
-				CAER_EVENT_PACKET_HEADER_SIZE + state->packets.currPacketDataSize);
+			//caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
+			//	"Allocating %zu bytes for newly read event packet.",
+			//	CAER_EVENT_PACKET_HEADER_SIZE + state->packets.currPacketDataSize);
 
 			state->packets.currPacket = malloc(CAER_EVENT_PACKET_HEADER_SIZE + state->packets.currPacketDataSize);
 			if (state->packets.currPacket == NULL) {
@@ -882,11 +878,20 @@ static bool parsePackets(inputCommonState state) {
 
 		// We've got a full event packet, store it. It will later appear in the packet
 		// container in some form.
-		caerEventPacketContainer packetContainer = generatePacketContainer(state, state->packets.currPacket);
+		addToPacketContainer(state, state->packets.currPacket);
 
+		// Check if we have read and accumulated all the event packets with a main first timestamp smaller
+		// or equal than what we want. We know this is the case when the last seen main timestamp is clearly
+		// bigger than the wanted one. If this is true, it means we do have all the possible events of all
+		// types that happen up until that point, and we can split that time range off into a packet container.
+		// If not, we just go get the next event packet.
+		if (state->packetContainer.lastSeenPacketTimestamp <= state->packetContainer.wantedPacketTimestamp) {
+			continue;
+		}
+
+		caerEventPacketContainer packetContainer = generatePacketContainer(state);
 		if (packetContainer == NULL) {
-			// Given the new packet and the current criteria, no new event packet container
-			// was produced, so we don't send anything to the mainloop.
+			// On failure, just continue.
 			continue;
 		}
 
@@ -938,6 +943,9 @@ static bool parsePackets(inputCommonState state) {
 		else {
 			// Signal availability of new data to the mainloop on packet container commit.
 			atomic_fetch_add_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_release);
+
+			caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
+				"Submitted packet container successfully.");
 		}
 	}
 
