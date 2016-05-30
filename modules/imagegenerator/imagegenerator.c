@@ -178,6 +178,7 @@ static bool save_img(int img_counter, char *img, int size_w, int size_h, char **
 	return (true);
 }
 
+
 /*  Function: save_txt
  *  ------------------
  *  saves an image txt to disk.
@@ -197,7 +198,7 @@ static bool save_img(int img_counter, char *img, int size_w, int size_h, char **
  *
  */
 
-static bool save_txt(int img_counter, char *img, int size_w, int size_h, char ** file_strings_classify, char state_mode,
+static bool save_txt(int img_counter, char *img, int size_w, int size_h, char ** file_strings_classify,
 	int file_counter, char *directory, bool save_for_classification, int max_img_qty) {
 
 	char id_img[15];
@@ -206,22 +207,8 @@ static bool save_txt(int img_counter, char *img, int size_w, int size_h, char **
 	strcpy(filename, directory);
 
 	//check in which mode we are (testing/training/none)
+   strcat(filename, "img_");
 
-	if (state_mode == FRAME_SAVE_MODE) {
-		strcat(filename, "frame_");
-	}
-	else if (state_mode == TESTING) {
-		strcat(filename, "testing_spikes_");
-	}
-	else if (state_mode == TRAINING_POSITIVES) {
-		strcat(filename, "pos_spikes_");
-	}
-	else if (state_mode == TRAINING_NEGATIVES) {
-		strcat(filename, "neg_spikes_");
-	}
-	else { //default
-		strcat(filename, "img_");
-	}
 	sprintf(id_img, "%d", img_counter);
 	strcat(filename, id_img); //append id_img
 	strcat(filename, ext); //append extension
@@ -237,13 +224,15 @@ static bool save_txt(int img_counter, char *img, int size_w, int size_h, char **
 		caerLog(CAER_LOG_ERROR, __func__, "Failed to write file to disk.");
 	}
 	int c = 0;
-	int *pixel;
+	double *pixel;
 	pixel = malloc(sizeof(int));
 	for (int x = 0; x < size_w; x++) {
+	   fprintf(fd1, "\n");
 		for (int y = 0; y < size_h; y++) {
 			c = x * size_w + y;
-			*pixel = img[c];
-			fprintf(fd1, " %d\t", *pixel);
+			*pixel = (double)(img[c]*0.00390625);
+			//printf(" %d ", *pixel);
+			fprintf(fd1, " %f\t", *pixel);
 		}
 	}
 	fclose(fd1);
@@ -653,7 +642,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 					//normalize before saving
 					normalize_image(classify_txt, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE);
 					if (!save_txt(state->counterImg, classify_txt, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE,
-						file_strings_classify, state->mode, file_string_counter, CLASSIFY_IMG_DIRECTORY, true,
+						file_strings_classify, file_string_counter, CLASSIFY_IMG_DIRECTORY, true,
 						MAX_IMG_QTY)) {
 						caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to save image.");
 						return;
