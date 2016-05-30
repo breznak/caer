@@ -243,7 +243,7 @@ static bool mainloop_1(void) {
 		return (false);
 	}
 
-#if defined(DAVISFX2) || defined(DAVISFX3)
+#if defined(DAVISFX2) || defined(DAVISFX3) || defined(ENABLE_FILE_INPUT)
 	/* frame_img_ptr:
 	 *
 	 * (Not used so far.)
@@ -280,7 +280,7 @@ static bool mainloop_1(void) {
 	// display images of accumulated spikes
 	// this also requires image generator
 #ifdef ENABLE_IMAGEGENERATOR
-#if defined(DAVISFX2) || defined(DAVISFX3)
+#if defined(DAVISFX2) || defined(DAVISFX3) || defined(ENABLE_FILE_INPUT)
 	caerImagestreamerVisualizer(22, *display_img_ptr, DISPLAY_IMG_SIZE, classification_results, class_region_sizes, (int) MAX_IMG_QTY);
 #else //without Frames
 	caerImagestreamerVisualizer(22, *display_img_ptr, DISPLAY_IMG_SIZE, classificationResults, class_region_sizes, (int) MAX_IMG_QTY);
