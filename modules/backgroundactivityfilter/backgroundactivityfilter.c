@@ -161,6 +161,9 @@ static bool allocateTimestampMap(BAFilterState state, int16_t sourceID) {
 	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
 	state->timestampMap = simple2DBufferInitLong((size_t) sizeX, (size_t) sizeY);
+	if (state->timestampMap == NULL) {
+		return (false);
+	}
 
 	// TODO: size the map differently if subSampleBy is set!
 	return (true);
