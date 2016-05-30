@@ -1,4 +1,5 @@
 SET(CAER_EXT_FILES
+	ext/lodepng/lodepng.c
 	ext/ringbuffer/ringbuffer.c
 	ext/slre/slre.c
 	ext/sshs/sshs.c

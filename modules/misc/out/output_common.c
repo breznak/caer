@@ -83,6 +83,7 @@
 
 #include <libcaer/events/common.h>
 #include <libcaer/events/packetContainer.h>
+#include <libcaer/events/frame.h>
 
 // TODO: check handling of timestamp-reset events from camera!
 
@@ -401,6 +402,23 @@ static inline void caerGenericEventSetTimestamp(void *eventPtr, caerEventPacketH
 		timestamp);
 }
 
+static inline LodePNGColorType caerFrameEventColorToLodePNG(enum caer_frame_event_color_channels channels) {
+	switch (channels) {
+		case GRAYSCALE:
+			return (LCT_GREY);
+			break;
+
+		case RGB:
+			return (LCT_RGB);
+			break;
+
+		case RGBA:
+		default:
+			return (LCT_RGBA);
+			break;
+	}
+}
+
 static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader packet, size_t packetSize) {
 	// Data compression technique 1: serialize timestamps for event types that tend to repeat them a lot.
 	// Currently, this means polarity events.
@@ -490,6 +508,49 @@ static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader
 			// Reset values for next iteration.
 			lastTS = currTS;
 			tsRun = 1;
+		}
+
+		return (currPacketOffset);
+	}
+
+	// Data compression technique 2: do PNG compression on frames, Grayscale and RGB(A).
+	if ((state->format & 0x02) && caerEventPacketHeaderGetEventType(packet) == FRAME_EVENT) {
+		size_t currPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE; // Start here, no change to header.
+		size_t frameHeaderSize = sizeof(struct caer_frame_event);
+
+		CAER_FRAME_ITERATOR_ALL_START((caerFrameEventPacket) packet)
+			size_t pixelSize = caerFrameEventGetPixelsSize(caerFrameIteratorElement);
+
+			// Keep frame event header intact, compress image data, move memory close together.
+			memmove(((uint8_t *) packet) + currPacketOffset, caerFrameIteratorElement, frameHeaderSize);
+			currPacketOffset += frameHeaderSize;
+
+			unsigned char *outBuffer;
+			size_t outSize;
+			if (lodepng_encode_memory(&outBuffer, &outSize,
+				(unsigned char *) caerFrameEventGetPixelArrayUnsafe(caerFrameIteratorElement),
+				U32T(caerFrameEventGetLengthX(caerFrameIteratorElement)),
+				U32T(caerFrameEventGetLengthY(caerFrameIteratorElement)),
+				caerFrameEventColorToLodePNG(caerFrameEventGetChannelNumber(caerFrameIteratorElement)), 16) != 0) {
+				// Failed to generate PNG.
+				// TODO: how to handle?
+			}
+
+			// Check that the image didn't actually grow.
+			// Add integer needed for storing PNG block length.
+			if ((outSize + sizeof(int32_t)) > pixelSize) {
+				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to compress frame event. "
+					"Image actually grew by %zu bytes to a total of %zu bytes.", (outSize - pixelSize), outSize);
+				// TODO: how to handle this?
+			}
+
+			// Store size of PNG image block as 4 byte integer.
+			int32_t outSizeInt = I32T(outSize);
+			memcpy(((uint8_t *) packet) + currPacketOffset, &outSizeInt, sizeof(int32_t));
+			currPacketOffset += sizeof(int32_t);
+
+			memcpy(((uint8_t *) packet) + currPacketOffset, outBuffer, outSize);
+			currPacketOffset += outSize;
 		}
 
 		return (currPacketOffset);
