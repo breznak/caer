@@ -77,6 +77,10 @@
 	#include "ext/c11threads_posix.h"
 #endif
 
+#define LODEPNG_NO_COMPILE_DISK
+#define LODEPNG_NO_COMPILE_ANCILLARY_CHUNKS
+#include "ext/lodepng/lodepng.h"
+
 #include <libcaer/events/common.h>
 #include <libcaer/events/packetContainer.h>
 
