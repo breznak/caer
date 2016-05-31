@@ -8,12 +8,12 @@ struct AccFilter_state {
 	int64_t close; //close time for current packet
         caerPolarityEventPacket *curr;
         caerPolarityEventPacket *next; //backlog packet
-	int32_t deltaT;
+	int32_t deltaT; // how often a clock sync is generated (new packet released),in ms
         // 2D buffer
-	int16_t buff2dMaxX;
+	int16_t buff2dMaxX;  //these are set from camera dimensions
 	int16_t buff2dMaxY;
 	int64_t **buff2D;
-        polarity_t mode;
+        polarity_t mode; // config parameter
         // 1D buffer        
         int32_t buff1dMax;
         int64_t *buff1D;
@@ -47,6 +47,8 @@ void caerAccumulateFilter(uint16_t moduleID, caerPolarityEventPacket polarity) {
 static bool caerAccumulateFilterInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "deltaT", 1000);
         sshsNodePutIntIfAbsent(moduleData->moduleNode, "buff1dMax", 1000); //depends on transform() function
+        sshsNodePutStringIfAbsent(moduleData->moduleNode, "mode", "both");
+
 
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
@@ -104,11 +106,22 @@ static void caerAccumulateFilterConfig(caerModuleData moduleData) {
 	state->deltaT = sshsNodeGetInt(moduleData->moduleNode, "deltaT");
         state->buff2dMaxX = -1; // -1 means will be set to camera dimensions automatically
         state->buff2dMaxY = -1;
-        state->buff1dMax = sshsNodeGetInt(moduleData->moduleNode, "buff1dMax"); 
-        state->mode = POLARITY_ON; //TODO add config node for this
-
-        // If the 2D buff is not allocated yet, do it.
-        // ... must be done in run() as sizes are dymanically set from packet header //FIXME can I get camera dims already here?, would be nicer
+        state->buff1dMax = sshsNodeGetInt(moduleData->moduleNode, "buff1dMax");
+        char *str = sshNodeGetString(moduleData->moduleNode, "mode"); 
+        // parse mode:
+        if (caerStrEquals(str, "on")) {
+		 state->mode = POLARITY_ON;
+        } else if (caerStrEquals(str, "off")) {
+                 state->mode = POLARITY_OFF;
+        } else if (caerStrEquals(str, "both")) {
+                 state->mode = POLARITY_BOTH;
+        } else if (caerStrEquals(str, "replace")) {
+                 state->mode = POLARITY_REPLACE;
+        } else {
+                caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+			"Invalid AccumulateFilter.mode! Use one of on, off, both, replace. ");
+        	state->mode = POLARITY_BOTH;
+	}
 
       // Allocate 1D buff if needed
       if (state->buff1D == NULL) {
