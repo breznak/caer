@@ -209,7 +209,7 @@ static bool parseNetworkHeader(inputCommonState state) {
 
 	if (state->isNetworkMessageBased) {
 		// For message based streams, use the sequence number.
-		// TODO: check this!
+		// TODO: check this for missing packets in message mode!
 		state->header.networkSequenceNumber = networkHeader.sequenceNumber;
 	}
 	else {
@@ -231,6 +231,8 @@ static bool parseNetworkHeader(inputCommonState state) {
 
 	// All formats are supported.
 	state->header.formatID = networkHeader.formatNumber;
+
+	// TODO: get sourceInfo node via config-server side-channel.
 
 	// We're done!
 	state->header.isValidHeader = true;
