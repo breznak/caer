@@ -75,7 +75,6 @@ static void caerAccumulateFilterRun(caerModuleData moduleData, size_t argsNumber
           sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
           state->buff2dMaxX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
           state->buff2dMaxY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
-          free(sourceInfoNode); sourceInfoNode = NULL;
           // allocate 2D buffer
           if (state->buff2D == NULL && (state->buff2dMaxX != -1 || state->buff2dMaxY != -1)) {
                 if (!allocate2DBuffer(state, state->buff2dMaxX, state->buff2dMaxY)) {
