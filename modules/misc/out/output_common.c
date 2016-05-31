@@ -772,26 +772,18 @@ static void sendFileHeader(outputCommonState state) {
 
 static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD) {
 	// Send AEDAT 3.1 header (RAW format) for network streams (20 bytes total).
-	int64_t magicNumber = htole64(AEDAT3_NETWORK_MAGIC_NUMBER);
+	struct aedat3_network_header networkHeader;
 
-	int64_t sequenceNumber = htole64(state->networkSequenceNumber);
-
-	int8_t versionNumber = AEDAT3_NETWORK_VERSION;
-	int8_t formatNumber = 0x00; // RAW format.
-	int16_t sourceNumber = htole16(1); // Always one source per output module.
-
-	uint8_t networkHeader[AEDAT3_NETWORK_HEADER_LENGTH] = { 0 };
-
-	*((int64_t *) (networkHeader + 0)) = magicNumber;
-	*((int64_t *) (networkHeader + 8)) = sequenceNumber;
-	*((int8_t *) (networkHeader + 16)) = versionNumber;
-	*((int8_t *) (networkHeader + 17)) = formatNumber;
-	*((int16_t *) (networkHeader + 18)) = sourceNumber;
+	networkHeader.magicNumber = htole64(AEDAT3_NETWORK_MAGIC_NUMBER);
+	networkHeader.sequenceNumber = htole64(state->networkSequenceNumber);
+	networkHeader.versionNumber = AEDAT3_NETWORK_VERSION;
+	networkHeader.formatNumber = 0x00; // RAW format.
+	networkHeader.sourceNumber = htole16(1); // Always one source per output module.
 
 	// If message-based, we copy the header at the start of the buffer,
 	// because we want it in each message (and each buffer is a message!).
 	if (state->isNetworkMessageBased) {
-		memcpy(state->dataBuffer->buffer, networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
+		memcpy(state->dataBuffer->buffer, &networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
 		state->dataBuffer->bufferUsedSize = AEDAT3_NETWORK_HEADER_LENGTH;
 
 		// Increase sequence number for successive headers, if this is a
@@ -803,7 +795,7 @@ static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD) {
 		// We support writing to all clients, or only to one specified client.
 		// This one-client mode is only used for server mode operation.
 		if (onlyOneClientFD != NULL && *onlyOneClientFD >= 0) {
-			if (!writeUntilDone(*onlyOneClientFD, networkHeader, AEDAT3_NETWORK_HEADER_LENGTH)) {
+			if (!writeUntilDone(*onlyOneClientFD, &networkHeader, AEDAT3_NETWORK_HEADER_LENGTH)) {
 				caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
 					"Disconnect or error on fd %d, closing and removing. Error: %d.", *onlyOneClientFD, errno);
 
@@ -812,7 +804,7 @@ static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD) {
 			}
 		}
 		else {
-			writeBufferToAll(state, networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
+			writeBufferToAll(state, &networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
 		}
 	}
 }

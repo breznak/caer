@@ -185,7 +185,56 @@ static bool newInputBuffer(inputCommonState state) {
 }
 
 static bool parseNetworkHeader(inputCommonState state) {
-	// TODO: handle network header.
+	// Network header is 20 bytes long. Use struct to interpret.
+	struct aedat3_network_header networkHeader;
+
+	// Copy data into packet struct.
+	memcpy(&networkHeader, state->dataBuffer->buffer, AEDAT3_NETWORK_HEADER_LENGTH);
+	state->dataBuffer->bufferPosition += AEDAT3_NETWORK_HEADER_LENGTH;
+
+	// Ensure endianness conversion is done if needed.
+	networkHeader.magicNumber = le64toh(networkHeader.magicNumber);
+	networkHeader.sequenceNumber = le64toh(networkHeader.sequenceNumber);
+	networkHeader.sourceNumber = le16toh(networkHeader.sourceNumber);
+
+	// Check header values.
+	if (networkHeader.magicNumber != AEDAT3_NETWORK_MAGIC_NUMBER) {
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+			"AEDAT 3.X magic number not found. Invalid network stream.");
+		return (false);
+	}
+
+	state->header.isAEDAT3 = true;
+	state->header.majorVersion = 3;
+
+	if (state->isNetworkMessageBased) {
+		// For message based streams, use the sequence number.
+		// TODO: check this!
+		state->header.networkSequenceNumber = networkHeader.sequenceNumber;
+	}
+	else {
+		// For stream based transports, this is always zero.
+		if (networkHeader.sequenceNumber != 0) {
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+				"SequenceNumber is not zero. Invalid network stream.");
+			return (false);
+		}
+	}
+
+	if (networkHeader.versionNumber != AEDAT3_NETWORK_VERSION) {
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+			"Unsupported AEDAT version. Invalid network stream.");
+		return (false);
+	}
+
+	state->header.minorVersion = networkHeader.versionNumber;
+
+	// All formats are supported.
+	state->header.formatID = networkHeader.formatNumber;
+
+	// We're done!
+	state->header.isValidHeader = true;
+
 	return (true);
 }
 
