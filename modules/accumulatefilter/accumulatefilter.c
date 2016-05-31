@@ -9,6 +9,7 @@ struct AccFilter_state {
         caerPolarityEventPacket *curr;
         caerPolarityEventPacket *next; //backlog packet
 	int32_t deltaT; // how often a clock sync is generated (new packet released),in ms
+        int lastTsOverflow_; // helper keeping prev tsOverflow for comparison if those changed 
         // 2D buffer
 	simple2DBufferByte buff2D;
         polarity_t mode; // config parameter
@@ -16,7 +17,8 @@ struct AccFilter_state {
         int32_t buff1dMax;
         int64_t *buff1D;
         // etc
-        bool ready = false;
+        bool initialized = false; // the filter is fully initialized (after 1st run() call)
+        bool release = false; // the new packet should be released (either clock or other reasons)
 };
 
 typedef struct AccFilter_state *AccFilterState;
@@ -70,7 +72,7 @@ static void caerAccumulateFilterRun(caerModuleData moduleData, size_t argsNumber
 	AccFilterState state = moduleData->moduleState;
 
         // update camera dimensions
-        if(!state->ready) { //FIXME this should be in Init() if I know packet header at the time
+        if(!state->initialized) { //FIXME this should be in Init() if I know packet header at the time
           // Get size information from source.
           uint16_t sourceID = caerEventPacketHeaderGetEventSource(&polarity->packetHeader);
           sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
@@ -82,10 +84,19 @@ static void caerAccumulateFilterRun(caerModuleData moduleData, size_t argsNumber
 	  int maxEvtsSize = 50000; //FIXME must be large enough, we want to send packet ourselves on correct clock signal, not when the packet is full (which happens automatically)
       	  int source = moduleData->moduleID; // this module created this new packet
       	  int tsOverflow = caerEventPacketHeaderGetEventTSOverflow(&polarity->packetHeader);
+          state->lastTsOverflow_ = tsOverflow;
       	  state->curr = caerPolarityEventPacketAllocate(I32T(maxEvtsSize), I16T(source), I32T(tsOverflow)); //TODO use growing event packets when implemented (no need for maxEvtsSize)
       	  state->next = caerPolarityEventPacketAllocate(I32T(maxEvtsSize), I16T(source), I32T(tsOverflow));
-
+          // initialization finished
+          state->initialized = true;
         }
+
+        // check if timestamp overflowed (we must release the packet, as all new timestamps are invalid)
+        int tsOverflow = caerEventPacketHeaderGetEventTSOverflow(&polarity->packetHeader);
+        if (state->lastTsOverflow_ != tsOverflow) {
+ 	  state->release = true; 
+	  state->lastTsOverflow_ = tsOverflow;
+	}
 
         CAER_POLARITY_ITERATOR_VALID_START(state->next) //process all evts from previous next
                 processEvent(state, caerPolarityIteratorElement, state->next);
