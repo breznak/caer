@@ -59,7 +59,7 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 		close(sockFd);
 
 		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"Could not connect to remote UDP client %s:%" PRIu16 ". Error: %d.",
+			"Could not connect to remote UDP server %s:%" PRIu16 ". Error: %d.",
 			inet_ntop(AF_INET, &udpClient.sin_addr, (char[INET_ADDRSTRLEN] ) { 0x00 }, INET_ADDRSTRLEN),
 			ntohs(udpClient.sin_port), errno);
 		return (false);
