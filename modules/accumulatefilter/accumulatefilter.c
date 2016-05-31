@@ -85,6 +85,13 @@ static void caerAccumulateFilterRun(caerModuleData moduleData, size_t argsNumber
                         return;
                 }
           }
+          // allocate new helper event packets
+	  int maxEvtsSize = 50000; //FIXME must be large enough, we want to send packet ourselves on correct clock signal, not when the packet is full (which happens automatically)
+      	  int source = moduleData->moduleID; // this module created this new packet
+      	  int tsOverflow = caerEventPacketHeaderGetEventTSOverflow(&polarity->packetHeader);
+      	  state->curr = caerPolarityEventPacketAllocate(I32T(maxEvtsSize), I16T(source), I32T(tsOverflow)); //TODO use growing event packets when implemented (no need for maxEvtsSize)
+      	  state->next = caerPolarityEventPacketAllocate(I32T(maxEvtsSize), I16T(source), I32T(tsOverflow));
+
         }
 
         CAER_POLARITY_ITERATOR_VALID_START(state->next) //process all evts from previous next
@@ -131,12 +138,6 @@ static void caerAccumulateFilterConfig(caerModuleData moduleData) {
                         return;
         }
       }
-
-      //FIXME how to create my own caerPolarityEventPacket? and add an event to it?; WHAT should the constants be?
-      state->curr = caerPolarityEventPacketAllocate(I32T(5000), I16T(1), I32T(0));
-      state->next = caerPolarityEventPacketAllocate(I32T(5000), I16T(1), I32T(0));
-
-
 }
 
 static void caerAccumulateFilterExit(caerModuleData moduleData) {
