@@ -10,13 +10,13 @@ struct AccFilter_state {
         caerPolarityEventPacket *next; //backlog packet
 	int32_t deltaT; // how often a clock sync is generated (new packet released),in ms
         // 2D buffer
-	int16_t buff2dMaxX;  //these are set from camera dimensions
-	int16_t buff2dMaxY;
-	int64_t **buff2D;
+	simple2DBufferByte buff2D;
         polarity_t mode; // config parameter
         // 1D buffer        
         int32_t buff1dMax;
         int64_t *buff1D;
+        // etc
+        bool ready = false;
 };
 
 typedef struct AccFilter_state *AccFilterState;
@@ -27,7 +27,6 @@ static void caerAccumulateFilterRun(caerModuleData moduleData, size_t argsNumber
 static void caerAccumulateFilterConfig(caerModuleData moduleData);
 static void caerAccumulateFilterExit(caerModuleData moduleData);
 //helpers
-static bool allocate2DBuffer(AccFilterState state, int16_t sizeX, int16_t sizeY);
 static void transform1D(int64_t* vector1D, uint16_t x, uint16_t y, bool p);
 static void processEvent(AccFilterState state, caerPolarityEvent evt, caerPolarityEventPacket packet);
 
@@ -71,20 +70,14 @@ static void caerAccumulateFilterRun(caerModuleData moduleData, size_t argsNumber
 	AccFilterState state = moduleData->moduleState;
 
         // update camera dimensions
-        if(state->buff2dMaxX == -1 || state->buff2dMaxY == -1) { //FIXME this should be in Init() if I know "dvsSizeX" at the time
+        if(!state->ready) { //FIXME this should be in Init() if I know packet header at the time
           // Get size information from source.
           uint16_t sourceID = caerEventPacketHeaderGetEventSource(&polarity->packetHeader);
           sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
-          state->buff2dMaxX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-          state->buff2dMaxY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
           // allocate 2D buffer
-          if (state->buff2D == NULL && (state->buff2dMaxX != -1 || state->buff2dMaxY != -1)) {
-                if (!allocate2DBuffer(state, state->buff2dMaxX, state->buff2dMaxY)) {
-                        // Failed to allocate memory, nothing to do.
-                        caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for buff2D.");
-                        return;
-                }
-          }
+          int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
+          int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
+          state->buff2D = simple2DBufferInitByte((size_t) sizeX, (size_t) sizeY);
           // allocate new helper event packets
 	  int maxEvtsSize = 50000; //FIXME must be large enough, we want to send packet ourselves on correct clock signal, not when the packet is full (which happens automatically)
       	  int source = moduleData->moduleID; // this module created this new packet
@@ -111,8 +104,6 @@ static void caerAccumulateFilterConfig(caerModuleData moduleData) {
 
         state->close = -1;
 	state->deltaT = sshsNodeGetInt(moduleData->moduleNode, "deltaT");
-        state->buff2dMaxX = -1; // -1 means will be set to camera dimensions automatically
-        state->buff2dMaxY = -1;
         state->buff1dMax = sshsNodeGetInt(moduleData->moduleNode, "buff1dMax");
         char *str = sshNodeGetString(moduleData->moduleNode, "mode"); 
         // parse mode:
@@ -143,43 +134,12 @@ static void caerAccumulateFilterConfig(caerModuleData moduleData) {
 static void caerAccumulateFilterExit(caerModuleData moduleData) {
 	AccFilterState state = moduleData->moduleState;
 	// Ensure 2D buff is freed.
-	if (state->buff2D != NULL) {
-		free(state->buff2D[0]);
-		free(state->buff2D);
-		state->buff2D = NULL;
-	}
+        simple2DBufferFreeByte(state->buff2D);
         // free 1D buff
         if (state->buff1D != NULL) {
           free(state->buff1D);
           state->buff1D = NULL;
         }
-}
-
-// helper method to initialize 2D array with dimX,dimY sizes of the camera
-static bool allocate2DBuffer(AccFilterState state, int16_t sizeX, int16_t sizeY) {
-	// Initialize double-indirection contiguous 2D array, so that array[x][y]
-	// is possible, see http://c-faq.com/aryptr/dynmuldimary.html for info. //FIXME rather use a library for this?!
-	state->buff2D = calloc((size_t) sizeX, sizeof(int64_t *));
-	if (state->buff2D == NULL) {
-		return (false); // Failure.
-	}
-
-	state->buff2D[0] = calloc((size_t) (sizeX * sizeY), sizeof(int64_t));
-	if (state->buff2D[0] == NULL) {
-		free(state->buff2D);
-		state->buff2D = NULL;
-
-		return (false); // Failure.
-	}
-
-	for (size_t i = 1; i < (size_t) sizeX; i++) {
-		state->buff2D[i] = state->buff2D[0] + (i * (size_t) sizeY);
-	}
-
-	// Assign max ranges for arrays (0 to MAX-1).
-	state->buff2dMaxX = (sizeX - 1);
-	state->buff2dMaxY = (sizeY - 1);
-	return (true);
 }
 
 // transform (2D) events to 1D vector, keeping Euclidian similarity
