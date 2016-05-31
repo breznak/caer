@@ -44,6 +44,24 @@ void caerAccumulateFilter(uint16_t moduleID, caerPolarityEventPacket polarity) {
 	caerModuleSM(&caerAccumulateFilterFunctions, moduleData, sizeof(struct AccFilter_state), 1, polarity);
 }
 
+simpleBuffer2DByte caerAccumulateFilterGet2D(uint16_t moduleID) {
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "AccFilter");
+        AccFilterState state = moduleData->moduleState;
+	return state->buff2D;
+}
+
+caerPolarityEventPacket caerAccumulateFilterGetPacket(uint16_t moduleID) {
+        caerModuleData moduleData = caerMainloopFindModule(moduleID, "AccFilter");
+        AccFilterState state = moduleData->moduleState;
+        return state->curr;
+}
+int64_t* caerAccumulateFilterGet1D(uint16_t moduleID) {
+        caerModuleData moduleData = caerMainloopFindModule(moduleID, "AccFilter");
+        AccFilterState state = moduleData->moduleState;
+        return state->buff1D;
+}
+
+
 static bool caerAccumulateFilterInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "deltaT", 1000);
         sshsNodePutIntIfAbsent(moduleData->moduleNode, "buff1dMax", 1000); //depends on transform() function
@@ -99,7 +117,6 @@ static void caerAccumulateFilterRun(caerModuleData moduleData, size_t argsNumber
 		processEvent(state, caerPolarityIteratorElement, polarity);
 	  CAER_POLARITY_ITERATOR_VALID_END
 	}
-        // TODO assign output results here
 }
 
 static void caerAccumulateFilterConfig(caerModuleData moduleData) {
