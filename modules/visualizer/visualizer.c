@@ -1,8 +1,10 @@
 #include "visualizer.h"
 #include "base/mainloop.h"
-#include "ext/c11threads_posix.h"
 #include "ext/ringbuffer/ringbuffer.h"
 #include "modules/statistics/statistics.h"
+#ifdef HAVE_PTHREADS
+	#include "ext/c11threads_posix.h"
+#endif
 
 #include <math.h>
 #include <stdatomic.h>
@@ -298,8 +300,15 @@ void caerVisualizerUpdate(caerVisualizerState state, caerEventPacketHeader packe
 
 	caerEventPacketHeader packetHeaderCopy = caerCopyEventPacketOnlyEvents(packetHeader);
 	if (packetHeaderCopy == NULL) {
-		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
-			"Visualizer: Failed to copy event packet for rendering.");
+		if (caerEventPacketHeaderGetEventNumber(packetHeader) == 0) {
+			caerLog(CAER_LOG_NOTICE, state->parentModule->moduleSubSystemString,
+				"Visualizer: Submitted empty event packet for rendering. Ignoring empty event packet.");
+		}
+		else {
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+				"Visualizer: Failed to copy event packet for rendering.");
+		}
+
 		return;
 	}
 
@@ -464,7 +473,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		redraw = true;
 	}
 	else if (displayEvent.type == ALLEGRO_EVENT_DISPLAY_CLOSE) {
-		sshsNodePutBool(state->parentModule->moduleNode, "shutdown", true);
+		sshsNodePutBool(state->parentModule->moduleNode, "running", false);
 	}
 	else if (displayEvent.type == ALLEGRO_EVENT_KEY_CHAR || displayEvent.type == ALLEGRO_EVENT_KEY_DOWN
 		|| displayEvent.type == ALLEGRO_EVENT_KEY_UP) {
@@ -626,6 +635,9 @@ static int caerVisualizerRenderThread(void *visualizerState) {
 
 	caerVisualizerState state = visualizerState;
 
+	// Set thread name.
+	thrd_set_name(state->parentModule->moduleSubSystemString);
+
 	if (!caerVisualizerInitGraphics(state)) {
 		return (thrd_error);
 	}
@@ -661,6 +673,9 @@ void caerVisualizer(uint16_t moduleID, const char *name, caerVisualizerRenderer 
 	visualizerName[10 + nameLength] = '\0';
 
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, visualizerName);
+	if (moduleData == NULL) {
+		return;
+	}
 
 	caerModuleSM(&caerVisualizerFunctions, moduleData, 0, 3, renderer, eventHandler, packetHeader);
 }
@@ -669,14 +684,22 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRe
 	caerVisualizerEventHandler eventHandler, caerEventPacketHeader packetHeader) {
 	// Get size information from source.
 	int16_t sourceID = caerEventPacketHeaderGetEventSource(packetHeader);
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
+
+	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
+	if (sourceInfoNode == NULL) {
+		// This should never happen, but we handle it gracefully.
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+			"Failed to get source info to setup visualizer resolution.");
+		return (false);
+	}
 
 	// Default sizes if nothing else is specified in sourceInfo node.
 	int16_t sizeX = 320;
 	int16_t sizeY = 240;
 
 	// Get sizes from sourceInfo node. visualizer prefix takes precedence,
-	// for APS and DVS images, alternative prefixes are provided.
+	// for APS and DVS images, alternative prefixes are provided, as well
+	// as for generic data visualization.
 	if (sshsNodeAttributeExists(sourceInfoNode, "visualizerSizeX", SHORT)) {
 		sizeX = sshsNodeGetShort(sourceInfoNode, "visualizerSizeX");
 		sizeY = sshsNodeGetShort(sourceInfoNode, "visualizerSizeY");
@@ -690,6 +713,10 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRe
 		&& caerEventPacketHeaderGetEventType(packetHeader) == FRAME_EVENT) {
 		sizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
 		sizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
+	}
+	else if (sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SHORT)) {
+		sizeX = sshsNodeGetShort(sourceInfoNode, "dataSizeX");
+		sizeY = sshsNodeGetShort(sourceInfoNode, "dataSizeY");
 	}
 
 	moduleData->moduleState = caerVisualizerInit(renderer, eventHandler, sizeX, sizeY, VISUALIZER_DEFAULT_ZOOM, true,
@@ -885,18 +912,37 @@ bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacket
 	//al_draw_text(state->displayFont, accelColor, accelXScaled, accelYScaled, 0, valStr);
 
 	// Gyroscope pitch(X), yaw(Y), roll(Z) as lines.
-	float gyroXScaled = centerPointY - gyroX * scaleFactorGyro;
+	float gyroXScaled = centerPointY + gyroX * scaleFactorGyro;
 	RESET_LIMIT_POS(gyroXScaled, maxSizeY - 2 - lineThickness);
 	RESET_LIMIT_NEG(gyroXScaled, 1 + lineThickness);
 	float gyroYScaled = centerPointX + gyroY * scaleFactorGyro;
 	RESET_LIMIT_POS(gyroYScaled, maxSizeX - 2 - lineThickness);
 	RESET_LIMIT_NEG(gyroYScaled, 1 + lineThickness);
-	float gyroZScaled = centerPointX + gyroZ * scaleFactorGyro;
+	float gyroZScaled = centerPointX - gyroZ * scaleFactorGyro;
 	RESET_LIMIT_POS(gyroZScaled, maxSizeX - 2 - lineThickness);
 	RESET_LIMIT_NEG(gyroZScaled, 1 + lineThickness);
 
 	al_draw_line(centerPointX, centerPointY, gyroYScaled, gyroXScaled, gyroColor, lineThickness);
 	al_draw_line(centerPointX, centerPointY - 20, gyroZScaled, centerPointY - 20, gyroColor, lineThickness);
+
+	return (true);
+}
+
+bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPacketHeader point2DEventPacketHeader) {
+	UNUSED_ARGUMENT(state);
+
+	if (caerEventPacketHeaderGetEventValid(point2DEventPacketHeader) == 0) {
+		return (false);
+	}
+
+	// Render all valid events.
+	CAER_POINT2D_ITERATOR_VALID_START((caerPoint2DEventPacket) point2DEventPacketHeader)
+		float x = caerPoint2DEventGetX(caerPoint2DIteratorElement);
+		float y = caerPoint2DEventGetY(caerPoint2DIteratorElement);
+
+		// Display points in blue.
+		al_put_pixel((int) x, (int) y, al_map_rgb(0, 255, 255));
+	CAER_POINT2D_ITERATOR_VALID_END
 
 	return (true);
 }

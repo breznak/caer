@@ -8,12 +8,11 @@
 #include "backgroundactivityfilter.h"
 #include "base/mainloop.h"
 #include "base/module.h"
+#include "ext/buffers.h"
 
 struct BAFilter_state {
-	int64_t **timestampMap;
+	simple2DBufferLong timestampMap;
 	int32_t deltaT;
-	int16_t sizeMaxX;
-	int16_t sizeMaxY;
 	int8_t subSampleBy;
 };
 
@@ -31,6 +30,9 @@ static struct caer_module_functions caerBackgroundActivityFilterFunctions = { .m
 
 void caerBackgroundActivityFilter(uint16_t moduleID, caerPolarityEventPacket polarity) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "BAFilter");
+	if (moduleData == NULL) {
+		return;
+	}
 
 	caerModuleSM(&caerBackgroundActivityFilterFunctions, moduleData, sizeof(struct BAFilter_state), 1, polarity);
 }
@@ -86,7 +88,7 @@ static void caerBackgroundActivityFilterRun(caerModuleData moduleData, size_t ar
 		y = U16T(y >> state->subSampleBy);
 
 		// Get value from map.
-		int64_t lastTS = state->timestampMap[x][y];
+		int64_t lastTS = state->timestampMap->buffer2d[x][y];
 
 		if ((I64T(ts - lastTS) >= I64T(state->deltaT)) || (lastTS == 0)) {
 			// Filter out invalid.
@@ -94,32 +96,35 @@ static void caerBackgroundActivityFilterRun(caerModuleData moduleData, size_t ar
 		}
 
 		// Update neighboring region.
+		size_t sizeMaxX = (state->timestampMap->sizeX - 1);
+		size_t sizeMaxY = (state->timestampMap->sizeY - 1);
+
 		if (x > 0) {
-			state->timestampMap[x - 1][y] = ts;
+			state->timestampMap->buffer2d[x - 1][y] = ts;
 		}
-		if (x < state->sizeMaxX) {
-			state->timestampMap[x + 1][y] = ts;
+		if (x < sizeMaxX) {
+			state->timestampMap->buffer2d[x + 1][y] = ts;
 		}
 
 		if (y > 0) {
-			state->timestampMap[x][y - 1] = ts;
+			state->timestampMap->buffer2d[x][y - 1] = ts;
 		}
-		if (y < state->sizeMaxY) {
-			state->timestampMap[x][y + 1] = ts;
+		if (y < sizeMaxY) {
+			state->timestampMap->buffer2d[x][y + 1] = ts;
 		}
 
 		if (x > 0 && y > 0) {
-			state->timestampMap[x - 1][y - 1] = ts;
+			state->timestampMap->buffer2d[x - 1][y - 1] = ts;
 		}
-		if (x < state->sizeMaxX && y < state->sizeMaxY) {
-			state->timestampMap[x + 1][y + 1] = ts;
+		if (x < sizeMaxX && y < sizeMaxY) {
+			state->timestampMap->buffer2d[x + 1][y + 1] = ts;
 		}
 
-		if (x > 0 && y < state->sizeMaxY) {
-			state->timestampMap[x - 1][y + 1] = ts;
+		if (x > 0 && y < sizeMaxY) {
+			state->timestampMap->buffer2d[x - 1][y + 1] = ts;
 		}
-		if (x < state->sizeMaxX && y > 0) {
-			state->timestampMap[x + 1][y - 1] = ts;
+		if (x < sizeMaxX && y > 0) {
+			state->timestampMap->buffer2d[x + 1][y - 1] = ts;
 		}
 	CAER_POLARITY_ITERATOR_VALID_END
 }
@@ -140,41 +145,25 @@ static void caerBackgroundActivityFilterExit(caerModuleData moduleData) {
 	BAFilterState state = moduleData->moduleState;
 
 	// Ensure map is freed.
-	if (state->timestampMap != NULL) {
-		free(state->timestampMap[0]);
-		free(state->timestampMap);
-		state->timestampMap = NULL;
-	}
+	simple2DBufferFreeLong(state->timestampMap);
 }
 
 static bool allocateTimestampMap(BAFilterState state, int16_t sourceID) {
 	// Get size information from source.
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
+	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
+	if (sourceInfoNode == NULL) {
+		// This should never happen, but we handle it gracefully.
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to get source info to allocate timestamp map.");
+		return (false);
+	}
+
 	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
 	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
-	// Initialize double-indirection contiguous 2D array, so that array[x][y]
-	// is possible, see http://c-faq.com/aryptr/dynmuldimary.html for info.
-	state->timestampMap = calloc((size_t) sizeX, sizeof(int64_t *));
+	state->timestampMap = simple2DBufferInitLong((size_t) sizeX, (size_t) sizeY);
 	if (state->timestampMap == NULL) {
-		return (false); // Failure.
+		return (false);
 	}
-
-	state->timestampMap[0] = calloc((size_t) (sizeX * sizeY), sizeof(int64_t));
-	if (state->timestampMap[0] == NULL) {
-		free(state->timestampMap);
-		state->timestampMap = NULL;
-
-		return (false); // Failure.
-	}
-
-	for (size_t i = 1; i < (size_t) sizeX; i++) {
-		state->timestampMap[i] = state->timestampMap[0] + (i * (size_t) sizeY);
-	}
-
-	// Assign max ranges for arrays (0 to MAX-1).
-	state->sizeMaxX = I16T(sizeX - 1);
-	state->sizeMaxY = I16T(sizeY - 1);
 
 	// TODO: size the map differently if subSampleBy is set!
 	return (true);

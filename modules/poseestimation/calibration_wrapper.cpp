@@ -21,7 +21,7 @@ void posecalibration_destroy(PoseCalibration *calibClass) {
 }
 
 void posecalibration_updateSettings(PoseCalibration *calibClass) {
-	
+
 }
 
 bool posecalibration_findMarkers(PoseCalibration *calibClass, caerFrameEvent frame) {

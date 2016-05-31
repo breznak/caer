@@ -22,6 +22,9 @@ static struct caer_module_functions caerInputDVS128Functions = { .moduleInit = &
 
 caerEventPacketContainer caerInputDVS128(uint16_t moduleID) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "DVS128");
+	if (moduleData == NULL) {
+		return (NULL);
+	}
 
 	caerEventPacketContainer result = NULL;
 
@@ -53,19 +56,19 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 
 	// USB port/bus/SN settings/restrictions.
 	// These can be used to force connection to one specific device at startup.
-	sshsNodePutShortIfAbsent(moduleData->moduleNode, "BusNumber", 0);
-	sshsNodePutShortIfAbsent(moduleData->moduleNode, "DevAddress", 0);
-	sshsNodePutStringIfAbsent(moduleData->moduleNode, "SerialNumber", "");
+	sshsNodePutShortIfAbsent(moduleData->moduleNode, "busNumber", 0);
+	sshsNodePutShortIfAbsent(moduleData->moduleNode, "devAddress", 0);
+	sshsNodePutStringIfAbsent(moduleData->moduleNode, "serialNumber", "");
 
 	// Add auto-restart setting.
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "Auto-Restart", true);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "autoRestart", true);
 
 	// Start data acquisition, and correctly notify mainloop of new data and module of exceptional
 	// shutdown cases (device pulled, ...).
-	char *serialNumber = sshsNodeGetString(moduleData->moduleNode, "SerialNumber");
+	char *serialNumber = sshsNodeGetString(moduleData->moduleNode, "serialNumber");
 	moduleData->moduleState = caerDeviceOpen(moduleData->moduleID, CAER_DEVICE_DVS128,
-		U8T(sshsNodeGetShort(moduleData->moduleNode, "BusNumber")),
-		U8T(sshsNodeGetShort(moduleData->moduleNode, "DevAddress")), serialNumber);
+		U8T(sshsNodeGetShort(moduleData->moduleNode, "busNumber")),
+		U8T(sshsNodeGetShort(moduleData->moduleNode, "devAddress")), serialNumber);
 	free(serialNumber);
 
 	if (moduleData->moduleState == NULL) {
@@ -84,9 +87,18 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 	sshsNodePutShort(sourceInfoNode, "dvsSizeX", devInfo.dvsSizeX);
 	sshsNodePutShort(sourceInfoNode, "dvsSizeY", devInfo.dvsSizeY);
 
-	// Put source information for "virtual" APS frame that can be used to display and debug filter information.
-	sshsNodePutShort(sourceInfoNode, "apsSizeX", devInfo.dvsSizeX);
-	sshsNodePutShort(sourceInfoNode, "apsSizeY", devInfo.dvsSizeY);
+	// Put source information for generic visualization, to be used to display and debug filter information.
+	sshsNodePutShort(sourceInfoNode, "dataSizeX", devInfo.dvsSizeX);
+	sshsNodePutShort(sourceInfoNode, "dataSizeY", devInfo.dvsSizeY);
+
+	// Generate source string for output modules.
+	size_t sourceStringLength = (size_t) snprintf(NULL, 0, "#Source %" PRIu16 ": DVS128\r\n", moduleData->moduleID);
+
+	char sourceString[sourceStringLength + 1];
+	snprintf(sourceString, sourceStringLength + 1, "#Source %" PRIu16 ": DVS128\r\n", moduleData->moduleID);
+	sourceString[sourceStringLength] = '\0';
+
+	sshsNodePutString(sourceInfoNode, "sourceString", sourceString);
 
 	caerModuleSetSubSystemString(moduleData, devInfo.deviceString);
 
@@ -149,9 +161,9 @@ static void caerInputDVS128Exit(caerModuleData moduleData) {
 
 	caerDeviceClose((caerDeviceHandle *) &moduleData->moduleState);
 
-	if (sshsNodeGetBool(moduleData->moduleNode, "Auto-Restart")) {
+	if (sshsNodeGetBool(moduleData->moduleNode, "autoRestart")) {
 		// Prime input module again so that it will try to restart if new devices detected.
-		sshsNodePutBool(moduleData->moduleNode, "shutdown", false);
+		sshsNodePutBool(moduleData->moduleNode, "running", true);
 	}
 }
 
@@ -238,7 +250,7 @@ static void moduleShutdownNotify(void *p) {
 	sshsNode moduleNode = p;
 
 	// Ensure parent also shuts down (on disconnected device for example).
-	sshsNodePutBool(moduleNode, "shutdown", true);
+	sshsNodePutBool(moduleNode, "running", false);
 }
 
 static void biasConfigSend(sshsNode node, caerModuleData moduleData) {

@@ -84,9 +84,17 @@ int main(int argc, char *argv[]) {
 
 	configServerAddress.sin_family = AF_INET;
 	configServerAddress.sin_port = htons(portNumber);
-	inet_aton(ipAddress, &configServerAddress.sin_addr); // htonl() is implicit here.
+
+	if (inet_pton(AF_INET, ipAddress, &configServerAddress.sin_addr) == 0) {
+		close(sockFd);
+
+		fprintf(stderr, "No valid IP address found. '%s' is invalid!\n", ipAddress);
+		return (EXIT_FAILURE);
+	}
 
 	if (connect(sockFd, (struct sockaddr *) &configServerAddress, sizeof(struct sockaddr_in)) < 0) {
+		close(sockFd);
+
 		fprintf(stderr, "Failed to connect to remote config server.\n");
 		return (EXIT_FAILURE);
 	}
@@ -103,6 +111,13 @@ int main(int argc, char *argv[]) {
 	char commandHistoryFilePath[1024];
 
 	char *userHomeDir = getUserHomeDirectory();
+	if (userHomeDir == NULL) {
+		close(sockFd);
+
+		fprintf(stderr, "Failed to determine user's home directory.\n");
+		return (EXIT_FAILURE);
+	}
+
 	snprintf(commandHistoryFilePath, 1024, "%s/.caerctl_history", userHomeDir);
 	free(userHomeDir);
 
@@ -858,38 +873,44 @@ static void linenoiseAddCompletionSuffix(linenoiseCompletions *lc, const char *b
 
 // Remember to free strings returned by this.
 static char *getUserHomeDirectory(void) {
+	char *homeDir = NULL;
+
 	// First check the environment for $HOME.
 	char *homeVar = getenv("HOME");
 
 	if (homeVar != NULL) {
-		char *retVar = strdup(homeVar);
-		if (retVar == NULL) {
-			return (NULL);
-		}
-
-		return (retVar);
+		homeDir = strdup(homeVar);
 	}
 
 	// Else try to get it from the user data storage.
-	struct passwd userPasswd;
-	struct passwd *userPasswdPtr;
-	char userPasswdBuf[2048];
+	if (homeDir == NULL) {
+		struct passwd userPasswd;
+		struct passwd *userPasswdPtr;
+		char userPasswdBuf[2048];
 
-	if (getpwuid_r(getuid(), &userPasswd, userPasswdBuf, sizeof(userPasswdBuf), &userPasswdPtr) == 0) {
-		// Success!
-		char *retVar = strdup(userPasswd.pw_dir);
-		if (retVar == NULL) {
-			return (NULL);
+		if (getpwuid_r(getuid(), &userPasswd, userPasswdBuf, sizeof(userPasswdBuf), &userPasswdPtr) == 0) {
+			homeDir = strdup(userPasswd.pw_dir);
 		}
-
-		return (retVar);
 	}
 
-	// Else just return /tmp as a place to write to.
-	char *retVar = strdup("/tmp");
-	if (retVar == NULL) {
+	if (homeDir == NULL) {
+		// Else just return /tmp as a place to write to.
+		homeDir = strdup("/tmp");
+	}
+
+	// Check if anything worked.
+	if (homeDir == NULL) {
 		return (NULL);
 	}
 
-	return (retVar);
+	char *realHomeDir = realpath(homeDir, NULL);
+	if (realHomeDir == NULL) {
+		free(homeDir);
+
+		return (NULL);
+	}
+
+	free(homeDir);
+
+	return (realHomeDir);
 }

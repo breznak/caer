@@ -10,5 +10,10 @@ Assorted information on installing OpenCV 3.1.0 properly on a system:
 
 NB: -DOPENCV_EXTRA_MODULES_PATH=<opencv_contrib>/modules is required for -DENABLE_POSEESTIMATION=1 
 	you can download opencv_contrib from https://github.com/Itseez/opencv_contrib 
-	and place it in the opencv directory
+	and place it in the opencv directory, make sure you download the 3.1.0 tag  
+
+    on ubuntu 16.04 you could use (note that -DLIB_SUFFIX= is not needed here): 
+       cmake -DCMAKE_INSTALL_PREFIX=/usr -DWITH_IPP=ON -DINSTALL_CREATE_DISTRIB=ON \ 
+             -DOPENCV_EXTRA_MODULES_PATH=../opencv_contrib-3.1.0/modules/ -DBUILD_opencv_contrib_world=OFF \ 
+             -DBUILD_opencv_xfeatures2d=OFF -DBUILD_opencv_matlab=OFF -DBUILD_opencv_text=OFF -DBUILD_opencv_xobjdetect=OFF -DBUILD_opencv_aruco=ON ../
 

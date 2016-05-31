@@ -27,6 +27,9 @@ static struct caer_module_functions caerFrameEnhancerFunctions = { .moduleInit =
 
 caerFrameEventPacket caerFrameEnhancer(uint16_t moduleID, caerFrameEventPacket frame) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "FrameEnhancer");
+	if (moduleData == NULL) {
+		return (NULL);
+	}
 
 	// By default, same as input frame packet.
 	caerFrameEventPacket enhancedFrame = frame;

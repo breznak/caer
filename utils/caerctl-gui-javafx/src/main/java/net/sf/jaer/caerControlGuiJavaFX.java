@@ -130,7 +130,7 @@ public final class caerControlGuiJavaFX extends Application {
 			final File save = GUISupport.showDialogSaveFile("XML Config File", ImmutableList.of("*.xml"));
 			if (save != null) {
 				try (FileOutputStream saveOS = new FileOutputStream(save)) {
-					SSHS.GLOBAL.getNode("/").exportSubTreeToXML(saveOS, ImmutableList.of("shutdown"));
+					SSHS.GLOBAL.getNode("/").exportSubTreeToXML(saveOS, ImmutableList.of("running"));
 				}
 				catch (final Exception e) {
 					// Ignore, no file exceptions realistically possible at this

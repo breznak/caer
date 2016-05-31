@@ -81,22 +81,54 @@ int main(int argc, char *argv[]) {
 
 	listenTCPAddress.sin_family = AF_INET;
 	listenTCPAddress.sin_port = htons(portNumber);
-	inet_aton(ipAddress, &listenTCPAddress.sin_addr); // htonl() is implicit here.
+
+	if (inet_pton(AF_INET, ipAddress, &listenTCPAddress.sin_addr) == 0) {
+		close(listenTCPSocket);
+
+		fprintf(stderr, "No valid IP address found. '%s' is invalid!\n", ipAddress);
+		return (EXIT_FAILURE);
+	}
 
 	if (connect(listenTCPSocket, (struct sockaddr *) &listenTCPAddress, sizeof(struct sockaddr_in)) < 0) {
+		close(listenTCPSocket);
+
 		fprintf(stderr, "Failed to connect to remote TCP data server.\n");
 		return (EXIT_FAILURE);
 	}
 
-	// 64K data buffer should be enough for the TCP event packets.
-	size_t dataBufferLength = 1024 * 64;
+	// 1M data buffer should be enough for the TCP event packets. Frames are very big!
+	size_t dataBufferLength = 1024 * 1024;
 	uint8_t *dataBuffer = malloc(dataBufferLength);
+	if (dataBuffer == NULL) {
+		close(listenTCPSocket);
+
+		fprintf(stderr, "Failed to allocate memory for data buffer.\n");
+		return (EXIT_FAILURE);
+	}
+
+	// Get network header (20 bytes).
+	if (!recvUntilDone(listenTCPSocket, dataBuffer, 20)) {
+		free(dataBuffer);
+		close(listenTCPSocket);
+
+		fprintf(stderr, "Error in network header recv() call: %d\n", errno);
+		return (EXIT_FAILURE);
+	}
+
+	printf("Magic number: %" PRIi64 "\n", *((int64_t *) (dataBuffer + 0)));
+	printf("Sequence number: %" PRIi64 "\n", *((int64_t *) (dataBuffer + 8)));
+	printf("Version number: %" PRIi8 "\n", *((int8_t *) (dataBuffer + 16)));
+	printf("Format number: %" PRIi8 "\n", *((int8_t *) (dataBuffer + 17)));
+	printf("Source number: %" PRIi16 "\n", *((int16_t *) (dataBuffer + 18)));
 
 	while (!atomic_load_explicit(&globalShutdown, memory_order_relaxed)) {
 		// Get packet header, to calculate packet size.
-		if (!recvUntilDone(listenTCPSocket, dataBuffer, sizeof(struct caer_event_packet_header))) {
+		if (!recvUntilDone(listenTCPSocket, dataBuffer, CAER_EVENT_PACKET_HEADER_SIZE)) {
+			free(dataBuffer);
+			close(listenTCPSocket);
+
 			fprintf(stderr, "Error in header recv() call: %d\n", errno);
-			continue;
+			return (EXIT_FAILURE);
 		}
 
 		// Decode successfully received data.
@@ -106,19 +138,23 @@ int main(int argc, char *argv[]) {
 		int16_t eventSource = caerEventPacketHeaderGetEventSource(header);
 		int32_t eventSize = caerEventPacketHeaderGetEventSize(header);
 		int32_t eventTSOffset = caerEventPacketHeaderGetEventTSOffset(header);
+		int32_t eventTSOverflow = caerEventPacketHeaderGetEventTSOverflow(header);
 		int32_t eventCapacity = caerEventPacketHeaderGetEventCapacity(header);
 		int32_t eventNumber = caerEventPacketHeaderGetEventNumber(header);
 		int32_t eventValid = caerEventPacketHeaderGetEventValid(header);
 
 		printf(
-			"type = %" PRIi16 ", source = %" PRIi16 ", size = %" PRIi32 ", tsOffset = %" PRIi32 ", capacity = %" PRIi32 ", number = %" PRIi32 ", valid = %" PRIi32 ".\n",
-			eventType, eventSource, eventSize, eventTSOffset, eventCapacity, eventNumber, eventValid);
+			"type = %" PRIi16 ", source = %" PRIi16 ", size = %" PRIi32 ", tsOffset = %" PRIi32 ", tsOverflow = %" PRIi32 ", capacity = %" PRIi32 ", number = %" PRIi32 ", valid = %" PRIi32 ".\n",
+			eventType, eventSource, eventSize, eventTSOffset, eventTSOverflow, eventCapacity, eventNumber, eventValid);
 
 		// Get rest of event packet, the part with the events themselves.
-		if (!recvUntilDone(listenTCPSocket, dataBuffer + sizeof(struct caer_event_packet_header),
+		if (!recvUntilDone(listenTCPSocket, dataBuffer + CAER_EVENT_PACKET_HEADER_SIZE,
 			(size_t) (eventCapacity * eventSize))) {
+			free(dataBuffer);
+			close(listenTCPSocket);
+
 			fprintf(stderr, "Error in data recv() call: %d\n", errno);
-			continue;
+			return (EXIT_FAILURE);
 		}
 
 		if (eventValid > 0) {

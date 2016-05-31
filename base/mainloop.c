@@ -32,6 +32,9 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 		return;
 	}
 
+	// Ignore SIGPIPE.
+	signal(SIGPIPE, SIG_IGN);
+
 	// Install signal handler for global shutdown.
 	struct sigaction shutdown;
 
@@ -57,7 +60,7 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 	atomic_store(&mainloopThreads.running, true);
 
 	// Add shutdown hook to SSHS for external control.
-	sshsNodePutBool(rootNode, "shutdown", false); // Always reset to false.
+	sshsNodePutBool(rootNode, "running", true); // Always reset to true.
 	sshsNodeAddAttributeListener(rootNode, &mainloopThreads.running, &caerMainloopShutdownListener);
 
 	// Allocate memory for main-loops.
@@ -84,9 +87,9 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 		atomic_store(&mainloopThreads.loopThreads[i].running, true);
 
 		// Add per-mainloop shutdown hooks to SSHS for external control.
-		sshsNodePutBool(mainloopThreads.loopThreads[i].mainloopNode, "shutdown", false); // Always reset to false.
-		sshsNodeAddAttributeListener(mainloopThreads.loopThreads[i].mainloopNode, &mainloopThreads.loopThreads[i].running,
-			&caerMainloopShutdownListener);
+		sshsNodePutBool(mainloopThreads.loopThreads[i].mainloopNode, "running", true); // Always reset to true.
+		sshsNodeAddAttributeListener(mainloopThreads.loopThreads[i].mainloopNode,
+			&mainloopThreads.loopThreads[i].running, &caerMainloopShutdownListener);
 
 		if ((errno = thrd_create(&mainloopThreads.loopThreads[i].mainloop, &caerMainloopRunner,
 			&mainloopThreads.loopThreads[i])) != thrd_success) {
@@ -108,7 +111,7 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 	// Notify shutdown to the main-loops ...
 	for (size_t i = 0; i < mainloopThreads.loopThreadsLength; i++) {
 		// Shutdown all loops that are still active.
-		sshsNodePutBool(mainloopThreads.loopThreads[i].mainloopNode, "shutdown", true);
+		sshsNodePutBool(mainloopThreads.loopThreads[i].mainloopNode, "running", false);
 	}
 
 	// ... and then wait for their clean shutdown.
@@ -137,10 +140,11 @@ caerModuleData caerMainloopFindModule(uint16_t moduleID, const char *moduleShort
 	HASH_FIND(hh, mainloopData->modules, &moduleID, sizeof(uint16_t), moduleData);
 
 	if (moduleData == NULL) {
-		// Create module (will succeed! If errors happen, whole mainloop dies).
+		// Create module and initialize it. May fail!
 		moduleData = caerModuleInitialize(moduleID, moduleShortName, mainloopData->mainloopNode);
-
-		HASH_ADD(hh, mainloopData->modules, moduleID, sizeof(uint16_t), moduleData);
+		if (moduleData != NULL) {
+			HASH_ADD(hh, mainloopData->modules, moduleID, sizeof(uint16_t), moduleData);
+		}
 	}
 
 	return (moduleData);
@@ -155,6 +159,11 @@ static const UT_icd ut_genericFree_icd = { sizeof(struct genericFree), NULL, NUL
 
 static int caerMainloopRunner(void *inPtr) {
 	caerMainloopData mainloopData = inPtr;
+
+	// Set thread name.
+	char threadName[16];
+	snprintf(threadName, 16, "Mainloop-%" PRIu16, mainloopData->mainloopID);
+	thrd_set_name(threadName);
 
 	// Set global reference to main-loop memory for this thread (for modules).
 	glMainloopData = mainloopData;
@@ -200,7 +209,7 @@ static int caerMainloopRunner(void *inPtr) {
 
 	// Shutdown all modules.
 	for (caerModuleData m = mainloopData->modules; m != NULL; m = m->hh.next) {
-		sshsNodePutBool(m->moduleNode, "shutdown", true);
+		sshsNodePutBool(m->moduleNode, "running", false);
 	}
 
 	// Run through the loop one last time to correctly shutdown all the modules.
@@ -243,34 +252,40 @@ caerMainloopData caerMainloopGetReference(void) {
 	return (glMainloopData);
 }
 
-static inline caerModuleData findSourceModule(uint16_t source) {
+static inline caerModuleData findSourceModule(uint16_t sourceID) {
 	caerMainloopData mainloopData = glMainloopData;
 	caerModuleData moduleData;
 
 	// This is only ever called from within modules running in a main-loop.
 	// So always inside the same thread, needing thus no synchronization.
-	HASH_FIND(hh, mainloopData->modules, &source, sizeof(uint16_t), moduleData);
+	HASH_FIND(hh, mainloopData->modules, &sourceID, sizeof(uint16_t), moduleData);
 
 	if (moduleData == NULL) {
 		// This is impossible if used correctly, you can't have a packet with
 		// an event source X and that event source doesn't exist ...
 		caerLog(CAER_LOG_ALERT, sshsNodeGetName(mainloopData->mainloopNode),
-			"Impossible to get module data for source ID %" PRIu16 ".", source);
-		thrd_exit(EXIT_FAILURE);
+			"Impossible to get module data for source ID %" PRIu16 ".", sourceID);
+		return (NULL);
 	}
 
 	return (moduleData);
 }
 
-sshsNode caerMainloopGetSourceInfo(uint16_t source) {
-	caerModuleData moduleData = findSourceModule(source);
+sshsNode caerMainloopGetSourceInfo(uint16_t sourceID) {
+	caerModuleData moduleData = findSourceModule(sourceID);
+	if (moduleData == NULL) {
+		return (NULL);
+	}
 
 	// All sources have a sub-node in SSHS called 'sourceInfo/'.
 	return (sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"));
 }
 
-void *caerMainloopGetSourceState(uint16_t source) {
-	caerModuleData moduleData = findSourceModule(source);
+void *caerMainloopGetSourceState(uint16_t sourceID) {
+	caerModuleData moduleData = findSourceModule(sourceID);
+	if (moduleData == NULL) {
+		return (NULL);
+	}
 
 	return (moduleData->moduleState);
 }
@@ -286,10 +301,10 @@ static void caerMainloopShutdownListener(sshsNode node, void *userData, enum ssh
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
 	UNUSED_ARGUMENT(node);
 
-	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && caerStrEquals(changeKey, "shutdown")) {
-		// Shutdown changed, let's see.
-		if (changeValue.boolean == true) {
-			// Shutdown requested!
+	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && caerStrEquals(changeKey, "running")) {
+		// Running changed, let's see.
+		if (changeValue.boolean == false) {
+			// Shutdown requested! This goes to the mainloop/system 'running' atomic flags.
 			atomic_store((atomic_bool * ) userData, false);
 		}
 	}

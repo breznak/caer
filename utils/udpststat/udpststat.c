@@ -80,9 +80,17 @@ int main(int argc, char *argv[]) {
 
 	listenUDPAddress.sin_family = AF_INET;
 	listenUDPAddress.sin_port = htons(portNumber);
-	inet_aton(ipAddress, &listenUDPAddress.sin_addr); // htonl() is implicit here.
+
+	if (inet_pton(AF_INET, ipAddress, &listenUDPAddress.sin_addr) == 0) {
+		close(listenUDPSocket);
+
+		fprintf(stderr, "No valid IP address found. '%s' is invalid!\n", ipAddress);
+		return (EXIT_FAILURE);
+	}
 
 	if (bind(listenUDPSocket, (struct sockaddr *) &listenUDPAddress, sizeof(struct sockaddr_in)) < 0) {
+		close(listenUDPSocket);
+
 		fprintf(stderr, "Failed to listen on UDP socket.\n");
 		return (EXIT_FAILURE);
 	}
@@ -90,30 +98,47 @@ int main(int argc, char *argv[]) {
 	// 64K data buffer should be enough for the UDP packets.
 	size_t dataBufferLength = 1024 * 64;
 	uint8_t *dataBuffer = malloc(dataBufferLength);
+	if (dataBuffer == NULL) {
+		close(listenUDPSocket);
+
+		fprintf(stderr, "Failed to allocate memory for data buffer.\n");
+		return (EXIT_FAILURE);
+	}
 
 	while (!atomic_load_explicit(&globalShutdown, memory_order_relaxed)) {
 		ssize_t result = recv(listenUDPSocket, dataBuffer, dataBufferLength, 0);
 		if (result <= 0) {
+			free(dataBuffer);
+			close(listenUDPSocket);
+
 			fprintf(stderr, "Error in recv() call: %d\n", errno);
-			continue;
+			return (EXIT_FAILURE);
 		}
 
 		printf("Result of recv() call: %zd\n", result);
 
+		// Decode network header.
+		printf("Magic number: %" PRIi64 "\n", *((int64_t *) (dataBuffer + 0)));
+		printf("Sequence number: %" PRIi64 "\n", *((int64_t *) (dataBuffer + 8)));
+		printf("Version number: %" PRIi8 "\n", *((int8_t *) (dataBuffer + 16)));
+		printf("Format number: %" PRIi8 "\n", *((int8_t *) (dataBuffer + 17)));
+		printf("Source number: %" PRIi16 "\n", *((int16_t *) (dataBuffer + 18)));
+
 		// Decode successfully received data.
-		caerEventPacketHeader header = (caerEventPacketHeader) dataBuffer;
+		caerEventPacketHeader header = (caerEventPacketHeader) dataBuffer + 20;
 
 		int16_t eventType = caerEventPacketHeaderGetEventType(header);
 		int16_t eventSource = caerEventPacketHeaderGetEventSource(header);
 		int32_t eventSize = caerEventPacketHeaderGetEventSize(header);
 		int32_t eventTSOffset = caerEventPacketHeaderGetEventTSOffset(header);
+		int32_t eventTSOverflow = caerEventPacketHeaderGetEventTSOverflow(header);
 		int32_t eventCapacity = caerEventPacketHeaderGetEventCapacity(header);
 		int32_t eventNumber = caerEventPacketHeaderGetEventNumber(header);
 		int32_t eventValid = caerEventPacketHeaderGetEventValid(header);
 
 		printf(
-			"type = %" PRIi16 ", source = %" PRIi16 ", size = %" PRIi32 ", tsOffset = %" PRIi32 ", capacity = %" PRIi32 ", number = %" PRIi32 ", valid = %" PRIi32 ".\n",
-			eventType, eventSource, eventSize, eventTSOffset, eventCapacity, eventNumber, eventValid);
+			"type = %" PRIi16 ", source = %" PRIi16 ", size = %" PRIi32 ", tsOffset = %" PRIi32 ", tsOverflow = %" PRIi32 ", capacity = %" PRIi32 ", number = %" PRIi32 ", valid = %" PRIi32 ".\n",
+			eventType, eventSource, eventSize, eventTSOffset, eventTSOverflow, eventCapacity, eventNumber, eventValid);
 
 		if (eventValid > 0) {
 			void *firstEvent = caerGenericEventGetEvent(header, 0);

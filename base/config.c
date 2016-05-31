@@ -69,8 +69,8 @@ void caerConfigWriteBack(void) {
 		int configFileFd = open(caerConfigFilePath, O_WRONLY | O_TRUNC);
 
 		if (configFileFd >= 0) {
-			sshsNodeExportSubTreeToXML(sshsGetNode(sshsGetGlobal(), "/"), configFileFd,
-				(const char *[] ) { "shutdown" }, 1, (const char *[] ) { "sourceInfo" }, 1);
+			sshsNodeExportSubTreeToXML(sshsGetNode(sshsGetGlobal(), "/"), configFileFd, (const char *[] ) { "running",
+					"connectedClients" }, 2, (const char *[] ) { "sourceInfo" }, 1);
 
 			close(configFileFd);
 		}

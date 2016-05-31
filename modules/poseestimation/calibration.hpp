@@ -25,18 +25,20 @@ using namespace std;
 class PoseCalibration {
 
 public:
-	PoseCalibration(PoseCalibrationSettings settings);
-	bool findMarkers(caerFrameEvent frame);
-	bool loadCalibrationFile(PoseCalibrationSettings settings);
+	PoseCalibration(PoseCalibrationSettings settings);bool findMarkers(caerFrameEvent frame);bool loadCalibrationFile(
+		PoseCalibrationSettings settings);
 	void updateSettings(PoseCalibrationSettings settings);
 	Point3f convert2dto3dworldunit(Point2f point_in_image);
-	
+
 private:
 	PoseCalibrationSettings settings = NULL;
-	Mat undistortCameraMatrix;
-	bool useFisheyeModel;
+	Mat undistortCameraMatrix;bool useFisheyeModel;
 	Mat undistortDistCoeffs;
-
+	double focal_lenght_mm = 4.5;
+	int camera_x_resolution = 180;
+	int camera_y_resolution = 240;
+	double object_real_world_mm = 40; // obejct is 40 mm
+	bool calibrationLoaded = false;
 };
 
 #endif /* CALIBRATION_HPP_ */

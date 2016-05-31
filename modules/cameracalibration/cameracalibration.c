@@ -27,6 +27,9 @@ static struct caer_module_functions caerCameraCalibrationFunctions = { .moduleIn
 
 void caerCameraCalibration(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "CameraCalibration");
+	if (moduleData == NULL) {
+		return;
+	}
 
 	caerModuleSM(&caerCameraCalibrationFunctions, moduleData, sizeof(struct CameraCalibrationState_struct), 2, polarity,
 		frame);
@@ -171,7 +174,14 @@ static void caerCameraCalibrationRun(caerModuleData moduleData, size_t argsNumbe
 
 		// At this point we must have a valid source ID.
 		// Get size information from source.
-		sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
+		sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
+		if (sourceInfoNode == NULL) {
+			// This should never happen, but we handle it gracefully.
+			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+				"Failed to get source info to setup calibration settings.");
+			return;
+		}
+
 		state->settings.imageWidth = U32T(sshsNodeGetShort(sourceInfoNode, "apsSizeX"));
 		state->settings.imageHeigth = U32T(sshsNodeGetShort(sourceInfoNode, "apsSizeY"));
 	}

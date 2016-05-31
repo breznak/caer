@@ -12,6 +12,9 @@ static struct caer_module_functions caerStatisticsFunctions = { .moduleInit = &c
 
 void caerStatistics(uint16_t moduleID, caerEventPacketHeader packetHeader, size_t divisionFactor) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "Statistics");
+	if (moduleData == NULL) {
+		return;
+	}
 
 	caerModuleSM(&caerStatisticsFunctions, moduleData, sizeof(struct caer_statistics_state), 2, packetHeader,
 		divisionFactor);
@@ -54,10 +57,7 @@ bool caerStatisticsStringInit(caerStatisticsState state) {
 	}
 
 	// Initialize to current time.
-	struct timespec currentTime;
-	portable_clock_gettime_monotonic(&currentTime);
-	state->lastTime.tv_sec = currentTime.tv_sec;
-	state->lastTime.tv_nsec = currentTime.tv_nsec;
+	portable_clock_gettime_monotonic(&state->lastTime);
 
 	// Set division factor to 1 by default (avoid division by zero).
 	state->divisionFactor = 1;

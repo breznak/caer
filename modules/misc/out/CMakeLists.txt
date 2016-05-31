@@ -22,7 +22,8 @@ IF (ENABLE_NETWORK_OUTPUT)
 		modules/misc/out/net_tcp_server.c
 		modules/misc/out/net_tcp.c
 		modules/misc/out/net_udp.c
-		modules/misc/out/unixs.c)
+		modules/misc/out/unix_socket_server.c
+		modules/misc/out/unix_socket.c)
 
 	SET(CAER_C_SRC_FILES ${CAER_C_SRC_FILES} ${CAER_NETWORK_OUTPUT_FILES})
 ENDIF()

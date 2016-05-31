@@ -7,11 +7,6 @@
 
 #include "module.h"
 
-// For thrd_exit(), since this all happens inside threads.
-#ifdef HAVE_PTHREADS
-	#include "ext/c11threads_posix.h"
-#endif
-
 static void caerModuleShutdownListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
@@ -84,15 +79,14 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	caerModuleData moduleData = calloc(1, sizeof(struct caer_module_data));
 	if (moduleData == NULL) {
 		caerLog(CAER_LOG_ALERT, nameString, "Failed to allocate memory for module. Error: %d.", errno);
-		thrd_exit(EXIT_FAILURE);
+		return (NULL);
 	}
 
 	// Set module ID for later identification (hash-table key).
 	moduleData->moduleID = moduleID;
 
-	// Put module into startup state.
+	// Put module into startup state. 'running' flag is updated later based on user startup wishes.
 	moduleData->moduleStatus = STOPPED;
-	atomic_store_explicit(&moduleData->running, true, memory_order_relaxed);
 
 	// Determine SSHS module node. Use short name for better human recognition.
 	char sshsString[nameLength + 2];
@@ -106,7 +100,7 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 		free(moduleData);
 
 		caerLog(CAER_LOG_ALERT, nameString, "Failed to allocate configuration node for module.");
-		thrd_exit(EXIT_FAILURE);
+		return (NULL);
 	}
 
 	// Setup default full log string name.
@@ -115,14 +109,18 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 		free(moduleData);
 
 		caerLog(CAER_LOG_ALERT, nameString, "Failed to allocate subsystem string for module.");
-		thrd_exit(EXIT_FAILURE);
+		return (NULL);
 	}
 
 	strncpy(moduleData->moduleSubSystemString, nameString, nameLength);
 	moduleData->moduleSubSystemString[nameLength] = '\0';
 
-	// Initialize shutdown hooks.
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "shutdown", false); // Allow for users to disable a module at start.
+	// Initialize shutdown controls. By default modules always run.
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "runAtStartup", true); // Allow for users to disable a module at start.
+	bool runModule = sshsNodeGetBool(moduleData->moduleNode, "runAtStartup");
+
+	atomic_store_explicit(&moduleData->running, runModule, memory_order_relaxed);
+	sshsNodePutBool(moduleData->moduleNode, "running", runModule);
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleShutdownListener);
 
 	atomic_thread_fence(memory_order_release);
@@ -187,13 +185,13 @@ static void caerModuleShutdownListener(sshsNode node, void *userData, enum sshs_
 
 	caerModuleData data = userData;
 
-	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && caerStrEquals(changeKey, "shutdown")) {
-		// Shutdown changed, let's see.
+	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && caerStrEquals(changeKey, "running")) {
+		// Running changed, let's see.
 		if (changeValue.boolean == true) {
-			atomic_store(&data->running, false);
+			atomic_store(&data->running, true);
 		}
 		else {
-			atomic_store(&data->running, true);
+			atomic_store(&data->running, false);
 		}
 	}
 }

@@ -226,11 +226,12 @@ bool Calibration::saveCameraParams(Size& imageSize, Mat& cameraMatrix, Mat& dist
 		return (false);
 	}
 
-	time_t tm;
-	time(&tm);
-	struct tm *t2 = localtime(&tm);
+	time_t currentTimeEpoch = time(NULL);
+	tzset();
+	struct tm currentTime;
+	localtime_r(&currentTimeEpoch, &currentTime);
 	char buf[1024];
-	strftime(buf, sizeof(buf) - 1, "%c", t2);
+	strftime(buf, sizeof(buf) - 1, "%c", &currentTime);
 
 	fs << "calibration_time" << buf;
 
