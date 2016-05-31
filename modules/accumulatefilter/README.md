@@ -6,7 +6,7 @@ or to a 2D slice.
 `bool caerAccomulateFilter(PolarityEventPacket input, int dT, PolarityEventPacket dvsBuffer, vector<unsigned int> 1dBuffer, matrix<uint, uint> 2dBuffer, enum polarityMode = ignore)`
 
 Where:
- * `input` is the packetFilter passed around in the mainloop
+ * `input` is a polarity event packet passed around in the mainloop
  * `dT` time (ms); <0 => do not aggregate by time, directly pass; >0 => collect events for `dT` ms, write them to `dvsBuffer` after this period. 
  * `dvsBuffer` event packet released only after `dT` passed. `input` packets received within this period are accumulated to this `dvsBuffer` and function returns `false`. When time of events in in the packet exceeds the threshold (= time of the earliest event in internal buffer + dT), internal buffer is dumped to dvsBuffer, start time is reset, and the function returns `true`. Set `dvsBuffer` to `null` to disable the DVS event aggregation by time. 
  * `1dBuffer` is a 1D vector that contains accumulated "1D representation of the 2D events/points"; the transformation is semantic, in the meaning it tries to keep distance: `eucleidian distance ||(x1,y1), (x2,y2)|| ~ ||vector1, vector2||`.
