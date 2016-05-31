@@ -55,7 +55,7 @@ static bool caerInputUnixSocketInit(caerModuleData moduleData) {
 		return (false);
 	}
 
-	if (!caerOutputCommonInit(moduleData, sockFd, true, false)) {
+	if (!caerInputCommonInit(moduleData, sockFd, true, false)) {
 		close(sockFd);
 		return (false);
 	}

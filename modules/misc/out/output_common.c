@@ -795,7 +795,7 @@ static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD) {
 		// We support writing to all clients, or only to one specified client.
 		// This one-client mode is only used for server mode operation.
 		if (onlyOneClientFD != NULL && *onlyOneClientFD >= 0) {
-			if (!writeUntilDone(*onlyOneClientFD, &networkHeader, AEDAT3_NETWORK_HEADER_LENGTH)) {
+			if (!writeUntilDone(*onlyOneClientFD, (uint8_t *) &networkHeader, AEDAT3_NETWORK_HEADER_LENGTH)) {
 				caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
 					"Disconnect or error on fd %d, closing and removing. Error: %d.", *onlyOneClientFD, errno);
 
@@ -804,7 +804,7 @@ static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD) {
 			}
 		}
 		else {
-			writeBufferToAll(state, &networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
+			writeBufferToAll(state, (uint8_t *) &networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
 		}
 	}
 }
