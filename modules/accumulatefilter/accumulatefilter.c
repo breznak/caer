@@ -7,7 +7,6 @@ struct AccFilter_state {
         // time packet
 	int64_t close; //close time for current packet
         caerPolarityEventPacket *curr;
-        caerPolarityEventPacket *next; //backlog packet
 	int32_t deltaT; // how often a clock sync is generated (new packet released),in ms
         int lastTsOverflow_; // helper keeping prev tsOverflow for comparison if those changed 
         // 2D buffer
@@ -86,7 +85,6 @@ static void caerAccumulateFilterRun(caerModuleData moduleData, size_t argsNumber
       	  int tsOverflow = caerEventPacketHeaderGetEventTSOverflow(&polarity->packetHeader);
           state->lastTsOverflow_ = tsOverflow;
       	  state->curr = caerPolarityEventPacketAllocate(I32T(maxEvtsSize), I16T(source), I32T(tsOverflow)); //TODO use growing event packets when implemented (no need for maxEvtsSize)
-      	  state->next = caerPolarityEventPacketAllocate(I32T(maxEvtsSize), I16T(source), I32T(tsOverflow));
           // initialization finished
           state->initialized = true;
         }
@@ -96,16 +94,12 @@ static void caerAccumulateFilterRun(caerModuleData moduleData, size_t argsNumber
         if (state->lastTsOverflow_ != tsOverflow) {
  	  state->release = true; 
 	  state->lastTsOverflow_ = tsOverflow;
-	}
-
-        CAER_POLARITY_ITERATOR_VALID_START(state->next) //process all evts from previous next
-                processEvent(state, caerPolarityIteratorElement, state->next);
-                caerPolarityEventInvalidate(caerPolarityIteratorElement, state->next);
-        CAER_POLARITY_ITERATOR_VALID_END
-
-	CAER_POLARITY_ITERATOR_VALID_START(polarity)
+	} else {
+	  CAER_POLARITY_ITERATOR_VALID_START(polarity)
 		processEvent(state, caerPolarityIteratorElement, polarity);
-	CAER_POLARITY_ITERATOR_VALID_END
+	  CAER_POLARITY_ITERATOR_VALID_END
+	}
+        // TODO assign output results here
 }
 
 static void caerAccumulateFilterConfig(caerModuleData moduleData) {
@@ -172,21 +166,22 @@ static void processEvent(AccFilterState state, caerPolarityEvent evt, caerPolari
                   state->close = ts + state->deltaT;
                 }
                 // (in)validate evts in polarity packet; not in [start..close]
-                if(ts < state->close - state->deltaT) { // < T
-                  caerPolarityEventInvalidate(evt, packet); // this should not occur!
+		if(ts < state->close - state->deltaT) { // < T; this should not occur!
+                    // caerPolarityEventInvalidate(evt, packet); // do not alter the input
+                    caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString,
+                        "Event this old should not occur!");
                 } else if (ts > state->close) { // > T
-                  //next.addEvent(); //FIXME how to add event to a packet?
-                  caerPolarityEventInvalidate(evt, packet);
-                } else { // ok
-		  //curr.addEvent(); //FIXME
+                  // caerPolarityEventInvalidate(evt, packet); //TODO how handle if evt is too far in future? (just drop now)
+                } else { // ok within [start..close]
+		  //curr.addEvent(); //FIXME how add event to a packet?
 		}
 
-                // example write to 2D buffer
+                // write to 2D buffer
                 if(state->mode == POLARITY_ON && p) { state->buff2D[x][y]=1; }
                 else if(state->mode == POLARITY_OFF && !p) { state->buff2D[x][y]=1; }
                 else if(state->mode == POLARITY_REPLACE) { state->buff2D[x][y]= p?1:0; }
                 else { state->buff2D[x][y]=1; } // BOTH
 
-                // example write to 1D buffer
+                // write to 1D buffer
                 transform1D(&state->buff1D, x, y, p);
 }
