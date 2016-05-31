@@ -142,8 +142,11 @@ static bool mainloop_1(void) {
 	caerBackgroundActivityFilter(2, polarity);
 #endif
 #ifdef ENABLE_ACCFILTER
-       caerAccumulateFilter(21, polarity);
-       printf("Acc filter");
+       uint64_t* result1D;
+       simple2DBufferByte result2D;
+       caerPolarityEventPacket filtered;
+       caerAccumulateFilterAll(21, polarity, filtered, result2D, result1D);
+       printf("Acc filter: %i", result1D[501]);
 #endif
 
 	// Filters can also extract information from event packets: for example

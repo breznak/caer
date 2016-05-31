@@ -55,13 +55,28 @@ caerPolarityEventPacket caerAccumulateFilterGetPacket(uint16_t moduleID) {
         AccFilterState state = moduleData->moduleState;
         return state->curr;
 }
+
 int64_t* caerAccumulateFilterGet1D(uint16_t moduleID) {
         caerModuleData moduleData = caerMainloopFindModule(moduleID, "AccFilter");
         AccFilterState state = moduleData->moduleState;
         return state->buff1D;
 }
 
+void caerAccumulateFilterAll(uint16_t moduleID, caerPolarityEventPacket polarity, caerPolarityEventPacket *filtered, simple2DBufferByte *result2d, int64_t* result1d) {
+	caerAccumulateFilter(moduleID, polarity);
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "AccFilter");
+        AccFilterState state = moduleData->moduleState;
+	if (state->release) {
+		filtered = caerAccumulateFilterGetPacket(moduleID);
+		result2d = caerAccumulateFilterGet2D(moduleID);
+		result1d = caerAccumulateFilterGet1D(moduleID);
+		//FIXME call reset() to clean the buffers
+		state->release = false;
+	}
 
+}
+
+// module standard methods
 static bool caerAccumulateFilterInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "deltaT", 1000);
         sshsNodePutIntIfAbsent(moduleData->moduleNode, "buff1dMax", 1000); //depends on transform() function

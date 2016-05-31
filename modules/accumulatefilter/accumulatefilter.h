@@ -13,4 +13,5 @@ simple2DBufferByte caerAccumulateFilterGet2D(uint16_t moduleID);
 caerPolarityEventPacket caerAccumulateFilterGetPacket(uint16_t moduleID);
 int64_t* caerAccumulateFilterGet1D(uint16_t moduleID);
 
+void caerAccumulateFilterAll(uint16_t moduleID, caerPolarityEventPacket polarity, caerPolarityEventPacket *filtered, simple2DBufferByte *result2d, int64_t* result1d);
 #endif
