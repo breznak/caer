@@ -697,6 +697,10 @@ static void handleNewServerConnections(outputCommonState state) {
 			caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
 				"Accepted new TCP connection from client (fd %d).", acceptResult);
 
+			// Commit current buffer, so that for the new clients, it's empty, and they
+			// don't get packets and data that are possibly cut in the middle.
+			commitOutputBuffer(state);
+
 			// Empty place in FD list, add this one.
 			state->fileDescriptors->fds[i] = acceptResult;
 
