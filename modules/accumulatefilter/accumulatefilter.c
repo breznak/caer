@@ -142,7 +142,7 @@ static void caerAccumulateFilterConfig(caerModuleData moduleData) {
         state->close = -1;
 	state->deltaT = sshsNodeGetInt(moduleData->moduleNode, "deltaT");
         state->buff1dMax = sshsNodeGetInt(moduleData->moduleNode, "buff1dMax");
-        char *str = sshNodeGetString(moduleData->moduleNode, "mode"); 
+        char *str = sshsNodeGetString(moduleData->moduleNode, "mode"); 
         // parse mode:
         if (caerStrEquals(str, "on")) {
 		 state->mode = POLARITY_ON;
