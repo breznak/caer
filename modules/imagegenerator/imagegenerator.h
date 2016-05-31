@@ -19,6 +19,6 @@
 
 void caerImageGenerator(uint16_t moduleID, caerPolarityEventPacket polarity, char ** file_strings_classify,
 	int max_img_qty, int classify_img_size, char **display_img_ptr, int display_img_size,
-        caerFrameEventPacket frame, char ** frame_ptr, int* frame_w, int* frame_h);
+        caerFrameEventPacket frame, caerFrameEventPacket *imagestreamer, char ** frame_ptr, int* frame_w, int* frame_h);
 
 #endif /* IMAGEGENERATOR_H_ */

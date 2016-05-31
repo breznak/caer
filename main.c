@@ -21,63 +21,63 @@
 
 // Devices support.
 #ifdef DVS128
-	#include "modules/ini/dvs128.h"
+#include "modules/ini/dvs128.h"
 #endif
 #ifdef DAVISFX2
-	#include "modules/ini/davis_fx2.h"
+#include "modules/ini/davis_fx2.h"
 #endif
 #ifdef DAVISFX3
-	#include "modules/ini/davis_fx3.h"
+#include "modules/ini/davis_fx3.h"
 #endif
 
 // Input/Output support.
 #ifdef ENABLE_FILE_INPUT
-	#include "modules/misc/in/file.h"
+#include "modules/misc/in/file.h"
 #endif
 #ifdef ENABLE_NETWORK_INPUT
-	#include "modules/misc/in/net_tcp.h"
-	#include "modules/misc/in/unix_socket.h"
+#include "modules/misc/in/net_tcp.h"
+#include "modules/misc/in/unix_socket.h"
 #endif
 
 #ifdef ENABLE_FILE_OUTPUT
-	#include "modules/misc/out/file.h"
+#include "modules/misc/out/file.h"
 #endif
 #ifdef ENABLE_NETWORK_OUTPUT
-	#include "modules/misc/out/net_tcp_server.h"
-	#include "modules/misc/out/net_tcp.h"
-	#include "modules/misc/out/net_udp.h"
-	#include "modules/misc/out/unix_socket_server.h"
-	#include "modules/misc/out/unix_socket.h"
+#include "modules/misc/out/net_tcp_server.h"
+#include "modules/misc/out/net_tcp.h"
+#include "modules/misc/out/net_udp.h"
+#include "modules/misc/out/unix_socket_server.h"
+#include "modules/misc/out/unix_socket.h"
 #endif
 
 // Common filters support.
 #ifdef ENABLE_BAFILTER
-	#include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
+#include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
 #endif
 #ifdef ENABLE_CAMERACALIBRATION
-	#include "modules/cameracalibration/cameracalibration.h"
+#include "modules/cameracalibration/cameracalibration.h"
 #endif
 #ifdef ENABLE_FRAMEENHANCER
-	#include "modules/frameenhancer/frameenhancer.h"
+#include "modules/frameenhancer/frameenhancer.h"
 #endif
 #ifdef ENABLE_STATISTICS
-	#include "modules/statistics/statistics.h"
+#include "modules/statistics/statistics.h"
 #endif
 #ifdef ENABLE_VISUALIZER
-	#include "modules/visualizer/visualizer.h"
+#include "modules/visualizer/visualizer.h"
 #endif
 
 #ifdef ENABLE_IMAGEGENERATOR
-	#include "modules/imagegenerator/imagegenerator.h"
-	#define MAX_IMG_QTY 8
-	#define CLASSIFYSIZE 36
-	#define DISPLAYIMGSIZE 256
+#include "modules/imagegenerator/imagegenerator.h"
+#define MAX_IMG_QTY 8
+#define CLASSIFYSIZE 36
+#define DISPLAYIMGSIZE 256
 #endif
 #ifdef ENABLE_CAFFEINTERFACE
-	#include "modules/caffeinterface/wrapper.h"
+#include "modules/caffeinterface/wrapper.h"
 #endif
 #ifdef ENABLE_IMAGESTREAMERVISUALIZER
-	#include "modules/imagestreamervisualizer/imagestreamervisualizer.h"
+#include "modules/imagestreamervisualizer/imagestreamervisualizer.h"
 #endif
 
 static bool mainloop_1(void);
@@ -253,10 +253,11 @@ static bool mainloop_1(void) {
 	 */
 	unsigned char ** frame_img_ptr = calloc(sizeof(unsigned char *), 1);
 
+	caerFrameEventPacket imagestreamer = NULL;
 	// generate images
-	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, DISPLAY_IMG_SIZE, frame, frame_img_ptr, &FRAME_W, &FRAME_H);
+	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, DISPLAY_IMG_SIZE, frame, &imagestreamer, frame_img_ptr, &FRAME_W, &FRAME_H);
 #else
-	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, DISPLAY_IMG_SIZE, NULL, NULL, NULL, NULL);
+	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, DISPLAY_IMG_SIZE, NULL, imagestreamer, NULL, NULL);
 #endif
 #endif
 
@@ -312,6 +313,7 @@ static bool mainloop_1(void) {
 	*frame_img_ptr = NULL;
 	free(frame_img_ptr);
 	frame_img_ptr = NULL;
+	free(imagestreamer);
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.

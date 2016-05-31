@@ -58,6 +58,12 @@ struct imagegenerator_state {
 	int32_t frameRendererSizeY;
 	int32_t frameRendererPositionX;
 	int32_t frameRendererPositionY;
+	// imagestreamer
+	uint16_t *imagestreamerRenderer;
+	int32_t imagestreamerRendererSizeX;
+	int32_t imagestreamerRendererSizeY;
+	int32_t imagestreamerRendererPositionX;
+	int32_t imagestreamerRendererPositionY;
 
 	enum caer_frame_event_color_channels frameChannels;
 };
@@ -75,7 +81,7 @@ NULL, .moduleExit = &caerImageGeneratorExit };
 
 void caerImageGenerator(uint16_t moduleID, caerPolarityEventPacket polarity, char ** file_strings_classify,
 	int max_img_qty, int classify_img_size, char **display_img_ptr, int display_img_size, caerFrameEventPacket frame,
-	char ** frame_ptr, int* frame_w, int* frame_h) {
+	caerFrameEventPacket *imagestreamer, char ** frame_ptr, int* frame_w, int* frame_h) {
 
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageGenerator");
 	if (moduleData == NULL) {
@@ -83,8 +89,8 @@ void caerImageGenerator(uint16_t moduleID, caerPolarityEventPacket polarity, cha
 	}
 
 	caerModuleSM(&caerImageGeneratorFunctions, moduleData, sizeof(struct imagegenerator_state), 10, polarity,
-		file_strings_classify, max_img_qty, classify_img_size, display_img_ptr, display_img_size, frame, frame_ptr,
-		frame_w, frame_h);
+		file_strings_classify, max_img_qty, classify_img_size, display_img_ptr, display_img_size, frame, imagestreamer,
+		frame_ptr, frame_w, frame_h);
 
 	return;
 }
@@ -101,6 +107,10 @@ static bool caerImageGeneratorInit(caerModuleData moduleData) {
 	state->doSaveTxt = sshsNodeGetBool(moduleData->moduleNode, "doSaveTxt");
 	sshsNodePutByteIfAbsent(moduleData->moduleNode, "mode", 0);
 	state->mode = sshsNodeGetByte(moduleData->moduleNode, "mode");
+
+	// imagestreamer
+	state->imagestreamerRendererSizeX = IMAGEGENERATOR_SCREEN_WIDTH;
+	state->imagestreamerRendererSizeY = IMAGEGENERATOR_SCREEN_HEIGHT;
 
 	return (true);
 }
@@ -178,7 +188,6 @@ static bool save_img(int img_counter, char *img, int size_w, int size_h, char **
 	return (true);
 }
 
-
 /*  Function: save_txt
  *  ------------------
  *  saves an image txt to disk.
@@ -207,7 +216,7 @@ static bool save_txt(int img_counter, char *img, int size_w, int size_h, char **
 	strcpy(filename, directory);
 
 	//check in which mode we are (testing/training/none)
-   strcat(filename, "img_");
+	strcat(filename, "img_");
 
 	sprintf(id_img, "%d", img_counter);
 	strcat(filename, id_img); //append id_img
@@ -227,10 +236,10 @@ static bool save_txt(int img_counter, char *img, int size_w, int size_h, char **
 	double *pixel;
 	pixel = malloc(sizeof(int));
 	for (int x = 0; x < size_w; x++) {
-	   fprintf(fd1, "\n");
+		fprintf(fd1, "\n");
 		for (int y = 0; y < size_h; y++) {
 			c = x * size_w + y;
-			*pixel = (double)(img[c]*0.00390625);
+			*pixel = (double) (img[c] * 0.00390625);
 			//printf(" %d ", *pixel);
 			fprintf(fd1, " %f\t", *pixel);
 		}
@@ -334,7 +343,7 @@ static bool normalize_to_quadratic_image_map(int64_t **image_map, int size_w, in
 		}
 	}
 	else { //we found an outlier
-		//we need to calculate a new mean and std
+		   //we need to calculate a new mean and std
 		mean = 0.0f;
 		std = 0.0f;
 		max_tmp_v = FLT_MIN;
@@ -471,6 +480,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 	unsigned char ** display_img_ptr = va_arg(args, unsigned char **);
 	int DISPLAY_IMG_SIZE = va_arg(args, int);
 	caerFrameEventPacket frame = va_arg(args, caerFrameEventPacket);
+	caerFrameEventPacket *imagestreamer = va_arg(args, caerFrameEventPacket*);
 	unsigned char ** frame_ptr = va_arg(args, unsigned char **);
 	int * FRAME_W = va_arg(args, int *);
 	int * FRAME_H = va_arg(args, int *);
@@ -595,7 +605,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 						"Failed to allocate quadratic_image_map.");
 					return;
 				}
-				//nomalize image map and copy it into quadratic image_map [0,255]
+				//normalize image map and copy it into quadratic image_map [0,255]
 				if (!normalize_to_quadratic_image_map(state->ImageMap, state->sizeX, state->sizeY, SIZE_QUADRATIC_MAP,
 					quadratic_image_map)) {
 					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
@@ -642,8 +652,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 					//normalize before saving
 					normalize_image(classify_txt, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE);
 					if (!save_txt(state->counterImg, classify_txt, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE,
-						file_strings_classify, file_string_counter, CLASSIFY_IMG_DIRECTORY, true,
-						MAX_IMG_QTY)) {
+						file_strings_classify, file_string_counter, CLASSIFY_IMG_DIRECTORY, true, MAX_IMG_QTY)) {
 						caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to save image.");
 						return;
 					}
@@ -662,6 +671,39 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 				stbir_resize_uint8(quadratic_image_map, SIZE_QUADRATIC_MAP,
 				SIZE_QUADRATIC_MAP, 0, disp_img, DISPLAY_IMG_SIZE, DISPLAY_IMG_SIZE, 0, 1);
 				normalize_image(disp_img, DISPLAY_IMG_SIZE, DISPLAY_IMG_SIZE);
+
+				//put image into frame
+				/* **** imagestreamer SECTION START *** */
+				// initialize Frame
+				if (disp_img != NULL) {
+					//get that single frame
+					*imagestreamer = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0,
+					IMAGEGENERATOR_SCREEN_WIDTH, IMAGEGENERATOR_SCREEN_HEIGHT, 3);
+					if (*imagestreamer != NULL) {
+						caerFrameEvent imagestreamer_frame = caerFrameEventPacketGetEvent(*imagestreamer, 0);
+						int cs = 0, counters = 0;
+						//now put stuff into the frame
+						int c, counter;
+						counter = 0;
+						for (int i = 0; i < IMAGEGENERATOR_SCREEN_WIDTH; i++) {
+							for (int ys = 0; ys < IMAGEGENERATOR_SCREEN_HEIGHT; ys++) {
+								cs = i * DISPLAY_IMG_SIZE + ys;
+								//	imagestreamer_frame->pixels[counters] = (uint16_t) (disp_img[cs] << 8);
+								//	imagestreamer_frame->pixels[counters+1] = (uint16_t) (disp_img[cs] << 8);
+								//	imagestreamer_frame->pixels[counters+2] = (uint16_t) (disp_img[cs] << 8);
+								counters += 3;
+							}
+						}
+
+						//add info to the frame
+						caerFrameEventSetLengthXLengthYChannelNumber(*imagestreamer, IMAGEGENERATOR_SCREEN_WIDTH,
+						IMAGEGENERATOR_SCREEN_HEIGHT, 3, *imagestreamer);
+						//valido
+						caerFrameEventValidate(imagestreamer_frame, *imagestreamer);
+
+					}
+
+				}
 
 				//reset values
 				for (x_loop = 0; x_loop < state->sizeX; x_loop++) {
