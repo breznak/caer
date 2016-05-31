@@ -16,8 +16,8 @@ struct AccFilter_state {
         int32_t buff1dMax;
         int64_t *buff1D;
         // etc
-        bool initialized = false; // the filter is fully initialized (after 1st run() call)
-        bool release = false; // the new packet should be released (either clock or other reasons)
+        bool initialized; // the filter is fully initialized (after 1st run() call)
+        bool release; // the new packet should be released (either clock or other reasons)
 };
 
 typedef struct AccFilter_state *AccFilterState;
@@ -44,7 +44,7 @@ void caerAccumulateFilter(uint16_t moduleID, caerPolarityEventPacket polarity) {
 	caerModuleSM(&caerAccumulateFilterFunctions, moduleData, sizeof(struct AccFilter_state), 1, polarity);
 }
 
-simpleBuffer2DByte caerAccumulateFilterGet2D(uint16_t moduleID) {
+simple2DBufferByte caerAccumulateFilterGet2D(uint16_t moduleID) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "AccFilter");
         AccFilterState state = moduleData->moduleState;
 	return state->buff2D;
@@ -185,7 +185,7 @@ static void processEvent(AccFilterState state, caerPolarityEvent evt, caerPolari
                 // (in)validate evts in polarity packet; not in [start..close]
 		if(ts < state->close - state->deltaT) { // < T; this should not occur!
                     // caerPolarityEventInvalidate(evt, packet); // do not alter the input
-                    caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString,
+                    caerLog(CAER_LOG_WARNING, "AccumulateFilter",
                         "Event this old should not occur!");
                 } else if (ts > state->close) { // > T
                   // caerPolarityEventInvalidate(evt, packet); //TODO how handle if evt is too far in future? (just drop now)
@@ -194,11 +194,11 @@ static void processEvent(AccFilterState state, caerPolarityEvent evt, caerPolari
 		}
 
                 // write to 2D buffer
-                if(state->mode == POLARITY_ON && p) { state->buff2D[x][y]=1; }
-                else if(state->mode == POLARITY_OFF && !p) { state->buff2D[x][y]=1; }
-                else if(state->mode == POLARITY_REPLACE) { state->buff2D[x][y]= p?1:0; }
-                else { state->buff2D[x][y]=1; } // BOTH
+                if(state->mode == POLARITY_ON && p) { state->buff2D->buffer2d[x][y]=1; }
+                else if(state->mode == POLARITY_OFF && !p) { state->buff2D->buffer2d[x][y]=1; }
+                else if(state->mode == POLARITY_REPLACE) { state->buff2D->buffer2d[x][y]= p?1:0; }
+                else { state->buff2D->buffer2d[x][y]=1; } // BOTH
 
                 // write to 1D buffer
-                transform1D(&state->buff1D, x, y, p);
+                transform1D(state->buff1D, x, y, p);
 }
