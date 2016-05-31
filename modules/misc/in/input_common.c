@@ -233,6 +233,12 @@ static bool parseNetworkHeader(inputCommonState state) {
 	state->header.formatID = networkHeader.formatNumber;
 
 	// TODO: get sourceInfo node via config-server side-channel.
+	state->header.sourceID = 1;
+	sshsNode sourceInfoNode = sshsGetRelativeNode(state->parentModule->moduleNode, "sourceInfo/");
+	sshsNodePutShort(sourceInfoNode, "dvsSizeX", 240);
+	sshsNodePutShort(sourceInfoNode, "dvsSizeY", 180);
+	sshsNodePutShort(sourceInfoNode, "apsSizeX", 240);
+	sshsNodePutShort(sourceInfoNode, "apsSizeY", 180);
 
 	// We're done!
 	state->header.isValidHeader = true;
