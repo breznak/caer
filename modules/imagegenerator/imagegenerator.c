@@ -58,12 +58,6 @@ struct imagegenerator_state {
 	int32_t frameRendererSizeY;
 	int32_t frameRendererPositionX;
 	int32_t frameRendererPositionY;
-	// imagestreamer
-	uint16_t *imagestreamerRenderer;
-	int32_t imagestreamerRendererSizeX;
-	int32_t imagestreamerRendererSizeY;
-	int32_t imagestreamerRendererPositionX;
-	int32_t imagestreamerRendererPositionY;
 
 	enum caer_frame_event_color_channels frameChannels;
 };
@@ -108,9 +102,6 @@ static bool caerImageGeneratorInit(caerModuleData moduleData) {
 	sshsNodePutByteIfAbsent(moduleData->moduleNode, "mode", 0);
 	state->mode = sshsNodeGetByte(moduleData->moduleNode, "mode");
 
-	// imagestreamer
-	state->imagestreamerRendererSizeX = IMAGEGENERATOR_SCREEN_WIDTH;
-	state->imagestreamerRendererSizeY = IMAGEGENERATOR_SCREEN_HEIGHT;
 
 	return (true);
 }
@@ -485,6 +476,14 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 	int * FRAME_W = va_arg(args, int *);
 	int * FRAME_H = va_arg(args, int *);
 
+
+
+	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
+	if(!sshsNodeAttributeExists(sourceInfoNode, "apsSizeX", SHORT)) {
+		sshsNodePutShort(sourceInfoNode, "apsSizeX", DISPLAY_IMG_SIZE);
+		sshsNodePutShort(sourceInfoNode, "apsSizeY", DISPLAY_IMG_SIZE);
+	}
+
 	//counter for saved images (and corresponding file strings) which are handed to caffe CNN
 	int file_string_counter = 0;
 
@@ -672,35 +671,31 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 				SIZE_QUADRATIC_MAP, 0, disp_img, DISPLAY_IMG_SIZE, DISPLAY_IMG_SIZE, 0, 1);
 				normalize_image(disp_img, DISPLAY_IMG_SIZE, DISPLAY_IMG_SIZE);
 
-				//put image into frame
+				// put image into frame
 				/* **** imagestreamer SECTION START *** */
-				// initialize Frame
-				if (disp_img != NULL) {
+				if (disp_img  != NULL) {
 					//get that single frame
 					*imagestreamer = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0,
-					IMAGEGENERATOR_SCREEN_WIDTH, IMAGEGENERATOR_SCREEN_HEIGHT, 3);
+						DISPLAY_IMG_SIZE, DISPLAY_IMG_SIZE, 3);
 					if (*imagestreamer != NULL) {
 						caerFrameEvent imagestreamer_frame = caerFrameEventPacketGetEvent(*imagestreamer, 0);
-						int cs = 0, counters = 0;
 						//now put stuff into the frame
-						int c, counter;
+						int cs, counter;
 						counter = 0;
-						for (int i = 0; i < IMAGEGENERATOR_SCREEN_WIDTH; i++) {
-							for (int ys = 0; ys < IMAGEGENERATOR_SCREEN_HEIGHT; ys++) {
+						for (int i = 0; i < DISPLAY_IMG_SIZE; i++) {
+							for (int ys = 0; ys < DISPLAY_IMG_SIZE; ys++) {
 								cs = i * DISPLAY_IMG_SIZE + ys;
-								//	imagestreamer_frame->pixels[counters] = (uint16_t) (disp_img[cs] << 8);
-								//	imagestreamer_frame->pixels[counters+1] = (uint16_t) (disp_img[cs] << 8);
-								//	imagestreamer_frame->pixels[counters+2] = (uint16_t) (disp_img[cs] << 8);
-								counters += 3;
+								imagestreamer_frame->pixels[counter] = (uint16_t) (disp_img[cs] << 8);
+								imagestreamer_frame->pixels[counter+1] = (uint16_t) (disp_img[cs] << 8);
+								imagestreamer_frame->pixels[counter+2] = (uint16_t) (disp_img[cs] << 8);
+								counter += 3;
 							}
 						}
-
 						//add info to the frame
-						caerFrameEventSetLengthXLengthYChannelNumber(*imagestreamer, IMAGEGENERATOR_SCREEN_WIDTH,
-						IMAGEGENERATOR_SCREEN_HEIGHT, 3, *imagestreamer);
-						//valido
+						caerFrameEventSetLengthXLengthYChannelNumber(imagestreamer_frame, DISPLAY_IMG_SIZE,
+							DISPLAY_IMG_SIZE, 3, *imagestreamer);
+						//validate frame
 						caerFrameEventValidate(imagestreamer_frame, *imagestreamer);
-
 					}
 
 				}

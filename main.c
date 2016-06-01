@@ -244,20 +244,13 @@ static bool mainloop_1(void) {
 	}
 
 #if defined(DAVISFX2) || defined(DAVISFX3) || defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT)
-	/* frame_img_ptr:
-	 *
-	 * (Not used so far.)
-	 * points to the frame that is generated in imagegenerator.c
-	 * Could be used if we want to draw something on top of frame based on classification.
-	 * So far, the frame is drawn by the visualizer module.
-	 */
 	unsigned char ** frame_img_ptr = calloc(sizeof(unsigned char *), 1);
 
 	caerFrameEventPacket imagestreamer = NULL;
 	// generate images
 	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, DISPLAY_IMG_SIZE, frame, &imagestreamer, frame_img_ptr, &FRAME_W, &FRAME_H);
 #else
-	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, DISPLAY_IMG_SIZE, NULL, imagestreamer, NULL, NULL);
+	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, DISPLAY_IMG_SIZE, NULL, &imagestreamer, NULL, NULL);
 #endif
 #endif
 
@@ -282,9 +275,9 @@ static bool mainloop_1(void) {
 	// this also requires image generator
 #ifdef ENABLE_IMAGEGENERATOR
 #if defined(DAVISFX2) || defined(DAVISFX3) || defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT)
-	caerImagestreamerVisualizer(22, *display_img_ptr, DISPLAY_IMG_SIZE, classification_results, class_region_sizes, (int) MAX_IMG_QTY);
+	caerImagestreamerVisualizer(22, imagestreamer,  *display_img_ptr, DISPLAY_IMG_SIZE, classification_results, class_region_sizes, (int) MAX_IMG_QTY);
 #else //without Frames
-	caerImagestreamerVisualizer(22, *display_img_ptr, DISPLAY_IMG_SIZE, classification_results, class_region_sizes, (int) MAX_IMG_QTY);
+	//caerImagestreamerVisualizer(22, imagestreamer, *display_img_ptr, DISPLAY_IMG_SIZE, classification_results, class_region_sizes, (int) MAX_IMG_QTY);
 #endif
 #endif
 #endif
