@@ -3,7 +3,7 @@
 #include "ext/ringbuffer/ringbuffer.h"
 #include "modules/statistics/statistics.h"
 #ifdef HAVE_PTHREADS
-	#include "ext/c11threads_posix.h"
+#include "ext/c11threads_posix.h"
 #endif
 
 #include <math.h>
@@ -775,8 +775,7 @@ bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPa
 			// OFF polarity (red).
 			al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
 				caerPolarityEventGetY(caerPolarityIteratorElement), al_map_rgb(255, 0, 0));
-		}
-	CAER_POLARITY_ITERATOR_VALID_END
+		}CAER_POLARITY_ITERATOR_VALID_END
 
 	return (true);
 }

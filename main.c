@@ -76,8 +76,8 @@
 #ifdef ENABLE_CAFFEINTERFACE
 #include "modules/caffeinterface/wrapper.h"
 #endif
-#ifdef ENABLE_IMAGESTREAMERVISUALIZER
-#include "modules/imagestreamervisualizer/imagestreamervisualizer.h"
+#ifdef ENABLE_IMAGESTREAMERBEEPER
+#include "modules/imagestreamerbeeper/imagestreamerbeeper.h"
 #endif
 
 static bool mainloop_1(void);
@@ -186,9 +186,6 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_IMAGEGENERATOR
 	// save images of accumulated spikes and frames
 	int CLASSIFY_IMG_SIZE = CLASSIFYSIZE;
-	int DISPLAY_IMG_SIZE = DISPLAYIMGSIZE;
-	int FRAME_W = NULL;
-	int FRAME_H = NULL;
 	char mainString[16] = "_main.c_";
 
 	/* class_region_sizes:
@@ -243,14 +240,16 @@ static bool mainloop_1(void) {
 		return (false);
 	}
 
+	// create image streamer histogram/frame packet
+	caerFrameEventPacket imagestreamer = NULL;
+	caerFrameEventPacket imagestreamer_frame = NULL;
+
 #if defined(DAVISFX2) || defined(DAVISFX3) || defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT)
 	unsigned char ** frame_img_ptr = calloc(sizeof(unsigned char *), 1);
-
-	caerFrameEventPacket imagestreamer = NULL;
 	// generate images
-	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, DISPLAY_IMG_SIZE, frame, &imagestreamer, frame_img_ptr, &FRAME_W, &FRAME_H);
+	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, frame, &imagestreamer, &imagestreamer_frame, frame_img_ptr);
 #else
-	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, DISPLAY_IMG_SIZE, NULL, &imagestreamer, NULL, NULL);
+	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, NULL, &imagestreamer, NULL, NULL,);
 #endif
 #endif
 
@@ -269,16 +268,21 @@ static bool mainloop_1(void) {
 #endif
 #endif
 
-#ifdef ENABLE_IMAGESTREAMERVISUALIZER
+#ifdef ENABLE_VISUALIZER && ENABLE_IMAGEGENERATOR
+	caerVisualizer(65, "ImageStreamerHist", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) imagestreamer);
+#if defined(DAVISFX2) || defined(DAVISFX3) || defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT)
+	// add allegro bips
+	// display accumulated spike image in hist
+	//caerVisualizer(64, "ImageStreamerFrame", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) imagestreamer_frame);
+#endif
+#endif
+
+#ifdef ENABLE_IMAGESTREAMERBEEPER
 	// Open a second window of the visualizer
 	// display images of accumulated spikes
 	// this also requires image generator
-#ifdef ENABLE_IMAGEGENERATOR
-#if defined(DAVISFX2) || defined(DAVISFX3) || defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT)
-	caerImagestreamerVisualizer(22, imagestreamer,  *display_img_ptr, DISPLAY_IMG_SIZE, classification_results, class_region_sizes, (int) MAX_IMG_QTY);
-#else //without Frames
-	//caerImagestreamerVisualizer(22, imagestreamer, *display_img_ptr, DISPLAY_IMG_SIZE, classification_results, class_region_sizes, (int) MAX_IMG_QTY);
-#endif
+#ifdef ENABLE_CAFFEINTERFACE
+	caerImagestreamerBeeper(22, imagestreamer, classification_results);
 #endif
 #endif
 
