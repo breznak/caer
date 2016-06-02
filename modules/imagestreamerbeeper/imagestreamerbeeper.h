@@ -7,6 +7,6 @@
 
 typedef struct imagestreamerbeeper_state *caerImagestreamerBeeperState;
 
-void caerImagestreamerBeeper(uint16_t moduleID, caerEventPacketHeader imagestreamer, double * classific_results);
+void caerImagestreamerBeeper(uint16_t moduleID, double classific_results);
 
 #endif /* IMAGESTREAMERVISUALIZER_H_ */

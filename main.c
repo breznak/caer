@@ -273,7 +273,7 @@ static bool mainloop_1(void) {
 #if defined(DAVISFX2) || defined(DAVISFX3) || defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT)
 	// add allegro bips
 	// display accumulated spike image in hist
-	//caerVisualizer(64, "ImageStreamerFrame", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) imagestreamer_frame);
+	caerVisualizer(64, "ImageStreamerFrame", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) imagestreamer_frame);
 #endif
 #endif
 
@@ -282,7 +282,9 @@ static bool mainloop_1(void) {
 	// display images of accumulated spikes
 	// this also requires image generator
 #ifdef ENABLE_CAFFEINTERFACE
-	caerImagestreamerBeeper(22, imagestreamer, classification_results);
+	if(classification_results != NULL){
+		caerImagestreamerBeeper(22, *classification_results);
+	}
 #endif
 #endif
 

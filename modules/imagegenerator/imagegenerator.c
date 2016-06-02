@@ -86,8 +86,8 @@ void caerImageGenerator(uint16_t moduleID, caerPolarityEventPacket polarity, cha
 	}
 
 	caerModuleSM(&caerImageGeneratorFunctions, moduleData, sizeof(struct imagegenerator_state), 10, polarity,
-		file_strings_classify, max_img_qty, classify_img_size, display_img_ptr, frame, imagestreamer, frame_ptr,
-		imagestreamer_frame);
+		file_strings_classify, max_img_qty, classify_img_size, display_img_ptr, frame, imagestreamer, imagestreamer_frame,
+		frame_ptr);
 
 	return;
 }
@@ -551,11 +551,10 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 			}
 
 			int csf = 0;
-			for (int i = 0; i < state->frameRendererSizeX; i++) {
-				for (int ys = 0; ys < state->frameRendererSizeY; ys++) {
-					csf = ys * state->frameRendererSizeY + i;
-					frame_img_d->buffer2d[i][ys] = frame_img[csf];
-					csf++;
+			for (int y = 0; y < state->frameRendererSizeY; y++) {
+				for (int x = 0; x < state->frameRendererSizeX; x++) {
+					csf = y * state->frameRendererSizeX + x;
+					frame_img_d->buffer2d[x][y] = frame_img[csf];
 				}
 			}
 
@@ -568,7 +567,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 				return;
 			}
 			//normalize image map and copy it into quadratic image_map [0,255]
-			if (!normalize_to_quadratic_image_map(frame_img_d->buffer2d, state->sizeX, state->sizeY, SIZE_QUADRATIC_MAP,
+			if (!normalize_to_quadratic_image_map(frame_img_d->buffer2d, state->frameRendererSizeX, state->frameRendererSizeY, SIZE_QUADRATIC_MAP,
 				quadratic_image_mapf)) {
 				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to generate quadratic image map.");
 				return;
@@ -597,9 +596,9 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 					//now put stuff into the frame
 					int cs, counter;
 					counter = 0;
-					for (int i = 0; i < CLASSIFY_IMG_SIZE; i++) {
-						for (int ys = 0; ys < CLASSIFY_IMG_SIZE; ys++) {
-							cs = i * CLASSIFY_IMG_SIZE + ys;
+					for (int y = 0; y < CLASSIFY_IMG_SIZE; y++) {
+						for (int x = 0; x < CLASSIFY_IMG_SIZE; x++) {
+							cs = y * CLASSIFY_IMG_SIZE + x;
 							imagestreamer_single_frame->pixels[counter] = (uint16_t) (disp_img[cs] << 8);
 							imagestreamer_single_frame->pixels[counter + 1] = (uint16_t) (disp_img[cs] << 8);
 							imagestreamer_single_frame->pixels[counter + 2] = (uint16_t) (disp_img[cs] << 8);

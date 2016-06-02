@@ -17,13 +17,13 @@ static struct caer_module_functions caerImagestreamerBeeperFunctions = { .module
 	.moduleRun = &caerImagestreamerBeeperRun, .moduleConfig =
 	NULL, .moduleExit = &caerImagestreamerBeeperExit };
 
-void caerImagestreamerBeeper(uint16_t moduleID, caerEventPacketHeader imagestreamer, double * classific_results) {
+void caerImagestreamerBeeper(uint16_t moduleID, double classific_results) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageStreamerVisualizer");
 	if (moduleData == NULL) {
 		return;
 	}
 
-	caerModuleSM(&caerImagestreamerBeeperFunctions, moduleData, 2, imagestreamer, classific_results);
+	caerModuleSM(&caerImagestreamerBeeperFunctions, moduleData, 1, classific_results);
 }
 
 static bool caerImagestreamerBeeperInit(caerModuleData moduleData) {
@@ -57,12 +57,12 @@ static void caerImagestreamerBeeperRun(caerModuleData moduleData, size_t argsNum
 	UNUSED_ARGUMENT(argsNumber);
 
 	// Interpret variable arguments (same as above in main function).
-	caerEventPacketHeader imagestreamer = va_arg(args, caerEventPacketHeader);
-	double * classific_results = va_arg(args, double *);
+	double classific_results = va_arg(args, double);
 
 	ALLEGRO_SAMPLE *sample = NULL;
 
-	if (*classific_results != 0) {
+	double dd = 0.0f;
+	if ( classific_results > dd) {
 		sample = al_load_sample(AUDIO_BEEP_FILE);
 		al_reserve_samples(1);
 		if (!sample) {
