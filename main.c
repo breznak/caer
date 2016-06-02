@@ -268,7 +268,7 @@ static bool mainloop_1(void) {
 #endif
 #endif
 
-#ifdef ENABLE_VISUALIZER && ENABLE_IMAGEGENERATOR
+#if defined(ENABLE_VISUALIZER) && defined(ENABLE_IMAGEGENERATOR)
 	caerVisualizer(65, "ImageStreamerHist", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) imagestreamer);
 #if defined(DAVISFX2) || defined(DAVISFX3) || defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT)
 	// add allegro bips
