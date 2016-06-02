@@ -658,16 +658,8 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 	sshsNode sysNode = sshsGetRelativeNode(moduleData->moduleNode, "system/");
 
 	// Packet settings (size (in events) and time interval (in µs)).
-	sshsNodePutIntIfAbsent(sysNode, "PacketContainerMaxSize", 4096 + 128 + 4 + 8);
-	sshsNodePutIntIfAbsent(sysNode, "PacketContainerMaxInterval", 5000);
-	sshsNodePutIntIfAbsent(sysNode, "PolarityPacketMaxSize", 4096);
-	sshsNodePutIntIfAbsent(sysNode, "PolarityPacketMaxInterval", 5000);
-	sshsNodePutIntIfAbsent(sysNode, "SpecialPacketMaxSize", 128);
-	sshsNodePutIntIfAbsent(sysNode, "SpecialPacketMaxInterval", 1000);
-	sshsNodePutIntIfAbsent(sysNode, "FramePacketMaxSize", 4);
-	sshsNodePutIntIfAbsent(sysNode, "FramePacketMaxInterval", 50000);
-	sshsNodePutIntIfAbsent(sysNode, "IMU6PacketMaxSize", 8);
-	sshsNodePutIntIfAbsent(sysNode, "IMU6PacketMaxInterval", 5000);
+	sshsNodePutIntIfAbsent(sysNode, "PacketContainerMaxSize", 8192);
+	sshsNodePutIntIfAbsent(sysNode, "PacketContainerMaxInterval", 10000);
 
 	// Ring-buffer setting (only changes value on module init/shutdown cycles).
 	sshsNodePutIntIfAbsent(sysNode, "DataExchangeBufferSize", 64);
@@ -2287,22 +2279,6 @@ static void systemConfigSend(sshsNode node, caerModuleData moduleData) {
 		U32T(sshsNodeGetInt(node, "PacketContainerMaxSize")));
 	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
 	CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_INTERVAL, U32T(sshsNodeGetInt(node, "PacketContainerMaxInterval")));
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS, CAER_HOST_CONFIG_PACKETS_MAX_POLARITY_SIZE,
-		U32T(sshsNodeGetInt(node, "PolarityPacketMaxSize")));
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-	CAER_HOST_CONFIG_PACKETS_MAX_POLARITY_INTERVAL, U32T(sshsNodeGetInt(node, "PolarityPacketMaxInterval")));
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS, CAER_HOST_CONFIG_PACKETS_MAX_SPECIAL_SIZE,
-		U32T(sshsNodeGetInt(node, "SpecialPacketMaxSize")));
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-	CAER_HOST_CONFIG_PACKETS_MAX_SPECIAL_INTERVAL, U32T(sshsNodeGetInt(node, "SpecialPacketMaxInterval")));
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS, CAER_HOST_CONFIG_PACKETS_MAX_FRAME_SIZE,
-		U32T(sshsNodeGetInt(node, "FramePacketMaxSize")));
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-	CAER_HOST_CONFIG_PACKETS_MAX_FRAME_INTERVAL, U32T(sshsNodeGetInt(node, "FramePacketMaxInterval")));
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS, CAER_HOST_CONFIG_PACKETS_MAX_IMU6_SIZE,
-		U32T(sshsNodeGetInt(node, "IMU6PacketMaxSize")));
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-	CAER_HOST_CONFIG_PACKETS_MAX_IMU6_INTERVAL, U32T(sshsNodeGetInt(node, "IMU6PacketMaxInterval")));
 
 	// Changes only take effect on module start!
 	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_DATAEXCHANGE,
@@ -2323,38 +2299,6 @@ static void systemConfigListener(sshsNode node, void *userData, enum sshs_node_a
 		else if (changeType == INT && caerStrEquals(changeKey, "PacketContainerMaxInterval")) {
 			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
 			CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_INTERVAL, U32T(changeValue.iint));
-		}
-		else if (changeType == INT && caerStrEquals(changeKey, "PolarityPacketMaxSize")) {
-			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-			CAER_HOST_CONFIG_PACKETS_MAX_POLARITY_SIZE, U32T(changeValue.iint));
-		}
-		else if (changeType == INT && caerStrEquals(changeKey, "PolarityPacketMaxInterval")) {
-			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-			CAER_HOST_CONFIG_PACKETS_MAX_POLARITY_INTERVAL, U32T(changeValue.iint));
-		}
-		else if (changeType == INT && caerStrEquals(changeKey, "SpecialPacketMaxSize")) {
-			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-			CAER_HOST_CONFIG_PACKETS_MAX_SPECIAL_SIZE, U32T(changeValue.iint));
-		}
-		else if (changeType == INT && caerStrEquals(changeKey, "SpecialPacketMaxInterval")) {
-			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-			CAER_HOST_CONFIG_PACKETS_MAX_SPECIAL_INTERVAL, U32T(changeValue.iint));
-		}
-		else if (changeType == INT && caerStrEquals(changeKey, "FramePacketMaxSize")) {
-			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-			CAER_HOST_CONFIG_PACKETS_MAX_FRAME_SIZE, U32T(changeValue.iint));
-		}
-		else if (changeType == INT && caerStrEquals(changeKey, "FramePacketMaxInterval")) {
-			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-			CAER_HOST_CONFIG_PACKETS_MAX_FRAME_INTERVAL, U32T(changeValue.iint));
-		}
-		else if (changeType == INT && caerStrEquals(changeKey, "IMU6PacketMaxSize")) {
-			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-			CAER_HOST_CONFIG_PACKETS_MAX_IMU6_SIZE, U32T(changeValue.iint));
-		}
-		else if (changeType == INT && caerStrEquals(changeKey, "IMU6PacketMaxInterval")) {
-			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-			CAER_HOST_CONFIG_PACKETS_MAX_IMU6_INTERVAL, U32T(changeValue.iint));
 		}
 	}
 }
