@@ -77,15 +77,11 @@
 	#include "ext/c11threads_posix.h"
 #endif
 
-#define LODEPNG_NO_COMPILE_DISK
-#define LODEPNG_NO_COMPILE_ANCILLARY_CHUNKS
-#include "ext/lodepng/lodepng.h"
-
 #include <libcaer/events/common.h>
 #include <libcaer/events/packetContainer.h>
 #include <libcaer/events/frame.h>
 
-// TODO: check handling of timestamp-reset events from camera!
+// TODO: check handling of TS reset events from camera!
 
 struct output_common_statistics {
 	uint64_t packetsNumber;
@@ -402,21 +398,9 @@ static inline void caerGenericEventSetTimestamp(void *eventPtr, caerEventPacketH
 		timestamp);
 }
 
-static inline LodePNGColorType caerFrameEventColorToLodePNG(enum caer_frame_event_color_channels channels) {
-	switch (channels) {
-		case GRAYSCALE:
-			return (LCT_GREY);
-			break;
-
-		case RGB:
-			return (LCT_RGB);
-			break;
-
-		case RGBA:
-		default:
-			return (LCT_RGBA);
-			break;
-	}
+static inline bool caerFrameEventPNGCompress(uint8_t **outBuffer, size_t *outSize, uint16_t *inBuffer, int32_t xSize,
+	int32_t ySize, enum caer_frame_event_color_channels channels) {
+	return (false);
 }
 
 static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader packet, size_t packetSize) {
@@ -525,13 +509,12 @@ static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader
 			memmove(((uint8_t *) packet) + currPacketOffset, caerFrameIteratorElement, frameHeaderSize);
 			currPacketOffset += frameHeaderSize;
 
-			unsigned char *outBuffer;
+			uint8_t *outBuffer;
 			size_t outSize;
-			if (lodepng_encode_memory(&outBuffer, &outSize,
-				(unsigned char *) caerFrameEventGetPixelArrayUnsafe(caerFrameIteratorElement),
-				U32T(caerFrameEventGetLengthX(caerFrameIteratorElement)),
-				U32T(caerFrameEventGetLengthY(caerFrameIteratorElement)),
-				caerFrameEventColorToLodePNG(caerFrameEventGetChannelNumber(caerFrameIteratorElement)), 16) != 0) {
+			if (!caerFrameEventPNGCompress(&outBuffer, &outSize,
+				caerFrameEventGetPixelArrayUnsafe(caerFrameIteratorElement),
+				caerFrameEventGetLengthX(caerFrameIteratorElement), caerFrameEventGetLengthY(caerFrameIteratorElement),
+				caerFrameEventGetChannelNumber(caerFrameIteratorElement))) {
 				// Failed to generate PNG.
 				// TODO: how to handle?
 			}
