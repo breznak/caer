@@ -627,10 +627,8 @@ static void addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 		int32_t newPacketEventValid = caerEventPacketHeaderGetEventValid(newPacket);
 		int32_t newPacketEventNumber = caerEventPacketHeaderGetEventNumber(newPacket);
 
-		size_t mergedSize = CAER_EVENT_PACKET_HEADER_SIZE
-			+ (size_t) (packetEventSize * (packetEventNumber + newPacketEventNumber));
-
-		caerEventPacketHeader mergedPacket = realloc(*packet, mergedSize);
+		caerEventPacketHeader mergedPacket = caerGenericEventPacketGrow(*packet,
+			(packetEventNumber + newPacketEventNumber));
 		if (mergedPacket == NULL) {
 			// Failed to allocate memory for merged packets, free newPacket and jump merge stage.
 			free(newPacket);
@@ -643,11 +641,9 @@ static void addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 
 		caerEventPacketHeaderSetEventValid(mergedPacket, packetEventValid + newPacketEventValid);
 		caerEventPacketHeaderSetEventNumber(mergedPacket, packetEventNumber + newPacketEventNumber);
-		caerEventPacketHeaderSetEventCapacity(mergedPacket, packetEventNumber + newPacketEventNumber);
 
-		size_t mergedPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (packetEventSize * packetEventNumber);
-		memcpy(((uint8_t *) mergedPacket) + mergedPacketOffset, ((uint8_t *) newPacket) + CAER_EVENT_PACKET_HEADER_SIZE,
-			mergedSize - mergedPacketOffset);
+		memcpy(((uint8_t *) mergedPacket) + CAER_EVENT_PACKET_HEADER_SIZE + (packetEventSize * packetEventNumber),
+			((uint8_t *) newPacket) + CAER_EVENT_PACKET_HEADER_SIZE, (size_t) (packetEventSize * newPacketEventNumber));
 
 		// Merged content with existing packet, data copied: free new one.
 		free(newPacket);
