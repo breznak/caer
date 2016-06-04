@@ -473,7 +473,7 @@ static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader
 				}
 				currPacketOffset += (size_t) eventSize * 2;
 
-				// Now go thorugh remaining events and move their data close together.
+				// Now go through remaining events and move their data close together.
 				while (tsRun > 0) {
 					uint8_t *thirdEvent = caerGenericEventGetEvent(packet, caerIteratorCounter - (int32_t) tsRun--);
 					memmove(((uint8_t *) packet) + currPacketOffset, thirdEvent, (size_t) eventTSOffset);
