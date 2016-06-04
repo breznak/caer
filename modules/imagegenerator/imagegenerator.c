@@ -52,6 +52,7 @@ struct imagegenerator_state {
 	int32_t numSpikes; // after how many spikes will we generate an image
 	int32_t spikeCounter; // actual number of spikes seen so far, in range [0, numSpikes]
 	int32_t counterImg; // how many spikeImages did we produce so far
+	int32_t counterTxt; 
 	int32_t counterFrame; // how many frames did we see so far
 	int16_t sizeX;
 	int16_t sizeY;
@@ -179,7 +180,6 @@ static bool save_img(int img_counter, char *img, int size_w, int size_h, char **
 	}
 	
 	//remove previous file and symlink
-	printf("%s\n", filename_sym);
 	if(remove(filename_d) != 0){
 		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove file %s.", strerror(errno));
 	}
@@ -269,7 +269,6 @@ static bool save_txt(int img_counter, char *img, int size_w, int size_h, char **
 	fclose(fd1);
 
 	//remove previous file and symlink
-	printf("%s\n", filename_sym);
 	if(remove(filename_d) != 0){
 		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove file %s.", strerror(errno));
 	}
@@ -677,11 +676,32 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 					return;
 				}
 				free(classify_frame);
-
+				state->counterImg += 1;
 			}
+			
+			if (state->doSaveTxt_frame) {
+				//create classify_txt with desired CLASSIFY_IMG_SIZE (input size of CNN)
+				unsigned char *classify_txt;
+				classify_txt = (unsigned char*) malloc(CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE * 1);
+				if (classify_txt == NULL) {
+					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate classify_png.");
+					return;
+				}
+				stbir_resize_uint8(quadratic_image_mapf, SIZE_QUADRATIC_MAP,
+				SIZE_QUADRATIC_MAP, 0, classify_txt, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE, 0, 1);
+
+				//normalize before saving
+				normalize_image(classify_txt, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE);
+				if (!save_txt(state->counterTxt, classify_txt, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE,
+					file_strings_classify, file_string_counter, CLASSIFY_IMG_DIRECTORY, true, MAX_IMG_QTY)) {
+					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to save image.");
+					return;
+				}
+				free(classify_txt);
+				state->counterTxt += 1;
+			}
+			
 			free(quadratic_image_mapf);
-			//state->counterFrame += 1;
-			state->counterImg += 1;
 		}
 
 	}/* **** FRAME SECTION END *** */
@@ -761,6 +781,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 						return;
 					}
 					free(classify_img);
+					state->counterImg += 1;
 				}
 
 				// if we want to save the txt
@@ -777,13 +798,13 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 
 					//normalize before saving
 					normalize_image(classify_txt, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE);
-					if (!save_txt(state->counterImg, classify_txt, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE,
+					if (!save_txt(state->counterTxt, classify_txt, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE,
 						file_strings_classify, file_string_counter, CLASSIFY_IMG_DIRECTORY, true, MAX_IMG_QTY)) {
 						caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to save image.");
 						return;
 					}
 					free(classify_txt);
-
+					state->counterTxt += 1;
 				}
 
 				//Create small_img to display the image_map, return it (to main function) in display_img_ptr
@@ -833,7 +854,6 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 						state->ImageMap[x_loop][y_loop] = 0;
 					}
 				}
-				state->counterImg += 1;
 				state->spikeCounter = 0;
 
 				// free chunks of memory
@@ -891,6 +911,7 @@ static bool allocateImageMap(imagegeneratorState state, int16_t sourceID) {
 	// Init counters
 	state->spikeCounter = 0;
 	state->counterImg = 0;
+	state->counterTxt = 0;
 	state->counterFrame = 0;
 
 	return (true);
