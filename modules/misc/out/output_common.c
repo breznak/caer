@@ -534,6 +534,9 @@ static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader
 
 			memcpy(((uint8_t *) packet) + currPacketOffset, outBuffer, outSize);
 			currPacketOffset += outSize;
+
+			// Free allocated PNG block memory.
+			free(outBuffer);
 		}
 
 		return (currPacketOffset);
