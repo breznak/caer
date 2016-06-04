@@ -147,34 +147,49 @@ static bool save_img(int img_counter, char *img, int size_w, int size_h, char **
 
 	char id_img[15];
 	char ext[] = ".png"; // png output (possibles other formats supported by the library are bmp, ppm, TGA, psd, pnm, hdr, gif,..)
-	char filename[255];
+	char filename[255] = {0};
+	char filename_d[255] = {0};
+	char filename_sym[255] = {0};
+	
+	memset(filename, 0, 255);
+	memset(filename_d, 0, 255);
+	memset(filename_sym, 0, 255);	
+	
 	strcpy(filename, directory);
-
-	//check in which mode we are (testing/training/none)
-
-	if (state_mode == FRAME_SAVE_MODE) {
-		strcat(filename, "frame_");
-	}
-	else if (state_mode == TESTING) {
-		strcat(filename, "testing_spikes_");
-	}
-	else if (state_mode == TRAINING_POSITIVES) {
-		strcat(filename, "pos_spikes_");
-	}
-	else if (state_mode == TRAINING_NEGATIVES) {
-		strcat(filename, "neg_spikes_");
-	}
-	else { //default
-		strcat(filename, "img_");
-	}
+	strcat(filename, "img_");
 	sprintf(id_img, "%d", img_counter);
 	strcat(filename, id_img); //append id_img
 	strcat(filename, ext); //append extension
+
+	strcpy(filename_d, directory);
+	strcat(filename_d, "img_");
+	int previous =  img_counter - 1;
+	sprintf(id_img, "%d", previous);
+	strcat(filename_d, id_img); //append id_img
+	strcat(filename_d, ext); //append extension
+
+	strcat(filename_sym, directory);
+	strcat(filename_sym, "latest");
+	strcat(filename_sym, ext); //append extension
 
 	//save file and print error message if error occurs
 	if (stbi_write_png(filename, size_w, size_h, 1, img, size_w * 1) == 0) {
 		printf("Error in function \"save_img\" (saving images to disk). Path may not be found");
 		return (false);
+	}
+	
+	//remove previous file and symlink
+	printf("%s\n", filename_sym);
+	if(remove(filename_d) != 0){
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove file %s.", strerror(errno));
+	}
+	if(remove(filename_sym) != 0){
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove symlink %s.", strerror(errno));
+	}
+	
+	//create symlink
+	if(symlink(filename, filename_sym) != 0){
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to create symlink errno %s.", strerror(errno));
 	}
 
 	if (save_for_classification && file_counter < max_img_qty) {
@@ -209,21 +224,31 @@ static bool save_txt(int img_counter, char *img, int size_w, int size_h, char **
 
 	char id_img[15];
 	char ext[] = ".txt"; // txt output
-	char filename[255];
+	char filename[255] = {0};
+	char filename_d[255] = {0};
+	char filename_sym[255] = {0};
+	
+	memset(filename, 0, 255);
+	memset(filename_d, 0, 255);
+	memset(filename_sym, 0, 255);	
+	
 	strcpy(filename, directory);
-
-	//check in which mode we are (testing/training/none)
 	strcat(filename, "img_");
-
 	sprintf(id_img, "%d", img_counter);
 	strcat(filename, id_img); //append id_img
 	strcat(filename, ext); //append extension
 
-	//save file and print error message if error occurs
-	//if (stbi_write_png(filename, size_w, size_h, 1, img, size_w * 1) == 0) {
-	//    printf("Error in function \"save_img\" (saving images to disk). Path may not be found");
-	//    return (false);
-	//}
+	strcpy(filename_d, directory);
+	strcat(filename_d, "img_");
+	int previous =  img_counter - 1;
+	sprintf(id_img, "%d", previous);
+	strcat(filename_d, id_img); //append id_img
+	strcat(filename_d, ext); //append extension
+
+	strcat(filename_sym, directory);
+	strcat(filename_sym, "latest");
+	strcat(filename_sym, ext); //append extension
+	
 	FILE* fd1;
 	fd1 = fopen(filename, "wb");
 	if (fd1 == -1) {
@@ -243,11 +268,27 @@ static bool save_txt(int img_counter, char *img, int size_w, int size_h, char **
 	}
 	fclose(fd1);
 
+	//remove previous file and symlink
+	printf("%s\n", filename_sym);
+	if(remove(filename_d) != 0){
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove file %s.", strerror(errno));
+	}
+	if(remove(filename_sym) != 0){
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove symlink %s.", strerror(errno));
+	}
+	
+	//create symlink
+	if(symlink(filename, filename_sym) != 0){
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to create symlink errno %s.", strerror(errno));
+	}
+
 	if (save_for_classification && file_counter < max_img_qty) {
 		//strdup also allocates memory!
 		file_strings_classify[file_counter] = strdup(filename);
 		file_counter += 1;
 	}
+	
+	free(pixel);
 	return (true);
 }
 
