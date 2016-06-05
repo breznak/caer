@@ -1,7 +1,6 @@
 /* C wrapper to caffe interface
  *  Author: federico.corradi@inilabs.com
  */
-#define CPU_ONLY 1
 #include "classify.hpp"
 #include "wrapper.h"
 
