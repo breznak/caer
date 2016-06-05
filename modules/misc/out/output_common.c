@@ -76,6 +76,9 @@
 #ifdef HAVE_PTHREADS
 	#include "ext/c11threads_posix.h"
 #endif
+#ifdef ENABLE_INOUT_PNG_COMPRESSION
+	#include <png.h>
+#endif
 
 #include <libcaer/events/common.h>
 #include <libcaer/events/packetContainer.h>
@@ -398,10 +401,123 @@ static inline void caerGenericEventSetTimestamp(void *eventPtr, caerEventPacketH
 		timestamp);
 }
 
+#ifdef ENABLE_INOUT_PNG_COMPRESSION
+// Simple structure to store PNG image bytes.
+struct mem_encode {
+	uint8_t *buffer;
+	size_t size;
+};
+
+static void caerLibPNGWriteBuffer(png_structp png_ptr, png_bytep data, png_size_t length) {
+	struct mem_encode *p = (struct mem_encode *) png_get_io_ptr(png_ptr);
+	size_t nsize = p->size + length;
+
+	// Allocate or grow buffer as needed.
+	if (p->buffer) {
+		p->buffer = realloc(p->buffer, nsize);
+	}
+	else {
+		p->buffer = malloc(nsize);
+	}
+
+	if (!p->buffer) {
+		png_error(png_ptr, "Write Buffer Error");
+	}
+
+	// Copy the new bytes to the end of the buffer.
+	memcpy(p->buffer + p->size, data, length);
+	p->size += length;
+}
+
+static inline int caerFrameEventColorToLibPNG(enum caer_frame_event_color_channels channels) {
+	switch (channels) {
+		case GRAYSCALE:
+			return (PNG_COLOR_TYPE_GRAY);
+			break;
+
+		case RGB:
+			return (PNG_COLOR_TYPE_RGB);
+			break;
+
+		case RGBA:
+		default:
+			return (PNG_COLOR_TYPE_RGBA);
+			break;
+	}
+}
+
+static int testINT = 0;
+
 static inline bool caerFrameEventPNGCompress(uint8_t **outBuffer, size_t *outSize, uint16_t *inBuffer, int32_t xSize,
 	int32_t ySize, enum caer_frame_event_color_channels channels) {
+	png_structp png_ptr = NULL;
+	png_infop info_ptr = NULL;
+
+	// Initialize the write struct.
+	png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	if (png_ptr == NULL) {
+		return (false);
+	}
+
+	// Initialize the info struct.
+	info_ptr = png_create_info_struct(png_ptr);
+	if (info_ptr == NULL) {
+		png_destroy_write_struct(&png_ptr, NULL);
+		return (false);
+	}
+
+	// Set up error handling.
+	if (setjmp(png_jmpbuf(png_ptr))) {
+		png_destroy_write_struct(&png_ptr, &info_ptr);
+		return (false);
+	}
+
+	// Set image attributes.
+	png_set_IHDR(png_ptr, info_ptr, (png_uint_32) xSize, (png_uint_32) ySize, 16, caerFrameEventColorToLibPNG(channels),
+		PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+
+	// Handle endianness of 16-bit depth pixels correctly.
+	// PNG assumes big-endian, our Frame Event is always little-endian.
+	png_set_swap(png_ptr);
+
+	// Initialize rows of PNG.
+	png_byte **row_pointers = png_malloc(png_ptr, (size_t) ySize * sizeof(png_byte *));
+
+	for (size_t y = 0; y < (size_t) ySize; y++) {
+		row_pointers[y] = (png_byte *) ((uint8_t *)inBuffer) + (y * (size_t) xSize * channels * sizeof(uint16_t));
+	}
+
+	// Set write function to buffer one.
+	struct mem_encode state = {.buffer = NULL, .size = 0};
+	//png_set_write_fn(png_ptr, &state, &caerLibPNGWriteBuffer, NULL);
+
+	// Actually write the image data.
+	//png_set_rows(png_ptr, info_ptr, row_pointers);
+	//png_write_png(png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
+
+	// TEST.
+	char fn[256];
+	snprintf(fn, 256, "test_%d.png", testINT++);
+
+	FILE *fp = fopen(fn, "wb");
+	png_init_io(png_ptr, fp);
+	png_set_rows(png_ptr, info_ptr, row_pointers);
+	png_write_png(png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
+	fclose(fp);
+
+	// Free allocated memory for rows.
+	png_free(png_ptr, row_pointers);
+
+	// Destroy main structs.
+	png_destroy_write_struct(&png_ptr, &info_ptr);
+
+	// Pass out buffer with resulting PNG image.
+	*outBuffer = state.buffer;
+	*outSize = state.size;
+
 	return (false);
 }
+#endif
 
 static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader packet, size_t packetSize) {
 	// Data compression technique 1: serialize timestamps for event types that tend to repeat them a lot.
@@ -497,6 +613,7 @@ static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader
 		return (currPacketOffset);
 	}
 
+#ifdef ENABLE_INOUT_PNG_COMPRESSION
 	// Data compression technique 2: do PNG compression on frames, Grayscale and RGB(A).
 	if ((state->format & 0x02) && caerEventPacketHeaderGetEventType(packet) == FRAME_EVENT) {
 		size_t currPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE; // Start here, no change to header.
@@ -541,6 +658,7 @@ static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader
 
 		return (currPacketOffset);
 	}
+#endif
 
 	return (packetSize);
 }
