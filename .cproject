@@ -27,6 +27,7 @@
 									<listOptionValue builtIn="false" value="_XOPEN_SOURCE=700"/>
 									<listOptionValue builtIn="false" value="_Thread_local"/>
 									<listOptionValue builtIn="false" value="_Noreturn"/>
+									<listOptionValue builtIn="false" value="ENABLE_INOUT_PNG_COMPRESSION=1"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1645890299" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
