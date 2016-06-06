@@ -59,7 +59,7 @@ void MyClass::init_network() {
 
 void MyClass::Classifier(const string& model_file, const string& trained_file, const string& mean_file,
 	const string& label_file) {
-#ifdef CAFFE_CPU_ONLY
+#ifdef CPU_ONLY
 	Caffe::set_mode(Caffe::CPU);
 #else
 	Caffe::set_mode(Caffe::GPU);
