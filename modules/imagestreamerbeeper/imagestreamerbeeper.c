@@ -9,6 +9,7 @@
 #include <allegro5/allegro_audio.h>
 #include <allegro5/allegro_acodec.h>
 
+
 static bool caerImagestreamerBeeperInit(caerModuleData moduleData);
 static void caerImagestreamerBeeperRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerImagestreamerBeeperExit(caerModuleData moduleData);
@@ -17,16 +18,20 @@ static struct caer_module_functions caerImagestreamerBeeperFunctions = { .module
 	.moduleRun = &caerImagestreamerBeeperRun, .moduleConfig =
 	NULL, .moduleExit = &caerImagestreamerBeeperExit };
 
-void caerImagestreamerBeeper(uint16_t moduleID, double classific_results) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageStreamerVisualizer");
+void caerImagestreamerBeeper(uint16_t moduleID, double  * classific_results, int max_img_qty) {
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageStreamerBeeper");
 	if (moduleData == NULL) {
 		return;
 	}
 
-	caerModuleSM(&caerImagestreamerBeeperFunctions, moduleData, 1, classific_results);
+	caerModuleSM(&caerImagestreamerBeeperFunctions, moduleData, sizeof(struct imagestreamerbeeper_state), 2, classific_results, max_img_qty);
 }
 
 static bool caerImagestreamerBeeperInit(caerModuleData moduleData) {
+
+	caerImagestreamerBeeperState state = moduleData->moduleState;
+	sshsNodePutDoubleIfAbsent(moduleData->moduleNode, "detThreshold", 0.96);
+	state->detThreshold = sshsNodeGetDouble(moduleData->moduleNode, "detThreshold");
 
 	if (!al_init()) {
 		fprintf(stderr, "failed to initialize allegro!\n");
@@ -55,24 +60,32 @@ static void caerImagestreamerBeeperExit(caerModuleData moduleData) {
 
 static void caerImagestreamerBeeperRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
 	UNUSED_ARGUMENT(argsNumber);
-
+	
 	// Interpret variable arguments (same as above in main function).
-	double classific_results = va_arg(args, double);
+	double  * res = va_arg(args, double*);
+	int max_img_qty = va_arg(args, int);
+
+	caerImagestreamerBeeperState state = moduleData->moduleState;
+	state->detThreshold = sshsNodeGetDouble(moduleData->moduleNode, "detThreshold");
 
 	ALLEGRO_SAMPLE *sample = NULL;
 
-	double dd = 0.0f;
-	if ( classific_results > dd) {
-		sample = al_load_sample(AUDIO_BEEP_FILE);
-		al_reserve_samples(1);
-		if (!sample) {
-			printf("Audio clip sample not loaded!\n");
+	sample = al_load_sample(AUDIO_BEEP_FILE);
+	al_reserve_samples(1);
+	
+	for(int uu=0; uu< 1 ; uu++){
+	        if(res[uu] != 0.0f){
+			if ( res[uu] >= state->detThreshold) {
+			if (!sample) {
+					printf("Audio clip sample not loaded!\n");
+				}
+				else {
+					al_play_sample(sample, 100.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, 0);
+					al_rest(0.06);
+				}
+			}
 		}
-		else {
-			al_play_sample(sample, 100.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, 0);
-			al_rest(0.06);
-		}
-		al_destroy_sample(sample);
 	}
+	al_destroy_sample(sample);
 
 }

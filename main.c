@@ -261,9 +261,6 @@ static bool mainloop_1(void) {
 	// only run CNN if we have a file to classify
 	if(*file_strings_classify != NULL) {
 		caerCaffeWrapper(21, file_strings_classify, classification_results, (int) MAX_IMG_QTY);
-		if( remove(*file_strings_classify) != 0) {
-			caerLog(CAER_LOG_ERROR, mainString, "Failed to remove temporary image of accumulated spikes from /tmp/ folder.. keep accumulating\n");
-		}
 	}
 #endif
 #endif
@@ -283,7 +280,7 @@ static bool mainloop_1(void) {
 	// this also requires image generator
 #ifdef ENABLE_CAFFEINTERFACE
 	if(classification_results != NULL){
-		caerImagestreamerBeeper(22, *classification_results);
+		caerImagestreamerBeeper(22, classification_results, (int) MAX_IMG_QTY);
 	}
 #endif
 #endif
