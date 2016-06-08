@@ -517,6 +517,8 @@ static inline bool caerFrameEventPNGCompress(uint8_t **outBuffer, size_t *outSiz
 	png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
 	info_ptr = png_create_info_struct(png_ptr);
 
+	png_set_swap(png_ptr);
+
 	state.size = 0;
 	png_set_read_fn(png_ptr, &state, &testReader);
 
