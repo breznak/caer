@@ -410,6 +410,13 @@ struct mem_encode {
 	size_t size;
 };
 
+static void testReader(png_structp png_ptr, png_bytep data, png_size_t length) {
+	struct mem_encode *p = (struct mem_encode *) png_get_io_ptr(png_ptr);
+
+	memcpy(data, ((uint8_t *) p->buffer) + p->size, length);
+	p->size += length;
+}
+
 static void caerLibPNGWriteBuffer(png_structp png_ptr, png_bytep data, png_size_t length) {
 	struct mem_encode *p = (struct mem_encode *) png_get_io_ptr(png_ptr);
 	size_t nsize = p->size + length;
@@ -448,8 +455,6 @@ static inline int caerFrameEventColorToLibPNG(enum caer_frame_event_color_channe
 	}
 }
 
-static int testINT = 0;
-
 static inline bool caerFrameEventPNGCompress(uint8_t **outBuffer, size_t *outSize, uint16_t *inBuffer, int32_t xSize,
 	int32_t ySize, enum caer_frame_event_color_channels channels) {
 	png_structp png_ptr = NULL;
@@ -476,7 +481,7 @@ static inline bool caerFrameEventPNGCompress(uint8_t **outBuffer, size_t *outSiz
 
 	// Set image attributes.
 	png_set_IHDR(png_ptr, info_ptr, (png_uint_32) xSize, (png_uint_32) ySize, 16, caerFrameEventColorToLibPNG(channels),
-		PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+	PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
 
 	// Handle endianness of 16-bit depth pixels correctly.
 	// PNG assumes big-endian, our Frame Event is always little-endian.
@@ -486,26 +491,16 @@ static inline bool caerFrameEventPNGCompress(uint8_t **outBuffer, size_t *outSiz
 	png_byte **row_pointers = png_malloc(png_ptr, (size_t) ySize * sizeof(png_byte *));
 
 	for (size_t y = 0; y < (size_t) ySize; y++) {
-		row_pointers[y] = (png_byte *) ((uint8_t *)inBuffer) + (y * (size_t) xSize * channels * sizeof(uint16_t));
+		row_pointers[y] = (png_byte *) &inBuffer[y * (size_t) xSize * channels];
 	}
 
 	// Set write function to buffer one.
-	struct mem_encode state = {.buffer = NULL, .size = 0};
-	//png_set_write_fn(png_ptr, &state, &caerLibPNGWriteBuffer, NULL);
+	struct mem_encode state = { .buffer = NULL, .size = 0 };
+	png_set_write_fn(png_ptr, &state, &caerLibPNGWriteBuffer, NULL);
 
 	// Actually write the image data.
-	//png_set_rows(png_ptr, info_ptr, row_pointers);
-	//png_write_png(png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
-
-	// TEST.
-	char fn[256];
-	snprintf(fn, 256, "test_%d.png", testINT++);
-
-	FILE *fp = fopen(fn, "wb");
-	png_init_io(png_ptr, fp);
 	png_set_rows(png_ptr, info_ptr, row_pointers);
 	png_write_png(png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
-	fclose(fp);
 
 	// Free allocated memory for rows.
 	png_free(png_ptr, row_pointers);
@@ -516,6 +511,36 @@ static inline bool caerFrameEventPNGCompress(uint8_t **outBuffer, size_t *outSiz
 	// Pass out buffer with resulting PNG image.
 	*outBuffer = state.buffer;
 	*outSize = state.size;
+
+	// Check values against original input.
+	png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	info_ptr = png_create_info_struct(png_ptr);
+
+	state.size = 0;
+	png_set_read_fn(png_ptr, &state, &testReader);
+
+	png_read_info(png_ptr, info_ptr);
+
+	png_uint_32 width = 0, height = 0;
+	int bitDepth = 0;
+	int color = -1;
+	png_get_IHDR(png_ptr, info_ptr, &width, &height, &bitDepth, &color, NULL, NULL, NULL);
+
+	printf("PNG data is: %dx%d, depth %d and color %d\n", width, height, bitDepth, color);
+
+	size_t bytesPerRow = width * sizeof(uint16_t);
+	uint8_t *rowData[bytesPerRow];
+
+	for (size_t rowIdx = 0; rowIdx < height; rowIdx++) {
+		png_read_row(png_ptr, (png_bytep) rowData, NULL);
+
+		// Verify against original image values.
+		if (memcmp(&inBuffer[rowIdx * width], rowData, bytesPerRow) != 0) {
+			printf("PNG MEMORY NOT EQUAL\n");
+		}
+	}
+
+	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 
 	return (false);
 }
