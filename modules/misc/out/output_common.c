@@ -410,13 +410,6 @@ struct mem_encode {
 	size_t size;
 };
 
-static void testReader(png_structp png_ptr, png_bytep data, png_size_t length) {
-	struct mem_encode *p = (struct mem_encode *) png_get_io_ptr(png_ptr);
-
-	memcpy(data, ((uint8_t *) p->buffer) + p->size, length);
-	p->size += length;
-}
-
 static void caerLibPNGWriteBuffer(png_structp png_ptr, png_bytep data, png_size_t length) {
 	struct mem_encode *p = (struct mem_encode *) png_get_io_ptr(png_ptr);
 	size_t nsize = p->size + length;
@@ -516,39 +509,7 @@ static inline bool caerFrameEventPNGCompress(uint8_t **outBuffer, size_t *outSiz
 	*outBuffer = state.buffer;
 	*outSize = state.size;
 
-	// Check values against original input.
-	png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-	info_ptr = png_create_info_struct(png_ptr);
-
-	png_set_swap(png_ptr);
-
-	state.size = 0;
-	png_set_read_fn(png_ptr, &state, &testReader);
-
-	png_read_info(png_ptr, info_ptr);
-
-	png_uint_32 width = 0, height = 0;
-	int bitDepth = 0;
-	int color = -1;
-	png_get_IHDR(png_ptr, info_ptr, &width, &height, &bitDepth, &color, NULL, NULL, NULL);
-
-	printf("PNG data is: %dx%d, depth %d and color %d\n", width, height, bitDepth, color);
-
-	size_t bytesPerRow = width * sizeof(uint16_t);
-	uint8_t *rowData[bytesPerRow];
-
-	for (size_t rowIdx = 0; rowIdx < height; rowIdx++) {
-		png_read_row(png_ptr, (png_bytep) rowData, NULL);
-
-		// Verify against original image values.
-		if (memcmp(&inBuffer[rowIdx * width], rowData, bytesPerRow) != 0) {
-			printf("PNG MEMORY NOT EQUAL\n");
-		}
-	}
-
-	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-
-	return (false);
+	return (true);
 }
 #endif
 
