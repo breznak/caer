@@ -490,6 +490,9 @@ static inline bool caerFrameEventPNGCompress(uint8_t **outBuffer, size_t *outSiz
 
 	// Initialize rows of PNG.
 	png_byte **row_pointers = png_malloc(png_ptr, (size_t) ySize * sizeof(png_byte *));
+	if (row_pointers == NULL) {
+		return (false);
+	}
 
 	for (size_t y = 0; y < (size_t) ySize; y++) {
 		row_pointers[y] = (png_byte *) &inBuffer[y * (size_t) xSize * channels];
