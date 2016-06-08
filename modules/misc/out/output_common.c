@@ -74,10 +74,10 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #ifdef HAVE_PTHREADS
-	#include "ext/c11threads_posix.h"
+#include "ext/c11threads_posix.h"
 #endif
 #ifdef ENABLE_INOUT_PNG_COMPRESSION
-	#include <png.h>
+#include <png.h>
 #endif
 
 #include <libcaer/events/common.h>
@@ -249,17 +249,19 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 	bool validOnly = atomic_load_explicit(&state->validOnly, memory_order_relaxed);
 
 	// Now copy each event packet and send the array out. Track how many packets there are.
-	int32_t idx = 0;
+	size_t idx = 0;
 
 	for (size_t i = 0; i < packetsSize; i++) {
 		if (validOnly) {
-			caerEventPacketContainerSetEventPacket(eventPackets, idx, caerCopyEventPacketOnlyValidEvents(packets[i]));
+			caerEventPacketContainerSetEventPacket(eventPackets, (int32_t) idx,
+				caerCopyEventPacketOnlyValidEvents(packets[i]));
 		}
 		else {
-			caerEventPacketContainerSetEventPacket(eventPackets, idx, caerCopyEventPacketOnlyEvents(packets[i]));
+			caerEventPacketContainerSetEventPacket(eventPackets, (int32_t) idx,
+				caerCopyEventPacketOnlyEvents(packets[i]));
 		}
 
-		if (caerEventPacketContainerGetEventPacket(eventPackets, idx) == NULL) {
+		if (caerEventPacketContainerGetEventPacket(eventPackets, (int32_t) idx) == NULL) {
 			// Failed to copy packet. Signal but try to continue anyway.
 			if ((validOnly && (caerEventPacketHeaderGetEventValid(packets[i]) == 0))
 				|| (!validOnly && (caerEventPacketHeaderGetEventNumber(packets[i]) == 0))) {
@@ -285,7 +287,7 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 
 	// Reset packet container size so we only consider the packets we managed
 	// to successfully copy.
-	caerEventPacketContainerSetEventPacketsNumber(eventPackets, idx);
+	caerEventPacketContainerSetEventPacketsNumber(eventPackets, (int32_t) idx);
 
 	retry: if (!ringBufferPut(state->transferRing, eventPackets)) {
 		if (atomic_load_explicit(&state->keepPackets, memory_order_relaxed)) {
