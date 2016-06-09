@@ -26,14 +26,14 @@ void MyClass::file_set(char * i, double *b, double thr, bool printoutputs) {
 		/* Print the top N predictions. */
 		for (size_t i = 0; i < predictions.size(); ++i) {
 			Prediction p = predictions[i];
-			if(printoutputs){
+			if (printoutputs) {
 				std::cout << "\n" << std::fixed << std::setprecision(4) << p.second << " - \"" << p.first << "\""
 					<< std::endl;
 			}
 			// for face detection net
 			if (p.first.compare("FACE") == 0 && p.second > thr) {
-					*b = p.second;
-					std::cout << "\n" << p.second << " DETECTION " << std::endl;
+				*b = p.second;
+				std::cout << "\n" << p.second << " DETECTION " << std::endl;
 			}
 		}
 	}
