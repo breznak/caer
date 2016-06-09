@@ -13,7 +13,7 @@ typedef struct MyClass MyClass;
 
 MyClass* newMyClass();
 
-void MyClass_file_set(MyClass* v, char * i, double *b, double thr);
+void MyClass_file_set(MyClass* v, char * i, double *b, double thr, bool printoutputs);
 
 char * MyClass_file_get(MyClass* v);
 

@@ -10,6 +10,7 @@ struct caffewrapper_state {
 	uint32_t *integertest;
 	char * file_to_classify;
 	double detThreshold;
+	bool doPrintOutputs;
 	struct MyClass* cpp_class; //pointer to cpp_class_object
 };
 
@@ -40,6 +41,8 @@ static bool caerCaffeWrapperInit(caerModuleData moduleData) {
 	caffewrapperState state = moduleData->moduleState;
 	sshsNodePutDoubleIfAbsent(moduleData->moduleNode, "detThreshold", 0.96);
 	state->detThreshold = sshsNodeGetDouble(moduleData->moduleNode, "detThreshold");
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doPrintOutputs", false);
+	state->doPrintOutputs = sshsNodeGetBool(moduleData->moduleNode, "doPrintOutputs");
 
 	//Initializing caffe network..
 	state->cpp_class = newMyClass();
@@ -62,10 +65,11 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber, va
 
 	//update module state
 	state->detThreshold = sshsNodeGetDouble(moduleData->moduleNode, "detThreshold");
+	state->doPrintOutputs = sshsNodeGetBool(moduleData->moduleNode, "doPrintOutputs");
 
 	for (int i = 0; i < max_img_qty; ++i) {
 		if (file_string[i] != NULL) {
-			MyClass_file_set(state->cpp_class, file_string[i], &classificationResults[i], state->detThreshold);
+			MyClass_file_set(state->cpp_class, file_string[i], &classificationResults[i], state->detThreshold, state->doPrintOutputs);
 		}
 	}
 

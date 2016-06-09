@@ -10,8 +10,8 @@ MyClass* newMyClass() {
 	return new MyClass();
 }
 
-void MyClass_file_set(MyClass* v, char * i, double *b, double thr) {
-	v->file_set(i, b, thr);
+void MyClass_file_set(MyClass* v, char * i, double *b, double thr, bool printoutputs) {
+	v->file_set(i, b, thr, printoutputs);
 }
 
 char * MyClass_file_get(MyClass* v) {

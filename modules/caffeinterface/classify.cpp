@@ -8,7 +8,7 @@ using namespace caffe;
 // NOLINT(build/namespaces)
 using std::string;
 
-void MyClass::file_set(char * i, double *b, double thr) {
+void MyClass::file_set(char * i, double *b, double thr, bool printoutputs) {
 	MyClass::file_i = i;
 
 	if (file_i != NULL) {
@@ -17,7 +17,7 @@ void MyClass::file_set(char * i, double *b, double thr) {
 		cv::Mat img = cv::imread(file_i, 0);
 		cv::Mat img2;
 		img.convertTo(img2, CV_32FC1);
-		img2 = img2*0.00390625;
+		img2 = img2 * 0.00390625;
 		//std::cout << "\n" << img2 << std::endl;
 
 		CHECK(!img.empty()) << "Unable to decode image " << file_i;
@@ -26,13 +26,16 @@ void MyClass::file_set(char * i, double *b, double thr) {
 		/* Print the top N predictions. */
 		for (size_t i = 0; i < predictions.size(); ++i) {
 			Prediction p = predictions[i];
-			//std::cout << "\n" << std::fixed << std::setprecision(4) << p.second << " - \"" << p.first << "\"" << std::endl;
-                        if (p.first.compare("FACE") == 0 && p.second > thr){
-                            *b = p.second;
-                            std::cout << "\n" << p.second << " DETECTION " << std::endl;
-                        }
-                }
-
+			if(printoutputs){
+				std::cout << "\n" << std::fixed << std::setprecision(4) << p.second << " - \"" << p.first << "\""
+					<< std::endl;
+			}
+			// for face detection net
+			if (p.first.compare("FACE") == 0 && p.second > thr) {
+					*b = p.second;
+					std::cout << "\n" << p.second << " DETECTION " << std::endl;
+			}
+		}
 	}
 }
 
@@ -79,7 +82,6 @@ void MyClass::Classifier(const string& model_file, const string& trained_file, c
 
 	/* Load the binaryproto mean file. */
 	//SetMean(mean_file);
-
 	/* Load labels. */
 	std::ifstream labels(label_file.c_str());
 	CHECK(labels) << "Unable to open labels file " << label_file;
@@ -157,7 +159,6 @@ void MyClass::SetMean(const string& mean_file) {
 
 std::vector<float> MyClass::Predict(const cv::Mat& img) {
 
-
 	Blob<float>* input_layer = net_->input_blobs()[0];
 	input_layer->Reshape(1, num_channels_, input_geometry_.height, input_geometry_.width);
 	/* Forward dimension change to all layers. */
@@ -167,7 +168,7 @@ std::vector<float> MyClass::Predict(const cv::Mat& img) {
 	WrapInputLayer(&input_channels);
 
 	Preprocess(img, &input_channels); //Error in here
-	net_->ForwardPrefilled();
+	net_->Forward(); //Prefilled();
 
 	/* Copy the output layer to a std::vector */
 	Blob<float>* output_layer = net_->output_blobs()[0];
@@ -199,7 +200,6 @@ void MyClass::Preprocess(const cv::Mat& img, std::vector<cv::Mat>* input_channel
 	/* Convert the input image to the input image format of the network. */
 
 	// std::cout << " Preprocess --- img.channnels() " << img.channels() << ", num_channels_" << num_channels_ << std::endl;
-
 	cv::Mat sample;
 	if (img.channels() == 3 && num_channels_ == 1)
 		cv::cvtColor(img, sample, cv::COLOR_BGR2GRAY);
@@ -212,7 +212,6 @@ void MyClass::Preprocess(const cv::Mat& img, std::vector<cv::Mat>* input_channel
 	else
 		sample = img;
 
-
 	cv::Mat sample_resized;
 	if (sample.size() != input_geometry_)
 		cv::resize(sample, sample_resized, input_geometry_);
@@ -224,7 +223,6 @@ void MyClass::Preprocess(const cv::Mat& img, std::vector<cv::Mat>* input_channel
 		sample_resized.convertTo(sample_float, CV_32FC3);
 	else
 		sample_resized.convertTo(sample_float, CV_32FC1);
-
 
 	cv::Mat sample_normalized;
 	mean_ = cv::Mat::zeros(1, 1, CV_64F); //TODO remove, compute mean_ from mean_file and adapt size for subtraction.
