@@ -185,7 +185,7 @@ std::vector<float> MyClass::Predict(const cv::Mat& img,
 	net_->ForwardPrefilled(); //Prefilled();
 
 	//IF WE ENABLE VISUALIZATION IN REAL TIME
-	if (1) {
+	if (0) {
 		const vector<shared_ptr<Layer<float> > >& layers = net_->layers();
 		int num_layer_conv = 0; // for graphics
 
