@@ -290,9 +290,9 @@ std::vector<float> MyClass::Predict(const cv::Mat& img,
 					counter_x +=1; // count number of images on x (filters)
 
 					int size_x_single_image = floor(
-							floor(single_frame->lengthX)
+							floor(single_frame->lengthY)
 									/ layersVector[layer_num].size());
-					int size_y_single_image = floor(single_frame->lengthY);
+					int size_y_single_image = floor(single_frame->lengthX);
 					cv::Size size(size_x_single_image, size_y_single_image);
 					cv::Mat rescaled; //rescaled image
 
@@ -303,22 +303,24 @@ std::vector<float> MyClass::Predict(const cv::Mat& img,
 					cv::resize(layersVector[layer_num][img_num], rescaled,
 							size); //resize image
 
-					char buffer[255];
-					snprintf(buffer, sizeof(char) * 255, "/Users/federicocorradi/tmp/fileLayer%iImgNum%i.jpg", layer_num, img_num);
-					imwrite( buffer, rescaled*255);
+					//char buffer[255];
+					//snprintf(buffer, sizeof(char) * 255, "/Users/federicocorradi/tmp/fileLayer%iImgNum%i.jpg", layer_num, img_num);
+					//imwrite( buffer, rescaled*255);
 
 					//now place images in the right place of the frame
 					//rescaled = cv::norm(rescaled);
 					//rescaled.convertTo(rescaled, CV_8U, 1/256);
-					for(int y=0; y < size_x_single_image; y++){
-						for(int x=0; x < size_y_single_image; x++){
+					//std::cout << counter_y << std::endl;
+					for(int x=0; x < size_x_single_image; x++){
+						for(int y=0; y < size_y_single_image; y++){
 							//round(rescaled.at<float>(x,y))
 							//round(rescaled.at<float>(x,y)*65532))
-							cs = (y * size_y_single_image) + (counter_y*size_y_single_image)
-									+ x +(counter_x*size_x_single_image) ;
+							cs =  (y + (counter_y*size_y_single_image)) + (x * size_x_single_image)+(counter_x*size_x_single_image);
+									//+ (y * size_y_single_image) + (counter_y*size_y_single_image);
+									//+ x +(counter_x*size_x_single_image) ;
 							single_frame->pixels[cs] = (uint16_t) ((int) (rescaled.at<float>(x,y)*255) << 8);
-							//single_frame->pixels[cs+1] = (uint16_t) ((int) (rescaled.at<float>(x,y)*255) << 8);
-							//single_frame->pixels[cs+2] = (uint16_t) ((int) (rescaled.at<float>(x,y)*255) << 8 );
+							single_frame->pixels[cs+1] = (uint16_t) ((int) (rescaled.at<float>(x,y)*255) << 8);
+							single_frame->pixels[cs+2] = (uint16_t) ((int) (rescaled.at<float>(x,y)*255) << 8 );
 							//std::cout << rescaled.at<float>(x,y) << std::endl;
 							//cs += 3;
 						}
