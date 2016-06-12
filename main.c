@@ -259,8 +259,12 @@ static bool mainloop_1(void) {
 	// this wrapper let you interact with caffe framework
 	// for example, we now classify the latest image
 	// only run CNN if we have a file to classify
+
+	// create image describing network activity
+	caerFrameEventPacket networkActivity = NULL;
+
 	if(*file_strings_classify != NULL) {
-		caerCaffeWrapper(21, file_strings_classify, classification_results, (int) MAX_IMG_QTY);
+		caerCaffeWrapper(21, file_strings_classify, classification_results, (int) MAX_IMG_QTY, &networkActivity);
 	}
 #endif
 #endif
@@ -271,6 +275,9 @@ static bool mainloop_1(void) {
 	// add allegro bips
 	// display accumulated spike image in hist
 	caerVisualizer(64, "ImageStreamerFrame", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) imagestreamer_frame);
+#ifdef ENABLE_CAFFEINTERFACE
+	caerVisualizer(66, "DeepNetworkActivations", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) networkActivity);
+#endif
 #endif
 #endif
 
@@ -310,6 +317,10 @@ static bool mainloop_1(void) {
 	free(frame_img_ptr);
 	frame_img_ptr = NULL;
 	free(imagestreamer);
+	free(imagestreamer_frame);
+#ifdef ENABLE_CAFFEINTERFACE
+	free(networkActivity); // frame that plots network outputs
+#endif
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.

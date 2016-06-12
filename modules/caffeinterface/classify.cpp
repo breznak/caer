@@ -8,7 +8,8 @@ using namespace caffe;
 // NOLINT(build/namespaces)
 using std::string;
 
-void MyClass::file_set(char * i, double *b, double thr, bool printoutputs) {
+void MyClass::file_set(char * i, double *b, double thr, bool printoutputs,
+		caerFrameEvent single_frame) {
 	MyClass::file_i = i;
 
 	if (file_i != NULL) {
@@ -21,14 +22,15 @@ void MyClass::file_set(char * i, double *b, double thr, bool printoutputs) {
 		//std::cout << "\n" << img2 << std::endl;
 
 		CHECK(!img.empty()) << "Unable to decode image " << file_i;
-		std::vector<Prediction> predictions = MyClass::Classify(img2);
+		std::vector<Prediction> predictions = MyClass::Classify(img2, 5,
+				single_frame);
 
 		/* Print the top N predictions. */
 		for (size_t i = 0; i < predictions.size(); ++i) {
 			Prediction p = predictions[i];
 			if (printoutputs) {
-				std::cout << "\n" << std::fixed << std::setprecision(4) << p.second << " - \"" << p.first << "\""
-					<< std::endl;
+				std::cout << "\n" << std::fixed << std::setprecision(4)
+						<< p.second << " - \"" << p.first << "\"" << std::endl;
 			}
 			// for face detection net
 			if (p.first.compare("FACE") == 0 && p.second > thr) {
@@ -60,8 +62,8 @@ void MyClass::init_network() {
 
 }
 
-void MyClass::Classifier(const string& model_file, const string& trained_file, const string& mean_file,
-	const string& label_file) {
+void MyClass::Classifier(const string& model_file, const string& trained_file,
+		const string& mean_file, const string& label_file) {
 #ifdef CPU_ONLY
 	Caffe::set_mode(Caffe::CPU);
 #else
@@ -73,11 +75,13 @@ void MyClass::Classifier(const string& model_file, const string& trained_file, c
 	net_->CopyTrainedLayersFrom(trained_file);
 
 	CHECK_EQ(net_->num_inputs(), 1) << "Network should have exactly one input.";
-	CHECK_EQ(net_->num_outputs(), 1) << "Network should have exactly one output.";
+	CHECK_EQ(net_->num_outputs(), 1)
+			<< "Network should have exactly one output.";
 
 	Blob<float>* input_layer = net_->input_blobs()[0];
 	num_channels_ = input_layer->channels();
-	CHECK(num_channels_ == 3 || num_channels_ == 1) << "Input layer should have 1 or 3 channels.";
+	CHECK(num_channels_ == 3 || num_channels_ == 1)
+			<< "Input layer should have 1 or 3 channels.";
 	input_geometry_ = cv::Size(input_layer->width(), input_layer->height());
 
 	/* Load the binaryproto mean file. */
@@ -91,10 +95,11 @@ void MyClass::Classifier(const string& model_file, const string& trained_file, c
 
 	Blob<float>* output_layer = net_->output_blobs()[0];
 	CHECK_EQ(labels_.size(), output_layer->channels())
-		<< "Number of labels is different from the output layer dimension.";
+			<< "Number of labels is different from the output layer dimension.";
 }
 
-static bool PairCompare(const std::pair<float, int>& lhs, const std::pair<float, int>& rhs) {
+static bool PairCompare(const std::pair<float, int>& lhs,
+		const std::pair<float, int>& rhs) {
 	return lhs.first > rhs.first;
 }
 
@@ -103,7 +108,8 @@ static std::vector<int> Argmax(const std::vector<float>& v, int N) {
 	std::vector<std::pair<float, int> > pairs;
 	for (size_t i = 0; i < v.size(); ++i)
 		pairs.push_back(std::make_pair(v[i], i));
-	std::partial_sort(pairs.begin(), pairs.begin() + N, pairs.end(), PairCompare);
+	std::partial_sort(pairs.begin(), pairs.begin() + N, pairs.end(),
+			PairCompare);
 
 	std::vector<int> result;
 	for (int i = 0; i < N; ++i)
@@ -112,8 +118,9 @@ static std::vector<int> Argmax(const std::vector<float>& v, int N) {
 }
 
 /* Return the top N predictions. */
-std::vector<Prediction> MyClass::Classify(const cv::Mat& img, int N) {
-	std::vector<float> output = Predict(img);
+std::vector<Prediction> MyClass::Classify(const cv::Mat& img, int N,
+		caerFrameEvent single_frame) {
+	std::vector<float> output = Predict(img, single_frame);
 
 	N = std::min<int>(labels_.size(), N);
 	std::vector<int> maxN = Argmax(output, N);
@@ -134,11 +141,16 @@ void MyClass::SetMean(const string& mean_file) {
 	/* Convert from BlobProto to Blob<float> */
 	Blob<float> mean_blob;
 	mean_blob.FromProto(blob_proto);
-	CHECK_EQ(mean_blob.channels(), num_channels_) << "Number of channels of mean file doesn't match input layer.";
+	CHECK_EQ(mean_blob.channels(), num_channels_)
+			<< "Number of channels of mean file doesn't match input layer.";
 
 	/* The format of the mean file is planar 32-bit float BGR or grayscale. */
 	std::vector<cv::Mat> channels;
+#ifdef CPU_ONLY
 	float* data = mean_blob.mutable_cpu_data();
+#else
+	float* data = mean_blob.mutable_gpu_data();
+#endif
 	for (int i = 0; i < num_channels_; ++i) {
 		/* Extract an individual channel. */
 		cv::Mat channel(mean_blob.height(), mean_blob.width(), CV_32FC1, data);
@@ -157,22 +169,166 @@ void MyClass::SetMean(const string& mean_file) {
 
 }
 
-std::vector<float> MyClass::Predict(const cv::Mat& img) {
+std::vector<float> MyClass::Predict(const cv::Mat& img,
+		caerFrameEvent single_frame) {
 
 	Blob<float>* input_layer = net_->input_blobs()[0];
-	input_layer->Reshape(1, num_channels_, input_geometry_.height, input_geometry_.width);
+	input_layer->Reshape(1, num_channels_, input_geometry_.height,
+			input_geometry_.width);
 	/* Forward dimension change to all layers. */
 	net_->Reshape();
 
 	std::vector<cv::Mat> input_channels;
 	WrapInputLayer(&input_channels);
 
-	Preprocess(img, &input_channels); //Error in here
-	net_->Forward(); //Prefilled();
+	Preprocess(img, &input_channels);
+	net_->ForwardPrefilled(); //Prefilled();
+
+	//IF WE ENABLE VISUALIZATION IN REAL TIME
+	if (1) {
+		const vector<shared_ptr<Layer<float> > >& layers = net_->layers();
+		int num_layer_conv = 0; // for graphics
+
+		//image vector containing all layer activations
+		vector < vector<cv::Mat> > layersVector;
+
+		std::vector<int> ntot, ctot, htot, wtot, n_image_per_layer;
+
+		// we want all activations of all layers
+		for (int i = 0; i < layers.size(); i++) {
+			// layer name
+			string layer_name = net_->layer_names()[i];
+			//std::cout << "working on layer ID: " << i << " of type: "
+			//		<< layers[i]->type() << " Name: " << layer_name
+			//		<< std::endl;
+
+			// layer blobs
+			//const vector<Blob<float>*> & bottom_vecs = net_->bottom_vecs()[i];
+			//const vector<Blob<float>*> & top_vecs = net_->top_vecs()[i];
+			//layers[i]->Reshape(bottom_vecs, top_vecs);
+			//layers[i]->Forward(bottom_vecs, top_vecs);
+
+			vector < shared_ptr<Blob<float>>>&this_layer_blobs =
+					layers[i]->blobs();
+
+			int n, c, h, w;
+			float data;
+
+			// print blobs data
+			if (strcmp(layers[i]->type(), "Convolution") == 0) {
+				for (int j = 0; j < this_layer_blobs.size(); j++) {
+					n = this_layer_blobs[j]->num();
+					c = this_layer_blobs[j]->channels();
+					h = this_layer_blobs[j]->height();
+					w = this_layer_blobs[j]->width();
+
+					// new image Vector For all Activations of this Layer
+					std::vector<cv::Mat> imageVector;
+					num_layer_conv += 1;
+
+					//go over all channels/filters/activations
+					//std::cout << "layers[i]->type() " << layers[i]->type()
+					//		<< std::endl;
+					//std::cout << "N " << n << std::endl;
+					//std::cout << "C " << c << std::endl;
+					//std::cout << "H " << h << std::endl;
+					//std::cout << "W " << w << std::endl;
+					ntot.push_back(n);
+					ctot.push_back(c);
+					htot.push_back(h);
+					wtot.push_back(w);
+					n_image_per_layer.push_back(n * c);
+					for (int num = 0; num < n; num++) {
+						//go over all channels
+						for (int chan_num = 0; chan_num < c; chan_num++) {
+							//go over h,w produce image
+							cv::Mat newImage = cv::Mat::zeros(h, w, CV_32F);
+							for (int hh = 0; hh < h; hh++) {
+								//go over w
+								for (int ww = 0; ww < w; ww++) {
+									data = this_layer_blobs[j]->data_at(num,
+											chan_num, hh, ww);
+									newImage.at<float>(hh, ww) = data;
+								}
+							}
+							imageVector.push_back(newImage);
+						}
+					}
+					layersVector.push_back(imageVector);
+				}
+			}
+		}
+
+		if (num_layer_conv > 0) {
+			//do the graphics only plot convolutional layers
+			//divide the y in equal parts , one row per layer
+			//single_frame->pixels[0] = (uint16_t) (20);
+			int y_pixels_per_layer = floor(
+					single_frame->lengthX / num_layer_conv);
+			int x_pixels_per_layer = floor(single_frame->lengthY);
+			int counter_y=-1,counter_x=-1;
+
+			//std::cout << " SIZE " << layersVector.size() << std::endl;
+			//loop over all conv layer
+			int cs = 0;
+			for (int layer_num = 0; layer_num < layersVector.size();
+					layer_num++) {
+
+				counter_y +=1; // count y position of image (layers)
+
+				// loop over all in/out filters for this layer
+				for (int img_num = 0; img_num < layersVector[layer_num].size();
+						img_num++) {
+
+					counter_x +=1; // count number of images on x (filters)
+
+					int size_x_single_image = floor(
+							x_pixels_per_layer
+									/ layersVector[layer_num].size());
+					int size_y_single_image = y_pixels_per_layer;
+					cv::Size size(size_x_single_image, size_y_single_image);
+					cv::Mat rescaled; //rescaled image
+
+					// square size of each image in this layer
+					//std::cout << " this image "
+					//		<< layersVector[layer_num][img_num]<< std::endl;
+
+					cv::resize(layersVector[layer_num][img_num], rescaled,
+							size); //resize image
+
+					char buffer[255];
+					snprintf(buffer, sizeof(char) * 255, "/Users/federicocorradi/tmp/file%i%i.jpg", layer_num, img_num);
+					imwrite( buffer, rescaled*255);
+
+					//now place images in the right place of the frame
+					//rescaled = cv::norm(rescaled);
+					//rescaled.convertTo(rescaled, CV_8U, 1/256);
+					for(int y=0; y < size_y_single_image; y++){
+						for(int x=0; x < size_x_single_image; x++){
+							//round(rescaled.at<float>(x,y))
+							//round(rescaled.at<float>(x,y)*65532))
+							single_frame->pixels[cs] = (uint16_t) ((int) (rand()*255 ));
+							single_frame->pixels[cs+1] = (uint16_t) ((int) (rescaled.at<float>(x,y)*255*2) );
+							single_frame->pixels[cs+2] = (uint16_t) ((int) (rescaled.at<float>(x,y)*255*4) );
+							//std::cout << rescaled.at<float>(x,y) << std::endl;
+							cs += 3;
+						}
+					}
+
+				}
+			}
+		}//num layer conv
+
+	}//if 1
 
 	/* Copy the output layer to a std::vector */
 	Blob<float>* output_layer = net_->output_blobs()[0];
+
+#ifdef CPU_ONLY
 	const float* begin = output_layer->cpu_data();
+#else
+	const float* begin = output_layer->gpu_data();
+#endif
 	const float* end = begin + output_layer->channels();
 
 	return std::vector<float>(begin, end);
@@ -196,7 +352,8 @@ void MyClass::WrapInputLayer(std::vector<cv::Mat>* input_channels) {
 	}
 }
 
-void MyClass::Preprocess(const cv::Mat& img, std::vector<cv::Mat>* input_channels) {
+void MyClass::Preprocess(const cv::Mat& img,
+		std::vector<cv::Mat>* input_channels) {
 	/* Convert the input image to the input image format of the network. */
 
 	// std::cout << " Preprocess --- img.channnels() " << img.channels() << ", num_channels_" << num_channels_ << std::endl;
@@ -235,7 +392,12 @@ void MyClass::Preprocess(const cv::Mat& img, std::vector<cv::Mat>* input_channel
 	 * objects in input_channels. */
 	cv::split(sample_normalized, *input_channels);
 
-	CHECK(reinterpret_cast<float*>(input_channels->at(0).data) == net_->input_blobs()[0]->cpu_data())
-		<< "Input channels are not wrapping the input layer of the network.";
+	CHECK(reinterpret_cast<float*>(input_channels->at(0).data)
+#ifdef CPU_ONLY
+			== net_->input_blobs()[0]->cpu_data())
+#else
+			== net_->input_blobs()[0]->gpu_data())
+#endif
+			<< "Input channels are not wrapping the input layer of the network.";
 }
 

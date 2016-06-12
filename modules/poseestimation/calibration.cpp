@@ -51,7 +51,7 @@ bool PoseCalibration::findMarkers(caerFrameEvent frame) {
     if (ids.size() > 0){ 
         aruco::drawDetectedMarkers(view, corners, ids);
     }else{
-        return false;
+        return (false);
     } 
        
     // from camera calibration 

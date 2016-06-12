@@ -654,7 +654,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 
 			}
 
-			//save frame if desired, do NOT classify on frame (at the moment)
+			// save frame if desired
 			if (state->doSavePng_frame) {
 
 				//create classify_img with desired CLASSIFY_IMG_SIZE (input size of CNN)
