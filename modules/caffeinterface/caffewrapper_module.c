@@ -85,7 +85,7 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber,
 	caerFrameEvent single_frame = caerFrameEventPacketGetEvent(*networkActivity,
 			0);
 	//add info to the frame
-	caerFrameEventSetLengthXLengthYChannelNumber(single_frame, 640, 480, 3,
+	caerFrameEventSetLengthXLengthYChannelNumber(single_frame, 640, 480, 1,
 			*networkActivity);
 	//single_frame->pixels[0] = (uint16_t) (20);
 

@@ -197,7 +197,7 @@ std::vector<float> MyClass::Predict(const cv::Mat& img,
 		// we want all activations of all layers
 		for (int i = 0; i < layers.size(); i++) {
 			// layer name
-			string layer_name = net_->layer_names()[i];
+			//string layer_name = net_->layer_names()[i];
 			//std::cout << "working on layer ID: " << i << " of type: "
 			//		<< layers[i]->type() << " Name: " << layer_name
 			//		<< std::endl;
@@ -208,13 +208,14 @@ std::vector<float> MyClass::Predict(const cv::Mat& img,
 			//layers[i]->Reshape(bottom_vecs, top_vecs);
 			//layers[i]->Forward(bottom_vecs, top_vecs);
 
-			vector < shared_ptr<Blob<float>>>&this_layer_blobs =
-					layers[i]->blobs();
+			// net blobs
+			const vector < shared_ptr<Blob<float>>>&this_layer_blobs =
+					net_->blobs();
 
 			int n, c, h, w;
 			float data;
 
-			// print blobs data
+			// get only convolutions
 			if (strcmp(layers[i]->type(), "Convolution") == 0) {
 				for (int j = 0; j < this_layer_blobs.size(); j++) {
 					n = this_layer_blobs[j]->num();
@@ -259,13 +260,14 @@ std::vector<float> MyClass::Predict(const cv::Mat& img,
 			}
 		}
 
+
 		if (num_layer_conv > 0) {
 			//do the graphics only plot convolutional layers
 			//divide the y in equal parts , one row per layer
 			//single_frame->pixels[0] = (uint16_t) (20);
-			int y_pixels_per_layer = floor(
-					single_frame->lengthX / num_layer_conv);
-			int x_pixels_per_layer = floor(single_frame->lengthY);
+			//int y_pixels_per_layer = floor(
+			//		single_frame->lengthY / num_layer_conv);
+			//int x_pixels_per_layer = floor(single_frame->lengthX);
 			int counter_y=-1,counter_x=-1;
 
 			//std::cout << " SIZE " << layersVector.size() << std::endl;
@@ -273,6 +275,9 @@ std::vector<float> MyClass::Predict(const cv::Mat& img,
 			int cs = 0;
 			for (int layer_num = 0; layer_num < layersVector.size();
 					layer_num++) {
+                //std::cout << "num_layer_conv " << num_layer_conv << std::endl;
+				//std::cout << "Layers Vector size " << layersVector.size() << std::endl;
+
 
 				counter_y +=1; // count y position of image (layers)
 
@@ -280,12 +285,14 @@ std::vector<float> MyClass::Predict(const cv::Mat& img,
 				for (int img_num = 0; img_num < layersVector[layer_num].size();
 						img_num++) {
 
+					//std::cout << " layersVector[layer_num] " <<  layersVector[layer_num].size() << std::endl;
+
 					counter_x +=1; // count number of images on x (filters)
 
 					int size_x_single_image = floor(
-							x_pixels_per_layer
+							floor(single_frame->lengthX)
 									/ layersVector[layer_num].size());
-					int size_y_single_image = y_pixels_per_layer;
+					int size_y_single_image = floor(single_frame->lengthY);
 					cv::Size size(size_x_single_image, size_y_single_image);
 					cv::Mat rescaled; //rescaled image
 
@@ -297,21 +304,23 @@ std::vector<float> MyClass::Predict(const cv::Mat& img,
 							size); //resize image
 
 					char buffer[255];
-					snprintf(buffer, sizeof(char) * 255, "/Users/federicocorradi/tmp/file%i%i.jpg", layer_num, img_num);
+					snprintf(buffer, sizeof(char) * 255, "/Users/federicocorradi/tmp/fileLayer%iImgNum%i.jpg", layer_num, img_num);
 					imwrite( buffer, rescaled*255);
 
 					//now place images in the right place of the frame
 					//rescaled = cv::norm(rescaled);
 					//rescaled.convertTo(rescaled, CV_8U, 1/256);
-					for(int y=0; y < size_y_single_image; y++){
-						for(int x=0; x < size_x_single_image; x++){
+					for(int y=0; y < size_x_single_image; y++){
+						for(int x=0; x < size_y_single_image; x++){
 							//round(rescaled.at<float>(x,y))
 							//round(rescaled.at<float>(x,y)*65532))
-							single_frame->pixels[cs] = (uint16_t) ((int) (rand()*255 ));
-							single_frame->pixels[cs+1] = (uint16_t) ((int) (rescaled.at<float>(x,y)*255*2) );
-							single_frame->pixels[cs+2] = (uint16_t) ((int) (rescaled.at<float>(x,y)*255*4) );
+							cs = (y * size_y_single_image) + (counter_y*size_y_single_image)
+									+ x +(counter_x*size_x_single_image) ;
+							single_frame->pixels[cs] = (uint16_t) ((int) (rescaled.at<float>(x,y)*255) << 8);
+							//single_frame->pixels[cs+1] = (uint16_t) ((int) (rescaled.at<float>(x,y)*255) << 8);
+							//single_frame->pixels[cs+2] = (uint16_t) ((int) (rescaled.at<float>(x,y)*255) << 8 );
 							//std::cout << rescaled.at<float>(x,y) << std::endl;
-							cs += 3;
+							//cs += 3;
 						}
 					}
 
