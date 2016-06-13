@@ -185,152 +185,121 @@ std::vector<float> MyClass::Predict(const cv::Mat& img,
 	net_->ForwardPrefilled(); //Prefilled();
 
 	//IF WE ENABLE VISUALIZATION IN REAL TIME
-	if (0) {
+	if (1) {
 		const vector<shared_ptr<Layer<float> > >& layers = net_->layers();
-		int num_layer_conv = 0; // for graphics
+		//int num_layer_conv = 0; // for graphics
 
 		//image vector containing all layer activations
 		vector < vector<cv::Mat> > layersVector;
 
 		std::vector<int> ntot, ctot, htot, wtot, n_image_per_layer;
 
-		// we want all activations of all layers
-		for (int i = 0; i < layers.size(); i++) {
-			// layer name
-			//string layer_name = net_->layer_names()[i];
-			//std::cout << "working on layer ID: " << i << " of type: "
-			//		<< layers[i]->type() << " Name: " << layer_name
-			//		<< std::endl;
+		// net blobs
+		const vector<shared_ptr<Blob<float>>>&this_layer_blobs =
+		net_->blobs();
 
-			// layer blobs
-			//const vector<Blob<float>*> & bottom_vecs = net_->bottom_vecs()[i];
-			//const vector<Blob<float>*> & top_vecs = net_->top_vecs()[i];
-			//layers[i]->Reshape(bottom_vecs, top_vecs);
-			//layers[i]->Forward(bottom_vecs, top_vecs);
-
-			// net blobs
-			const vector < shared_ptr<Blob<float>>>&this_layer_blobs =
-					net_->blobs();
+		// we want all activations of all layers this_layer_blobs.size()
+		for (int i = 0; i < this_layer_blobs.size(); i++) {
 
 			int n, c, h, w;
 			float data;
 
-			// get only convolutions
-			if (strcmp(layers[i]->type(), "Convolution") == 0) {
-				for (int j = 0; j < this_layer_blobs.size(); j++) {
-					n = this_layer_blobs[j]->num();
-					c = this_layer_blobs[j]->channels();
-					h = this_layer_blobs[j]->height();
-					w = this_layer_blobs[j]->width();
+			n = this_layer_blobs[i]->num();
+			c = this_layer_blobs[i]->channels();
+			h = this_layer_blobs[i]->height();
+			w = this_layer_blobs[i]->width();
 
-					// new image Vector For all Activations of this Layer
-					std::vector<cv::Mat> imageVector;
-					num_layer_conv += 1;
+			// new image Vector For all Activations of this Layer
+			std::vector<cv::Mat> imageVector;
 
-					//go over all channels/filters/activations
-					//std::cout << "layers[i]->type() " << layers[i]->type()
-					//		<< std::endl;
-					//std::cout << "N " << n << std::endl;
-					//std::cout << "C " << c << std::endl;
-					//std::cout << "H " << h << std::endl;
-					//std::cout << "W " << w << std::endl;
-					ntot.push_back(n);
-					ctot.push_back(c);
-					htot.push_back(h);
-					wtot.push_back(w);
-					n_image_per_layer.push_back(n * c);
-					for (int num = 0; num < n; num++) {
-						//go over all channels
-						for (int chan_num = 0; chan_num < c; chan_num++) {
-							//go over h,w produce image
-							cv::Mat newImage = cv::Mat::zeros(h, w, CV_32F);
-							for (int hh = 0; hh < h; hh++) {
-								//go over w
-								for (int ww = 0; ww < w; ww++) {
-									data = this_layer_blobs[j]->data_at(num,
-											chan_num, hh, ww);
-									newImage.at<float>(hh, ww) = data;
-								}
-							}
-							imageVector.push_back(newImage);
+			//go over all channels/filters/activations
+			ntot.push_back(n);
+			ctot.push_back(c);
+			htot.push_back(h);
+			wtot.push_back(w);
+			n_image_per_layer.push_back(n * c);
+			for (int num = 0; num < n; num++) {
+				//go over all channels
+				for (int chan_num = 0; chan_num < c; chan_num++) {
+					//go over h,w produce image
+					cv::Mat newImage = cv::Mat::zeros(h, w, CV_32F);
+					for (int hh = 0; hh < h; hh++) {
+						//go over w
+						for (int ww = 0; ww < w; ww++) {
+							data = this_layer_blobs[i]->data_at(num, chan_num,
+									hh, ww);
+							newImage.at<float>(hh, ww) = data;
 						}
 					}
-					layersVector.push_back(imageVector);
+					imageVector.push_back(newImage);
 				}
+			}
+			layersVector.push_back(imageVector);
+		}
+
+		//do the graphics only plot convolutional layers
+		//divide the y in equal parts , one row per layer
+		//single_frame->pixels[0] = (uint16_t) (20);
+		int counter_y = -1, counter_x = -1;
+
+		// mat final Frame of activations
+		cv::Mat1f frame_activity(single_frame->lengthX, single_frame->lengthY);
+
+		//std::cout << " SIZE " << layersVector.size() << std::endl; layersVector.size()
+		int cs = 0;
+		int size_y_single_image = single_frame->lengthY / layersVector.size(); // num layers
+		for (int layer_num = 0; layer_num < layersVector.size(); layer_num++) {
+			counter_y += 1; // count y position of image (layers)
+			counter_x = -1; // reset counter_x
+
+			// loop over all in/out filters for this layer
+			for (int img_num = 0; img_num < layersVector[layer_num].size();
+					img_num++) {
+
+				counter_x += 1; // count number of images on x (filters)
+
+				int size_x_single_image = floor(
+						single_frame->lengthX / layersVector[layer_num].size());
+
+				cv::Size size(size_x_single_image, size_y_single_image);
+				cv::Mat1f rescaled; //rescaled image
+
+				// square size of each image in this layer
+				//std::cout << " this image "
+				//		<< layersVector[layer_num][img_num]<< std::endl;
+				cv::resize(layersVector[layer_num][img_num], rescaled, size); //resize image
+				cv::Mat data_tp = cv::Mat(rescaled.cols, rescaled.rows, CV_32F);
+				cv::transpose(rescaled, data_tp);
+
+				int xloc, yloc;
+				xloc = (size_x_single_image) * counter_x;
+				yloc = (size_y_single_image) * counter_y;
+
+				data_tp.copyTo(
+						frame_activity.rowRange(xloc, xloc + rescaled.cols).colRange(
+								yloc, yloc + rescaled.rows));
 			}
 		}
 
+		cv::Mat data_frame = cv::Mat(frame_activity.cols, frame_activity.rows,
+		CV_32F);
+		cv::transpose(frame_activity, data_frame);
 
-		if (num_layer_conv > 0) {
-			//do the graphics only plot convolutional layers
-			//divide the y in equal parts , one row per layer
-			//single_frame->pixels[0] = (uint16_t) (20);
-			//int y_pixels_per_layer = floor(
-			//		single_frame->lengthY / num_layer_conv);
-			//int x_pixels_per_layer = floor(single_frame->lengthX);
-			int counter_y=-1,counter_x=-1;
+		// copy opencv image into frame
+		for (int y = 0; y < single_frame->lengthY; y++) {
+			for (int x = 0; x < single_frame->lengthX; x++) {
 
-			//std::cout << " SIZE " << layersVector.size() << std::endl;
-			//loop over all conv layer
-			int cs = 0;
-			for (int layer_num = 0; layer_num < layersVector.size();
-					layer_num++) {
-                //std::cout << "num_layer_conv " << num_layer_conv << std::endl;
-				//std::cout << "Layers Vector size " << layersVector.size() << std::endl;
+				cs = y * (single_frame->lengthY) + x;
+				single_frame->pixels[cs] = (uint16_t) ((int) (data_frame.at<
+						float>(y, x) * 255) << 8);
+				single_frame->pixels[cs + 1] = (uint16_t) ((int) (data_frame.at<
+						float>(y, x) * 255) << 8);
+				single_frame->pixels[cs + 2] = (uint16_t) ((int) (data_frame.at<
+						float>(y, x) * 255) << 8);
 
-
-				counter_y +=1; // count y position of image (layers)
-
-				// loop over all in/out filters for this layer
-				for (int img_num = 0; img_num < layersVector[layer_num].size();
-						img_num++) {
-
-					//std::cout << " layersVector[layer_num] " <<  layersVector[layer_num].size() << std::endl;
-
-					counter_x +=1; // count number of images on x (filters)
-
-					int size_x_single_image = floor(
-							floor(single_frame->lengthY)
-									/ layersVector[layer_num].size());
-					int size_y_single_image = floor(single_frame->lengthX);
-					cv::Size size(size_x_single_image, size_y_single_image);
-					cv::Mat rescaled; //rescaled image
-
-					// square size of each image in this layer
-					//std::cout << " this image "
-					//		<< layersVector[layer_num][img_num]<< std::endl;
-
-					cv::resize(layersVector[layer_num][img_num], rescaled,
-							size); //resize image
-
-					//char buffer[255];
-					//snprintf(buffer, sizeof(char) * 255, "/Users/federicocorradi/tmp/fileLayer%iImgNum%i.jpg", layer_num, img_num);
-					//imwrite( buffer, rescaled*255);
-
-					//now place images in the right place of the frame
-					//rescaled = cv::norm(rescaled);
-					//rescaled.convertTo(rescaled, CV_8U, 1/256);
-					//std::cout << counter_y << std::endl;
-					for(int x=0; x < size_x_single_image; x++){
-						for(int y=0; y < size_y_single_image; y++){
-							//round(rescaled.at<float>(x,y))
-							//round(rescaled.at<float>(x,y)*65532))
-							cs =  (y + (counter_y*size_y_single_image)) + (x * size_x_single_image)+(counter_x*size_x_single_image);
-									//+ (y * size_y_single_image) + (counter_y*size_y_single_image);
-									//+ x +(counter_x*size_x_single_image) ;
-							single_frame->pixels[cs] = (uint16_t) ((int) (rescaled.at<float>(x,y)*255) << 8);
-							single_frame->pixels[cs+1] = (uint16_t) ((int) (rescaled.at<float>(x,y)*255) << 8);
-							single_frame->pixels[cs+2] = (uint16_t) ((int) (rescaled.at<float>(x,y)*255) << 8 );
-							//std::cout << rescaled.at<float>(x,y) << std::endl;
-							//cs += 3;
-						}
-					}
-
-				}
 			}
-		}//num layer conv
-
-	}//if 1
+		}
+	}							//if 1
 
 	/* Copy the output layer to a std::vector */
 	Blob<float>* output_layer = net_->output_blobs()[0];
