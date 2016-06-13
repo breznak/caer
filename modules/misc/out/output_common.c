@@ -632,7 +632,9 @@ static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader
 				caerFrameEventGetLengthX(caerFrameIteratorElement), caerFrameEventGetLengthY(caerFrameIteratorElement),
 				caerFrameEventGetChannelNumber(caerFrameIteratorElement))) {
 				// Failed to generate PNG.
-				// TODO: how to handle?
+				// Discard this frame event.
+				currPacketOffset -= frameHeaderSize;
+				continue;
 			}
 
 			// Check that the image didn't actually grow.
@@ -640,7 +642,10 @@ static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader
 			if ((outSize + sizeof(int32_t)) > pixelSize) {
 				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to compress frame event. "
 					"Image actually grew by %zu bytes to a total of %zu bytes.", (outSize - pixelSize), outSize);
-				// TODO: how to handle this?
+
+				free(outBuffer);
+				currPacketOffset -= frameHeaderSize;
+				continue;
 			}
 
 			// Store size of PNG image block as 4 byte integer.
