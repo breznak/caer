@@ -77,7 +77,7 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber, va
 	*networkActivity = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, 640, 480, 3);
 	caerFrameEvent single_frame = caerFrameEventPacketGetEvent(*networkActivity, 0);
 	//add info to the frame
-	caerFrameEventSetLengthXLengthYChannelNumber(single_frame, 640, 480, 3, *networkActivity); // to do remove hard coded size
+	caerFrameEventSetLengthXLengthYChannelNumber(single_frame, 480, 480, 3, *networkActivity); // to do remove hard coded size
 	//single_frame->pixels[0] = (uint16_t) (20);
 
 	for (int i = 0; i < max_img_qty; ++i) {

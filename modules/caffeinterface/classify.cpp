@@ -8,8 +8,8 @@ using namespace caffe;
 // NOLINT(build/namespaces)
 using std::string;
 
-void MyClass::file_set(char * i, double *b, double thr, bool printoutputs, caerFrameEvent single_frame,
-	bool showactivations) {
+void MyClass::file_set(char * i, double *b, double thr, bool printoutputs,
+		caerFrameEvent single_frame, bool showactivations) {
 	MyClass::file_i = i;
 
 	if (file_i != NULL) {
@@ -22,14 +22,15 @@ void MyClass::file_set(char * i, double *b, double thr, bool printoutputs, caerF
 		//std::cout << "\n" << img2 << std::endl;
 
 		CHECK(!img.empty()) << "Unable to decode image " << file_i;
-		std::vector<Prediction> predictions = MyClass::Classify(img2, 5, single_frame, showactivations);
+		std::vector<Prediction> predictions = MyClass::Classify(img2, 5,
+				single_frame, showactivations);
 
 		/* Print the top N predictions. */
 		for (size_t i = 0; i < predictions.size(); ++i) {
 			Prediction p = predictions[i];
 			if (printoutputs) {
-				std::cout << "\n" << std::fixed << std::setprecision(4) << p.second << " - \"" << p.first << "\""
-					<< std::endl;
+				std::cout << "\n" << std::fixed << std::setprecision(4)
+						<< p.second << " - \"" << p.first << "\"" << std::endl;
 			}
 			// for face detection net
 			if (p.first.compare("FACE") == 0 && p.second > thr) {
@@ -61,8 +62,8 @@ void MyClass::init_network() {
 
 }
 
-void MyClass::Classifier(const string& model_file, const string& trained_file, const string& mean_file,
-	const string& label_file) {
+void MyClass::Classifier(const string& model_file, const string& trained_file,
+		const string& mean_file, const string& label_file) {
 #ifdef CPU_ONLY
 	Caffe::set_mode(Caffe::CPU);
 #else
@@ -74,11 +75,13 @@ void MyClass::Classifier(const string& model_file, const string& trained_file, c
 	net_->CopyTrainedLayersFrom(trained_file);
 
 	CHECK_EQ(net_->num_inputs(), 1) << "Network should have exactly one input.";
-	CHECK_EQ(net_->num_outputs(), 1) << "Network should have exactly one output.";
+	CHECK_EQ(net_->num_outputs(), 1)
+			<< "Network should have exactly one output.";
 
 	Blob<float>* input_layer = net_->input_blobs()[0];
 	num_channels_ = input_layer->channels();
-	CHECK(num_channels_ == 3 || num_channels_ == 1) << "Input layer should have 1 or 3 channels.";
+	CHECK(num_channels_ == 3 || num_channels_ == 1)
+			<< "Input layer should have 1 or 3 channels.";
 	input_geometry_ = cv::Size(input_layer->width(), input_layer->height());
 
 	/* Load the binaryproto mean file. */
@@ -92,10 +95,11 @@ void MyClass::Classifier(const string& model_file, const string& trained_file, c
 
 	Blob<float>* output_layer = net_->output_blobs()[0];
 	CHECK_EQ(labels_.size(), output_layer->channels())
-		<< "Number of labels is different from the output layer dimension.";
+			<< "Number of labels is different from the output layer dimension.";
 }
 
-static bool PairCompare(const std::pair<float, int>& lhs, const std::pair<float, int>& rhs) {
+static bool PairCompare(const std::pair<float, int>& lhs,
+		const std::pair<float, int>& rhs) {
 	return lhs.first > rhs.first;
 }
 
@@ -104,7 +108,8 @@ static std::vector<int> Argmax(const std::vector<float>& v, int N) {
 	std::vector<std::pair<float, int> > pairs;
 	for (size_t i = 0; i < v.size(); ++i)
 		pairs.push_back(std::make_pair(v[i], i));
-	std::partial_sort(pairs.begin(), pairs.begin() + N, pairs.end(), PairCompare);
+	std::partial_sort(pairs.begin(), pairs.begin() + N, pairs.end(),
+			PairCompare);
 
 	std::vector<int> result;
 	for (int i = 0; i < N; ++i)
@@ -113,8 +118,8 @@ static std::vector<int> Argmax(const std::vector<float>& v, int N) {
 }
 
 /* Return the top N predictions. */
-std::vector<Prediction> MyClass::Classify(const cv::Mat& img, int N, caerFrameEvent single_frame,
-	bool showactivations) {
+std::vector<Prediction> MyClass::Classify(const cv::Mat& img, int N,
+		caerFrameEvent single_frame, bool showactivations) {
 	std::vector<float> output = Predict(img, single_frame, showactivations);
 
 	N = std::min<int>(labels_.size(), N);
@@ -136,7 +141,8 @@ void MyClass::SetMean(const string& mean_file) {
 	/* Convert from BlobProto to Blob<float> */
 	Blob<float> mean_blob;
 	mean_blob.FromProto(blob_proto);
-	CHECK_EQ(mean_blob.channels(), num_channels_) << "Number of channels of mean file doesn't match input layer.";
+	CHECK_EQ(mean_blob.channels(), num_channels_)
+			<< "Number of channels of mean file doesn't match input layer.";
 
 	/* The format of the mean file is planar 32-bit float BGR or grayscale. */
 	std::vector<cv::Mat> channels;
@@ -163,10 +169,12 @@ void MyClass::SetMean(const string& mean_file) {
 
 }
 
-std::vector<float> MyClass::Predict(const cv::Mat& img, caerFrameEvent single_frame, bool showactivations) {
+std::vector<float> MyClass::Predict(const cv::Mat& img,
+		caerFrameEvent single_frame, bool showactivations) {
 
 	Blob<float>* input_layer = net_->input_blobs()[0];
-	input_layer->Reshape(1, num_channels_, input_geometry_.height, input_geometry_.width);
+	input_layer->Reshape(1, num_channels_, input_geometry_.height,
+			input_geometry_.width);
 	/* Forward dimension change to all layers. */
 	net_->Reshape();
 
@@ -218,7 +226,8 @@ std::vector<float> MyClass::Predict(const cv::Mat& img, caerFrameEvent single_fr
 					for (int hh = 0; hh < h; hh++) {
 						//go over w
 						for (int ww = 0; ww < w; ww++) {
-							data = this_layer_blobs[i]->data_at(num, chan_num, hh, ww);
+							data = this_layer_blobs[i]->data_at(num, chan_num,
+									hh, ww);
 							newImage.at<float>(hh, ww) = data;
 						}
 					}
@@ -238,17 +247,19 @@ std::vector<float> MyClass::Predict(const cv::Mat& img, caerFrameEvent single_fr
 
 		//std::cout << " SIZE " << layersVector.size() << std::endl; layersVector.size()
 		int cs = 0;
-		int size_y_single_image = single_frame->lengthY / layersVector.size(); // num layers
+		int size_y_single_image = floor(single_frame->lengthY / layersVector.size()); // num layers
 		for (int layer_num = 0; layer_num < layersVector.size(); layer_num++) {
 			counter_y += 1; // count y position of image (layers)
 			counter_x = -1; // reset counter_x
 
 			// loop over all in/out filters for this layer
-			for (int img_num = 0; img_num < layersVector[layer_num].size(); img_num++) {
+			for (int img_num = 0; img_num < layersVector[layer_num].size();
+					img_num++) {
 
 				counter_x += 1; // count number of images on x (filters)
 
-				int size_x_single_image = floor(single_frame->lengthX / layersVector[layer_num].size());
+				int size_x_single_image = floor(
+						single_frame->lengthX / layersVector[layer_num].size());
 
 				cv::Size size(size_x_single_image, size_y_single_image);
 				cv::Mat1f rescaled; //rescaled image
@@ -265,27 +276,28 @@ std::vector<float> MyClass::Predict(const cv::Mat& img, caerFrameEvent single_fr
 				yloc = (size_y_single_image) * counter_y;
 
 				data_tp.copyTo(
-					frame_activity.rowRange(xloc, xloc + rescaled.cols).colRange(yloc, yloc + rescaled.rows));
+						frame_activity.rowRange(xloc, xloc + rescaled.cols).colRange(
+								yloc, yloc + rescaled.rows));
 			}
 		}
 
-		cv::Mat data_frame = cv::Mat(frame_activity.cols, frame_activity.rows,
-		CV_32F);
+		cv::Mat data_frame = cv::Mat(frame_activity.cols, frame_activity.rows, CV_16UC1);
 		cv::transpose(frame_activity, data_frame);
+		cv::normalize(data_frame, data_frame, 0, 65535, cv::NORM_MINMAX);
 
 		// copy opencv image into frame
 		for (int y = 0; y < single_frame->lengthY; y++) {
 			for (int x = 0; x < single_frame->lengthX; x++) {
 
 				cs = y * (single_frame->lengthY) + x;
-				single_frame->pixels[cs] = (uint16_t) ((int) (data_frame.at<float>(y, x) * 255) << 8);
-				single_frame->pixels[cs + 1] = (uint16_t) ((int) (data_frame.at<float>(y, x) * 255) << 8);
-				single_frame->pixels[cs + 2] = (uint16_t) ((int) (data_frame.at<float>(y, x) * 255) << 8);
+				single_frame->pixels[cs] = data_frame.at<float>(y, x);
+				single_frame->pixels[cs + 1] = data_frame.at<float>(y, x);
+				single_frame->pixels[cs + 2] = data_frame.at<float>(y, x);
 
 			}
 		}
-	} //if show activations
-	else {
+	}//if show activations
+	else{
 		single_frame = NULL;
 	}
 
@@ -320,7 +332,8 @@ void MyClass::WrapInputLayer(std::vector<cv::Mat>* input_channels) {
 	}
 }
 
-void MyClass::Preprocess(const cv::Mat& img, std::vector<cv::Mat>* input_channels) {
+void MyClass::Preprocess(const cv::Mat& img,
+		std::vector<cv::Mat>* input_channels) {
 	/* Convert the input image to the input image format of the network. */
 
 	// std::cout << " Preprocess --- img.channnels() " << img.channels() << ", num_channels_" << num_channels_ << std::endl;
@@ -361,10 +374,10 @@ void MyClass::Preprocess(const cv::Mat& img, std::vector<cv::Mat>* input_channel
 
 	CHECK(reinterpret_cast<float*>(input_channels->at(0).data)
 #ifdef CPU_ONLY
-		== net_->input_blobs()[0]->cpu_data())
+			== net_->input_blobs()[0]->cpu_data())
 #else
-		== net_->input_blobs()[0]->gpu_data())
+			== net_->input_blobs()[0]->gpu_data())
 #endif
-		<< "Input channels are not wrapping the input layer of the network.";
+			<< "Input channels are not wrapping the input layer of the network.";
 }
 
