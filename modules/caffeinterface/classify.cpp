@@ -231,6 +231,19 @@ std::vector<float> MyClass::Predict(const cv::Mat& img,
 							newImage.at<float>(hh, ww) = data;
 						}
 					}
+					//std::cout << layers[i]->type() << std::endl;
+					/*if(strcmp(layers[i]->type(),"Convolution") == 0){
+					    cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
+					}*/
+					/*if(strcmp(layers[i]->type(),"ReLU") == 0){
+					    cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
+					}*/
+					/*if(strcmp(layers[i]->type(),"Pooling") == 0){
+					    cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
+					}*/
+					/*if(strcmp(layers[i]->type(),"Innerproduct") == 0){
+					    cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
+					}*/
 					imageVector.push_back(newImage);
 				}
 			}
@@ -281,9 +294,11 @@ std::vector<float> MyClass::Predict(const cv::Mat& img,
 			}
 		}
 
-		cv::Mat data_frame = cv::Mat(frame_activity.cols, frame_activity.rows, CV_16UC1);
+		cv::Mat data_frame = cv::Mat(frame_activity.cols, frame_activity.rows, CV_16UC3);
 		cv::transpose(frame_activity, data_frame);
-		cv::normalize(data_frame, data_frame, 0, 65535, cv::NORM_MINMAX);
+
+	    // normalize output into [0,65535]
+	    cv::normalize(data_frame, data_frame, 0.0, 65535, cv::NORM_MINMAX, -1);
 
 		// copy opencv image into frame
 		for (int y = 0; y < single_frame->lengthY; y++) {
@@ -291,8 +306,8 @@ std::vector<float> MyClass::Predict(const cv::Mat& img,
 
 				cs = y * (single_frame->lengthY) + x;
 				single_frame->pixels[cs] = data_frame.at<float>(y, x);
-				single_frame->pixels[cs + 1] = data_frame.at<float>(y, x);
-				single_frame->pixels[cs + 2] = data_frame.at<float>(y, x);
+				single_frame->pixels[cs + 1] = data_frame.at<float>(y, x);//data_frame.at<float>(y, x);
+				single_frame->pixels[cs + 2] = data_frame.at<float>(y, x);//data_frame.at<float>(y, x);
 
 			}
 		}
