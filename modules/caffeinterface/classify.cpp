@@ -234,16 +234,17 @@ std::vector<float> MyClass::Predict(const cv::Mat& img,
 					//std::cout << layers[i]->type() << std::endl;
 					/*if(strcmp(layers[i]->type(),"Convolution") == 0){
 					    cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
-					}*/
-					/*if(strcmp(layers[i]->type(),"ReLU") == 0){
+					}
+					if(strcmp(layers[i]->type(),"ReLU") == 0){
+					    cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
+					}
+					if(strcmp(layers[i]->type(),"Pooling") == 0){
+					    cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
+					}
+					if(strcmp(layers[i]->type(),"InnerProduct") == 0){
 					    cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
 					}*/
-					/*if(strcmp(layers[i]->type(),"Pooling") == 0){
-					    cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
-					}*/
-					/*if(strcmp(layers[i]->type(),"Innerproduct") == 0){
-					    cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
-					}*/
+					//cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
 					imageVector.push_back(newImage);
 				}
 			}

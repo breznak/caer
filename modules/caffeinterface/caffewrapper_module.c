@@ -74,10 +74,12 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber, va
 	state->doShowActivations = sshsNodeGetBool(moduleData->moduleNode, "doShowActivations");
 
 	//allocate single frame
-	*networkActivity = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, 640, 480, 3);
+	int frame_x = 480;
+	int frame_y = 480;
+	*networkActivity = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, frame_x, frame_y, 3);
 	caerFrameEvent single_frame = caerFrameEventPacketGetEvent(*networkActivity, 0);
 	//add info to the frame
-	caerFrameEventSetLengthXLengthYChannelNumber(single_frame, 480, 480, 3, *networkActivity); // to do remove hard coded size
+	caerFrameEventSetLengthXLengthYChannelNumber(single_frame, frame_x, frame_y, 3, *networkActivity); // to do remove hard coded size
 	//single_frame->pixels[0] = (uint16_t) (20);
 
 	for (int i = 0; i < max_img_qty; ++i) {
