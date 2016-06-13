@@ -453,6 +453,7 @@ static inline bool caerFrameEventPNGCompress(uint8_t **outBuffer, size_t *outSiz
 	int32_t ySize, enum caer_frame_event_color_channels channels) {
 	png_structp png_ptr = NULL;
 	png_infop info_ptr = NULL;
+	png_byte **row_pointers = NULL;
 
 	// Initialize the write struct.
 	png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
@@ -469,6 +470,9 @@ static inline bool caerFrameEventPNGCompress(uint8_t **outBuffer, size_t *outSiz
 
 	// Set up error handling.
 	if (setjmp(png_jmpbuf(png_ptr))) {
+		if (row_pointers != NULL) {
+			png_free(png_ptr, row_pointers);
+		}
 		png_destroy_write_struct(&png_ptr, &info_ptr);
 		return (false);
 	}
@@ -482,8 +486,9 @@ static inline bool caerFrameEventPNGCompress(uint8_t **outBuffer, size_t *outSiz
 	png_set_swap(png_ptr);
 
 	// Initialize rows of PNG.
-	png_byte **row_pointers = png_malloc(png_ptr, (size_t) ySize * sizeof(png_byte *));
+	row_pointers = png_malloc(png_ptr, (size_t) ySize * sizeof(png_byte *));
 	if (row_pointers == NULL) {
+		png_destroy_write_struct(&png_ptr, &info_ptr);
 		return (false);
 	}
 
