@@ -90,7 +90,7 @@ static char *getFullFilePath(const char *subSystemString, const char *directory,
 	// 4 year, 2 month, 2 day, 2 hours, 2 minutes, 2 seconds).
 	size_t currentTimeStringLength = 19;
 	char currentTimeString[currentTimeStringLength + 1]; // + 1 for terminating NUL byte.
-	strftime(currentTimeString, currentTimeStringLength + 1, "%Y-%m-%d_%H:%M:%S", &currentTime);
+	strftime(currentTimeString, currentTimeStringLength + 1, "%Y_%m_%d_%H_%M_%S", &currentTime);
 
 	if (caerStrEquals(prefix, "")) {
 		// If the prefix is the empty string, use a minimal one.

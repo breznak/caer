@@ -3,7 +3,7 @@
 
 #include "main.h"
 
-#define DEFAULT_PREFIX "caer_out"
+#define DEFAULT_PREFIX "caerOut"
 
 void caerOutputFile(uint16_t moduleID, size_t outputTypesNumber, ...);
 
