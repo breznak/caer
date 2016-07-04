@@ -474,9 +474,9 @@ static bool parseFileHeader(inputCommonState state) {
 		}
 		else if (state->header.isAEDAT3 && !formatHeader) {
 			// Then the format header. Only with AEDAT 3.X.
-			char *formatString = NULL;
+			char formatString[1024 + 1];
 
-			if (sscanf(headerLine, "#Format: %ms\r\n", &formatString) == 1) {
+			if (sscanf(headerLine, "#Format: %1024s\r\n", formatString) == 1) {
 				formatHeader = true;
 
 				// Parse format string to format ID.
@@ -496,14 +496,11 @@ static bool parseFileHeader(inputCommonState state) {
 					caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
 						"No compliant Format type found. Format '%s' is invalid.", formatString);
 
-					free(formatString);
 					return (false);
 				}
 
 				caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
 					"Found Format header with value '%s', Format ID %" PRIi8 ".", formatString, state->header.formatID);
-
-				free(formatString);
 			}
 			else {
 				free(headerLine);
@@ -515,9 +512,9 @@ static bool parseFileHeader(inputCommonState state) {
 		}
 		else if (state->header.isAEDAT3 && !sourceHeader) {
 			// Then the source header. Only with AEDAT 3.X. We only support one active source.
-			char *sourceString = NULL;
+			char sourceString[1024 + 1];
 
-			if (sscanf(headerLine, "#Source %" SCNi16 ": %m[^\r]s\n", &state->header.sourceID, &sourceString) == 2) {
+			if (sscanf(headerLine, "#Source %" SCNi16 ": %1024[^\r]s\n", &state->header.sourceID, sourceString) == 2) {
 				sourceHeader = true;
 
 				// Parse source string to get needed sourceInfo parameters.
@@ -526,8 +523,6 @@ static bool parseFileHeader(inputCommonState state) {
 				caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
 					"Found Source header with value '%s', Source ID %" PRIi16 ".", sourceString,
 					state->header.sourceID);
-
-				free(sourceString);
 			}
 			else {
 				free(headerLine);
@@ -550,12 +545,11 @@ static bool parseFileHeader(inputCommonState state) {
 				// Then other headers, like Start-Time.
 				// TODO: parse negative source strings (#-Source) and add them to sourceInfo.
 				if (caerStrEqualsUpTo(headerLine, "#Start-Time: ", 13)) {
-					char *startTimeString = NULL;
+					char startTimeString[1024 + 1];
 
-					if (sscanf(headerLine, "#Start-Time: %m[^\r]s\n", &startTimeString) == 1) {
+					if (sscanf(headerLine, "#Start-Time: %1024[^\r]s\n", startTimeString) == 1) {
 						caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString, "Recording was taken on %s.",
 							startTimeString);
-						free(startTimeString);
 					}
 				}
 				else {
