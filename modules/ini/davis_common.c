@@ -294,6 +294,9 @@ void caerInputDAVISRun(caerModuleData moduleData, size_t argsNumber, va_list arg
 
 	if (*container != NULL) {
 		caerMainloopFreeAfterLoop((void (*)(void *)) &caerEventPacketContainerFree, *container);
+
+		sshsNodePutLong(sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"), "highestTimestamp",
+			caerEventPacketContainerGetHighestEventTimestamp(*container));
 	}
 }
 

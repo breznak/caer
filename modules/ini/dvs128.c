@@ -177,6 +177,9 @@ static void caerInputDVS128Run(caerModuleData moduleData, size_t argsNumber, va_
 
 	if (*container != NULL) {
 		caerMainloopFreeAfterLoop((void (*)(void *)) &caerEventPacketContainerFree, *container);
+
+		sshsNodePutLong(sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"), "highestTimestamp",
+			caerEventPacketContainerGetHighestEventTimestamp(*container));
 	}
 }
 
