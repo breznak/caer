@@ -5,7 +5,7 @@
 #include "ext/uthash/utarray.h"
 #include "ext/buffers.h"
 #ifdef HAVE_PTHREADS
-	#include "ext/c11threads_posix.h"
+#include "ext/c11threads_posix.h"
 #endif
 
 #include <libcaer/events/common.h>
@@ -708,6 +708,9 @@ static inline void doTimeDelay(inputCommonState state) {
 		if (diffMicroTime >= timeDelay) {
 			caerLog(CAER_LOG_WARNING, state->parentModule->moduleSubSystemString,
 				"Impossible to meet timeDelay timing specification with current settings.");
+
+			// Don't delay any more by requesting time again, use old one.
+			state->packetContainer.lastCommitTime = currentTime;
 		}
 		else {
 			// Sleep for the remaining time.
@@ -718,11 +721,11 @@ static inline void doTimeDelay(inputCommonState state) {
 			struct timespec delaySleep = { .tv_sec = I64T(sleepMicroTimeSec), .tv_nsec = I64T(sleepMicroTimeNsec) };
 
 			thrd_sleep(&delaySleep, NULL);
+
+			// Update stored time.
+			portable_clock_gettime_monotonic(&state->packetContainer.lastCommitTime);
 		}
 	}
-
-	// Update stored time.
-	portable_clock_gettime_monotonic(&state->packetContainer.lastCommitTime);
 }
 
 static caerEventPacketContainer generatePacketContainer(inputCommonState state) {
