@@ -781,7 +781,7 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state) 
 		int32_t currPacketEventNumber = caerEventPacketHeaderGetEventNumber(*currPacket);
 
 		// Allocate a new packet, with space for the remaining events that we don't send off
-		// (the ones after cuttoff point).
+		// (the ones after cutoff point).
 		int32_t nextPacketEventNumber = currPacketEventNumber - cutoffIndex;
 		caerEventPacketHeader nextPacket = malloc(
 		CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (currPacketEventSize * nextPacketEventNumber));
