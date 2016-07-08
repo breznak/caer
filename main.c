@@ -286,7 +286,7 @@ static bool mainloop_1(void) {
 	// display images of accumulated spikes
 	// this also requires image generator
 #ifdef ENABLE_CAFFEINTERFACE
-	if(classification_results != NULL){
+	if(classification_results != NULL) {
 		caerImagestreamerBeeper(22, classification_results, (int) MAX_IMG_QTY);
 	}
 #endif
@@ -337,13 +337,13 @@ int main(int argc, char **argv) {
 	// Initialize logging sub-system.
 	caerLogInit();
 
+	// Daemonize the application (run in background).
+	// caerDaemonize();
+
 	// Initialize visualizer framework (load fonts etc.).
 #ifdef ENABLE_VISUALIZER
 	caerVisualizerSystemInit();
 #endif
-
-	// Daemonize the application (run in background).
-	// caerDaemonize();
 
 	// Start the configuration server thread for run-time config changes.
 	caerConfigServerStart();
