@@ -297,6 +297,8 @@ static void parseSourceString(char *sourceString, inputCommonState state) {
 	// Create SourceInfo node.
 	sshsNode sourceInfoNode = sshsGetRelativeNode(state->parentModule->moduleNode, "sourceInfo/");
 
+	sshsNodePutLong(sourceInfoNode, "highestTimestamp", -1);
+
 	int16_t dvsSizeX = 0, dvsSizeY = 0;
 	int16_t apsSizeX = 0, apsSizeY = 0;
 	int16_t dataSizeX = 0, dataSizeY = 0;
@@ -1239,6 +1241,9 @@ void caerInputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list ar
 		// No special memory order for decrease, because the acquire load to even start running
 		// through a mainloop already synchronizes with the release store above.
 		atomic_fetch_sub_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_relaxed);
+
+		sshsNodePutLong(sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"), "highestTimestamp",
+			caerEventPacketContainerGetHighestEventTimestamp(*container));
 	}
 }
 

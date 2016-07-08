@@ -81,6 +81,8 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
 
+	sshsNodePutLong(sourceInfoNode, "highestTimestamp", -1);
+
 	sshsNodePutShort(sourceInfoNode, "logicVersion", devInfo.logicVersion);
 	sshsNodePutBool(sourceInfoNode, "deviceIsMaster", devInfo.deviceIsMaster);
 

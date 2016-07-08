@@ -120,6 +120,8 @@ bool caerInputDAVISInit(caerModuleData moduleData, uint16_t deviceType) {
 
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
 
+	sshsNodePutLong(sourceInfoNode, "highestTimestamp", -1);
+
 	sshsNodePutShort(sourceInfoNode, "logicVersion", devInfo.logicVersion);
 	sshsNodePutBool(sourceInfoNode, "deviceIsMaster", devInfo.deviceIsMaster);
 	sshsNodePutShort(sourceInfoNode, "chipID", devInfo.chipID);
