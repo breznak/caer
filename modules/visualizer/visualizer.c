@@ -280,15 +280,17 @@ static void caerVisualizerConfigListener(sshsNode node, void *userData, enum ssh
 	}
 }
 
-void caerVisualizerUpdate(caerVisualizerState state, caerEventPacketHeader packetHeader) {
-	if (state == NULL || packetHeader == NULL) {
+void caerVisualizerUpdate(caerVisualizerState state, caerEventPacketContainer container) {
+	if (state == NULL || container == NULL) {
 		return;
 	}
 
 	// Keep statistics up-to-date with all events, always.
-	caerStatisticsStringUpdate(packetHeader, &state->packetStatistics);
+	CAER_EVENT_PACKET_CONTAINER_ITERATOR_START(container)
+		caerStatisticsStringUpdate(caerEventPacketContainerIteratorElement, &state->packetStatistics);
+	CAER_EVENT_PACKET_CONTAINER_ITERATOR_END
 
-	// Only render every Nth packet.
+	// Only render every Nth container (or packet, if using standard visualizer).
 	state->packetSubsampleCount++;
 
 	if (state->packetSubsampleCount >= atomic_load_explicit(&state->packetSubsampleRendering, memory_order_relaxed)) {
@@ -298,25 +300,19 @@ void caerVisualizerUpdate(caerVisualizerState state, caerEventPacketHeader packe
 		return;
 	}
 
-	caerEventPacketHeader packetHeaderCopy = caerCopyEventPacketOnlyEvents(packetHeader);
-	if (packetHeaderCopy == NULL) {
-		if (caerEventPacketHeaderGetEventNumber(packetHeader) == 0) {
-			caerLog(CAER_LOG_NOTICE, state->parentModule->moduleSubSystemString,
-				"Visualizer: Submitted empty event packet for rendering. Ignoring empty event packet.");
-		}
-		else {
-			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
-				"Visualizer: Failed to copy event packet for rendering.");
-		}
+	caerEventPacketContainer containerCopy = caerEventPacketContainerCopyAllEvents(container);
+	if (containerCopy == NULL) {
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+			"Visualizer: Failed to copy event packet container for rendering.");
 
 		return;
 	}
 
-	if (!ringBufferPut(state->dataTransfer, packetHeaderCopy)) {
-		free(packetHeaderCopy);
+	if (!ringBufferPut(state->dataTransfer, containerCopy)) {
+		caerEventPacketContainerFree(containerCopy);
 
 		caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
-			"Visualizer: Failed to move event packet copy to ring-buffer (full).");
+			"Visualizer: Failed to move event packet container copy to ring-buffer (full).");
 		return;
 	}
 }
@@ -339,9 +335,9 @@ void caerVisualizerExit(caerVisualizerState state) {
 	}
 
 	// Now clean up the ring-buffer and its contents.
-	caerEventPacketHeader packetHeader;
-	while ((packetHeader = ringBufferGet(state->dataTransfer)) != NULL) {
-		free(packetHeader);
+	caerEventPacketContainer container;
+	while ((container = ringBufferGet(state->dataTransfer)) != NULL) {
+		caerEventPacketContainerFree(container);
 	}
 
 	ringBufferFree(state->dataTransfer);
@@ -427,20 +423,20 @@ static bool caerVisualizerInitGraphics(caerVisualizerState state) {
 }
 
 static void caerVisualizerUpdateScreen(caerVisualizerState state) {
-	caerEventPacketHeader packetHeader = ringBufferGet(state->dataTransfer);
+	caerEventPacketContainer container = ringBufferGet(state->dataTransfer);
 
-	repeat: if (packetHeader != NULL) {
+	repeat: if (container != NULL) {
 		// Are there others? Only render last one, to avoid getting backed up!
-		caerEventPacketHeader packetHeader2 = ringBufferGet(state->dataTransfer);
+		caerEventPacketContainer container2 = ringBufferGet(state->dataTransfer);
 
-		if (packetHeader2 != NULL) {
-			free(packetHeader);
-			packetHeader = packetHeader2;
+		if (container2 != NULL) {
+			caerEventPacketContainerFree(container);
+			container = container2;
 			goto repeat;
 		}
 	}
 
-	if (packetHeader != NULL) {
+	if (container != NULL) {
 		al_set_target_bitmap(state->bitmapRenderer);
 
 		// Only clear bitmap to black if nothing has been
@@ -452,7 +448,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		// Update bitmap with new content. (0, 0) is lower left corner.
 		// NULL renderer is supported and simply does nothing (black screen).
 		if (state->renderer != NULL) {
-			bool didDrawSomething = (*state->renderer)(state, packetHeader);
+			bool didDrawSomething = (*state->renderer)(state, container);
 
 			// Remember if something was drawn, even just once.
 			if (!state->bitmapDrawUpdate) {
@@ -460,8 +456,8 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 			}
 		}
 
-		// Free packet copy.
-		free(packetHeader);
+		// Free packet container copy.
+		caerEventPacketContainerFree(container);
 	}
 
 	bool redraw = false;
@@ -653,7 +649,7 @@ static int caerVisualizerRenderThread(void *visualizerState) {
 
 // Init is deferred and called from Run, because we need actual packets.
 static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRenderer renderer,
-	caerVisualizerEventHandler eventHandler, caerEventPacketHeader packetHeader);
+	caerVisualizerEventHandler eventHandler, caerEventPacketContainer container);
 static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerVisualizerModuleExit(caerModuleData moduleData);
 
@@ -662,6 +658,19 @@ static struct caer_module_functions caerVisualizerFunctions = { .moduleInit = NU
 
 void caerVisualizer(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer,
 	caerVisualizerEventHandler eventHandler, caerEventPacketHeader packetHeader) {
+	// Generate packet container with just this one packet.
+	caerEventPacketContainer container = caerEventPacketContainerAllocate(1);
+	caerEventPacketContainerSetEventPacket(container, 0, packetHeader);
+
+	caerVisualizerMulti(moduleID, name, renderer, eventHandler, container);
+
+	// Destroy packet container (but not the original packet!).
+	caerEventPacketContainerSetEventPacket(container, 0, NULL);
+	caerEventPacketContainerFree(container);
+}
+
+void caerVisualizerMulti(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer,
+	caerVisualizerEventHandler eventHandler, caerEventPacketContainer container) {
 	// Concatenate name and 'Visualizer' prefix.
 	size_t nameLength = (name != NULL) ? (strlen(name)) : (0);
 	char visualizerName[10 + nameLength + 1]; // +1 for NUL termination.
@@ -677,47 +686,62 @@ void caerVisualizer(uint16_t moduleID, const char *name, caerVisualizerRenderer 
 		return;
 	}
 
-	caerModuleSM(&caerVisualizerFunctions, moduleData, 0, 3, renderer, eventHandler, packetHeader);
+	caerModuleSM(&caerVisualizerFunctions, moduleData, 0, 3, renderer, eventHandler, container);
 }
 
 static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRenderer renderer,
-	caerVisualizerEventHandler eventHandler, caerEventPacketHeader packetHeader) {
-	// Get size information from source.
-	int16_t sourceID = caerEventPacketHeaderGetEventSource(packetHeader);
-
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
-	if (sourceInfoNode == NULL) {
-		// This should never happen, but we handle it gracefully.
-		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
-			"Failed to get source info to setup visualizer resolution.");
-		return (false);
-	}
-
+	caerVisualizerEventHandler eventHandler, caerEventPacketContainer container) {
 	// Default sizes if nothing else is specified in sourceInfo node.
-	int16_t sizeX = 320;
-	int16_t sizeY = 240;
+	int16_t sizeX = 20;
+	int16_t sizeY = 20;
 
-	// Get sizes from sourceInfo node. visualizer prefix takes precedence,
-	// for APS and DVS images, alternative prefixes are provided, as well
-	// as for generic data visualization.
-	if (sshsNodeAttributeExists(sourceInfoNode, "visualizerSizeX", SHORT)) {
-		sizeX = sshsNodeGetShort(sourceInfoNode, "visualizerSizeX");
-		sizeY = sshsNodeGetShort(sourceInfoNode, "visualizerSizeY");
-	}
-	else if (sshsNodeAttributeExists(sourceInfoNode, "dvsSizeX", SHORT)
-		&& caerEventPacketHeaderGetEventType(packetHeader) == POLARITY_EVENT) {
-		sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-		sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
-	}
-	else if (sshsNodeAttributeExists(sourceInfoNode, "apsSizeX", SHORT)
-		&& caerEventPacketHeaderGetEventType(packetHeader) == FRAME_EVENT) {
-		sizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
-		sizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
-	}
-	else if (sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SHORT)) {
-		sizeX = sshsNodeGetShort(sourceInfoNode, "dataSizeX");
-		sizeY = sshsNodeGetShort(sourceInfoNode, "dataSizeY");
-	}
+	// Search for biggest sizes amongst all event packets.
+	CAER_EVENT_PACKET_CONTAINER_ITERATOR_START(container)
+		// Get size information from source.
+		int16_t sourceID = caerEventPacketHeaderGetEventSource(caerEventPacketContainerIteratorElement);
+
+		sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
+		if (sourceInfoNode == NULL) {
+			// This should never happen, but we handle it gracefully.
+			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+				"Failed to get source info to setup visualizer resolution.");
+			return (false);
+		}
+
+		// Default sizes if nothing else is specified in sourceInfo node.
+		int16_t packetSizeX = 0;
+		int16_t packetSizeY = 0;
+
+		// Get sizes from sourceInfo node. visualizer prefix takes precedence,
+		// for APS and DVS images, alternative prefixes are provided, as well
+		// as for generic data visualization.
+		if (sshsNodeAttributeExists(sourceInfoNode, "visualizerSizeX", SHORT)) {
+			packetSizeX = sshsNodeGetShort(sourceInfoNode, "visualizerSizeX");
+			packetSizeY = sshsNodeGetShort(sourceInfoNode, "visualizerSizeY");
+		}
+		else if (sshsNodeAttributeExists(sourceInfoNode, "dvsSizeX", SHORT)
+			&& caerEventPacketHeaderGetEventType(caerEventPacketContainerIteratorElement) == POLARITY_EVENT) {
+			packetSizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
+			packetSizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
+		}
+		else if (sshsNodeAttributeExists(sourceInfoNode, "apsSizeX", SHORT)
+			&& caerEventPacketHeaderGetEventType(caerEventPacketContainerIteratorElement) == FRAME_EVENT) {
+			packetSizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
+			packetSizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
+		}
+		else if (sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SHORT)) {
+			packetSizeX = sshsNodeGetShort(sourceInfoNode, "dataSizeX");
+			packetSizeY = sshsNodeGetShort(sourceInfoNode, "dataSizeY");
+		}
+
+		if (packetSizeX > sizeX) {
+			sizeX = packetSizeX;
+		}
+
+		if (packetSizeY > sizeY) {
+			sizeY = packetSizeY;
+		}
+	CAER_EVENT_PACKET_CONTAINER_ITERATOR_END
 
 	moduleData->moduleState = caerVisualizerInit(renderer, eventHandler, sizeX, sizeY, VISUALIZER_DEFAULT_ZOOM, true,
 		moduleData);
@@ -739,26 +763,29 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 
 	caerVisualizerRenderer renderer = va_arg(args, caerVisualizerRenderer);
 	caerVisualizerEventHandler eventHandler = va_arg(args, caerVisualizerEventHandler);
-	caerEventPacketHeader packetHeader = va_arg(args, caerEventPacketHeader);
+	caerEventPacketContainer container = va_arg(args, caerEventPacketContainer);
 
-	// Without a packet, we cannot initialize or render anything.
-	if (packetHeader == NULL) {
+	// Without a packet container with events, we cannot initialize or render anything.
+	if (container == NULL || caerEventPacketContainerGetEventsNumber(container) == 0) {
 		return;
 	}
 
 	// Initialize visualizer. Needs information from a packet (the source ID)!
 	if (moduleData->moduleState == NULL) {
-		if (!caerVisualizerModuleInit(moduleData, renderer, eventHandler, packetHeader)) {
+		if (!caerVisualizerModuleInit(moduleData, renderer, eventHandler, container)) {
 			return;
 		}
 	}
 
-	// Render given packet.
-	caerVisualizerUpdate(moduleData->moduleState, packetHeader);
+	// Render given packet container.
+	caerVisualizerUpdate(moduleData->moduleState, container);
 }
 
-bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketHeader polarityEventPacketHeader) {
+bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketContainer container) {
 	UNUSED_ARGUMENT(state);
+
+	caerEventPacketHeader polarityEventPacketHeader = caerEventPacketContainerFindEventPacketByType(container,
+		POLARITY_EVENT);
 
 	if (caerEventPacketHeaderGetEventValid(polarityEventPacketHeader) == 0) {
 		return (false);
@@ -775,13 +802,17 @@ bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPa
 			// OFF polarity (red).
 			al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
 				caerPolarityEventGetY(caerPolarityIteratorElement), al_map_rgb(255, 0, 0));
-		}CAER_POLARITY_ITERATOR_VALID_END
+		}
+	CAER_POLARITY_ITERATOR_VALID_END
 
 	return (true);
 }
 
-bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketHeader frameEventPacketHeader) {
+bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketContainer container) {
 	UNUSED_ARGUMENT(state);
+
+	caerEventPacketHeader frameEventPacketHeader = caerEventPacketContainerFindEventPacketByType(container,
+		FRAME_EVENT);
 
 	if (caerEventPacketHeaderGetEventValid(frameEventPacketHeader) == 0) {
 		return (false);
@@ -848,7 +879,9 @@ bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacke
 #define RESET_LIMIT_POS(VAL, LIMIT) if ((VAL) > (LIMIT)) { (VAL) = (LIMIT); }
 #define RESET_LIMIT_NEG(VAL, LIMIT) if ((VAL) < (LIMIT)) { (VAL) = (LIMIT); }
 
-bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketHeader imu6EventPacketHeader) {
+bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketContainer container) {
+	caerEventPacketHeader imu6EventPacketHeader = caerEventPacketContainerFindEventPacketByType(container, IMU6_EVENT);
+
 	if (caerEventPacketHeaderGetEventValid(imu6EventPacketHeader) == 0) {
 		return (false);
 	}
@@ -927,8 +960,11 @@ bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacket
 	return (true);
 }
 
-bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPacketHeader point2DEventPacketHeader) {
+bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPacketContainer container) {
 	UNUSED_ARGUMENT(state);
+
+	caerEventPacketHeader point2DEventPacketHeader = caerEventPacketContainerFindEventPacketByType(container,
+		POINT2D_EVENT);
 
 	if (caerEventPacketHeaderGetEventValid(point2DEventPacketHeader) == 0) {
 		return (false);
