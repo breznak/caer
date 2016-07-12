@@ -24,16 +24,18 @@ caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisu
 void caerVisualizerUpdate(caerVisualizerState state, caerEventPacketContainer container);
 void caerVisualizerExit(caerVisualizerState state);
 
+void caerVisualizer(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer,
+	caerVisualizerEventHandler eventHandler, caerEventPacketHeader packetHeader);
+
 bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketContainer container);
 bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketContainer container);
 bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketContainer container);
 bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPacketContainer container);
 
-void caerVisualizer(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer,
-	caerVisualizerEventHandler eventHandler, caerEventPacketHeader packetHeader);
-
 void caerVisualizerMulti(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer,
 	caerVisualizerEventHandler eventHandler, caerEventPacketContainer container);
+
+bool caerVisualizerMultiRendererPolarityAndFrameEvents(caerVisualizerState state, caerEventPacketContainer container);
 
 void caerVisualizerSystemInit(void);
 

@@ -787,7 +787,7 @@ bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPa
 	caerEventPacketHeader polarityEventPacketHeader = caerEventPacketContainerFindEventPacketByType(container,
 		POLARITY_EVENT);
 
-	if (caerEventPacketHeaderGetEventValid(polarityEventPacketHeader) == 0) {
+	if (polarityEventPacketHeader == NULL || caerEventPacketHeaderGetEventValid(polarityEventPacketHeader) == 0) {
 		return (false);
 	}
 
@@ -814,7 +814,7 @@ bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacke
 	caerEventPacketHeader frameEventPacketHeader = caerEventPacketContainerFindEventPacketByType(container,
 		FRAME_EVENT);
 
-	if (caerEventPacketHeaderGetEventValid(frameEventPacketHeader) == 0) {
+	if (frameEventPacketHeader == NULL || caerEventPacketHeaderGetEventValid(frameEventPacketHeader) == 0) {
 		return (false);
 	}
 
@@ -882,7 +882,7 @@ bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacke
 bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketContainer container) {
 	caerEventPacketHeader imu6EventPacketHeader = caerEventPacketContainerFindEventPacketByType(container, IMU6_EVENT);
 
-	if (caerEventPacketHeaderGetEventValid(imu6EventPacketHeader) == 0) {
+	if (imu6EventPacketHeader == NULL || caerEventPacketHeaderGetEventValid(imu6EventPacketHeader) == 0) {
 		return (false);
 	}
 
@@ -966,7 +966,7 @@ bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPac
 	caerEventPacketHeader point2DEventPacketHeader = caerEventPacketContainerFindEventPacketByType(container,
 		POINT2D_EVENT);
 
-	if (caerEventPacketHeaderGetEventValid(point2DEventPacketHeader) == 0) {
+	if (point2DEventPacketHeader == NULL || caerEventPacketHeaderGetEventValid(point2DEventPacketHeader) == 0) {
 		return (false);
 	}
 
@@ -980,4 +980,16 @@ bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPac
 	CAER_POINT2D_ITERATOR_VALID_END
 
 	return (true);
+}
+
+bool caerVisualizerMultiRendererPolarityAndFrameEvents(caerVisualizerState state, caerEventPacketContainer container) {
+	bool drewFrameEvents = caerVisualizerRendererFrameEvents(state, container);
+
+	caerVisualizerRendererPolarityEvents(state, container);
+
+	if (drewFrameEvents) {
+		return (true);
+	}
+
+	return (false);
 }

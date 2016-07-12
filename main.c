@@ -165,6 +165,8 @@ static bool mainloop_1(void) {
 	caerVisualizer(60, "Polarity", &caerVisualizerRendererPolarityEvents, NULL, (caerEventPacketHeader) polarity);
 	caerVisualizer(61, "Frame", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) frame);
 	caerVisualizer(62, "IMU6", &caerVisualizerRendererIMU6Events, NULL, (caerEventPacketHeader) imu);
+
+	//caerVisualizerMulti(65, "PolarityAndFrame", &caerVisualizerMultiRendererPolarityAndFrameEvents, NULL, container);
 #endif
 
 #ifdef ENABLE_FILE_OUTPUT
