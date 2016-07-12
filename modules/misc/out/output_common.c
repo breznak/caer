@@ -83,8 +83,7 @@
 #include <libcaer/events/common.h>
 #include <libcaer/events/packetContainer.h>
 #include <libcaer/events/frame.h>
-
-// TODO: check handling of TS reset events from camera!
+#include <libcaer/events/special.h>
 
 struct output_common_statistics {
 	uint64_t packetsNumber;
@@ -744,6 +743,7 @@ static void orderAndSendEventPackets(outputCommonState state, caerEventPacketCon
 	// these, as stated in the assumptions at the start of file, but erroneous usage or mixing
 	// or reordering of packet containers is possible, and has to be caught here.
 	int64_t highestTimestamp = 0;
+	bool resetTimestamp = false;
 
 	for (size_t cpIdx = 0; cpIdx < currPacketContainerSize; cpIdx++) {
 		caerEventPacketHeader cpPacket = caerEventPacketContainerGetEventPacket(currPacketContainer, (int32_t) cpIdx);
@@ -773,10 +773,28 @@ static void orderAndSendEventPackets(outputCommonState state, caerEventPacketCon
 				highestTimestamp = cpLastEventTimestamp;
 			}
 		}
+
+		// Detect special timestamp reset event, needed to correctly reset the timestamp
+		// going backwards check, so that it doesn't trigger and discard packets in this
+		// particular case, where the timestamp resetting is actually correct.
+		if (caerEventPacketHeaderGetEventType(cpPacket) == SPECIAL_EVENT) {
+			caerSpecialEvent tsResetEvent = caerSpecialEventPacketFindEventByType((caerSpecialEventPacket) cpPacket,
+				TIMESTAMP_RESET);
+
+			if (tsResetEvent != NULL) {
+				resetTimestamp = true;
+			}
+		}
 	}
 
-	// Remember highest timestamp for check in next iteration.
-	state->lastTimestamp = highestTimestamp;
+	// Remember highest timestamp for check in next iteration. Reset check when
+	// timestamp reset is detected.
+	if (resetTimestamp) {
+		state->lastTimestamp = 0;
+	}
+	else {
+		state->lastTimestamp = highestTimestamp;
+	}
 }
 
 static void handleNewServerConnections(outputCommonState state) {
