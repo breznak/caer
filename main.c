@@ -126,10 +126,10 @@ static bool mainloop_1(void) {
 #if defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT)
 	// Typed EventPackets contain events of a certain type.
 	// We search for them by type here, because input modules may not have all or any of them.
-	special = (caerSpecialEventPacket) caerEventPacketContainerGetEventPacketForType(container, SPECIAL_EVENT);
-	polarity = (caerPolarityEventPacket) caerEventPacketContainerGetEventPacketForType(container, POLARITY_EVENT);
-	frame = (caerFrameEventPacket) caerEventPacketContainerGetEventPacketForType(container, FRAME_EVENT);
-	imu = (caerIMU6EventPacket) caerEventPacketContainerGetEventPacketForType(container, IMU6_EVENT);
+	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
+	polarity = (caerPolarityEventPacket) caerEventPacketContainerFindEventPacketByType(container, POLARITY_EVENT);
+	frame = (caerFrameEventPacket) caerEventPacketContainerFindEventPacketByType(container, FRAME_EVENT);
+	imu = (caerIMU6EventPacket) caerEventPacketContainerFindEventPacketByType(container, IMU6_EVENT);
 #endif
 
 	// Filters process event packets: for example to suppress certain events,
