@@ -60,7 +60,8 @@ struct input_common_packet_container_data {
 	int64_t lastSeenPacketTimestamp;
 	/// The timestamp up to which we want to (have to!) read, so that we can
 	/// output the next packet container (in time-slice mode).
-	int64_t wantedPacketTimestamp;
+	int64_t newContainerTimestampStart;
+	int64_t newContainerTimestampEnd;
 	/// Time when the last packet container was sent out, used to calculate
 	/// sleep time to reach user configured 'timeDelay'.
 	struct timespec lastCommitTime;
@@ -590,9 +591,10 @@ static void addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 	state->packetContainer.lastSeenPacketTimestamp = newPacketFirstTimestamp;
 
 	// Initialize with first packet.
-	if (state->packetContainer.wantedPacketTimestamp == -1) {
+	if (state->packetContainer.newContainerTimestampStart == -1) {
 		// -1 because newPacketFirstTimestamp is part of the set!
-		state->packetContainer.wantedPacketTimestamp = newPacketFirstTimestamp
+		state->packetContainer.newContainerTimestampStart = newPacketFirstTimestamp;
+		state->packetContainer.newContainerTimestampEnd = newPacketFirstTimestamp
 			+ (atomic_load_explicit(&state->packetContainer.timeSlice, memory_order_relaxed) - 1);
 
 		portable_clock_gettime_monotonic(&state->packetContainer.lastCommitTime);
@@ -749,7 +751,7 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state) 
 
 		CAER_ITERATOR_ALL_START(*currPacket, void *)
 			if (caerGenericEventGetTimestamp64(caerIteratorElement, *currPacket)
-				> state->packetContainer.wantedPacketTimestamp) {
+				> state->packetContainer.newContainerTimestampEnd) {
 				cutoffIndex = caerIteratorCounter;
 				break;
 			}
@@ -826,7 +828,9 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state) 
 	}
 
 	// Update wanted timestamp for next time slice.
-	state->packetContainer.wantedPacketTimestamp += atomic_load_explicit(&state->packetContainer.timeSlice,
+	state->packetContainer.newContainerTimestampStart += atomic_load_explicit(&state->packetContainer.timeSlice,
+		memory_order_relaxed);
+	state->packetContainer.newContainerTimestampEnd += atomic_load_explicit(&state->packetContainer.timeSlice,
 		memory_order_relaxed);
 
 	return (packetContainer);
@@ -995,7 +999,7 @@ static bool parsePackets(inputCommonState state) {
 		// bigger than the wanted one. If this is true, it means we do have all the possible events of all
 		// types that happen up until that point, and we can split that time range off into a packet container.
 		// If not, we just go get the next event packet.
-		if (state->packetContainer.lastSeenPacketTimestamp <= state->packetContainer.wantedPacketTimestamp) {
+		if (state->packetContainer.lastSeenPacketTimestamp <= state->packetContainer.newContainerTimestampEnd) {
 			continue;
 		}
 
@@ -1153,7 +1157,8 @@ bool isNetworkMessageBased) {
 	// Initialize array for packets -> packet container.
 	utarray_new(state->packetContainer.eventPackets, &ut_caerEventPacketHeader_icd);
 
-	state->packetContainer.wantedPacketTimestamp = -1;
+	state->packetContainer.newContainerTimestampStart = -1;
+	state->packetContainer.newContainerTimestampEnd = -1;
 
 	// Start input handling thread.
 	atomic_store(&state->running, true);
