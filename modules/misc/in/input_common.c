@@ -1208,9 +1208,8 @@ void caerInputCommonExit(caerModuleData moduleData) {
 	while ((packet = (caerEventPacketHeader *) utarray_next(state->packetContainer.eventPackets, packet)) != NULL) {
 		free(*packet);
 	}
-	utarray_clear(state->packetContainer.eventPackets);
 
-	// Free packet array used for packet container construction.
+	// Clear and free packet array used for packet container construction.
 	utarray_free(state->packetContainer.eventPackets);
 
 	// Close file descriptors.
