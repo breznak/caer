@@ -681,7 +681,7 @@ void caerVisualizerMulti(uint16_t moduleID, const char *name, caerVisualizerRend
 	}
 	visualizerName[10 + nameLength] = '\0';
 
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, visualizerName);
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, visualizerName, PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}

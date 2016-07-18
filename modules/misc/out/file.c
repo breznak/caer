@@ -13,7 +13,7 @@ static struct caer_module_functions caerOutputFileFunctions = { .moduleInit = &c
 	&caerOutputCommonRun, .moduleConfig = NULL, .moduleExit = &caerOutputCommonExit };
 
 void caerOutputFile(uint16_t moduleID, size_t outputTypesNumber, ...) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "FileOutput");
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "FileOutput", OUTPUT);
 	if (moduleData == NULL) {
 		return;
 	}

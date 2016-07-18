@@ -27,7 +27,7 @@ NULL, .moduleExit = &caerCaffeWrapperExit };
 
 const char * caerCaffeWrapper(uint16_t moduleID, char ** file_string, double *classificationResults, int max_img_qty,
 	caerFrameEventPacket *networkActivity) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "caerCaffeWrapper");
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "caerCaffeWrapper", PROCESSOR);
 	if (moduleData == NULL) {
 		return (NULL);
 	}

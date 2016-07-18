@@ -11,7 +11,7 @@ static struct caer_module_functions caerInputDAVISFX3Functions = { .moduleInit =
 	&caerInputDAVISRun, .moduleConfig = NULL, .moduleExit = &caerInputDAVISExit };
 
 caerEventPacketContainer caerInputDAVISFX3(uint16_t moduleID) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "DAVISFX3");
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "DAVISFX3", INPUT);
 	if (moduleData == NULL) {
 		return (NULL);
 	}

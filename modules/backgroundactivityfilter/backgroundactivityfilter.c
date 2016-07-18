@@ -29,7 +29,7 @@ static struct caer_module_functions caerBackgroundActivityFilterFunctions = { .m
 	&caerBackgroundActivityFilterConfig, .moduleExit = &caerBackgroundActivityFilterExit };
 
 void caerBackgroundActivityFilter(uint16_t moduleID, caerPolarityEventPacket polarity) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "BAFilter");
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "BAFilter", PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}

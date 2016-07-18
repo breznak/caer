@@ -25,7 +25,7 @@ static struct caer_module_functions caerPoseCalibrationFunctions = { .moduleInit
 		&caerPoseCalibrationExit };
 
 void caerPoseCalibration(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "PoseEstimation");
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "PoseEstimation", PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}

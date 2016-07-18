@@ -11,7 +11,7 @@ static struct caer_module_functions caerStatisticsFunctions = { .moduleInit = &c
 	&caerStatisticsRun, .moduleConfig = NULL, .moduleExit = &caerStatisticsExit };
 
 void caerStatistics(uint16_t moduleID, caerEventPacketHeader packetHeader, size_t divisionFactor) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "Statistics");
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "Statistics", PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}

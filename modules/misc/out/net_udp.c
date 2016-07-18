@@ -12,7 +12,7 @@ static struct caer_module_functions caerOutputNetUDPFunctions = { .moduleInit = 
 	&caerOutputCommonRun, .moduleConfig = NULL, .moduleExit = &caerOutputCommonExit };
 
 void caerOutputNetUDP(uint16_t moduleID, size_t outputTypesNumber, ...) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "NetUDPOutput");
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "NetUDPOutput", OUTPUT);
 	if (moduleData == NULL) {
 		return;
 	}

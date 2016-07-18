@@ -11,7 +11,7 @@ static struct caer_module_functions caerInputFileFunctions = { .moduleInit = &ca
 	&caerInputCommonRun, .moduleConfig = NULL, .moduleExit = &caerInputCommonExit };
 
 caerEventPacketContainer caerInputFile(uint16_t moduleID) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "FileInput");
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "FileInput", INPUT);
 	if (moduleData == NULL) {
 		return (NULL);
 	}

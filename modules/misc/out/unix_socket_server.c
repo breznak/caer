@@ -13,7 +13,7 @@ static struct caer_module_functions caerOutputUnixSocketServerFunctions = { .mod
 	&caerOutputUnixSocketServerExit };
 
 void caerOutputUnixSocketServer(uint16_t moduleID, size_t outputTypesNumber, ...) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "UnixSocketServerOutput");
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "UnixSocketServerOutput", OUTPUT);
 	if (moduleData == NULL) {
 		return;
 	}

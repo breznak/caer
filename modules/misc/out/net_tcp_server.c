@@ -13,7 +13,7 @@ static struct caer_module_functions caerOutputNetTCPServerFunctions = { .moduleI
 	.moduleRun = &caerOutputCommonRun, .moduleConfig = NULL, .moduleExit = &caerOutputCommonExit };
 
 void caerOutputNetTCPServer(uint16_t moduleID, size_t outputTypesNumber, ...) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "NetTCPServerOutput");
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "NetTCPServerOutput", OUTPUT);
 	if (moduleData == NULL) {
 		return;
 	}

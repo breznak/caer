@@ -11,7 +11,7 @@ static struct caer_module_functions caerInputUnixSocketFunctions = { .moduleInit
 	.moduleRun = &caerInputCommonRun, .moduleConfig = NULL, .moduleExit = &caerInputCommonExit };
 
 caerEventPacketContainer caerInputUnixSocket(uint16_t moduleID) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "UnixSocketInput");
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "UnixSocketInput", INPUT);
 	if (moduleData == NULL) {
 		return (NULL);
 	}

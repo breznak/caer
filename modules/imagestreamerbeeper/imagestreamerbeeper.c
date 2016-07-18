@@ -19,7 +19,7 @@ static struct caer_module_functions caerImagestreamerBeeperFunctions = { .module
 	NULL, .moduleExit = &caerImagestreamerBeeperExit };
 
 void caerImagestreamerBeeper(uint16_t moduleID, double  * classific_results, int max_img_qty) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageStreamerBeeper");
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageStreamerBeeper", PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}

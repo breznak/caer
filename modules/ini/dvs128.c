@@ -21,7 +21,7 @@ static struct caer_module_functions caerInputDVS128Functions = { .moduleInit = &
 	&caerInputDVS128Run, .moduleConfig = NULL, .moduleExit = &caerInputDVS128Exit };
 
 caerEventPacketContainer caerInputDVS128(uint16_t moduleID) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "DVS128");
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "DVS128", INPUT);
 	if (moduleData == NULL) {
 		return (NULL);
 	}

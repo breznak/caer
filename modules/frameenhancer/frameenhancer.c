@@ -26,7 +26,7 @@ static struct caer_module_functions caerFrameEnhancerFunctions = { .moduleInit =
 	&caerFrameEnhancerRun, .moduleConfig = &caerFrameEnhancerConfig, .moduleExit = &caerFrameEnhancerExit };
 
 caerFrameEventPacket caerFrameEnhancer(uint16_t moduleID, caerFrameEventPacket frame) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "FrameEnhancer");
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "FrameEnhancer", PROCESSOR);
 	if (moduleData == NULL) {
 		return (NULL);
 	}
