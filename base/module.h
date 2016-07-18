@@ -18,6 +18,10 @@ enum caer_module_status {
 	STOPPED = 0, RUNNING = 1,
 };
 
+enum caer_module_type {
+	INPUT = 0, OUTPUT = 1, PROCESSOR = 2,
+};
+
 struct caer_module_data {
 	UT_hash_handle hh;
 	uint16_t moduleID;
@@ -27,6 +31,7 @@ struct caer_module_data {
 	atomic_uint_fast32_t configUpdate;
 	void *moduleState;
 	char *moduleSubSystemString;
+	atomic_uint_fast32_t doReset;
 };
 
 typedef struct caer_module_data *caerModuleData;
@@ -36,6 +41,7 @@ struct caer_module_functions {
 	void (* const moduleRun)(caerModuleData moduleData, size_t argsNumber, va_list args);
 	void (* const moduleConfig)(caerModuleData moduleData); // Can be NULL.
 	void (* const moduleExit)(caerModuleData moduleData); // Can be NULL.
+	void (* const moduleReset)(caerModuleData moduleData); // Can be NULL.
 };
 
 typedef struct caer_module_functions const * const caerModuleFunctions;

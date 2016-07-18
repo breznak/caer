@@ -131,7 +131,7 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 
 // Only use this inside the mainloop-thread, not inside any other thread,
 // like additional data acquisition threads or output threads.
-caerModuleData caerMainloopFindModule(uint16_t moduleID, const char *moduleShortName) {
+caerModuleData caerMainloopFindModule(uint16_t moduleID, const char *moduleShortName, enum caer_module_type type) {
 	caerMainloopData mainloopData = glMainloopData;
 	caerModuleData moduleData;
 
@@ -144,6 +144,17 @@ caerModuleData caerMainloopFindModule(uint16_t moduleID, const char *moduleShort
 		moduleData = caerModuleInitialize(moduleID, moduleShortName, mainloopData->mainloopNode);
 		if (moduleData != NULL) {
 			HASH_ADD(hh, mainloopData->modules, moduleID, sizeof(uint16_t), moduleData);
+
+			// Register with mainloop. Add to appropriate type.
+			if (type == INPUT) {
+				utarray_push_back(mainloopData->inputModules, &moduleData);
+			}
+			else if (type == OUTPUT) {
+				utarray_push_back(mainloopData->outputModules, &moduleData);
+			}
+			else {
+				utarray_push_back(mainloopData->processorModules, &moduleData);
+			}
 		}
 	}
 
@@ -170,6 +181,11 @@ static int caerMainloopRunner(void *inPtr) {
 
 	// Enable memory recycling.
 	utarray_new(mainloopData->memoryToFree, &ut_genericFree_icd);
+
+	// Store references to all active modules, separated by type.
+	utarray_new(mainloopData->inputModules, &ut_ptr_icd);
+	utarray_new(mainloopData->outputModules, &ut_ptr_icd);
+	utarray_new(mainloopData->processorModules, &ut_ptr_icd);
 
 	// If no data is available, sleep for a millisecond to avoid wasting resources.
 	struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 1000000 };
@@ -229,9 +245,13 @@ static int caerMainloopRunner(void *inPtr) {
 	while ((memFree = (struct genericFree *) utarray_next(mainloopData->memoryToFree, memFree)) != NULL) {
 		memFree->func(memFree->memPtr);
 	}
-	utarray_clear(mainloopData->memoryToFree);
 
+	// Clear and free all allocated arrays.
 	utarray_free(mainloopData->memoryToFree);
+
+	utarray_free(mainloopData->inputModules);
+	utarray_free(mainloopData->outputModules);
+	utarray_free(mainloopData->processorModules);
 
 	return (EXIT_SUCCESS);
 }
@@ -288,6 +308,33 @@ void *caerMainloopGetSourceState(uint16_t sourceID) {
 	}
 
 	return (moduleData->moduleState);
+}
+
+void caerMainloopResetInputs(void) {
+	caerMainloopData mainloopData = glMainloopData;
+	caerModuleData moduleData = NULL;
+
+	while ((moduleData = (caerModuleData) utarray_next(mainloopData->inputModules, moduleData)) != NULL) {
+		atomic_store(&moduleData->doReset, 1);
+	}
+}
+
+void caerMainloopResetOutputs(void) {
+	caerMainloopData mainloopData = glMainloopData;
+	caerModuleData moduleData = NULL;
+
+	while ((moduleData = (caerModuleData) utarray_next(mainloopData->outputModules, moduleData)) != NULL) {
+		atomic_store(&moduleData->doReset, 1);
+	}
+}
+
+void caerMainloopResetProcessors(void) {
+	caerMainloopData mainloopData = glMainloopData;
+	caerModuleData moduleData = NULL;
+
+	while ((moduleData = (caerModuleData) utarray_next(mainloopData->processorModules, moduleData)) != NULL) {
+		atomic_store(&moduleData->doReset, 1);
+	}
 }
 
 static void caerMainloopSignalHandler(int signal) {
