@@ -10,6 +10,7 @@
 
 #include <libcaer/events/common.h>
 #include <libcaer/events/packetContainer.h>
+#include <libcaer/events/special.h>
 
 #define MAX_HEADER_LINE_SIZE 1024
 #define STD_PACKET_SIZE 10240
@@ -1248,6 +1249,18 @@ void caerInputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list ar
 
 		sshsNodePutLong(sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"), "highestTimestamp",
 			caerEventPacketContainerGetHighestEventTimestamp(*container));
+
+		caerSpecialEventPacket special = (caerSpecialEventPacket) caerEventPacketContainerGetEventPacket(*container,
+			SPECIAL_EVENT);
+
+		if (special != NULL) {
+			caerSpecialEvent tsResetEvent = caerSpecialEventPacketFindEventByType(special, TIMESTAMP_RESET);
+
+			if (tsResetEvent != NULL) {
+				caerMainloopResetProcessors();
+				caerMainloopResetOutputs();
+			}
+		}
 	}
 }
 

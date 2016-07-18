@@ -299,6 +299,19 @@ void caerInputDAVISRun(caerModuleData moduleData, size_t argsNumber, va_list arg
 
 		sshsNodePutLong(sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"), "highestTimestamp",
 			caerEventPacketContainerGetHighestEventTimestamp(*container));
+
+		// Detect timestamp reset and call all reset functions for processors and outputs.
+		caerSpecialEventPacket special = (caerSpecialEventPacket) caerEventPacketContainerGetEventPacket(*container,
+			SPECIAL_EVENT);
+
+		if (special != NULL) {
+			caerSpecialEvent tsResetEvent = caerSpecialEventPacketFindEventByType(special, TIMESTAMP_RESET);
+
+			if (tsResetEvent != NULL) {
+				caerMainloopResetProcessors();
+				caerMainloopResetOutputs();
+			}
+		}
 	}
 }
 
