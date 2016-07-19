@@ -351,6 +351,16 @@ void caerVisualizerExit(caerVisualizerState state) {
 	caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Visualizer: Exited successfully.");
 }
 
+void caerVisualizerReset(caerVisualizerState state) {
+	if (state == NULL) {
+		return;
+	}
+
+	// Reset statistics and counters.
+	caerStatisticsStringReset(&state->packetStatistics);
+	state->packetSubsampleCount = 0;
+}
+
 static bool caerVisualizerInitGraphics(caerVisualizerState state) {
 	// Create display window.
 	state->displayWindow = al_create_display(state->displayWindowSizeX, state->displayWindowSizeY);
@@ -652,9 +662,11 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRe
 	caerVisualizerEventHandler eventHandler, caerEventPacketContainer container);
 static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerVisualizerModuleExit(caerModuleData moduleData);
+static void caerVisualizerModuleReset(caerModuleData moduleData);
 
 static struct caer_module_functions caerVisualizerFunctions = { .moduleInit = NULL, .moduleRun =
-	&caerVisualizerModuleRun, .moduleConfig = NULL, .moduleExit = &caerVisualizerModuleExit };
+	&caerVisualizerModuleRun, .moduleConfig = NULL, .moduleExit = &caerVisualizerModuleExit, .moduleReset =
+	&caerVisualizerModuleReset };
 
 void caerVisualizer(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer,
 	caerVisualizerEventHandler eventHandler, caerEventPacketHeader packetHeader) {
@@ -756,6 +768,11 @@ static void caerVisualizerModuleExit(caerModuleData moduleData) {
 	// Shut down rendering.
 	caerVisualizerExit(moduleData->moduleState);
 	moduleData->moduleState = NULL;
+}
+
+static void caerVisualizerModuleReset(caerModuleData moduleData) {
+	// Reset counters for statistics on reset.
+	caerVisualizerReset(moduleData->moduleState);
 }
 
 static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
