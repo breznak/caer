@@ -314,7 +314,7 @@ void caerMainloopResetInputs(void) {
 	caerMainloopData mainloopData = glMainloopData;
 	caerModuleData *moduleData = NULL;
 
-	while ((moduleData = (caerModuleData) utarray_next(mainloopData->inputModules, moduleData)) != NULL) {
+	while ((moduleData = (caerModuleData *) utarray_next(mainloopData->inputModules, moduleData)) != NULL) {
 		atomic_store(&(*moduleData)->doReset, 1);
 	}
 }
@@ -323,7 +323,7 @@ void caerMainloopResetOutputs(void) {
 	caerMainloopData mainloopData = glMainloopData;
 	caerModuleData *moduleData = NULL;
 
-	while ((moduleData = (caerModuleData) utarray_next(mainloopData->outputModules, moduleData)) != NULL) {
+	while ((moduleData = (caerModuleData *) utarray_next(mainloopData->outputModules, moduleData)) != NULL) {
 		atomic_store(&(*moduleData)->doReset, 1);
 	}
 }
@@ -332,7 +332,7 @@ void caerMainloopResetProcessors(void) {
 	caerMainloopData mainloopData = glMainloopData;
 	caerModuleData *moduleData = NULL;
 
-	while ((moduleData = (caerModuleData) utarray_next(mainloopData->processorModules, moduleData)) != NULL) {
+	while ((moduleData = (caerModuleData *) utarray_next(mainloopData->processorModules, moduleData)) != NULL) {
 		atomic_store(&(*moduleData)->doReset, 1);
 	}
 }
