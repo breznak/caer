@@ -6,9 +6,10 @@
 static bool caerStatisticsInit(caerModuleData moduleData);
 static void caerStatisticsRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerStatisticsExit(caerModuleData moduleData);
+static void caerStatisticsReset(caerModuleData moduleData);
 
 static struct caer_module_functions caerStatisticsFunctions = { .moduleInit = &caerStatisticsInit, .moduleRun =
-	&caerStatisticsRun, .moduleConfig = NULL, .moduleExit = &caerStatisticsExit };
+	&caerStatisticsRun, .moduleConfig = NULL, .moduleExit = &caerStatisticsExit, .moduleReset = &caerStatisticsReset };
 
 void caerStatistics(uint16_t moduleID, caerEventPacketHeader packetHeader, size_t divisionFactor) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "Statistics", PROCESSOR);
@@ -46,6 +47,12 @@ static void caerStatisticsExit(caerModuleData moduleData) {
 	caerStatisticsState state = moduleData->moduleState;
 
 	caerStatisticsStringExit(state);
+}
+
+static void caerStatisticsReset(caerModuleData moduleData) {
+	caerStatisticsState state = moduleData->moduleState;
+
+	caerStatisticsStringReset(state);
 }
 
 bool caerStatisticsStringInit(caerStatisticsState state) {
@@ -92,8 +99,7 @@ void caerStatisticsStringUpdate(caerEventPacketHeader packetHeader, caerStatisti
 		// Reset for next update.
 		state->totalEventsCounter = 0;
 		state->validEventsCounter = 0;
-		state->lastTime.tv_sec = currentTime.tv_sec;
-		state->lastTime.tv_nsec = currentTime.tv_nsec;
+		state->lastTime = currentTime;
 	}
 }
 
@@ -103,4 +109,13 @@ void caerStatisticsStringExit(caerStatisticsState state) {
 		free(state->currentStatisticsString);
 		state->currentStatisticsString = NULL;
 	}
+}
+
+void caerStatisticsStringReset(caerStatisticsState state) {
+	// Reset counters.
+	state->totalEventsCounter = 0;
+	state->validEventsCounter = 0;
+
+	// Update to current time.
+	portable_clock_gettime_monotonic(&state->lastTime);
 }
