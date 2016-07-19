@@ -8,7 +8,8 @@
 static bool caerOutputUnixSocketInit(caerModuleData moduleData);
 
 static struct caer_module_functions caerOutputUnixSocketFunctions = { .moduleInit = &caerOutputUnixSocketInit,
-	.moduleRun = &caerOutputCommonRun, .moduleConfig = NULL, .moduleExit = &caerOutputCommonExit };
+	.moduleRun = &caerOutputCommonRun, .moduleConfig = NULL, .moduleExit = &caerOutputCommonExit, .moduleReset =
+		&caerOutputCommonReset };
 
 void caerOutputUnixSocket(uint16_t moduleID, size_t outputTypesNumber, ...) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "UnixSocketOutput", OUTPUT);

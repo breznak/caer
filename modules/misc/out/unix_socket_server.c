@@ -10,7 +10,7 @@ void caerOutputUnixSocketServerExit(caerModuleData moduleData);
 
 static struct caer_module_functions caerOutputUnixSocketServerFunctions = { .moduleInit =
 	&caerOutputUnixSocketServerInit, .moduleRun = &caerOutputCommonRun, .moduleConfig = NULL, .moduleExit =
-	&caerOutputUnixSocketServerExit };
+	&caerOutputUnixSocketServerExit, .moduleReset = &caerOutputCommonReset };
 
 void caerOutputUnixSocketServer(uint16_t moduleID, size_t outputTypesNumber, ...) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "UnixSocketServerOutput", OUTPUT);

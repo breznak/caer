@@ -9,7 +9,8 @@
 static bool caerOutputNetTCPInit(caerModuleData moduleData);
 
 static struct caer_module_functions caerOutputNetTCPFunctions = { .moduleInit = &caerOutputNetTCPInit, .moduleRun =
-	&caerOutputCommonRun, .moduleConfig = NULL, .moduleExit = &caerOutputCommonExit };
+	&caerOutputCommonRun, .moduleConfig = NULL, .moduleExit = &caerOutputCommonExit, .moduleReset =
+	&caerOutputCommonReset };
 
 void caerOutputNetTCP(uint16_t moduleID, size_t outputTypesNumber, ...) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "NetTCPOutput", OUTPUT);

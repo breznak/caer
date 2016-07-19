@@ -9,7 +9,8 @@
 static bool caerOutputNetUDPInit(caerModuleData moduleData);
 
 static struct caer_module_functions caerOutputNetUDPFunctions = { .moduleInit = &caerOutputNetUDPInit, .moduleRun =
-	&caerOutputCommonRun, .moduleConfig = NULL, .moduleExit = &caerOutputCommonExit };
+	&caerOutputCommonRun, .moduleConfig = NULL, .moduleExit = &caerOutputCommonExit, .moduleReset =
+	&caerOutputCommonReset };
 
 void caerOutputNetUDP(uint16_t moduleID, size_t outputTypesNumber, ...) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "NetUDPOutput", OUTPUT);

@@ -10,7 +10,8 @@
 static bool caerOutputFileInit(caerModuleData moduleData);
 
 static struct caer_module_functions caerOutputFileFunctions = { .moduleInit = &caerOutputFileInit, .moduleRun =
-	&caerOutputCommonRun, .moduleConfig = NULL, .moduleExit = &caerOutputCommonExit };
+	&caerOutputCommonRun, .moduleConfig = NULL, .moduleExit = &caerOutputCommonExit, .moduleReset =
+	&caerOutputCommonReset };
 
 void caerOutputFile(uint16_t moduleID, size_t outputTypesNumber, ...) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "FileOutput", OUTPUT);
