@@ -22,11 +22,13 @@ static bool caerBackgroundActivityFilterInit(caerModuleData moduleData);
 static void caerBackgroundActivityFilterRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerBackgroundActivityFilterConfig(caerModuleData moduleData);
 static void caerBackgroundActivityFilterExit(caerModuleData moduleData);
+static void caerBackgroundActivityFilterReset(caerModuleData moduleData);
 static bool allocateTimestampMap(BAFilterState state, int16_t sourceID);
 
 static struct caer_module_functions caerBackgroundActivityFilterFunctions = { .moduleInit =
 	&caerBackgroundActivityFilterInit, .moduleRun = &caerBackgroundActivityFilterRun, .moduleConfig =
-	&caerBackgroundActivityFilterConfig, .moduleExit = &caerBackgroundActivityFilterExit };
+	&caerBackgroundActivityFilterConfig, .moduleExit = &caerBackgroundActivityFilterExit, .moduleReset =
+	&caerBackgroundActivityFilterReset };
 
 void caerBackgroundActivityFilter(uint16_t moduleID, caerPolarityEventPacket polarity) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "BAFilter", PROCESSOR);
@@ -146,6 +148,13 @@ static void caerBackgroundActivityFilterExit(caerModuleData moduleData) {
 
 	// Ensure map is freed.
 	simple2DBufferFreeLong(state->timestampMap);
+}
+
+static void caerBackgroundActivityFilterReset(caerModuleData moduleData) {
+	BAFilterState state = moduleData->moduleState;
+
+	// Reset timestamp map to all zeros (startup state).
+	simple2DBufferResetLong(state->timestampMap);
 }
 
 static bool allocateTimestampMap(BAFilterState state, int16_t sourceID) {

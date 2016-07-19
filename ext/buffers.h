@@ -113,6 +113,12 @@ static inline void simple2DBufferFree##NAME(simple2DBuffer##NAME buffer2d) { \
 		free(buffer2d->buffer2d[0]); \
 		free(buffer2d); \
 	} \
+} \
+\
+static inline void simple2DBufferReset##NAME(simple2DBuffer##NAME buffer2d) { \
+	if (buffer2d != NULL) { \
+		memset(buffer2d->buffer2d[0], 0, buffer2d->sizeX * buffer2d->sizeY * sizeof(TYPE)); \
+	} \
 }
 
 buffers_define_2d_typed(int8_t, Byte)
