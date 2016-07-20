@@ -13,7 +13,6 @@
 #include <libcaer/events/special.h>
 
 #define MAX_HEADER_LINE_SIZE 1024
-#define STD_PACKET_SIZE 10240
 
 struct input_common_header_info {
 	/// Header has been completely read and is valid.
@@ -770,7 +769,7 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state) 
 
 			// Erase slot from packets array.
 			utarray_erase(state->packetContainer.eventPackets,
-				utarray_eltidx(state->packetContainer.eventPackets, currPacket), 1);
+				(size_t) utarray_eltidx(state->packetContainer.eventPackets, currPacket), 1);
 			currPacket = (caerEventPacketHeader *) utarray_prev(state->packetContainer.eventPackets, currPacket);
 			continue;
 		}
