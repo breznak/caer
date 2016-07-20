@@ -125,6 +125,7 @@ static bool parseHeader(inputCommonState state);
 static void addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket);
 static caerEventPacketContainer generatePacketContainer(inputCommonState state);
 static bool parsePackets(inputCommonState state);
+static bool parseAEDAT3(inputCommonState state);
 static int inputHandlerThread(void *stateArg);
 static void caerInputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
@@ -844,6 +845,10 @@ static bool parsePackets(inputCommonState state) {
 		return (false);
 	}
 
+	return (parseAEDAT3(state));
+}
+
+static bool parseAEDAT3(inputCommonState state) {
 	simpleBuffer buf = state->dataBuffer;
 
 	while (buf->bufferPosition < buf->bufferUsedSize) {
