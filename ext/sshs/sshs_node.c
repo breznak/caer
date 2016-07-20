@@ -532,6 +532,7 @@ static bool sshsNodeCheckAttributeValueChanged(enum sshs_node_attr_value_type ty
 		case STRING:
 			return (strcmp(oldValue.string, newValue.string) != 0);
 
+		case UNKNOWN:
 		default:
 			return (false);
 	}
@@ -717,11 +718,11 @@ double sshsNodeGetDouble(sshsNode node, const char *key) {
 }
 
 bool sshsNodePutStringIfAbsent(sshsNode node, const char *key, const char *value) {
-	return (sshsNodePutAttributeIfAbsent(node, key, STRING, (union sshs_node_attr_value ) { .string = value }));
+	return (sshsNodePutAttributeIfAbsent(node, key, STRING, (union sshs_node_attr_value ) { .string = (char *) value }));
 }
 
 void sshsNodePutString(sshsNode node, const char *key, const char *value) {
-	sshsNodePutAttribute(node, key, STRING, (union sshs_node_attr_value ) { .string = value });
+	sshsNodePutAttribute(node, key, STRING, (union sshs_node_attr_value ) { .string = (char *) value });
 }
 
 // This is a copy of the string on the heap, remember to free() when done!

@@ -452,7 +452,6 @@ static void caerLibPNGWriteBuffer(png_structp png_ptr, png_bytep data, png_size_
 
 	if (p->buffer == NULL) {
 		png_error(png_ptr, "Write Buffer Error");
-		return;
 	}
 
 	// Copy the new bytes to the end of the buffer.

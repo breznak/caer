@@ -135,7 +135,9 @@ IF (CC_GCC OR CC_CLANG)
 	IF (CC_CLANG)
 		# Enable all warnings in Clang easily.
 		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Weverything -Wno-packed -Wno-padded -Wno-unreachable-code-break")
-		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-disabled-macro-expansion")
+		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-disabled-macro-expansion -Wno-reserved-id-macro -Wno-vla")
+		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-parentheses-equality -Wno-covered-switch-default")
+		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-used-but-marked-unused -Wno-cast-align")
 	ENDIF()
 ENDIF()
 

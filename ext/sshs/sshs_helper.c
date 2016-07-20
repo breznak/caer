@@ -48,6 +48,7 @@ const char *sshsHelperTypeToStringConverter(enum sshs_node_attr_value_type type)
 		case STRING:
 			return ("string");
 
+		case UNKNOWN:
 		default:
 			return (NULL); // UNKNOWN TYPE.
 	}
@@ -134,6 +135,7 @@ char *sshsHelperValueToStringConverter(enum sshs_node_attr_value_type type, unio
 			valueString = strdup(value.string);
 			break;
 
+		case UNKNOWN:
 		default:
 			valueString = NULL; // UNKNOWN TYPE.
 			break;
@@ -224,6 +226,7 @@ bool sshsHelperStringToValueConverter(enum sshs_node_attr_value_type type, const
 
 			break;
 
+		case UNKNOWN:
 		default:
 			return (false); // UNKNOWN TYPE.
 	}
