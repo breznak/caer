@@ -31,6 +31,27 @@ struct input_common_header_info {
 	int64_t networkSequenceNumber;
 };
 
+struct packetData {
+	/// Numerical ID of a packet. First packet hast ID 0.
+	size_t id;
+	/// Data offset, in bytes.
+	size_t offset;
+	/// Data size, in bytes.
+	size_t size;
+	/// Contained event type.
+	int16_t type;
+	/// Contained number of events.
+	int32_t numEvents;
+	/// Contained number of valid events.
+	int32_t numValidEvents;
+	/// First (lowest) timestamp.
+	int64_t startTimestamp;
+	/// Last (highest) timestamp.
+	int64_t endTimestamp;
+	/// Doubly-linked list pointers.
+	struct packetData *prev, *next;
+};
+
 struct input_common_packet_data {
 	/// Current packet header, to support headers being split across buffers.
 	uint8_t currPacketHeader[CAER_EVENT_PACKET_HEADER_SIZE];
@@ -44,6 +65,8 @@ struct input_common_packet_data {
 	size_t currPacketDataOffset;
 	/// Skip over packets coming from other sources. We only support one!
 	size_t skipSize;
+	/// List of data on all parsed original packets from the input.
+	struct packetData *packetsList;
 };
 
 struct input_common_packet_container_data {
@@ -103,6 +126,8 @@ struct input_common_state {
 	struct input_common_packet_container_data packetContainer;
 	/// Data buffer for reading from file descriptor (buffered I/O).
 	simpleBuffer dataBuffer;
+	/// Offset for current data buffer.
+	size_t dataBufferOffset;
 	/// Flag to signal update to buffer configuration asynchronously.
 	atomic_bool bufferUpdate;
 	/// Reference to parent module's original data.
@@ -124,8 +149,9 @@ static bool parseFileHeader(inputCommonState state);
 static bool parseHeader(inputCommonState state);
 static void addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket);
 static caerEventPacketContainer generatePacketContainer(inputCommonState state);
-static bool parsePackets(inputCommonState state);
-static bool parseAEDAT3(inputCommonState state);
+static bool parseData(inputCommonState state);
+static bool parseAEDAT2(inputCommonState state);
+static bool parseAEDAT3(inputCommonState state, bool reverseXY);
 static int inputHandlerThread(void *stateArg);
 static void caerInputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
@@ -422,11 +448,13 @@ static bool parseFileHeader(inputCommonState state) {
 		char *headerLine = getFileHeaderLine(state);
 		if (headerLine == NULL) {
 			// Failed to parse header line; this is an invalid header for AEDAT 3.1!
-			// For AEDAT 2.0, since there is no END-HEADER, this might be
+			// For AEDAT 2.0 and 3.0, since there is no END-HEADER, this might be
 			// the right way for headers to stop, so we consider this valid IFF we
 			// already got at least the version header.
-			if (versionHeader && !state->header.isAEDAT3) {
-				// Parsed AEDAT 2.0 header successfully.
+			if (versionHeader
+				&& ((state->header.majorVersion == 2 && state->header.minorVersion == 0)
+					|| (state->header.majorVersion == 3 && state->header.minorVersion == 0))) {
+				// Parsed AEDAT 2.0/3.0 header successfully.
 				state->header.isValidHeader = true;
 				return (true);
 			}
@@ -452,14 +480,14 @@ static bool parseFileHeader(inputCommonState state) {
 					case 3:
 						state->header.isAEDAT3 = true;
 
-						// AEDAT 3.1 is supported. AEDAT 3.0 was not in active use.
-						if (state->header.minorVersion != 1) {
+						// AEDAT 3.0 and 3.1 are supported.
+						if (state->header.minorVersion != 0 && state->header.minorVersion != 1) {
 							goto noValidVersionHeader;
 						}
 						break;
 
 					default:
-						// Versions other than 2.0 and 3.1 are not supported.
+						// Versions other than 2.0 and 3.X are not supported.
 						goto noValidVersionHeader;
 						break;
 				}
@@ -537,7 +565,7 @@ static bool parseFileHeader(inputCommonState state) {
 			}
 		}
 		else {
-			// Now we either have other header lines with AEDAT 2.0/AEDAT 3.1, or
+			// Now we either have other header lines with AEDAT 2.0/AEDAT 3.X, or
 			// the END-HEADER with AEDAT 3.1. We check this before the other possible,
 			// because it terminates the AEDAT 3.1 header, so we stop in that case.
 			if (caerStrEquals(headerLine, "#!END-HEADER\r\n")) {
@@ -759,8 +787,7 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state) 
 
 			if (caerGenericEventIsValid(caerIteratorElement)) {
 				validEventsSeen++;
-			}
-		CAER_ITERATOR_ALL_END
+			}CAER_ITERATOR_ALL_END
 
 		// TODO: handle TS_WRAP and TS_RESET as split points.
 
@@ -837,18 +864,32 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state) 
 	return (packetContainer);
 }
 
-static bool parsePackets(inputCommonState state) {
-	if (!state->header.isAEDAT3) {
-		// TODO: AEDAT 2.0 not yet supported.
-		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
-			"Reading AEDAT 2.0 data not yet supported.");
-		return (false);
+static bool parseData(inputCommonState state) {
+	if (state->header.majorVersion == 2 && state->header.minorVersion == 0) {
+		return (parseAEDAT2(state));
+	}
+	else if (state->header.majorVersion == 3 && state->header.minorVersion == 0) {
+		return (parseAEDAT3(state, true));
+	}
+	else if (state->header.majorVersion == 3 && state->header.minorVersion == 1) {
+		return (parseAEDAT3(state, false));
 	}
 
-	return (parseAEDAT3(state));
+	// No parseable format found!
+	return (false);
 }
 
-static bool parseAEDAT3(inputCommonState state) {
+static bool parseAEDAT2(inputCommonState state) {
+	// TODO: AEDAT 2.0 not yet supported.
+	caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Reading AEDAT 2.0 data not yet supported.");
+	return (false);
+}
+
+static bool parseAEDAT3(inputCommonState state, bool reverseXY) {
+
+}
+
+static bool aedat3GetPacket(inputCommonState state) {
 	simpleBuffer buf = state->dataBuffer;
 
 	while (buf->bufferPosition < buf->bufferUsedSize) {
@@ -994,30 +1035,33 @@ static bool parseAEDAT3(inputCommonState state) {
 			// TODO: implement this.
 			return (false);
 		}
-
-		// We've got a full event packet, store it. It will later appear in the packet
-		// container in some form.
-		addToPacketContainer(state, state->packets.currPacket);
-
-		// Check if we have read and accumulated all the event packets with a main first timestamp smaller
-		// or equal than what we want. We know this is the case when the last seen main timestamp is clearly
-		// bigger than the wanted one. If this is true, it means we do have all the possible events of all
-		// types that happen up until that point, and we can split that time range off into a packet container.
-		// If not, we just go get the next event packet.
-		if (state->packetContainer.lastSeenPacketTimestamp <= state->packetContainer.newContainerTimestampEnd) {
-			continue;
-		}
-
-		caerEventPacketContainer packetContainer = generatePacketContainer(state);
-		if (packetContainer == NULL) {
-			// On failure, just continue.
-			continue;
-		}
-
-		doTimeDelay(state);
-
-		doPacketContainerCommit(state, packetContainer);
 	}
+}
+
+static bool bla(inputCommonState state) {
+
+	// We've got a full event packet, store it. It will later appear in the packet
+	// container in some form.
+	addToPacketContainer(state, state->packets.currPacket);
+
+	// Check if we have read and accumulated all the event packets with a main first timestamp smaller
+	// or equal than what we want. We know this is the case when the last seen main timestamp is clearly
+	// bigger than the wanted one. If this is true, it means we do have all the possible events of all
+	// types that happen up until that point, and we can split that time range off into a packet container.
+	// If not, we just go get the next event packet.
+	if (state->packetContainer.lastSeenPacketTimestamp <= state->packetContainer.newContainerTimestampEnd) {
+		return (false);
+	}
+
+	caerEventPacketContainer packetContainer = generatePacketContainer(state);
+	if (packetContainer == NULL) {
+		// On failure, just continue.
+		return (false);
+	}
+
+	doTimeDelay(state);
+
+	doPacketContainerCommit(state, packetContainer);
 
 	return (true);
 }
@@ -1077,15 +1121,20 @@ static int inputHandlerThread(void *stateArg) {
 			break;
 		}
 
-		// Parse event packets now.
-		if (!parsePackets(state)) {
+		// Parse event data now.
+		if (!parseData(state)) {
 			// Packets invalid, exit.
-			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to parse event packets.");
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to parse event data.");
 			break;
 		}
 
 		// Go and get a full buffer on next iteration again, starting at position 0.
 		state->dataBuffer->bufferPosition = 0;
+
+		// Update offset. Makes sense for files only.
+		if (!state->isNetworkStream) {
+			state->dataBufferOffset += state->dataBuffer->bufferUsedSize;
+		}
 	}
 
 	// At this point we either got terminated (running=false) or we stopped for some
