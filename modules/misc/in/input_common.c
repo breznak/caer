@@ -159,7 +159,7 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state);
 static bool parseData(inputCommonState state);
 static bool parseAEDAT2(inputCommonState state);
 static bool parseAEDAT3(inputCommonState state, bool reverseXY);
-static bool aedat3GetPacket(inputCommonState state, bool *newPacketComplete);
+static int aedat3GetPacket(inputCommonState state);
 static int inputHandlerThread(void *stateArg);
 static void caerInputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
@@ -895,15 +895,18 @@ static bool parseAEDAT2(inputCommonState state) {
 
 static bool parseAEDAT3(inputCommonState state, bool reverseXY) {
 	while (state->dataBuffer->bufferPosition < state->dataBuffer->bufferUsedSize) {
-		bool newPacketComplete = false;
-
-		if (!aedat3GetPacket(state, &newPacketComplete)) {
+		int pRes = aedat3GetPacket(state);
+		if (pRes < 0) {
 			// Error in parsing buffer to get packet.
 			return (false);
 		}
-
-		// Got no error, but also no new packet. Continue parsing buffer.
-		if (!newPacketComplete) {
+		else if (pRes == 1) {
+			// Finished parsing this buffer with no new packet.
+			// Exit to get next buffer.
+			break;
+		}
+		else if (pRes == 2) {
+			// Skip requested, run again.
 			continue;
 		}
 
@@ -921,11 +924,11 @@ static bool parseAEDAT3(inputCommonState state, bool reverseXY) {
  * meta-data list.
  *
  * @param state common input data structure.
- * @param newPacketComplete set to true if new packet successfully extracted.
  *
- * @return false on failure, true if ready to continue parsing data buffers.
+ * @return -1 on failure. 0 on successful packet extraction.
+ * 1 if more data needed. 2 if skip requested.
  */
-static bool aedat3GetPacket(inputCommonState state, bool *newPacketComplete) {
+static int aedat3GetPacket(inputCommonState state) {
 	simpleBuffer buf = state->dataBuffer;
 
 	// So now we're somewhere inside the buffer (usually at start), and want to
@@ -947,7 +950,7 @@ static bool aedat3GetPacket(inputCommonState state, bool *newPacketComplete) {
 
 			// Go and get next buffer. bufferPosition is at end of buffer.
 			buf->bufferPosition += remainingData;
-			return (true);
+			return (1);
 		}
 		else {
 			buf->bufferPosition += state->packets.skipSize;
@@ -966,7 +969,7 @@ static bool aedat3GetPacket(inputCommonState state, bool *newPacketComplete) {
 
 			// Go and get next buffer. bufferPosition is at end of buffer.
 			buf->bufferPosition += remainingData;
-			return (true);
+			return (1);
 		}
 		else {
 			// Either a full header, or the second part of one.
@@ -1000,7 +1003,7 @@ static bool aedat3GetPacket(inputCommonState state, bool *newPacketComplete) {
 			state->packets.currPacketHeaderSize = 0; // Get new header after skipping.
 
 			// Run function again to skip data. bufferPosition is already up-to-date.
-			return (true);
+			return (2);
 		}
 
 		// Allocate space for the full packet, so we can reassemble it.
@@ -1010,7 +1013,7 @@ static bool aedat3GetPacket(inputCommonState state, bool *newPacketComplete) {
 		if (state->packets.currPacket == NULL) {
 			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
 				"Failed to allocate memory for new event packet.");
-			return (false);
+			return (-1);
 		}
 
 		// First we copy the header in.
@@ -1026,7 +1029,7 @@ static bool aedat3GetPacket(inputCommonState state, bool *newPacketComplete) {
 		if (state->packets.currPacketData == NULL) {
 			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
 				"Failed to allocate memory for new event packet meta-data.");
-			return (false);
+			return (-1);
 		}
 
 		// Fill out meta-data fields with proper information gained from current event packet.
@@ -1055,7 +1058,7 @@ static bool aedat3GetPacket(inputCommonState state, bool *newPacketComplete) {
 
 		// Go and get next buffer. bufferPosition is at end of buffer.
 		buf->bufferPosition += remainingData;
-		return (true);
+		return (1);
 	}
 	else {
 		// We copy the last bytes of data and we're done.
@@ -1079,8 +1082,7 @@ static bool aedat3GetPacket(inputCommonState state, bool *newPacketComplete) {
 		DL_APPEND(state->packets.packetsList, state->packets.currPacketData);
 
 		// New packet parsed!
-		*newPacketComplete = true;
-		return (true);
+		return (0);
 	}
 }
 
