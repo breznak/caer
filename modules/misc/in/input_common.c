@@ -911,7 +911,12 @@ static bool parseAEDAT3(inputCommonState state, bool reverseXY) {
 		}
 
 		// New packet from stream, process it.
-		// TODO: this.
+		caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
+			"New packet read - ID: %zu, Offset: %zu, Size: %zu, Events: %" PRIi32 ", Type: %" PRIi16 ", StartTS: %" PRIi64 ", EndTS: %" PRIi64 ".",
+			state->packets.currPacketData->id, state->packets.currPacketData->offset,
+			state->packets.currPacketData->size, state->packets.currPacketData->eventNumber,
+			state->packets.currPacketData->eventType, state->packets.currPacketData->startTimestamp,
+			state->packets.currPacketData->endTimestamp);
 	}
 
 	// All good, get next buffer.
