@@ -3,6 +3,7 @@
 #include "ext/portable_time.h"
 #include "ext/ringbuffer/ringbuffer.h"
 #include "ext/uthash/utarray.h"
+#include "ext/uthash/utlist.h"
 #include "ext/buffers.h"
 #ifdef HAVE_PTHREADS
 #include "ext/c11threads_posix.h"
@@ -39,11 +40,13 @@ struct packetData {
 	/// Data size, in bytes.
 	size_t size;
 	/// Contained event type.
-	int16_t type;
+	int16_t eventType;
+	/// Size of contained events, in bytes.
+	int32_t eventSize;
 	/// Contained number of events.
-	int32_t numEvents;
+	int32_t eventNumber;
 	/// Contained number of valid events.
-	int32_t numValidEvents;
+	int32_t eventValid;
 	/// First (lowest) timestamp.
 	int64_t startTimestamp;
 	/// Last (highest) timestamp.
@@ -65,8 +68,12 @@ struct input_common_packet_data {
 	size_t currPacketDataOffset;
 	/// Skip over packets coming from other sources. We only support one!
 	size_t skipSize;
+	/// Current packet data for packet list book-keeping.
+	struct packetData *currPacketData;
 	/// List of data on all parsed original packets from the input.
 	struct packetData *packetsList;
+	/// Global packet counter.
+	size_t packetCount;
 };
 
 struct input_common_packet_container_data {
@@ -152,6 +159,7 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state);
 static bool parseData(inputCommonState state);
 static bool parseAEDAT2(inputCommonState state);
 static bool parseAEDAT3(inputCommonState state, bool reverseXY);
+static bool aedat3GetPacket(inputCommonState state, bool *newPacketComplete);
 static int inputHandlerThread(void *stateArg);
 static void caerInputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
@@ -886,160 +894,197 @@ static bool parseAEDAT2(inputCommonState state) {
 }
 
 static bool parseAEDAT3(inputCommonState state, bool reverseXY) {
+	while (state->dataBuffer->bufferPosition < state->dataBuffer->bufferUsedSize) {
+		bool newPacketComplete = false;
 
-}
-
-static bool aedat3GetPacket(inputCommonState state) {
-	simpleBuffer buf = state->dataBuffer;
-
-	while (buf->bufferPosition < buf->bufferUsedSize) {
-		// So now we're somewhere inside the buffer (usually at start), and want to
-		// read in a very long sequence of event packets.
-		// An event packet is made up of header + data, and the header contains the
-		// information needed to decode the data and its length, to know then where
-		// the next event packet boundary is. So we get the full header first, then
-		// the data, but careful, it can all be split across two (header+data) or
-		// more (data) buffers, so we need to reassemble!
-		size_t remainingData = buf->bufferUsedSize - buf->bufferPosition;
-
-		// First thing, handle skip packet requests.
-		if (state->packets.skipSize != 0) {
-			if (state->packets.skipSize >= remainingData) {
-				state->packets.skipSize -= remainingData;
-
-				// Go and get next buffer. bufferPosition is reset.
-				return (true);
-			}
-			else {
-				buf->bufferPosition += state->packets.skipSize;
-				remainingData -= state->packets.skipSize;
-				state->packets.skipSize = 0; // Don't skip anymore, continue as usual.
-			}
-		}
-
-		if (state->packets.currPacketHeaderSize != CAER_EVENT_PACKET_HEADER_SIZE) {
-			if (remainingData < CAER_EVENT_PACKET_HEADER_SIZE) {
-				// Reaching end of buffer, the header is split across two buffers!
-				memcpy(state->packets.currPacketHeader, buf->buffer + buf->bufferPosition, remainingData);
-
-				state->packets.currPacketHeaderSize = remainingData;
-
-				// Go and get next buffer. bufferPosition is reset.
-				return (true);
-			}
-			else {
-				// Either a full header, or the second part of one.
-				size_t dataToRead = CAER_EVENT_PACKET_HEADER_SIZE - state->packets.currPacketHeaderSize;
-
-				memcpy(state->packets.currPacketHeader + state->packets.currPacketHeaderSize,
-					buf->buffer + buf->bufferPosition, dataToRead);
-
-				state->packets.currPacketHeaderSize += dataToRead;
-				buf->bufferPosition += dataToRead;
-				remainingData -= dataToRead;
-			}
-
-			// So now that we have a full header, let's look at it.
-			caerEventPacketHeader packet = (caerEventPacketHeader) state->packets.currPacketHeader;
-
-			int16_t eventSource = caerEventPacketHeaderGetEventSource(packet);
-			int32_t eventNumber = caerEventPacketHeaderGetEventNumber(packet);
-			int32_t eventValid = caerEventPacketHeaderGetEventValid(packet);
-			int32_t eventSize = caerEventPacketHeaderGetEventSize(packet);
-
-			// First we verify that the source ID remained unique (only one source per I/O module supported!).
-			if (state->header.sourceID != eventSource) {
-				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
-					"An input module can only handle packets from the same source! "
-						"A packet with source %" PRIi16 " was read, but this input module expects only packets from source %" PRIi16 ".",
-					eventSource, state->header.sourceID);
-
-				// Skip packet.
-				state->packets.skipSize = (size_t) (eventNumber * eventSize);
-				state->packets.currPacketHeaderSize = 0; // Get new header after skipping.
-
-				continue;
-			}
-
-			// Now let's get the right number of events, depending on user settings.
-			bool validOnly = atomic_load_explicit(&state->validOnly, memory_order_relaxed);
-			int32_t eventCapacity = (validOnly) ? (eventValid) : (eventNumber);
-
-			// Allocate space for the full packet, so we can reassemble it.
-			state->packets.currPacketDataSize = (size_t) (eventCapacity * eventSize);
-
-			//caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
-			//	"Allocating %zu bytes for newly read event packet.",
-			//	CAER_EVENT_PACKET_HEADER_SIZE + state->packets.currPacketDataSize);
-
-			state->packets.currPacket = malloc(CAER_EVENT_PACKET_HEADER_SIZE + state->packets.currPacketDataSize);
-			if (state->packets.currPacket == NULL) {
-				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
-					"Failed to allocate memory for newly read event packet.");
-				return (false);
-			}
-
-			// First we copy the header in.
-			memcpy(state->packets.currPacket, state->packets.currPacketHeader, CAER_EVENT_PACKET_HEADER_SIZE);
-
-			state->packets.currPacketDataOffset = CAER_EVENT_PACKET_HEADER_SIZE;
-
-			// Rewrite event source to reflect this module, not the original one.
-			caerEventPacketHeaderSetEventSource(state->packets.currPacket, I16T(state->parentModule->moduleID));
-
-			// And set the event numbers to the correct value for the valid-only mode.
-			if (validOnly) {
-				caerEventPacketHeaderSetEventNumber(state->packets.currPacket, eventCapacity);
-				caerEventPacketHeaderSetEventCapacity(state->packets.currPacket, eventCapacity);
-			}
-		}
-
-		// And then the data, from the buffer to the new event packet. We have to take care of
-		// date being split across multiple buffers, as well as what data we want to copy. In
-		// validOnly mode, we only want to copy valid events, which means either checking and
-		// copying, or in the case of already receiving a packet where eventValid == eventNumber
-		// just copying. For the non-validOnly case, we always just copy.
-		int32_t eventNumberOriginal = caerEventPacketHeaderGetEventNumber(
-			(caerEventPacketHeader) state->packets.currPacketHeader);
-		int32_t eventNumber = caerEventPacketHeaderGetEventNumber(state->packets.currPacket);
-
-		if (eventNumberOriginal == eventNumber) {
-			// Original packet header and new packet header have the same event number, this
-			// means that either there was no change due to validOnly (eventValid == eventNumber),
-			// or that validOnly mode is disabled. Just copy data!
-			if (state->packets.currPacketDataSize >= remainingData) {
-				// We need to copy more data than in this buffer.
-				memcpy(((uint8_t *) state->packets.currPacket) + state->packets.currPacketDataOffset,
-					buf->buffer + buf->bufferPosition, remainingData);
-
-				state->packets.currPacketDataOffset += remainingData;
-				state->packets.currPacketDataSize -= remainingData;
-
-				// Go and get next buffer. bufferPosition is reset.
-				return (true);
-			}
-			else {
-				// We copy the last bytes of data and we're done.
-				memcpy(((uint8_t *) state->packets.currPacket) + state->packets.currPacketDataOffset,
-					buf->buffer + buf->bufferPosition, state->packets.currPacketDataSize);
-
-				// This packet is fully copied and done, so reset variables for next iteration.
-				state->packets.currPacketHeaderSize = 0; // Get new header next iteration.
-				buf->bufferPosition += state->packets.currPacketDataSize;
-			}
-		}
-		else {
-			// Valid-only mode, iterate over events and copy only the valid ones.
-			int32_t eventSize = caerEventPacketHeaderGetEventSize(state->packets.currPacket);
-
-			// TODO: implement this.
+		if (!aedat3GetPacket(state, &newPacketComplete)) {
+			// Error in parsing buffer to get packet.
 			return (false);
 		}
+
+		// Got no error, but also no new packet. Continue parsing buffer.
+		if (!newPacketComplete) {
+			continue;
+		}
+
+		// New packet from stream, process it.
+		// TODO: this.
+	}
+
+	// All good, get next buffer.
+	return (true);
+}
+
+/**
+ * Parse the current buffer and try to extract the AEDAT 3.X
+ * packet contained within, as well as updating the packet
+ * meta-data list.
+ *
+ * @param state common input data structure.
+ * @param newPacketComplete set to true if new packet successfully extracted.
+ *
+ * @return false on failure, true if ready to continue parsing data buffers.
+ */
+static bool aedat3GetPacket(inputCommonState state, bool *newPacketComplete) {
+	simpleBuffer buf = state->dataBuffer;
+
+	// So now we're somewhere inside the buffer (usually at start), and want to
+	// read in a very long sequence of event packets.
+	// An event packet is made up of header + data, and the header contains the
+	// information needed to decode the data and its length, to know then where
+	// the next event packet boundary is. So we get the full header first, then
+	// the data, but careful, it can all be split across two (header+data) or
+	// more (data) buffers, so we need to reassemble!
+	size_t remainingData = buf->bufferUsedSize - buf->bufferPosition;
+
+	// First thing, handle skip packet requests. This can happen if packets
+	// from another source are mixed in, or we forbid some packet types.
+	// In that case, we just skip over all their bytes and try to get the next
+	// good packet (header).
+	if (state->packets.skipSize != 0) {
+		if (state->packets.skipSize >= remainingData) {
+			state->packets.skipSize -= remainingData;
+
+			// Go and get next buffer. bufferPosition is at end of buffer.
+			buf->bufferPosition += remainingData;
+			return (true);
+		}
+		else {
+			buf->bufferPosition += state->packets.skipSize;
+			remainingData -= state->packets.skipSize;
+			state->packets.skipSize = 0; // Don't skip anymore, continue as usual.
+		}
+	}
+
+	// Get 28 bytes common packet header.
+	if (state->packets.currPacketHeaderSize != CAER_EVENT_PACKET_HEADER_SIZE) {
+		if (remainingData < CAER_EVENT_PACKET_HEADER_SIZE) {
+			// Reaching end of buffer, the header is split across two buffers!
+			memcpy(state->packets.currPacketHeader, buf->buffer + buf->bufferPosition, remainingData);
+
+			state->packets.currPacketHeaderSize = remainingData;
+
+			// Go and get next buffer. bufferPosition is at end of buffer.
+			buf->bufferPosition += remainingData;
+			return (true);
+		}
+		else {
+			// Either a full header, or the second part of one.
+			size_t dataToRead = CAER_EVENT_PACKET_HEADER_SIZE - state->packets.currPacketHeaderSize;
+
+			memcpy(state->packets.currPacketHeader + state->packets.currPacketHeaderSize,
+				buf->buffer + buf->bufferPosition, dataToRead);
+
+			state->packets.currPacketHeaderSize += dataToRead;
+			buf->bufferPosition += dataToRead;
+			remainingData -= dataToRead;
+		}
+
+		// So now that we have a full header, let's look at it.
+		caerEventPacketHeader packet = (caerEventPacketHeader) state->packets.currPacketHeader;
+
+		int16_t eventSource = caerEventPacketHeaderGetEventSource(packet);
+		int32_t eventNumber = caerEventPacketHeaderGetEventNumber(packet);
+		int32_t eventValid = caerEventPacketHeaderGetEventValid(packet);
+		int32_t eventSize = caerEventPacketHeaderGetEventSize(packet);
+
+		// First we verify that the source ID remained unique (only one source per I/O module supported!).
+		if (state->header.sourceID != eventSource) {
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+				"An input module can only handle packets from the same source! "
+					"A packet with source %" PRIi16 " was read, but this input module expects only packets from source %" PRIi16 ". "
+				"Discarding event packet.", eventSource, state->header.sourceID);
+
+			// Skip packet.
+			state->packets.skipSize = (size_t) (eventNumber * eventSize);
+			state->packets.currPacketHeaderSize = 0; // Get new header after skipping.
+
+			// Run function again to skip data. bufferPosition is already up-to-date.
+			return (true);
+		}
+
+		// Allocate space for the full packet, so we can reassemble it.
+		state->packets.currPacketDataSize = (size_t) (eventNumber * eventSize);
+
+		state->packets.currPacket = malloc(CAER_EVENT_PACKET_HEADER_SIZE + state->packets.currPacketDataSize);
+		if (state->packets.currPacket == NULL) {
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+				"Failed to allocate memory for new event packet.");
+			return (false);
+		}
+
+		// First we copy the header in.
+		memcpy(state->packets.currPacket, state->packets.currPacketHeader, CAER_EVENT_PACKET_HEADER_SIZE);
+
+		state->packets.currPacketDataOffset = CAER_EVENT_PACKET_HEADER_SIZE;
+
+		// Rewrite event source to reflect this module, not the original one.
+		caerEventPacketHeaderSetEventSource(state->packets.currPacket, I16T(state->parentModule->moduleID));
+
+		// Now we can also start keeping track of this packet's meta-data.
+		state->packets.currPacketData = calloc(1, sizeof(struct packetData));
+		if (state->packets.currPacketData == NULL) {
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+				"Failed to allocate memory for new event packet meta-data.");
+			return (false);
+		}
+
+		// Fill out meta-data fields with proper information gained from current event packet.
+		state->packets.currPacketData->id = state->packets.packetCount++;
+		state->packets.currPacketData->offset =
+			(state->isNetworkStream) ?
+				(0) : (state->dataBufferOffset + buf->bufferPosition - CAER_EVENT_PACKET_HEADER_SIZE);
+		state->packets.currPacketData->size = CAER_EVENT_PACKET_HEADER_SIZE + state->packets.currPacketDataSize;
+		state->packets.currPacketData->eventType = caerEventPacketHeaderGetEventType(packet);
+		state->packets.currPacketData->eventSize = eventSize;
+		state->packets.currPacketData->eventNumber = eventNumber;
+		state->packets.currPacketData->eventValid = eventValid;
+		state->packets.currPacketData->startTimestamp = -1; // Invalid for now.
+		state->packets.currPacketData->endTimestamp = -1; // Invalid for now.
+	}
+
+	// Now get the data from the buffer to the new event packet. We have to take care of
+	// data being split across multiple buffers, as above.
+	if (state->packets.currPacketDataSize >= remainingData) {
+		// We need to copy more data than in this buffer.
+		memcpy(((uint8_t *) state->packets.currPacket) + state->packets.currPacketDataOffset,
+			buf->buffer + buf->bufferPosition, remainingData);
+
+		state->packets.currPacketDataOffset += remainingData;
+		state->packets.currPacketDataSize -= remainingData;
+
+		// Go and get next buffer. bufferPosition is at end of buffer.
+		buf->bufferPosition += remainingData;
+		return (true);
+	}
+	else {
+		// We copy the last bytes of data and we're done.
+		memcpy(((uint8_t *) state->packets.currPacket) + state->packets.currPacketDataOffset,
+			buf->buffer + buf->bufferPosition, state->packets.currPacketDataSize);
+
+		// This packet is fully copied and done, so reset variables for next iteration.
+		state->packets.currPacketHeaderSize = 0; // Get new header next iteration.
+		buf->bufferPosition += state->packets.currPacketDataSize;
+
+		// Update timestamp information and insert packet into meta-data list.
+		void *firstEvent = caerGenericEventGetEvent(state->packets.currPacket, 0);
+		state->packets.currPacketData->startTimestamp = caerGenericEventGetTimestamp64(firstEvent,
+			state->packets.currPacket);
+
+		void *lastEvent = caerGenericEventGetEvent(state->packets.currPacket,
+			state->packets.currPacketData->eventNumber - 1);
+		state->packets.currPacketData->endTimestamp = caerGenericEventGetTimestamp64(lastEvent,
+			state->packets.currPacket);
+
+		DL_APPEND(state->packets.packetsList, state->packets.currPacketData);
+
+		// New packet parsed!
+		*newPacketComplete = true;
+		return (true);
 	}
 }
 
-static bool bla(inputCommonState state) {
-
+static bool processPacket(inputCommonState state) {
 	// We've got a full event packet, store it. It will later appear in the packet
 	// container in some form.
 	addToPacketContainer(state, state->packets.currPacket);
