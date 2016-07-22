@@ -1048,7 +1048,7 @@ static int aedat3GetPacket(inputCommonState state) {
 
 	// Now get the data from the buffer to the new event packet. We have to take care of
 	// data being split across multiple buffers, as above.
-	if (state->packets.currPacketDataSize >= remainingData) {
+	if (state->packets.currPacketDataSize > remainingData) {
 		// We need to copy more data than in this buffer.
 		memcpy(((uint8_t *) state->packets.currPacket) + state->packets.currPacketDataOffset,
 			buf->buffer + buf->bufferPosition, remainingData);
