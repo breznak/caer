@@ -88,8 +88,6 @@ static bool mainloop_1(void) {
 	caerEventPacketContainer container = NULL;
 	caerSpecialEventPacket special = NULL;
 	caerPolarityEventPacket polarity = NULL;
-	caerFrameEventPacket frame = NULL;
-	caerIMU6EventPacket imu = NULL;
 
 	// Input modules grab data from outside sources (like devices, files, ...)
 	// and put events into an event packet.
@@ -113,6 +111,9 @@ static bool mainloop_1(void) {
 	polarity = (caerPolarityEventPacket) caerEventPacketContainerGetEventPacket(container, POLARITY_EVENT);
 
 	// Frame and IMU events exist only with DAVIS cameras.
+	caerFrameEventPacket frame = NULL;
+	caerIMU6EventPacket imu = NULL;
+
 	frame = (caerFrameEventPacket) caerEventPacketContainerGetEventPacket(container, FRAME_EVENT);
 	imu = (caerIMU6EventPacket) caerEventPacketContainerGetEventPacket(container, IMU6_EVENT);
 #endif
