@@ -39,6 +39,8 @@ struct packetData {
 	size_t offset;
 	/// Data size, in bytes.
 	size_t size;
+	/// Is this packet compressed?
+	bool isCompressed;
 	/// Contained event type.
 	int16_t eventType;
 	/// Size of contained events, in bytes.
@@ -160,6 +162,7 @@ static bool parseData(inputCommonState state);
 static bool parseAEDAT2(inputCommonState state);
 static bool parseAEDAT3(inputCommonState state, bool reverseXY);
 static int aedat3GetPacket(inputCommonState state);
+static bool decompressEventPacket(inputCommonState state, caerEventPacketHeader packet, size_t packetSize);
 static int inputHandlerThread(void *stateArg);
 static void caerInputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
@@ -930,8 +933,13 @@ static bool parseAEDAT3(inputCommonState state, bool reverseXY) {
  *
  * @param state common input data structure.
  *
- * @return -1 on failure. 0 on successful packet extraction.
- * 1 if more data needed. 2 if skip requested.
+ * @return 0 on successful packet extraction.
+ * Positive numbers for special conditions:
+ * 1 if more data needed.
+ * 2 if skip requested (call again).
+ * Negative numbers on error conditions:
+ * -1 on memory allocation failure.
+ * -2 on decompression failure.
  */
 static int aedat3GetPacket(inputCommonState state) {
 	simpleBuffer buf = state->dataBuffer;
@@ -991,7 +999,10 @@ static int aedat3GetPacket(inputCommonState state) {
 		// So now that we have a full header, let's look at it.
 		caerEventPacketHeader packet = (caerEventPacketHeader) state->packets.currPacketHeader;
 
+		int16_t eventType = caerEventPacketHeaderGetEventType(packet);
+		bool isCompressed = (eventType & 0x8000);
 		int16_t eventSource = caerEventPacketHeaderGetEventSource(packet);
+		int32_t eventCapacity = caerEventPacketHeaderGetEventCapacity(packet);
 		int32_t eventNumber = caerEventPacketHeaderGetEventNumber(packet);
 		int32_t eventValid = caerEventPacketHeaderGetEventValid(packet);
 		int32_t eventSize = caerEventPacketHeaderGetEventSize(packet);
@@ -1003,18 +1014,20 @@ static int aedat3GetPacket(inputCommonState state) {
 					"A packet with source %" PRIi16 " was read, but this input module expects only packets from source %" PRIi16 ". "
 				"Discarding event packet.", eventSource, state->header.sourceID);
 
-			// Skip packet.
-			state->packets.skipSize = (size_t) (eventNumber * eventSize);
+			// Skip packet. If packet is compressed, eventCapacity carries the size.
+			state->packets.skipSize = (isCompressed) ? (size_t) (eventCapacity) : (size_t) (eventNumber * eventSize);
 			state->packets.currPacketHeaderSize = 0; // Get new header after skipping.
 
 			// Run function again to skip data. bufferPosition is already up-to-date.
 			return (2);
 		}
 
-		// Allocate space for the full packet, so we can reassemble it.
-		state->packets.currPacketDataSize = (size_t) (eventNumber * eventSize);
+		// If packet is compressed, eventCapacity carries the size in bytes to read.
+		state->packets.currPacketDataSize =
+			(isCompressed) ? (size_t) (eventCapacity) : (size_t) (eventNumber * eventSize);
 
-		state->packets.currPacket = malloc(CAER_EVENT_PACKET_HEADER_SIZE + state->packets.currPacketDataSize);
+		// Allocate space for the full packet, so we can reassemble it (and decompress it later).
+		state->packets.currPacket = malloc(CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (eventNumber * eventSize));
 		if (state->packets.currPacket == NULL) {
 			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
 				"Failed to allocate memory for new event packet.");
@@ -1029,9 +1042,20 @@ static int aedat3GetPacket(inputCommonState state) {
 		// Rewrite event source to reflect this module, not the original one.
 		caerEventPacketHeaderSetEventSource(state->packets.currPacket, I16T(state->parentModule->moduleID));
 
+		// If packet was compressed, restore original eventType and eventCapacity,
+		// for in-memory usage (no mark bit, eventCapacity == eventNumber).
+		if (isCompressed) {
+			state->packets.currPacket->eventType = htole16(
+				le16toh(state->packets.currPacket->eventType) & I16T(0x7FFF));
+			state->packets.currPacket->eventCapacity = htole32(eventNumber);
+		}
+
 		// Now we can also start keeping track of this packet's meta-data.
 		state->packets.currPacketData = calloc(1, sizeof(struct packetData));
 		if (state->packets.currPacketData == NULL) {
+			free(state->packets.currPacket);
+			state->packets.currPacket = NULL;
+
 			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
 				"Failed to allocate memory for new event packet meta-data.");
 			return (-1);
@@ -1043,7 +1067,8 @@ static int aedat3GetPacket(inputCommonState state) {
 			(state->isNetworkStream) ?
 				(0) : (state->dataBufferOffset + buf->bufferPosition - CAER_EVENT_PACKET_HEADER_SIZE);
 		state->packets.currPacketData->size = CAER_EVENT_PACKET_HEADER_SIZE + state->packets.currPacketDataSize;
-		state->packets.currPacketData->eventType = caerEventPacketHeaderGetEventType(packet);
+		state->packets.currPacketData->isCompressed = isCompressed;
+		state->packets.currPacketData->eventType = caerEventPacketHeaderGetEventType(state->packets.currPacket);
 		state->packets.currPacketData->eventSize = eventSize;
 		state->packets.currPacketData->eventNumber = eventNumber;
 		state->packets.currPacketData->eventValid = eventValid;
@@ -1074,6 +1099,21 @@ static int aedat3GetPacket(inputCommonState state) {
 		state->packets.currPacketHeaderSize = 0; // Get new header next iteration.
 		buf->bufferPosition += state->packets.currPacketDataSize;
 
+		// Decompress packet.
+		if (state->packets.currPacketData->isCompressed) {
+			if (!decompressEventPacket(state, state->packets.currPacket, state->packets.currPacketData->size)) {
+				// Failed to decompress packet. Error exit.
+				free(state->packets.currPacket);
+				state->packets.currPacket = NULL;
+				free(state->packets.currPacketData);
+				state->packets.currPacketData = NULL;
+
+				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+					"Failed to decompress event packet.");
+				return (-2);
+			}
+		}
+
 		// Update timestamp information and insert packet into meta-data list.
 		void *firstEvent = caerGenericEventGetEvent(state->packets.currPacket, 0);
 		state->packets.currPacketData->startTimestamp = caerGenericEventGetTimestamp64(firstEvent,
@@ -1089,6 +1129,10 @@ static int aedat3GetPacket(inputCommonState state) {
 		// New packet parsed!
 		return (0);
 	}
+}
+
+static bool decompressEventPacket(inputCommonState state, caerEventPacketHeader packet, size_t packetSize) {
+
 }
 
 static bool processPacket(inputCommonState state) {
