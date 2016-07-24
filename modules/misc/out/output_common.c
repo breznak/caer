@@ -547,7 +547,7 @@ static inline bool caerFrameEventPNGCompress(uint8_t **outBuffer, size_t *outSiz
 }
 
 static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader packet) {
-	size_t currPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE; // Start here, no change to header yet.
+	size_t currPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE; // Start here, no change to header.
 	size_t frameEventHeaderSize = sizeof(struct caer_frame_event);
 
 	CAER_FRAME_ITERATOR_ALL_START((caerFrameEventPacket) packet)
@@ -653,7 +653,7 @@ static inline void caerGenericEventSetTimestamp(void *eventPtr, caerEventPacketH
 static size_t compressTimestampSerialize(outputCommonState state, caerEventPacketHeader packet) {
 	UNUSED_ARGUMENT(state);
 
-	size_t currPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE; // Start here, no change to header yet.
+	size_t currPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE; // Start here, no change to header.
 	int32_t eventSize = caerEventPacketHeaderGetEventSize(packet);
 	int32_t eventTSOffset = caerEventPacketHeaderGetEventTSOffset(packet);
 

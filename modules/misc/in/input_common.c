@@ -8,9 +8,13 @@
 #ifdef HAVE_PTHREADS
 #include "ext/c11threads_posix.h"
 #endif
+#ifdef ENABLE_INOUT_PNG_COMPRESSION
+#include <png.h>
+#endif
 
 #include <libcaer/events/common.h>
 #include <libcaer/events/packetContainer.h>
+#include <libcaer/events/frame.h>
 #include <libcaer/events/special.h>
 
 #define MAX_HEADER_LINE_SIZE 1024
@@ -162,6 +166,7 @@ static bool parseData(inputCommonState state);
 static bool parseAEDAT2(inputCommonState state);
 static bool parseAEDAT3(inputCommonState state, bool reverseXY);
 static int aedat3GetPacket(inputCommonState state);
+static bool decompressTimestampSerialize(inputCommonState state, caerEventPacketHeader packet, size_t packetSize);
 static bool decompressEventPacket(inputCommonState state, caerEventPacketHeader packet, size_t packetSize);
 static int inputHandlerThread(void *stateArg);
 static void caerInputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
@@ -1131,8 +1136,139 @@ static int aedat3GetPacket(inputCommonState state) {
 	}
 }
 
-static bool decompressEventPacket(inputCommonState state, caerEventPacketHeader packet, size_t packetSize) {
+#ifdef ENABLE_INOUT_PNG_COMPRESSION
 
+static void caerLibPNGReadBuffer(png_structp png_ptr, png_bytep data, png_size_t length);
+static bool decompressFramePNG(inputCommonState state, caerEventPacketHeader packet, size_t packetSize);
+
+// Simple structure to store PNG image bytes.
+struct caer_libpng_buffer {
+	uint8_t *buffer;
+	size_t size;
+	size_t pos;
+};
+
+static void caerLibPNGReadBuffer(png_structp png_ptr, png_bytep data, png_size_t length) {
+	struct caer_libpng_buffer *p = (struct caer_libpng_buffer *) png_get_io_ptr(png_ptr);
+	size_t newPos = p->pos + length;
+
+	// Detect attempts to read past buffer end.
+	if (newPos > p->size) {
+		png_error(png_ptr, "Read Buffer Error");
+	}
+
+	memcpy(data, p->buffer + p->pos, length);
+	p->pos += length;
+}
+
+static inline enum caer_frame_event_color_channels caerFrameEventColorFromLibPNG(int channels) {
+	switch (channels) {
+		case PNG_COLOR_TYPE_GRAY:
+			return (GRAYSCALE);
+			break;
+
+		case PNG_COLOR_TYPE_RGB:
+			return (RGB);
+			break;
+
+		case PNG_COLOR_TYPE_RGBA:
+		default:
+			return (RGBA);
+			break;
+	}
+}
+
+static inline bool caerFrameEventPNGDecompress(uint8_t *inBuffer, size_t inSize, uint16_t *outBuffer, int32_t xSize,
+	int32_t ySize, enum caer_frame_event_color_channels channels) {
+	png_structp png_ptr = NULL;
+	png_infop info_ptr = NULL;
+
+	// Initialize the write struct.
+	png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	if (png_ptr == NULL) {
+		return (false);
+	}
+
+	// Initialize the info struct.
+	info_ptr = png_create_info_struct(png_ptr);
+	if (info_ptr == NULL) {
+		png_destroy_read_struct(&png_ptr, NULL, NULL);
+		return (false);
+	}
+
+	// Set up error handling.
+	if (setjmp(png_jmpbuf(png_ptr))) {
+		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+		return (false);
+	}
+
+	// Handle endianness of 16-bit depth pixels correctly.
+	// PNG assumes big-endian, our Frame Event is always little-endian.
+	png_set_swap(png_ptr);
+
+	// Set read function to buffer one.
+	struct caer_libpng_buffer state = { .buffer = inBuffer, .size = inSize, .pos = 0 };
+	png_set_read_fn(png_ptr, &state, &caerLibPNGReadBuffer);
+
+	// Read the whole PNG image.
+	png_read_png(png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
+
+	// Extract header info.
+	png_uint_32 width = 0, height = 0;
+	int bitDepth = 0;
+	int color = -1;
+	png_get_IHDR(png_ptr, info_ptr, &width, &height, &bitDepth, &color, NULL, NULL, NULL);
+
+	// Check header info against known values from our frame event header.
+	if ((I32T(width) != xSize) || (I32T(height) != ySize) || (bitDepth != 16)
+		|| (caerFrameEventColorFromLibPNG(color) != channels)) {
+		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+		return (false);
+	}
+
+	// Extract image data, row by row.
+	png_size_t row_bytes = png_get_rowbytes(png_ptr, info_ptr);
+	png_bytepp row_pointers = png_get_rows(png_ptr, info_ptr);
+
+	for (size_t y = 0; y < (size_t) ySize; y++) {
+		memcpy(&outBuffer[y * row_bytes], row_pointers[y], row_bytes);
+	}
+
+	// Destroy main structs.
+	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+
+	return (true);
+}
+
+static bool decompressFramePNG(inputCommonState state, caerEventPacketHeader packet, size_t packetSize) {
+	size_t currPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE; // Start here, no change to header.
+	size_t frameEventHeaderSize = sizeof(struct caer_frame_event);
+
+	return (true);
+}
+
+#endif
+
+static bool decompressTimestampSerialize(inputCommonState state, caerEventPacketHeader packet, size_t packetSize) {
+	return (true);
+}
+
+static bool decompressEventPacket(inputCommonState state, caerEventPacketHeader packet, size_t packetSize) {
+	bool retVal = false;
+
+	// Data compression technique 1: serialized timestamps.
+	if ((state->header.formatID & 0x01) && caerEventPacketHeaderGetEventType(packet) == POLARITY_EVENT) {
+		retVal = decompressTimestampSerialize(state, packet, packetSize);
+	}
+
+#ifdef ENABLE_INOUT_PNG_COMPRESSION
+	// Data compression technique 2: frame PNG compression.
+	if ((state->header.formatID & 0x02) && caerEventPacketHeaderGetEventType(packet) == FRAME_EVENT) {
+		retVal = decompressFramePNG(state, packet, packetSize);
+	}
+#endif
+
+	return (retVal);
 }
 
 static bool processPacket(inputCommonState state) {
