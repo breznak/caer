@@ -440,15 +440,15 @@ struct caer_libpng_buffer {
 
 static void caerLibPNGWriteBuffer(png_structp png_ptr, png_bytep data, png_size_t length) {
 	struct caer_libpng_buffer *p = (struct caer_libpng_buffer *) png_get_io_ptr(png_ptr);
-	size_t nsize = p->size + length;
+	size_t newSize = p->size + length;
 	uint8_t *bufferSave = p->buffer;
 
 	// Allocate or grow buffer as needed.
 	if (p->buffer) {
-		p->buffer = realloc(p->buffer, nsize);
+		p->buffer = realloc(p->buffer, newSize);
 	}
 	else {
-		p->buffer = malloc(nsize);
+		p->buffer = malloc(newSize);
 	}
 
 	if (p->buffer == NULL) {
@@ -482,7 +482,7 @@ static inline bool caerFrameEventPNGCompress(uint8_t **outBuffer, size_t *outSiz
 	int32_t ySize, enum caer_frame_event_color_channels channels) {
 	png_structp png_ptr = NULL;
 	png_infop info_ptr = NULL;
-	png_byte **row_pointers = NULL;
+	png_bytepp row_pointers = NULL;
 
 	// Initialize the write struct.
 	png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
@@ -515,14 +515,14 @@ static inline bool caerFrameEventPNGCompress(uint8_t **outBuffer, size_t *outSiz
 	png_set_swap(png_ptr);
 
 	// Initialize rows of PNG.
-	row_pointers = png_malloc(png_ptr, (size_t) ySize * sizeof(png_byte *));
+	row_pointers = png_malloc(png_ptr, (size_t) ySize * sizeof(png_bytep));
 	if (row_pointers == NULL) {
 		png_destroy_write_struct(&png_ptr, &info_ptr);
 		return (false);
 	}
 
 	for (size_t y = 0; y < (size_t) ySize; y++) {
-		row_pointers[y] = (png_byte *) &inBuffer[y * (size_t) xSize * channels];
+		row_pointers[y] = (png_bytep) &inBuffer[y * (size_t) xSize * channels];
 	}
 
 	// Set write function to buffer one.
