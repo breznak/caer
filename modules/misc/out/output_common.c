@@ -149,7 +149,7 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 static int packetsFirstTimestampThenTypeCmp(const void *a, const void *b);
 static bool newOutputBuffer(outputCommonState state);
 static void commitOutputBuffer(outputCommonState state);
-static size_t compressTimestampSerialize(outputCommonState state, caerEventPacketHeader packet, size_t packetSize);
+static size_t compressTimestampSerialize(outputCommonState state, caerEventPacketHeader packet);
 static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader packet, size_t packetSize);
 static void sendEventPacket(outputCommonState state, caerEventPacketHeader packet);
 static void orderAndSendEventPackets(outputCommonState state, caerEventPacketContainer currPacketContainer);
@@ -430,7 +430,7 @@ static void commitOutputBuffer(outputCommonState state) {
 #ifdef ENABLE_INOUT_PNG_COMPRESSION
 
 static void caerLibPNGWriteBuffer(png_structp png_ptr, png_bytep data, png_size_t length);
-static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader packet, size_t packetSize);
+static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader packet);
 
 // Simple structure to store PNG image bytes.
 struct caer_libpng_buffer {
@@ -441,6 +441,7 @@ struct caer_libpng_buffer {
 static void caerLibPNGWriteBuffer(png_structp png_ptr, png_bytep data, png_size_t length) {
 	struct caer_libpng_buffer *p = (struct caer_libpng_buffer *) png_get_io_ptr(png_ptr);
 	size_t nsize = p->size + length;
+	uint8_t *bufferSave = p->buffer;
 
 	// Allocate or grow buffer as needed.
 	if (p->buffer) {
@@ -451,6 +452,7 @@ static void caerLibPNGWriteBuffer(png_structp png_ptr, png_bytep data, png_size_
 	}
 
 	if (p->buffer == NULL) {
+		free(bufferSave); // Free on realloc() failure.
 		png_error(png_ptr, "Write Buffer Error");
 	}
 
@@ -544,16 +546,12 @@ static inline bool caerFrameEventPNGCompress(uint8_t **outBuffer, size_t *outSiz
 	return (true);
 }
 
-static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader packet, size_t packetSize) {
-	size_t currPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE; // Start here, no change to header.
-	size_t frameHeaderSize = sizeof(struct caer_frame_event);
+static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader packet) {
+	size_t currPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE; // Start here, no change to header yet.
+	size_t frameEventHeaderSize = sizeof(struct caer_frame_event);
 
 	CAER_FRAME_ITERATOR_ALL_START((caerFrameEventPacket) packet)
 		size_t pixelSize = caerFrameEventGetPixelsSize(caerFrameIteratorElement);
-
-		// Keep frame event header intact, compress image data, move memory close together.
-		memmove(((uint8_t *) packet) + currPacketOffset, caerFrameIteratorElement, frameHeaderSize);
-		currPacketOffset += frameHeaderSize;
 
 		uint8_t *outBuffer;
 		size_t outSize;
@@ -562,24 +560,46 @@ static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader pa
 			caerFrameEventGetLengthX(caerFrameIteratorElement), caerFrameEventGetLengthY(caerFrameIteratorElement),
 			caerFrameEventGetChannelNumber(caerFrameIteratorElement))) {
 			// Failed to generate PNG.
-			// Discard this frame event.
-			currPacketOffset -= frameHeaderSize;
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to compress frame event. "
+				"PNG generation from frame failed. Keeping uncompressed frame.");
+
+			// Copy this frame uncompressed. Don't want to loose data.
+			size_t fullCopySize = frameEventHeaderSize + pixelSize;
+			memmove(((uint8_t *) packet) + currPacketOffset, caerFrameIteratorElement, fullCopySize);
+			currPacketOffset += fullCopySize;
+
 			continue;
 		}
 
-		// Check that the image didn't actually grow.
 		// Add integer needed for storing PNG block length.
-		if ((outSize + sizeof(int32_t)) > pixelSize) {
+		size_t pngSize = outSize + sizeof(int32_t);
+
+		// Check that the image didn't actually grow or fail to compress.
+		// If we don't gain any size advantages, just keep it uncompressed.
+		if (pngSize >= pixelSize) {
 			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to compress frame event. "
-				"Image actually grew by %zu bytes to a total of %zu bytes.", (outSize - pixelSize), outSize);
+				"Image didn't shrink, original: %zu, compressed: %zu, difference: %zu.", pixelSize, pngSize,
+				(pngSize - pixelSize));
+
+			// Copy this frame uncompressed. Don't want to loose data.
+			size_t fullCopySize = frameEventHeaderSize + pixelSize;
+			memmove(((uint8_t *) packet) + currPacketOffset, caerFrameIteratorElement, fullCopySize);
+			currPacketOffset += fullCopySize;
 
 			free(outBuffer);
-			currPacketOffset -= frameHeaderSize;
 			continue;
 		}
 
+		// Mark frame as PNG compressed. Use info member in frame event header struct,
+		// to store highest bit equals one.
+		SET_NUMBITS32(caerFrameIteratorElement->info, 31, 0x01, 1);
+
+		// Keep frame event header intact, copy all image data, move memory close together.
+		memmove(((uint8_t *) packet) + currPacketOffset, caerFrameIteratorElement, frameEventHeaderSize);
+		currPacketOffset += frameEventHeaderSize;
+
 		// Store size of PNG image block as 4 byte integer.
-		int32_t outSizeInt = I32T(outSize);
+		int32_t outSizeInt = htole32(I32T(outSize));
 		memcpy(((uint8_t *) packet) + currPacketOffset, &outSizeInt, sizeof(int32_t));
 		currPacketOffset += sizeof(int32_t);
 
@@ -600,29 +620,40 @@ static inline void caerGenericEventSetTimestamp(void *eventPtr, caerEventPacketH
 		timestamp);
 }
 
-static size_t compressTimestampSerialize(outputCommonState state, caerEventPacketHeader packet, size_t packetSize) {
-	// Search for runs of at least 3 events with the same timestamp, and convert them to a special
-	// sequence: leave first event unchanged, but mark its timestamp as special by setting the
-	// highest bit (bit 31) to one (it is forbidden for timestamps in memory to have that bit set for
-	// signed-integer-only language compatibility). Then, for the second event, change its timestamp
-	// to a 4-byte integer saying how many more events will follow afterwards with this same timestamp
-	// (this is used for decoding), so only their data portion will be given. Then follow with those
-	// event's data, back to back, with their timestamps removed.
-	// So let's assume there are 6 events with TS=1234. In memory this looks like this:
-	// E1(data,ts), E2(data,ts), E3(data,ts), E4(data,ts), E5(data,ts), E6(data,ts)
-	// After the timestamp serialization compression step:
-	// E1(data,ts|0x80000000), E2(data,4), E3(data), E4(data), E5(data), E5(data)
-	// This change is only in the data itself, not in the packet headers, so that we can still use the
-	// eventCapacity and eventSize fields to calculate memory allocation when doing decompression.
-	// As such, to correctly interpret this data, the Format flags must be correctly set. All current
-	// file or network formats do specify those as mandatory in their headers, so we can rely on that.
-	// Also all event types where this kind of thing makes any sense do have the timestamp as their last
-	// data member in their struct, so we can use that information, stored in tsOffset header field,
-	// together with eventSize, to come up with a generic implementation applicable to all other event
-	// types that satisfy this condition of TS-as-last-member (so we can use that offset as event size).
-	// When this is enabled, it requires full iteration thorough the whole event packet, both at
-	// compression and at decompression time.
-	size_t currPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE; // Start here, no change to header.
+/**
+ * Search for runs of at least 3 events with the same timestamp, and convert them to a special
+ * sequence: leave first event unchanged, but mark its timestamp as special by setting the
+ * highest bit (bit 31) to one (it is forbidden for timestamps in memory to have that bit set for
+ * signed-integer-only language compatibility). Then, for the second event, change its timestamp
+ * to a 4-byte integer saying how many more events will follow afterwards with this same timestamp
+ * (this is used for decoding), so only their data portion will be given. Then follow with those
+ * event's data, back to back, with their timestamps removed.
+ * So let's assume there are 6 events with TS=1234. In memory this looks like this:
+ * E1(data,ts), E2(data,ts), E3(data,ts), E4(data,ts), E5(data,ts), E6(data,ts)
+ * After the timestamp serialization compression step:
+ * E1(data,ts|0x80000000), E2(data,4), E3(data), E4(data), E5(data), E5(data)
+ * This change is only in the data itself, not in the packet headers, so that we can still use the
+ * eventNumber and eventSize fields to calculate memory allocation when doing decompression.
+ * As such, to correctly interpret this data, the Format flags must be correctly set. All current
+ * file or network formats do specify those as mandatory in their headers, so we can rely on that.
+ * Also all event types where this kind of thing makes any sense do have the timestamp as their last
+ * data member in their struct, so we can use that information, stored in tsOffset header field,
+ * together with eventSize, to come up with a generic implementation applicable to all other event
+ * types that satisfy this condition of TS-as-last-member (so we can use that offset as event size).
+ * When this is enabled, it requires full iteration thorough the whole event packet, both at
+ * compression and at decompression time.
+ *
+ * @param state common output state.
+ * @param packet the packet to timestamp-compress.
+ * @param packetSize the current event packet size (header + data).
+ *
+ * @return the event packet size (header + data) after compression.
+ *         Must be equal or smaller than the input packetSize.
+ */
+static size_t compressTimestampSerialize(outputCommonState state, caerEventPacketHeader packet) {
+	UNUSED_ARGUMENT(state);
+
+	size_t currPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE; // Start here, no change to header yet.
 	int32_t eventSize = caerEventPacketHeaderGetEventSize(packet);
 	int32_t eventTSOffset = caerEventPacketHeaderGetEventTSOffset(packet);
 
@@ -691,34 +722,58 @@ static size_t compressTimestampSerialize(outputCommonState state, caerEventPacke
 	return (currPacketOffset);
 }
 
+/**
+ * Compress event packets.
+ * Compressed event packets have the highest bit of the type field
+ * set to '1' (type | 0x8000). Their eventCapacity field holds the
+ * new, true length of the data portion of the packet, in bytes.
+ * This takes advantage of the fact capacity always equals number
+ * in any input/output stream, and as such is redundant information.
+ *
+ * @param state common output state.
+ * @param packet the event packet to compress.
+ * @param packetSize the current event packet size (header + data).
+ *
+ * @return the event packet size (header + data) after compression.
+ *         Must be equal or smaller than the input packetSize.
+ */
 static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader packet, size_t packetSize) {
+	size_t compressedSize = packetSize;
+
 	// Data compression technique 1: serialize timestamps for event types that tend to repeat them a lot.
 	// Currently, this means polarity events.
 	if ((state->format & 0x01) && caerEventPacketHeaderGetEventType(packet) == POLARITY_EVENT) {
-		return (compressTimestampSerialize(state, packet, packetSize));
+		compressedSize = compressTimestampSerialize(state, packet);
 	}
 
 #ifdef ENABLE_INOUT_PNG_COMPRESSION
 	// Data compression technique 2: do PNG compression on frames, Grayscale and RGB(A).
 	if ((state->format & 0x02) && caerEventPacketHeaderGetEventType(packet) == FRAME_EVENT) {
-		return (compressFramePNG(state, packet, packetSize));
+		compressedSize = compressFramePNG(state, packet);
 	}
 #endif
 
-	// Nothing was done.
-	return (packetSize);
+	// If any compression was possible, we mark the packet as compressed
+	// and store its data size in eventCapacity.
+	if (compressedSize != packetSize) {
+		packet->eventType = htole16(le16toh(packet->eventType) | I16T(0x8000));
+		packet->eventCapacity = htole32(I32T(compressedSize) - CAER_EVENT_PACKET_HEADER_SIZE);
+	}
+
+	// Return size after compression.
+	return (compressedSize);
 }
 
 static void sendEventPacket(outputCommonState state, caerEventPacketHeader packet) {
 	// Calculate total size of packet, in bytes.
 	size_t packetSize = CAER_EVENT_PACKET_HEADER_SIZE
-		+ (size_t) (caerEventPacketHeaderGetEventCapacity(packet) * caerEventPacketHeaderGetEventSize(packet));
+		+ (size_t) (caerEventPacketHeaderGetEventNumber(packet) * caerEventPacketHeaderGetEventSize(packet));
 
 	// Statistics support.
 	state->statistics.packetsNumber++;
 	state->statistics.packetsTotalSize += packetSize;
 	state->statistics.packetsHeaderSize += CAER_EVENT_PACKET_HEADER_SIZE;
-	state->statistics.packetsDataSize += (size_t) (caerEventPacketHeaderGetEventCapacity(packet)
+	state->statistics.packetsDataSize += (size_t) (caerEventPacketHeaderGetEventNumber(packet)
 		* caerEventPacketHeaderGetEventSize(packet));
 
 	if (state->format != 0) {
