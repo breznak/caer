@@ -938,6 +938,29 @@ static bool parseAEDAT3(inputCommonState state, bool reverseXY) {
 			state->packets.currPacketData->size, state->packets.currPacketData->eventNumber,
 			state->packets.currPacketData->eventType, state->packets.currPacketData->startTimestamp,
 			state->packets.currPacketData->endTimestamp);
+
+		// We've got a full event packet, store it. It will later appear in the packet
+		// container in some form.
+		addToPacketContainer(state, state->packets.currPacket);
+
+		// Check if we have read and accumulated all the event packets with a main first timestamp smaller
+		// or equal than what we want. We know this is the case when the last seen main timestamp is clearly
+		// bigger than the wanted one. If this is true, it means we do have all the possible events of all
+		// types that happen up until that point, and we can split that time range off into a packet container.
+		// If not, we just go get the next event packet.
+		if (state->packetContainer.lastSeenPacketTimestamp <= state->packetContainer.newContainerTimestampEnd) {
+			continue;
+		}
+
+		caerEventPacketContainer packetContainer = generatePacketContainer(state);
+		if (packetContainer == NULL) {
+			// On failure, just continue.
+			continue;
+		}
+
+		doTimeDelay(state);
+
+		doPacketContainerCommit(state, packetContainer);
 	}
 
 	// All good, get next buffer.
@@ -1478,33 +1501,6 @@ static bool decompressEventPacket(inputCommonState state, caerEventPacketHeader 
 #endif
 
 	return (retVal);
-}
-
-static bool processPacket(inputCommonState state) {
-	// We've got a full event packet, store it. It will later appear in the packet
-	// container in some form.
-	addToPacketContainer(state, state->packets.currPacket);
-
-	// Check if we have read and accumulated all the event packets with a main first timestamp smaller
-	// or equal than what we want. We know this is the case when the last seen main timestamp is clearly
-	// bigger than the wanted one. If this is true, it means we do have all the possible events of all
-	// types that happen up until that point, and we can split that time range off into a packet container.
-	// If not, we just go get the next event packet.
-	if (state->packetContainer.lastSeenPacketTimestamp <= state->packetContainer.newContainerTimestampEnd) {
-		return (false);
-	}
-
-	caerEventPacketContainer packetContainer = generatePacketContainer(state);
-	if (packetContainer == NULL) {
-		// On failure, just continue.
-		return (false);
-	}
-
-	doTimeDelay(state);
-
-	doPacketContainerCommit(state, packetContainer);
-
-	return (true);
 }
 
 static int inputHandlerThread(void *stateArg) {
