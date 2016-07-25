@@ -615,11 +615,6 @@ static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader pa
 
 #endif
 
-static inline void caerGenericEventSetTimestamp(void *eventPtr, caerEventPacketHeader headerPtr, int32_t timestamp) {
-	*((int32_t *) (((uint8_t *) eventPtr) + U64T(caerEventPacketHeaderGetEventTSOffset(headerPtr)))) = htole32(
-		timestamp);
-}
-
 /**
  * Search for runs of at least 3 events with the same timestamp, and convert them to a special
  * sequence: leave first event unchanged, but mark its timestamp as special by setting the

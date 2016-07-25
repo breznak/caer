@@ -17,4 +17,9 @@ struct aedat3_network_header {
 	int16_t sourceNumber;
 }__attribute__((__packed__));
 
+static inline void caerGenericEventSetTimestamp(void *eventPtr, caerEventPacketHeader headerPtr, int32_t timestamp) {
+	*((int32_t *) (((uint8_t *) eventPtr) + U64T(caerEventPacketHeaderGetEventTSOffset(headerPtr)))) = htole32(
+		timestamp);
+}
+
 #endif /* INPUT_OUTPUT_COMMON_H_ */

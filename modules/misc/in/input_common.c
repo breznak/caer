@@ -1351,11 +1351,6 @@ static bool decompressFramePNG(inputCommonState state, caerEventPacketHeader pac
 
 #endif
 
-static inline void caerGenericEventSetTimestamp(void *eventPtr, caerEventPacketHeader headerPtr, int32_t timestamp) {
-	*((int32_t *) (((uint8_t *) eventPtr) + U64T(caerEventPacketHeaderGetEventTSOffset(headerPtr)))) = htole32(
-		timestamp);
-}
-
 static bool decompressTimestampSerialize(inputCommonState state, caerEventPacketHeader packet, size_t packetSize) {
 	// To decompress this, we have to allocate memory to hold the expanded events. There is
 	// no efficient way to avoid this; working backwards from the last compressed event might
