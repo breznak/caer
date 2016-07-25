@@ -1153,6 +1153,9 @@ bool isNetworkMessageBased) {
 	state->bufferMaxInterval = U64T(sshsNodeGetInt(moduleData->moduleNode, "bufferMaxInterval"));
 	state->bufferMaxInterval *= 1000LLU; // Convert from microseconds to nanoseconds.
 
+	// Format configuration (compression modes).
+	state->formatID = 0x00; // RAW format by default.
+
 	// Initialize transfer ring-buffer. transferBufferSize only changes here at init time!
 	state->transferRing = ringBufferInit((size_t) sshsNodeGetInt(moduleData->moduleNode, "transferBufferSize"));
 	if (state->transferRing == NULL) {
