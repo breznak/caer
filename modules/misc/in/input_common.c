@@ -454,7 +454,7 @@ static bool parseFileHeader(inputCommonState state) {
 	// File headers are part of the AEDAT 3.X specification.
 	// Start with #, go until '\r\n' (Windows EOL). First must be
 	// version header !AER-DATx.y, last must be end-of-header
-	// marker with !END-HEADER.
+	// marker with !END-HEADER (AEDAT 3.1 only).
 	bool versionHeader = false;
 	bool formatHeader = false;
 	bool sourceHeader = false;
@@ -466,11 +466,17 @@ static bool parseFileHeader(inputCommonState state) {
 			// Failed to parse header line; this is an invalid header for AEDAT 3.1!
 			// For AEDAT 2.0 and 3.0, since there is no END-HEADER, this might be
 			// the right way for headers to stop, so we consider this valid IFF we
-			// already got at least the version header.
-			if (versionHeader
-				&& ((state->header.majorVersion == 2 && state->header.minorVersion == 0)
-					|| (state->header.majorVersion == 3 && state->header.minorVersion == 0))) {
-				// Parsed AEDAT 2.0/3.0 header successfully.
+			// already got the version header for AEDAT 2.0, and for AEDAT 3.0 if we
+			// also got the required headers Format and Source at least.
+			if ((state->header.majorVersion == 2 && state->header.minorVersion == 0) && versionHeader) {
+				// Parsed AEDAT 2.0 header successfully (version).
+				state->header.isValidHeader = true;
+				return (true);
+			}
+
+			if ((state->header.majorVersion == 3 && state->header.minorVersion == 0) && versionHeader && formatHeader
+				&& sourceHeader) {
+				// Parsed AEDAT 3.0 header successfully (version, format, source).
 				state->header.isValidHeader = true;
 				return (true);
 			}
@@ -528,23 +534,30 @@ static bool parseFileHeader(inputCommonState state) {
 				formatHeader = true;
 
 				// Parse format string to format ID.
+				// We support either only RAW, or a mixture of the various compression modes.
 				if (caerStrEquals(formatString, "RAW")) {
 					state->header.formatID = 0x00;
 				}
-				else if (caerStrEquals(formatString, "Serial-TS")) {
-					state->header.formatID = 0x01;
-				}
-				else if (caerStrEquals(formatString, "Compressed")) {
-					state->header.formatID = 0x02;
-				}
 				else {
-					// No valid format found.
-					free(headerLine);
+					state->header.formatID = 0x00;
 
-					caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
-						"No compliant Format type found. Format '%s' is invalid.", formatString);
+					if (strstr(formatString, "TSSerialize") != NULL) {
+						state->header.formatID |= 0x01;
+					}
 
-					return (false);
+					if (strstr(formatString, "PNGFrames") != NULL) {
+						state->header.formatID |= 0x02;
+					}
+
+					if (!state->header.formatID) {
+						// No valid format found.
+						free(headerLine);
+
+						caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+							"No compliant Format type found. Format '%s' is invalid.", formatString);
+
+						return (false);
+					}
 				}
 
 				caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
