@@ -134,7 +134,7 @@ struct output_common_state {
 	/// Flag to signal update to buffer configuration asynchronously.
 	atomic_bool bufferUpdate;
 	/// Support different formats, providing data compression.
-	int8_t format;
+	int8_t formatID;
 	/// Output module statistics collection.
 	struct output_common_statistics statistics;
 	/// Reference to parent module's original data.
@@ -737,13 +737,13 @@ static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader
 
 	// Data compression technique 1: serialize timestamps for event types that tend to repeat them a lot.
 	// Currently, this means polarity events.
-	if ((state->format & 0x01) && caerEventPacketHeaderGetEventType(packet) == POLARITY_EVENT) {
+	if ((state->formatID & 0x01) && caerEventPacketHeaderGetEventType(packet) == POLARITY_EVENT) {
 		compressedSize = compressTimestampSerialize(state, packet);
 	}
 
 #ifdef ENABLE_INOUT_PNG_COMPRESSION
 	// Data compression technique 2: do PNG compression on frames, Grayscale and RGB(A).
-	if ((state->format & 0x02) && caerEventPacketHeaderGetEventType(packet) == FRAME_EVENT) {
+	if ((state->formatID & 0x02) && caerEventPacketHeaderGetEventType(packet) == FRAME_EVENT) {
 		compressedSize = compressFramePNG(state, packet);
 	}
 #endif
@@ -771,7 +771,7 @@ static void sendEventPacket(outputCommonState state, caerEventPacketHeader packe
 	state->statistics.packetsDataSize += (size_t) (caerEventPacketHeaderGetEventNumber(packet)
 		* caerEventPacketHeaderGetEventSize(packet));
 
-	if (state->format != 0) {
+	if (state->formatID != 0) {
 		packetSize = compressEventPacket(state, packet, packetSize);
 	}
 
@@ -910,10 +910,32 @@ static void handleNewServerConnections(outputCommonState state) {
 }
 
 static void sendFileHeader(outputCommonState state) {
-	// Write AEDAT 3.1 header (RAW format).
+	// Write AEDAT 3.1 header.
 	writeBufferToAll(state, (const uint8_t *) "#!AER-DAT" AEDAT3_FILE_VERSION "\r\n", 11 + strlen(AEDAT3_FILE_VERSION));
 
-	writeBufferToAll(state, (const uint8_t *) "#Format: RAW\r\n", 14);
+	// Write format header for all supported formats.
+	writeBufferToAll(state, (const uint8_t *) "#Format: ", 9);
+
+	if (state->formatID == 0x00) {
+		writeBufferToAll(state, (const uint8_t *) "RAW", 3);
+	}
+	else {
+		// Support the various formats and their mixing.
+		if (state->formatID == 0x01) {
+			writeBufferToAll(state, (const uint8_t *) "SerializedTS", 12);
+		}
+
+		if (state->formatID == 0x02) {
+			writeBufferToAll(state, (const uint8_t *) "PNGFrames", 9);
+		}
+
+		if (state->formatID == 0x03) {
+			// Serial and PNG together.
+			writeBufferToAll(state, (const uint8_t *) "SerializedTS,PNGFrames", 12 + 1 + 9);
+		}
+	}
+
+	writeBufferToAll(state, (const uint8_t *) "\r\n", 2);
 
 	char *sourceString = sshsNodeGetString(state->sourceInfoNode, "sourceString");
 	writeBufferToAll(state, (const uint8_t *) sourceString, strlen(sourceString));
@@ -936,13 +958,13 @@ static void sendFileHeader(outputCommonState state) {
 }
 
 static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD) {
-	// Send AEDAT 3.1 header (RAW format) for network streams (20 bytes total).
+	// Send AEDAT 3.1 header for network streams (20 bytes total).
 	struct aedat3_network_header networkHeader;
 
 	networkHeader.magicNumber = htole64(AEDAT3_NETWORK_MAGIC_NUMBER);
 	networkHeader.sequenceNumber = htole64(state->networkSequenceNumber);
 	networkHeader.versionNumber = AEDAT3_NETWORK_VERSION;
-	networkHeader.formatNumber = 0x00; // RAW format.
+	networkHeader.formatNumber = state->formatID; // Send numeric format ID.
 	networkHeader.sourceNumber = htole16(1); // Always one source per output module.
 
 	// If message-based, we copy the header at the start of the buffer,

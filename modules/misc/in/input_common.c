@@ -541,7 +541,7 @@ static bool parseFileHeader(inputCommonState state) {
 				else {
 					state->header.formatID = 0x00;
 
-					if (strstr(formatString, "TSSerialize") != NULL) {
+					if (strstr(formatString, "SerializedTS") != NULL) {
 						state->header.formatID |= 0x01;
 					}
 
