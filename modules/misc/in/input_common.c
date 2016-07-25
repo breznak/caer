@@ -1256,7 +1256,6 @@ static bool decompressFramePNG(inputCommonState state, caerEventPacketHeader pac
 		size_t offsetDestination;
 		size_t offset;
 		size_t size;
-		size_t uncompressedSize;
 		bool isCompressed;
 	} eventMemory[eventNumber];
 
@@ -1288,9 +1287,6 @@ static bool decompressFramePNG(inputCommonState state, caerEventPacketHeader pac
 			// Normal size is header plus uncompressed pixels.
 			eventMemory[i].size = frameEventHeaderSize + caerFrameEventGetPixelsSize(frameEvent);
 		}
-
-		// Uncompressed size will always be header + uncompressed pixels.
-		eventMemory[i].uncompressedSize = frameEventHeaderSize + caerFrameEventGetPixelsSize(frameEvent);
 
 		// Update counter.
 		currPacketOffset += eventMemory[i].size;
@@ -1327,10 +1323,14 @@ static bool decompressFramePNG(inputCommonState state, caerEventPacketHeader pac
 			}
 		}
 
+		// Uncompressed size will always be header + uncompressed pixels.
+		caerFrameEvent frameEvent = (caerFrameEvent) (((uint8_t *) packet) + eventMemory[i].offsetDestination);
+		size_t uncompressedSize = frameEventHeaderSize + caerFrameEventGetPixelsSize(frameEvent);
+
 		// Initialize the rest of the memory of the event to zeros, to comply with spec
 		// that says non-pixels at the end, if they exist, are always zero.
-		memset(((uint8_t *) packet) + eventMemory[i].offsetDestination + eventMemory[i].uncompressedSize, 0,
-			(size_t) eventSize - eventMemory[i].uncompressedSize);
+		memset(((uint8_t *) packet) + eventMemory[i].offsetDestination + uncompressedSize, 0,
+			(size_t) eventSize - uncompressedSize);
 	}
 
 	return (true);
