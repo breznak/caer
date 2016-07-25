@@ -1351,7 +1351,119 @@ static bool decompressFramePNG(inputCommonState state, caerEventPacketHeader pac
 
 #endif
 
+static inline void caerGenericEventSetTimestamp(void *eventPtr, caerEventPacketHeader headerPtr, int32_t timestamp) {
+	*((int32_t *) (((uint8_t *) eventPtr) + U64T(caerEventPacketHeaderGetEventTSOffset(headerPtr)))) = htole32(
+		timestamp);
+}
+
 static bool decompressTimestampSerialize(inputCommonState state, caerEventPacketHeader packet, size_t packetSize) {
+	// To decompress this, we have to allocate memory to hold the expanded events. There is
+	// no efficient way to avoid this; working backwards from the last compressed event might
+	// be an option, but you'd have to track where all the events are during a first forward
+	// pass, and keeping track of offset, ts, numEvents for each group would incur similar
+	// memory consumption, while considerably increasing complexity. So let's just do the
+	// simple thing.
+	int32_t eventSize = caerEventPacketHeaderGetEventSize(packet);
+	int32_t eventNumber = caerEventPacketHeaderGetEventNumber(packet);
+	int32_t eventTSOffset = caerEventPacketHeaderGetEventTSOffset(packet);
+
+	uint8_t *events = malloc((size_t) (eventNumber * eventSize));
+	if (events == NULL) {
+		// Memory allocation failure.
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to decode serialized timestamp. "
+			"Memory allocation failure.");
+		return (false);
+	}
+
+	size_t currPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE; // Start here, no change to header.
+	size_t recoveredEventsPosition = 0;
+	size_t recoveredEventsNumber = 0;
+
+	while (currPacketOffset < packetSize) {
+		void *firstEvent = ((uint8_t *) packet) + currPacketOffset;
+		int32_t currTS = caerGenericEventGetTimestamp(firstEvent, packet);
+
+		if (currTS & I32T(0x80000000)) {
+			// Compressed run starts here! Must clear the compression bit from
+			// this first timestamp and restore the timestamp to the others.
+			// So first we clean the timestamp.
+			currTS &= I32T(0x7FFFFFFF);
+
+			// Then we fix the first event timestamp and copy it over.
+			caerGenericEventSetTimestamp(firstEvent, packet, currTS);
+			memcpy(events + recoveredEventsPosition, firstEvent, (size_t) eventSize);
+
+			currPacketOffset += (size_t) eventSize;
+			recoveredEventsPosition += (size_t) eventSize;
+			recoveredEventsNumber++;
+
+			// Then we get the second event, and get its timestamp, which is
+			// actually the size of the following compressed run.
+			void *secondEvent = ((uint8_t *) packet) + currPacketOffset;
+			int32_t tsRun = caerGenericEventGetTimestamp(secondEvent, packet);
+
+			// And fix its own timestamp back to what it should be, and copy it.
+			caerGenericEventSetTimestamp(secondEvent, packet, currTS);
+			memcpy(events + recoveredEventsPosition, secondEvent, (size_t) eventSize);
+
+			currPacketOffset += (size_t) eventSize;
+			recoveredEventsPosition += (size_t) eventSize;
+			recoveredEventsNumber++;
+
+			// Now go through the compressed, data-only events, and restore their
+			// timestamp. We do this by copying the data and then adding the timestamp,
+			// which is always the last in an event.
+			while (tsRun > 0) {
+				void *thirdEvent = ((uint8_t *) packet) + currPacketOffset;
+				memcpy(events + recoveredEventsPosition, thirdEvent, (size_t) eventTSOffset);
+
+				currPacketOffset += (size_t) eventTSOffset;
+				recoveredEventsPosition += (size_t) eventTSOffset;
+
+				int32_t *newTS = (int32_t *) (events + recoveredEventsPosition);
+				*newTS = currTS;
+
+				recoveredEventsPosition += sizeof(int32_t);
+
+				recoveredEventsNumber++;
+				tsRun--;
+			}
+		}
+		else {
+			// Normal event, nothing compressed.
+			// Just copy and advance.
+			memcpy(events + recoveredEventsPosition, firstEvent, (size_t) eventSize);
+
+			currPacketOffset += (size_t) eventSize;
+			recoveredEventsPosition += (size_t) eventSize;
+			recoveredEventsNumber++;
+		}
+	}
+
+	// Check we really recovered all events from compression.
+	if (currPacketOffset != packetSize) {
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to decode serialized timestamp. "
+			"Length of compressed packet and read data don't match.");
+		return (false);
+	}
+
+	if ((size_t) (eventNumber * eventSize) != recoveredEventsPosition) {
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to decode serialized timestamp. "
+			"Length of uncompressed packet and uncompressed data don't match.");
+		return (false);
+	}
+
+	if ((size_t) eventNumber != recoveredEventsNumber) {
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to decode serialized timestamp. "
+			"Number of expected and recovered events don't match.");
+		return (false);
+	}
+
+	// Copy recovered event packet into original.
+	memcpy(((uint8_t *) packet) + CAER_EVENT_PACKET_HEADER_SIZE, events, recoveredEventsPosition);
+
+	free(events);
+
 	return (true);
 }
 
