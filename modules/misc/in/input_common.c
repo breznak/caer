@@ -1241,8 +1241,97 @@ static inline bool caerFrameEventPNGDecompress(uint8_t *inBuffer, size_t inSize,
 }
 
 static bool decompressFramePNG(inputCommonState state, caerEventPacketHeader packet, size_t packetSize) {
+	// We want to avoid allocating new memory for each PNG decompression, and moving around things
+	// to much. So we first go through the compressed header+data blocks, and move them to their
+	// correct position for an in-memory frame packet (so at N*eventSize). Then we decompress the
+	// PNG block and directly copy the results into the space that it was occupying (plus extra for
+	// the uncompressed pixels).
+	// First we go once through the events to know where they are, and where they should go.
+	// Then we do memory move + PNG decompression, starting from the last event (back-side), so as
+	// to not overwrite memory we still need and haven't moved yet.
+	int32_t eventSize = caerEventPacketHeaderGetEventSize(packet);
+	int32_t eventNumber = caerEventPacketHeaderGetEventNumber(packet);
+
+	struct {
+		size_t offsetDestination;
+		size_t offset;
+		size_t size;
+		size_t uncompressedSize;
+		bool isCompressed;
+	} eventMemory[eventNumber];
+
 	size_t currPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE; // Start here, no change to header.
 	size_t frameEventHeaderSize = sizeof(struct caer_frame_event);
+
+	// Gather information on events.
+	for (int32_t i = 0; i < eventNumber; i++) {
+		// In-memory packet's events have to go where N*eventSize is.
+		eventMemory[i].offsetDestination = CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (i * eventSize);
+		eventMemory[i].offset = currPacketOffset;
+
+		caerFrameEvent frameEvent = (caerFrameEvent) (((uint8_t *) packet) + currPacketOffset);
+
+		// Bit 31 of info signals if event is PNG-compressed or not.
+		eventMemory[i].isCompressed = GET_NUMBITS32(frameEvent->info, 31, 0x01);
+
+		if (eventMemory[i].isCompressed) {
+			// Clear compression enabled bit.
+			CLEAR_NUMBITS32(frameEvent->info, 31, 0x01);
+
+			// Compressed block size is held in an integer right after the header.
+			int32_t pngSize = le32toh(*((int32_t * ) (((uint8_t * ) frameEvent) + frameEventHeaderSize)));
+
+			// PNG size is header plus integer plus compressed block size.
+			eventMemory[i].size = frameEventHeaderSize + sizeof(int32_t) + (size_t) pngSize;
+		}
+		else {
+			// Normal size is header plus uncompressed pixels.
+			eventMemory[i].size = frameEventHeaderSize + caerFrameEventGetPixelsSize(frameEvent);
+		}
+
+		// Uncompressed size will always be header + uncompressed pixels.
+		eventMemory[i].uncompressedSize = frameEventHeaderSize + caerFrameEventGetPixelsSize(frameEvent);
+
+		// Update counter.
+		currPacketOffset += eventMemory[i].size;
+	}
+
+	// Check that we indeed parsed everything correctly.
+	if (currPacketOffset != packetSize) {
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to decompress frame event. "
+			"Size after event parsing and packet size don't match.");
+		return (false);
+	}
+
+	// Now move memory and decompress in reverse order.
+	for (int32_t i = eventNumber; i >= 0; i--) {
+		// Move memory from compressed position to uncompressed, in-memory position.
+		memmove(((uint8_t *) packet) + eventMemory[i].offsetDestination, ((uint8_t *) packet) + eventMemory[i].offset,
+			eventMemory[i].size);
+
+		// If event is PNG-compressed, decompress it now.
+		if (eventMemory[i].isCompressed) {
+			uint8_t *pngBuffer = ((uint8_t *) packet) + eventMemory[i].offsetDestination + frameEventHeaderSize
+				+ sizeof(int32_t);
+			size_t pngBufferSize = eventMemory[i].size - frameEventHeaderSize - sizeof(int32_t);
+
+			caerFrameEvent frameEvent = (caerFrameEvent) (((uint8_t *) packet) + eventMemory[i].offsetDestination);
+
+			if (!caerFrameEventPNGDecompress(pngBuffer, pngBufferSize, caerFrameEventGetPixelArrayUnsafe(frameEvent),
+				caerFrameEventGetLengthX(frameEvent), caerFrameEventGetLengthY(frameEvent),
+				caerFrameEventGetChannelNumber(frameEvent))) {
+				// Failed to decompress PNG.
+				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to decompress frame event. "
+					"PNG decompression failure.");
+				return (false);
+			}
+		}
+
+		// Initialize the rest of the memory of the event to zeros, to comply with spec
+		// that says non-pixels at the end, if they exist, are always zero.
+		memset(((uint8_t *) packet) + eventMemory[i].offsetDestination + eventMemory[i].uncompressedSize, 0,
+			(size_t) eventSize - eventMemory[i].uncompressedSize);
+	}
 
 	return (true);
 }
