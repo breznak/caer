@@ -14,6 +14,7 @@
 
 #include <libcaer/events/common.h>
 #include <libcaer/events/packetContainer.h>
+#include <libcaer/events/polarity.h>
 #include <libcaer/events/frame.h>
 #include <libcaer/events/special.h>
 
@@ -36,7 +37,7 @@ struct input_common_header_info {
 	int64_t networkSequenceNumber;
 };
 
-struct packetData {
+struct input_packet_data {
 	/// Numerical ID of a packet. First packet hast ID 0.
 	size_t id;
 	/// Data offset, in bytes.
@@ -58,8 +59,10 @@ struct packetData {
 	/// Last (highest) timestamp.
 	int64_t endTimestamp;
 	/// Doubly-linked list pointers.
-	struct packetData *prev, *next;
+	struct input_packet_data *prev, *next;
 };
+
+typedef struct input_packet_data *packetData;
 
 struct input_common_packet_data {
 	/// Current packet header, to support headers being split across buffers.
@@ -75,9 +78,9 @@ struct input_common_packet_data {
 	/// Skip over packets coming from other sources. We only support one!
 	size_t skipSize;
 	/// Current packet data for packet list book-keeping.
-	struct packetData *currPacketData;
+	packetData currPacketData;
 	/// List of data on all parsed original packets from the input.
-	struct packetData *packetsList;
+	packetData packetsList;
 	/// Global packet counter.
 	size_t packetCount;
 };
@@ -160,12 +163,14 @@ static char *getFileHeaderLine(inputCommonState state);
 static void parseSourceString(char *sourceString, inputCommonState state);
 static bool parseFileHeader(inputCommonState state);
 static bool parseHeader(inputCommonState state);
-static void addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket);
+static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket, packetData newPacketData);
 static caerEventPacketContainer generatePacketContainer(inputCommonState state);
+static void doTimeDelay(inputCommonState state);
+static void doPacketContainerCommit(inputCommonState state, caerEventPacketContainer packetContainer);
 static bool parseData(inputCommonState state);
-static bool parseAEDAT2(inputCommonState state);
-static bool parseAEDAT3(inputCommonState state, bool reverseXY);
-static int aedat3GetPacket(inputCommonState state);
+static int aedat2GetPacket(inputCommonState state, int16_t chipID);
+static int aedat3GetPacket(inputCommonState state, bool isAEDAT30);
+static void aedat30ChangeOrigin(inputCommonState state, caerEventPacketHeader packet);
 static bool decompressTimestampSerialize(inputCommonState state, caerEventPacketHeader packet, size_t packetSize);
 static bool decompressEventPacket(inputCommonState state, caerEventPacketHeader packet, size_t packetSize);
 static int inputHandlerThread(void *stateArg);
@@ -638,21 +643,16 @@ static bool parseHeader(inputCommonState state) {
 	}
 }
 
-static void addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket) {
-	int16_t newPacketType = caerEventPacketHeaderGetEventType(newPacket);
-	int64_t newPacketFirstTimestamp = caerGenericEventGetTimestamp64(caerGenericEventGetEvent(newPacket, 0), newPacket);
-	int64_t newPacketLastTimestamp = caerGenericEventGetTimestamp64(
-		caerGenericEventGetEvent(newPacket, caerEventPacketHeaderGetEventCapacity(newPacket) - 1), newPacket);
-
+static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket, packetData newPacketData) {
 	// Remember the main timestamp of the first event of the new packet. That's the
 	// order-relvant timestamp for files/streams.
-	state->packetContainer.lastSeenPacketTimestamp = newPacketFirstTimestamp;
+	state->packetContainer.lastSeenPacketTimestamp = newPacketData->startTimestamp;
 
 	// Initialize with first packet.
 	if (state->packetContainer.newContainerTimestampStart == -1) {
 		// -1 because newPacketFirstTimestamp is part of the set!
-		state->packetContainer.newContainerTimestampStart = newPacketFirstTimestamp;
-		state->packetContainer.newContainerTimestampEnd = newPacketFirstTimestamp
+		state->packetContainer.newContainerTimestampStart = newPacketData->startTimestamp;
+		state->packetContainer.newContainerTimestampEnd = newPacketData->startTimestamp
 			+ (atomic_load_explicit(&state->packetContainer.timeSlice, memory_order_relaxed) - 1);
 
 		portable_clock_gettime_monotonic(&state->packetContainer.lastCommitTime);
@@ -663,7 +663,7 @@ static void addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 	while ((packet = (caerEventPacketHeader *) utarray_next(state->packetContainer.eventPackets, packet)) != NULL) {
 		int16_t packetType = caerEventPacketHeaderGetEventType(*packet);
 
-		if (packetType == newPacketType) {
+		if (packetType == newPacketData->eventType) {
 			// Packet of this type already present.
 			packetAlreadyExists = true;
 			break;
@@ -680,15 +680,19 @@ static void addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 		int32_t packetEventValid = caerEventPacketHeaderGetEventValid(*packet);
 		int32_t packetEventNumber = caerEventPacketHeaderGetEventNumber(*packet);
 
-		int32_t newPacketEventValid = caerEventPacketHeaderGetEventValid(newPacket);
-		int32_t newPacketEventNumber = caerEventPacketHeaderGetEventNumber(newPacket);
+		int32_t newPacketEventValid = newPacketData->eventValid;
+		int32_t newPacketEventNumber = newPacketData->eventNumber;
 
 		caerEventPacketHeader mergedPacket = caerGenericEventPacketGrow(*packet,
 			(packetEventNumber + newPacketEventNumber));
 		if (mergedPacket == NULL) {
-			// Failed to allocate memory for merged packets, free newPacket and jump merge stage.
+			// Failed to allocate memory for merged packets, free new packet, as
+			// we can't do anything more with it, and signal failure.
 			free(newPacket);
-			return;
+
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+				"%s: Failed to allocate memory for packet merge operation.", __func__);
+			return (false);
 		}
 
 		// Memory reallocation was successful, so we can update the header, copy over the new
@@ -708,8 +712,8 @@ static void addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 		// since we already have events of the same type that must come before.
 		state->packetContainer.totalEventNumber += (size_t) newPacketEventNumber;
 
-		if (newPacketLastTimestamp > state->packetContainer.highestTimestamp) {
-			state->packetContainer.highestTimestamp = newPacketLastTimestamp;
+		if (newPacketData->endTimestamp > state->packetContainer.highestTimestamp) {
+			state->packetContainer.highestTimestamp = newPacketData->endTimestamp;
 		}
 	}
 	else {
@@ -719,75 +723,18 @@ static void addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 		utarray_sort(state->packetContainer.eventPackets, &packetsTypeCmp);
 
 		// Update packets statistics.
-		state->packetContainer.totalEventNumber += (size_t) caerEventPacketHeaderGetEventNumber(newPacket);
+		state->packetContainer.totalEventNumber += (size_t) newPacketData->eventNumber;
 
-		if (newPacketFirstTimestamp < state->packetContainer.lowestTimestamp) {
-			state->packetContainer.lowestTimestamp = newPacketFirstTimestamp;
+		if (newPacketData->startTimestamp < state->packetContainer.lowestTimestamp) {
+			state->packetContainer.lowestTimestamp = newPacketData->startTimestamp;
 		}
 
-		if (newPacketLastTimestamp > state->packetContainer.highestTimestamp) {
-			state->packetContainer.highestTimestamp = newPacketLastTimestamp;
-		}
-	}
-}
-
-static inline void doPacketContainerCommit(inputCommonState state, caerEventPacketContainer packetContainer) {
-	retry: if (!ringBufferPut(state->transferRing, packetContainer)) {
-		if (atomic_load_explicit(&state->keepPackets, memory_order_relaxed)) {
-			// Retry forever if requested.
-			goto retry;
-		}
-
-		caerEventPacketContainerFree(packetContainer);
-
-		caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
-			"Failed to put new packet container on transfer ring-buffer: full.");
-	}
-	else {
-		// Signal availability of new data to the mainloop on packet container commit.
-		atomic_fetch_add_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_release);
-
-		caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Submitted packet container successfully.");
-	}
-}
-
-static inline void doTimeDelay(inputCommonState state) {
-	// Got packet container, delay it until user-defined time.
-	uint64_t timeDelay = U64T(atomic_load_explicit(&state->packetContainer.timeDelay, memory_order_relaxed));
-
-	if (timeDelay != 0) {
-		// Get current time (nanosecond resolution).
-		struct timespec currentTime;
-		portable_clock_gettime_monotonic(&currentTime);
-
-		// Calculate elapsed time since last commit, based on that then either
-		// wait to meet timing, or log that it's impossible with current settings.
-		uint64_t diffNanoTime = (uint64_t) (((int64_t) (currentTime.tv_sec
-			- state->packetContainer.lastCommitTime.tv_sec) * 1000000000LL)
-			+ (int64_t) (currentTime.tv_nsec - state->packetContainer.lastCommitTime.tv_nsec));
-		uint64_t diffMicroTime = diffNanoTime / 1000;
-
-		if (diffMicroTime >= timeDelay) {
-			caerLog(CAER_LOG_WARNING, state->parentModule->moduleSubSystemString,
-				"Impossible to meet timeDelay timing specification with current settings.");
-
-			// Don't delay any more by requesting time again, use old one.
-			state->packetContainer.lastCommitTime = currentTime;
-		}
-		else {
-			// Sleep for the remaining time.
-			uint64_t sleepMicroTime = timeDelay - diffMicroTime;
-			uint64_t sleepMicroTimeSec = sleepMicroTime / 1000000; // Seconds part.
-			uint64_t sleepMicroTimeNsec = (sleepMicroTime * 1000) - (sleepMicroTimeSec * 1000000000); // Nanoseconds part.
-
-			struct timespec delaySleep = { .tv_sec = I64T(sleepMicroTimeSec), .tv_nsec = I64T(sleepMicroTimeNsec) };
-
-			thrd_sleep(&delaySleep, NULL);
-
-			// Update stored time.
-			portable_clock_gettime_monotonic(&state->packetContainer.lastCommitTime);
+		if (newPacketData->endTimestamp > state->packetContainer.highestTimestamp) {
+			state->packetContainer.highestTimestamp = newPacketData->endTimestamp;
 		}
 	}
+
+	return (true);
 }
 
 static caerEventPacketContainer generatePacketContainer(inputCommonState state) {
@@ -893,30 +840,82 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state) 
 	return (packetContainer);
 }
 
+static void doTimeDelay(inputCommonState state) {
+	// Got packet container, delay it until user-defined time.
+	uint64_t timeDelay = U64T(atomic_load_explicit(&state->packetContainer.timeDelay, memory_order_relaxed));
+
+	if (timeDelay != 0) {
+		// Get current time (nanosecond resolution).
+		struct timespec currentTime;
+		portable_clock_gettime_monotonic(&currentTime);
+
+		// Calculate elapsed time since last commit, based on that then either
+		// wait to meet timing, or log that it's impossible with current settings.
+		uint64_t diffNanoTime = (uint64_t) (((int64_t) (currentTime.tv_sec
+			- state->packetContainer.lastCommitTime.tv_sec) * 1000000000LL)
+			+ (int64_t) (currentTime.tv_nsec - state->packetContainer.lastCommitTime.tv_nsec));
+		uint64_t diffMicroTime = diffNanoTime / 1000;
+
+		if (diffMicroTime >= timeDelay) {
+			caerLog(CAER_LOG_WARNING, state->parentModule->moduleSubSystemString,
+				"Impossible to meet timeDelay timing specification with current settings.");
+
+			// Don't delay any more by requesting time again, use old one.
+			state->packetContainer.lastCommitTime = currentTime;
+		}
+		else {
+			// Sleep for the remaining time.
+			uint64_t sleepMicroTime = timeDelay - diffMicroTime;
+			uint64_t sleepMicroTimeSec = sleepMicroTime / 1000000; // Seconds part.
+			uint64_t sleepMicroTimeNsec = (sleepMicroTime * 1000) - (sleepMicroTimeSec * 1000000000); // Nanoseconds part.
+
+			struct timespec delaySleep = { .tv_sec = I64T(sleepMicroTimeSec), .tv_nsec = I64T(sleepMicroTimeNsec) };
+
+			thrd_sleep(&delaySleep, NULL);
+
+			// Update stored time.
+			portable_clock_gettime_monotonic(&state->packetContainer.lastCommitTime);
+		}
+	}
+}
+
+static void doPacketContainerCommit(inputCommonState state, caerEventPacketContainer packetContainer) {
+	retry: if (!ringBufferPut(state->transferRing, packetContainer)) {
+		if (atomic_load_explicit(&state->keepPackets, memory_order_relaxed)) {
+			// Retry forever if requested.
+			goto retry;
+		}
+
+		caerEventPacketContainerFree(packetContainer);
+
+		caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
+			"Failed to put new packet container on transfer ring-buffer: full.");
+	}
+	else {
+		// Signal availability of new data to the mainloop on packet container commit.
+		atomic_fetch_add_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_release);
+
+		caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Submitted packet container successfully.");
+	}
+}
+
 static bool parseData(inputCommonState state) {
-	if (state->header.majorVersion == 2 && state->header.minorVersion == 0) {
-		return (parseAEDAT2(state));
-	}
-	else if (state->header.majorVersion == 3 && state->header.minorVersion == 0) {
-		return (parseAEDAT3(state, true));
-	}
-	else if (state->header.majorVersion == 3 && state->header.minorVersion == 1) {
-		return (parseAEDAT3(state, false));
-	}
-
-	// No parseable format found!
-	return (false);
-}
-
-static bool parseAEDAT2(inputCommonState state) {
-	// TODO: AEDAT 2.0 not yet supported.
-	caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Reading AEDAT 2.0 data not yet supported.");
-	return (false);
-}
-
-static bool parseAEDAT3(inputCommonState state, bool reverseXY) {
 	while (state->dataBuffer->bufferPosition < state->dataBuffer->bufferUsedSize) {
-		int pRes = aedat3GetPacket(state);
+		int pRes = -1;
+
+		// Try getting packet and packetData from buffer.
+		if (state->header.majorVersion == 2 && state->header.minorVersion == 0) {
+			pRes = aedat2GetPacket(state, 0);
+		}
+		else if (state->header.majorVersion == 3) {
+			pRes = aedat3GetPacket(state, (state->header.minorVersion == 0));
+		}
+		else {
+			// No parseable format found!
+			return (false);
+		}
+
+		// Check packet parser return value.
 		if (pRes < 0) {
 			// Error in parsing buffer to get packet.
 			return (false);
@@ -941,7 +940,7 @@ static bool parseAEDAT3(inputCommonState state, bool reverseXY) {
 
 		// We've got a full event packet, store it. It will later appear in the packet
 		// container in some form.
-		addToPacketContainer(state, state->packets.currPacket);
+		addToPacketContainer(state, state->packets.currPacket, state->packets.currPacketData);
 
 		// Check if we have read and accumulated all the event packets with a main first timestamp smaller
 		// or equal than what we want. We know this is the case when the last seen main timestamp is clearly
@@ -968,11 +967,34 @@ static bool parseAEDAT3(inputCommonState state, bool reverseXY) {
 }
 
 /**
+ * Parse the current buffer and try to extract the AEDAT 2.0
+ * data contained within, to form a compliant AEDAT 3.1 packet,
+ * and then update the packet meta-data list with it.
+ *
+ * @param state common input data structure.
+ * @param chipID chip identifier to decide sizes, ordering and
+ * features of the data stream for conversion to AEDAT 3.1.
+ *
+ * @return 0 on successful packet extraction.
+ * Positive numbers for special conditions:
+ * 1 if more data needed.
+ * Negative numbers on error conditions:
+ * -1 on memory allocation failure.
+ */
+static int aedat2GetPacket(inputCommonState state, int16_t chipID) {
+	// TODO: AEDAT 2.0 not yet supported.
+	caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Reading AEDAT 2.0 data not yet supported.");
+	return (-1);
+}
+
+/**
  * Parse the current buffer and try to extract the AEDAT 3.X
  * packet contained within, as well as updating the packet
  * meta-data list.
  *
  * @param state common input data structure.
+ * @param isAEDAT30 change the X/Y coordinate origin for Frames and Polarity
+ * events, as this changed from 3.0 (lower left) to 3.1 (upper left).
  *
  * @return 0 on successful packet extraction.
  * Positive numbers for special conditions:
@@ -982,7 +1004,7 @@ static bool parseAEDAT3(inputCommonState state, bool reverseXY) {
  * -1 on memory allocation failure.
  * -2 on decompression failure.
  */
-static int aedat3GetPacket(inputCommonState state) {
+static int aedat3GetPacket(inputCommonState state, bool isAEDAT30) {
 	simpleBuffer buf = state->dataBuffer;
 
 	// So now we're somewhere inside the buffer (usually at start), and want to
@@ -1092,7 +1114,7 @@ static int aedat3GetPacket(inputCommonState state) {
 		}
 
 		// Now we can also start keeping track of this packet's meta-data.
-		state->packets.currPacketData = calloc(1, sizeof(struct packetData));
+		state->packets.currPacketData = calloc(1, sizeof(struct input_packet_data));
 		if (state->packets.currPacketData == NULL) {
 			free(state->packets.currPacket);
 			state->packets.currPacket = NULL;
@@ -1167,8 +1189,51 @@ static int aedat3GetPacket(inputCommonState state) {
 
 		DL_APPEND(state->packets.packetsList, state->packets.currPacketData);
 
+		// If the file was in AEDAT 3.0 format, we must change X/Y coordinate origin
+		// for Polarity and Frame events. We do this after parsing and decompression.
+		if (isAEDAT30) {
+			aedat30ChangeOrigin(state, state->packets.currPacket);
+		}
+
 		// New packet parsed!
 		return (0);
+	}
+}
+
+static void aedat30ChangeOrigin(inputCommonState state, caerEventPacketHeader packet) {
+	if (caerEventPacketHeaderGetEventType(packet) == POLARITY_EVENT) {
+		// We need to know the DVS resolution to invert the polarity Y address.
+		sshsNode sourceInfoNode = sshsGetRelativeNode(state->parentModule->moduleNode, "sourceInfo/");
+		int16_t dvsSizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY") - 1;
+
+		CAER_POLARITY_ITERATOR_ALL_START((caerPolarityEventPacket) packet)
+			uint16_t newYAddress = (uint16_t) dvsSizeY - caerPolarityEventGetY(caerPolarityIteratorElement);
+			caerPolarityEventSetY(caerPolarityIteratorElement, newYAddress);
+		}
+	}
+
+	if (caerEventPacketHeaderGetEventType(packet) == FRAME_EVENT) {
+		// For frames, the resolution and size information is carried in each event.
+		CAER_FRAME_ITERATOR_ALL_START((caerFrameEventPacket) packet)
+			int32_t lengthX = caerFrameEventGetLengthX(caerFrameIteratorElement);
+			int32_t lengthY = caerFrameEventGetLengthY(caerFrameIteratorElement);
+			enum caer_frame_event_color_channels channels = caerFrameEventGetChannelNumber(caerFrameIteratorElement);
+
+			size_t rowSize = (size_t) lengthX * channels;
+
+			uint16_t *pixels = caerFrameEventGetPixelArrayUnsafe(caerFrameIteratorElement);
+
+			// Invert position of entire rows.
+			for (size_t y = 0; y < (size_t) lengthY; y++) {
+				size_t invY = (size_t) lengthY - 1 - y;
+
+				// Don't invert if no position change, this happens in the exact
+				// middle if lengthY is uneven.
+				if (y != invY) {
+					memcpy(&pixels[y * rowSize], &pixels[invY * rowSize], rowSize);
+				}
+			}
+		}
 	}
 }
 
