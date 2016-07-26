@@ -473,8 +473,8 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 
 	if (IS_DAVIS128(devInfo->chipID) || IS_DAVIS208(devInfo->chipID) || IS_DAVIS346(devInfo->chipID)
 	|| IS_DAVIS640(devInfo->chipID)|| IS_DAVISRGB(devInfo->chipID)) {
-		// Select which grey counter to use with the internal ADC: '0' means the external grey counter is used, which
-		// has to be supplied off-chip. '1' means the on-chip grey counter is used instead.
+		// Select which gray counter to use with the internal ADC: '0' means the external gray counter is used, which
+		// has to be supplied off-chip. '1' means the on-chip gray counter is used instead.
 		sshsNodePutBoolIfAbsent(chipNode, "SelectGrayCounter", 1);
 	}
 
