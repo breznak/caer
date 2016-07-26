@@ -150,6 +150,8 @@ struct input_common_state {
 	caerModuleData parentModule;
 	/// Reference to module's mainloop (for data availability signaling).
 	caerMainloopData mainloopReference;
+	/// Reference to sourceInfo node (to avoid getting it each time).
+	sshsNode sourceInfoNode;
 };
 
 typedef struct input_common_state *inputCommonState;
@@ -258,7 +260,7 @@ static bool parseNetworkHeader(inputCommonState state) {
 
 	if (state->isNetworkMessageBased) {
 		// For message based streams, use the sequence number.
-		// TODO: check this for missing packets in message mode!
+		// TODO: Network: check this for missing packets in message mode!
 		state->header.networkSequenceNumber = networkHeader.sequenceNumber;
 	}
 	else {
@@ -281,13 +283,14 @@ static bool parseNetworkHeader(inputCommonState state) {
 	// All formats are supported.
 	state->header.formatID = networkHeader.formatNumber;
 
-	// TODO: get sourceInfo node via config-server side-channel.
+	// TODO: Network: get sourceInfo node info via config-server side-channel.
 	state->header.sourceID = 1;
-	sshsNode sourceInfoNode = sshsGetRelativeNode(state->parentModule->moduleNode, "sourceInfo/");
-	sshsNodePutShort(sourceInfoNode, "dvsSizeX", 240);
-	sshsNodePutShort(sourceInfoNode, "dvsSizeY", 180);
-	sshsNodePutShort(sourceInfoNode, "apsSizeX", 240);
-	sshsNodePutShort(sourceInfoNode, "apsSizeY", 180);
+	sshsNodePutShort(state->sourceInfoNode, "dvsSizeX", 240);
+	sshsNodePutShort(state->sourceInfoNode, "dvsSizeY", 180);
+	sshsNodePutShort(state->sourceInfoNode, "apsSizeX", 240);
+	sshsNodePutShort(state->sourceInfoNode, "apsSizeY", 180);
+
+	// TODO: Network: add sourceString.
 
 	// We're done!
 	state->header.isValidHeader = true;
@@ -344,10 +347,6 @@ static char *getFileHeaderLine(inputCommonState state) {
 
 static void parseSourceString(char *sourceString, inputCommonState state) {
 	// Create SourceInfo node.
-	sshsNode sourceInfoNode = sshsGetRelativeNode(state->parentModule->moduleNode, "sourceInfo/");
-
-	sshsNodePutLong(sourceInfoNode, "highestTimestamp", -1);
-
 	int16_t dvsSizeX = 0, dvsSizeY = 0;
 	int16_t apsSizeX = 0, apsSizeY = 0;
 	int16_t dataSizeX = 0, dataSizeY = 0;
@@ -409,13 +408,13 @@ static void parseSourceString(char *sourceString, inputCommonState state) {
 
 	// Put size information inside sourceInfo node.
 	if (dvsSizeX != 0 && dvsSizeY != 0) {
-		sshsNodePutShort(sourceInfoNode, "dvsSizeX", dvsSizeX);
-		sshsNodePutShort(sourceInfoNode, "dvsSizeY", dvsSizeY);
+		sshsNodePutShort(state->sourceInfoNode, "dvsSizeX", dvsSizeX);
+		sshsNodePutShort(state->sourceInfoNode, "dvsSizeY", dvsSizeY);
 	}
 
 	if (apsSizeX != 0 && apsSizeY != 0) {
-		sshsNodePutShort(sourceInfoNode, "apsSizeX", apsSizeX);
-		sshsNodePutShort(sourceInfoNode, "apsSizeY", apsSizeY);
+		sshsNodePutShort(state->sourceInfoNode, "apsSizeX", apsSizeX);
+		sshsNodePutShort(state->sourceInfoNode, "apsSizeY", apsSizeY);
 	}
 
 	if (dataSizeX == 0 && dataSizeY == 0) {
@@ -426,13 +425,13 @@ static void parseSourceString(char *sourceString, inputCommonState state) {
 	}
 
 	if (dataSizeX != 0 && dataSizeY != 0) {
-		sshsNodePutShort(sourceInfoNode, "dataSizeX", dataSizeX);
-		sshsNodePutShort(sourceInfoNode, "dataSizeY", dataSizeY);
+		sshsNodePutShort(state->sourceInfoNode, "dataSizeX", dataSizeX);
+		sshsNodePutShort(state->sourceInfoNode, "dataSizeY", dataSizeY);
 	}
 
 	if (visualizerSizeX != 0 && visualizerSizeY != 0) {
-		sshsNodePutShort(sourceInfoNode, "visualizerSizeX", visualizerSizeX);
-		sshsNodePutShort(sourceInfoNode, "visualizerSizeY", visualizerSizeY);
+		sshsNodePutShort(state->sourceInfoNode, "visualizerSizeX", visualizerSizeX);
+		sshsNodePutShort(state->sourceInfoNode, "visualizerSizeY", visualizerSizeY);
 	}
 
 	// Generate source string for output modules.
@@ -450,7 +449,7 @@ static void parseSourceString(char *sourceString, inputCommonState state) {
 		dataSizeY, visualizerSizeX, visualizerSizeY, state->header.sourceID, sourceString);
 	sourceStringFile[sourceStringFileLength] = '\0';
 
-	sshsNodePutString(sourceInfoNode, "sourceString", sourceStringFile);
+	sshsNodePutString(state->sourceInfoNode, "sourceString", sourceStringFile);
 }
 
 static bool parseFileHeader(inputCommonState state) {
@@ -609,13 +608,35 @@ static bool parseFileHeader(inputCommonState state) {
 			}
 			else {
 				// Then other headers, like Start-Time.
-				// TODO: parse negative source strings (#-Source) and add them to sourceInfo.
 				if (caerStrEqualsUpTo(headerLine, "#Start-Time: ", 13)) {
 					char startTimeString[1024 + 1];
 
 					if (sscanf(headerLine, "#Start-Time: %1024[^\r]s\n", startTimeString) == 1) {
 						caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString, "Recording was taken on %s.",
 							startTimeString);
+					}
+				}
+				else if (caerStrEqualsUpTo(headerLine, "#-Source ", 9)) {
+					// Detect negative source strings (#-Source) and add them to sourceInfo.
+					// Previous sources are simply appended to the sourceString string in order.
+					char *currSourceString = sshsNodeGetString(state->sourceInfoNode, "sourceString");
+					size_t currSourceStringLength = strlen(currSourceString);
+
+					size_t addSourceStringLength = strlen(headerLine);
+
+					char *newSourceString = realloc(currSourceString,
+						currSourceStringLength + addSourceStringLength + 1); // +1 for NUL termination.
+					if (newSourceString == NULL) {
+						// Memory reallocation failure, skip this negative source string.
+						free(currSourceString);
+					}
+					else {
+						// Concatenate negative source string and commit as new sourceString.
+						memcpy(newSourceString + currSourceStringLength, headerLine, addSourceStringLength);
+						newSourceString[currSourceStringLength + addSourceStringLength] = '\0';
+
+						sshsNodePutString(state->sourceInfoNode, "sourceString", newSourceString);
+						free(newSourceString);
 					}
 				}
 				else {
@@ -1203,8 +1224,7 @@ static int aedat3GetPacket(inputCommonState state, bool isAEDAT30) {
 static void aedat30ChangeOrigin(inputCommonState state, caerEventPacketHeader packet) {
 	if (caerEventPacketHeaderGetEventType(packet) == POLARITY_EVENT) {
 		// We need to know the DVS resolution to invert the polarity Y address.
-		sshsNode sourceInfoNode = sshsGetRelativeNode(state->parentModule->moduleNode, "sourceInfo/");
-		int16_t dvsSizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY") - 1;
+		int16_t dvsSizeY = sshsNodeGetShort(state->sourceInfoNode, "dvsSizeY") - 1;
 
 		CAER_POLARITY_ITERATOR_ALL_START((caerPolarityEventPacket) packet)
 			uint16_t newYAddress = (uint16_t) dvsSizeY - caerPolarityEventGetY(caerPolarityIteratorElement);
@@ -1664,6 +1684,8 @@ bool isNetworkMessageBased) {
 
 	state->parentModule = moduleData;
 	state->mainloopReference = caerMainloopGetReference();
+	state->sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
+	sshsNodePutLong(state->sourceInfoNode, "highestTimestamp", -1);
 
 	// Check for invalid file descriptors.
 	if (readFd < -1) {
@@ -1802,7 +1824,7 @@ void caerInputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list ar
 		// through a mainloop already synchronizes with the release store above.
 		atomic_fetch_sub_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_relaxed);
 
-		sshsNodePutLong(sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"), "highestTimestamp",
+		sshsNodePutLong(state->sourceInfoNode, "highestTimestamp",
 			caerEventPacketContainerGetHighestEventTimestamp(*container));
 
 		caerSpecialEventPacket special = (caerSpecialEventPacket) caerEventPacketContainerGetEventPacket(*container,
