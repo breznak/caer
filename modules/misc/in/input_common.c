@@ -158,7 +158,7 @@ typedef struct input_common_state *inputCommonState;
 
 size_t CAER_INPUT_COMMON_STATE_STRUCT_SIZE = sizeof(struct input_common_state);
 
-static int packetsTypeCmp(const void *a, const void *b);
+static int packetsFirstTypeThenSizeCmp(const void *a, const void *b);
 static bool newInputBuffer(inputCommonState state);
 static bool parseNetworkHeader(inputCommonState state);
 static char *getFileHeaderLine(inputCommonState state);
@@ -179,11 +179,11 @@ static int inputHandlerThread(void *stateArg);
 static void caerInputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
-static int packetsTypeCmp(const void *a, const void *b) {
+static int packetsFirstTypeThenSizeCmp(const void *a, const void *b) {
 	const caerEventPacketHeader *aa = a;
 	const caerEventPacketHeader *bb = b;
 
-	// Sort by type ID.
+	// Sort first by type ID.
 	int16_t eventTypeA = caerEventPacketHeaderGetEventType(*aa);
 	int16_t eventTypeB = caerEventPacketHeaderGetEventType(*bb);
 
@@ -194,7 +194,19 @@ static int packetsTypeCmp(const void *a, const void *b) {
 		return (1);
 	}
 	else {
-		return (0);
+		// If equal, further sort by event size.
+		int32_t eventSizeA = caerEventPacketHeaderGetEventSize(*aa);
+		int32_t eventSizeB = caerEventPacketHeaderGetEventSize(*bb);
+
+		if (eventSizeA < eventSizeB) {
+			return (-1);
+		}
+		else if (eventSizeA > eventSizeB) {
+			return (1);
+		}
+		else {
+			return (0);
+		}
 	}
 }
 
@@ -682,22 +694,21 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 	bool packetAlreadyExists = false;
 	caerEventPacketHeader *packet = NULL;
 	while ((packet = (caerEventPacketHeader *) utarray_next(state->packetContainer.eventPackets, packet)) != NULL) {
-		int16_t packetType = caerEventPacketHeaderGetEventType(*packet);
+		int16_t packetEventType = caerEventPacketHeaderGetEventType(*packet);
+		int32_t packetEventSize = caerEventPacketHeaderGetEventSize(*packet);
 
-		if (packetType == newPacketData->eventType) {
-			// Packet of this type already present.
+		if (packetEventType == newPacketData->eventType && packetEventSize == newPacket->eventSize) {
+			// Packet with this type and event size already present.
 			packetAlreadyExists = true;
 			break;
 		}
 	}
 
-	// Packet with same type as newPacket found, do merge operation.
+	// Packet with same type and event size as newPacket found, do merge operation.
 	if (packetAlreadyExists) {
 		// Merge newPacket with '*packet'. Since packets from the same source,
 		// and having the same time, are guaranteed to have monotonic timestamps,
 		// the merge operation becomes a simple append operation.
-		int32_t packetEventSize = caerEventPacketHeaderGetEventSize(*packet);
-
 		int32_t packetEventValid = caerEventPacketHeaderGetEventValid(*packet);
 		int32_t packetEventNumber = caerEventPacketHeaderGetEventNumber(*packet);
 
@@ -723,8 +734,9 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 		caerEventPacketHeaderSetEventValid(mergedPacket, packetEventValid + newPacketEventValid);
 		caerEventPacketHeaderSetEventNumber(mergedPacket, packetEventNumber + newPacketEventNumber);
 
-		memcpy(((uint8_t *) mergedPacket) + CAER_EVENT_PACKET_HEADER_SIZE + (packetEventSize * packetEventNumber),
-			((uint8_t *) newPacket) + CAER_EVENT_PACKET_HEADER_SIZE, (size_t) (packetEventSize * newPacketEventNumber));
+		memcpy(((uint8_t *) mergedPacket) + CAER_EVENT_PACKET_HEADER_SIZE + (newPacket->eventSize * packetEventNumber),
+			((uint8_t *) newPacket) + CAER_EVENT_PACKET_HEADER_SIZE,
+			(size_t) (newPacket->eventSize * newPacketEventNumber));
 
 		// Merged content with existing packet, data copied: free new one.
 		free(newPacket);
@@ -738,10 +750,10 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 		}
 	}
 	else {
-		// No previous packet of this type found, use this one directly.
+		// No previous packet of this type and event size found, use this one directly.
 		utarray_push_back(state->packetContainer.eventPackets, &newPacket);
 
-		utarray_sort(state->packetContainer.eventPackets, &packetsTypeCmp);
+		utarray_sort(state->packetContainer.eventPackets, &packetsFirstTypeThenSizeCmp);
 
 		// Update packets statistics.
 		state->packetContainer.totalEventNumber += (size_t) newPacketData->eventNumber;
