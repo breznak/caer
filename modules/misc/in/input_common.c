@@ -676,6 +676,20 @@ static bool parseHeader(inputCommonState state) {
 	}
 }
 
+/**
+ * Add the given packet to a packet container that acts as accumulator. This way all
+ * events are in a common place, from which the right event amounts/times can be sliced.
+ * Packets are unique by type and event size, since for a packet of the same type, the
+ * only global things that can change are the source ID and the event size (like for
+ * Frames). The source ID is guaranteed to be the same from one source only when using
+ * the input module, so we only have to check for the event size in addition to the type.
+ *
+ * @param state common input data structure.
+ * @param newPacket packet to add/merge with accumulator packet container.
+ * @param newPacketData information on the new packet.
+ *
+ * @return true if successfully added/merged, false on failure (memory allocation).
+ */
 static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket, packetData newPacketData) {
 	// Remember the main timestamp of the first event of the new packet. That's the
 	// order-relvant timestamp for files/streams.
