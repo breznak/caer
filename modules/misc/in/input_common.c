@@ -88,8 +88,6 @@ struct input_common_packet_data {
 struct input_common_packet_container_data {
 	/// Current events, merged into packets, sorted by type.
 	UT_array *eventPackets;
-	/// Smallest timestamp among all events currently held in 'eventPackets'.
-	int64_t lowestTimestamp;
 	/// Biggest timestamp among all events currently held in 'eventPackets'.
 	int64_t highestTimestamp;
 	/// Sum of the event number for all packets currently held in 'eventPackets'.
@@ -97,6 +95,9 @@ struct input_common_packet_container_data {
 	/// The first main timestamp (the one relevant for packet ordering in streams)
 	/// of the last event packet that was handled.
 	int64_t lastSeenPacketTimestamp;
+	/// Track tsOverflow value. On change, we must commit the current packet
+	/// container content and empty it out.
+	int32_t lastTsOverflow;
 	/// The timestamp up to which we want to (have to!) read, so that we can
 	/// output the next packet container (in time-slice mode).
 	int64_t newContainerTimestampStart;
@@ -691,11 +692,45 @@ static bool parseHeader(inputCommonState state) {
  * @return true if successfully added/merged, false on failure (memory allocation).
  */
 static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket, packetData newPacketData) {
+	// Check timestamp constraints as per AEDAT 3.X format: order-relevant timestamps
+	// of each packet (the first timestamp) must be smaller or equal than next packet's.
+	if (newPacketData->startTimestamp < state->packetContainer.lastSeenPacketTimestamp) {
+		// Discard non-compliant packets.
+		return (false);
+	}
+
 	// Remember the main timestamp of the first event of the new packet. That's the
-	// order-relvant timestamp for files/streams.
+	// order-relevant timestamp for files/streams.
 	state->packetContainer.lastSeenPacketTimestamp = newPacketData->startTimestamp;
 
-	// Initialize with first packet.
+	// If it's a special packet, it might contain TIMESTAMP_RESET as event, which affects
+	// how things are mixed and parsed. This needs to be detected first.
+	bool tsReset = false;
+	bool tsResetAlone = false;
+
+	if (newPacket->eventType == SPECIAL_EVENT) {
+		if (caerSpecialEventPacketFindValidEventByType((caerSpecialEventPacket) newPacket, TIMESTAMP_RESET) != NULL) {
+			tsReset = true;
+
+			// Check if TIMESTAMP_RESET is the only special event in that special event packet.
+			// This is the case for new versions of libcaer and provides an easy way to disambiguate
+			// between events from before and from after the reset. For old libcaer versions, this
+			// is still the case when it's the only event. If not, it becomes more involved.
+			if (newPacketData->eventValid == 1 && newPacket->eventNumber == 1) {
+				tsResetAlone = true;
+			}
+		}
+	}
+
+	// Support TIMESTAMP_WRAP, the big timestamp wrap, which results in a tsOverflow change.
+	if (caerEventPacketHeaderGetEventTSOverflow(newPacket) > state->packetContainer.lastTsOverflow) {
+		state->packetContainer.lastTsOverflow = caerEventPacketHeaderGetEventTSOverflow(newPacket);
+
+		// TSOverflow increased, commit container now.
+
+	}
+
+	// Initialize time slice counters with first packet.
 	if (state->packetContainer.newContainerTimestampStart == -1) {
 		// -1 because newPacketFirstTimestamp is part of the set!
 		state->packetContainer.newContainerTimestampStart = newPacketData->startTimestamp;
@@ -772,13 +807,19 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 		// Update packets statistics.
 		state->packetContainer.totalEventNumber += (size_t) newPacketData->eventNumber;
 
-		if (newPacketData->startTimestamp < state->packetContainer.lowestTimestamp) {
-			state->packetContainer.lowestTimestamp = newPacketData->startTimestamp;
-		}
-
 		if (newPacketData->endTimestamp > state->packetContainer.highestTimestamp) {
 			state->packetContainer.highestTimestamp = newPacketData->endTimestamp;
 		}
+	}
+
+	// If this is a special packet with TIMESTAMP_RESET, we just merged it correctly
+	// and now need to prepare for the new event timeline coming with the next packet.
+	if (tsReset) {
+		state->packetContainer.lastSeenPacketTimestamp = 0;
+		state->packetContainer.newContainerTimestampStart = -1;
+		state->packetContainer.newContainerTimestampEnd = -1;
+		state->packetContainer.lastTsOverflow = 0;
+		state->packetContainer.highestTimestamp = 0;
 	}
 
 	return (true);
