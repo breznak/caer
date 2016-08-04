@@ -20,6 +20,10 @@
 
 #define MAX_HEADER_LINE_SIZE 1024
 
+enum input_reader_state {
+	READER_OK = 0, EOF_REACHED = 1, ERROR_READ = -1, ERROR_HEADER = -2, ERROR_DATA = -3,
+};
+
 struct input_common_header_info {
 	/// Header has been completely read and is valid.
 	bool isValidHeader;
@@ -113,11 +117,21 @@ struct input_common_packet_container_data {
 };
 
 struct input_common_state {
-	/// Control flag for input handling thread.
+	/// Control flag for input handling threads.
 	atomic_bool running;
-	/// The input handling thread (separate as to only wake up mainloop
-	/// processing when there is new data available).
-	thrd_t inputThread;
+	/// Reader thread state, to signal conditions like EOF or error to
+	/// the assembler thread.
+	atomic_int_fast32_t inputReaderThreadState;
+	/// The first input handling thread (separate as to only wake up mainloop
+	/// processing when there is new data available): takes care of data
+	/// reading and parsing, decompression from the input channel.
+	thrd_t inputReaderThread;
+	/// The first input handling thread (separate as to only wake up mainloop
+	/// processing when there is new data available): takes care of assembling
+	/// packet containers that respect the specs using the packets read by
+	/// the inputReadThread. This is separate so that delay operations don't
+	/// use up resources that could be doing read/decompression work.
+	thrd_t inputAssemblerThread;
 	/// The file descriptor for reading.
 	int fileDescriptor;
 	/// Network-like stream or file-like stream. Matters for header format.
@@ -131,10 +145,13 @@ struct input_common_state {
 	/// This results in no loss of data, but may deviate from the requested
 	/// real-time play-back expectations.
 	atomic_bool keepPackets;
-	/// Transfer packets coming from the input handling thread to the mainloop.
-	/// We use EventPacketContainers, as that is the standard data structure
-	/// returned from an input module.
-	RingBuffer transferRing;
+	/// Transfer packets coming from the input reading thread to the assembly
+	/// thread. Normal EventPackets are used here.
+	RingBuffer transferRingPackets;
+	/// Transfer packet containers coming from the input assembly thread to
+	/// the mainloop. We use EventPacketContainers, as that is the standard
+	/// data structure returned from an input module.
+	RingBuffer transferRingPacketContainers;
 	/// Header parsing results.
 	struct input_common_header_info header;
 	/// Packet data parsing structures.
@@ -151,7 +168,7 @@ struct input_common_state {
 	caerModuleData parentModule;
 	/// Reference to module's mainloop (for data availability signaling).
 	caerMainloopData mainloopReference;
-	/// Reference to sourceInfo node (to avoid getting it each time).
+	/// Reference to sourceInfo node (to avoid getting it each time again).
 	sshsNode sourceInfoNode;
 };
 
@@ -159,57 +176,29 @@ typedef struct input_common_state *inputCommonState;
 
 size_t CAER_INPUT_COMMON_STATE_STRUCT_SIZE = sizeof(struct input_common_state);
 
-static int packetsFirstTypeThenSizeCmp(const void *a, const void *b);
 static bool newInputBuffer(inputCommonState state);
 static bool parseNetworkHeader(inputCommonState state);
 static char *getFileHeaderLine(inputCommonState state);
 static void parseSourceString(char *sourceString, inputCommonState state);
 static bool parseFileHeader(inputCommonState state);
 static bool parseHeader(inputCommonState state);
-static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket, packetData newPacketData);
-static caerEventPacketContainer generatePacketContainer(inputCommonState state);
-static void doTimeDelay(inputCommonState state);
-static void doPacketContainerCommit(inputCommonState state, caerEventPacketContainer packetContainer);
 static bool parseData(inputCommonState state);
 static int aedat2GetPacket(inputCommonState state, int16_t chipID);
 static int aedat3GetPacket(inputCommonState state, bool isAEDAT30);
 static void aedat30ChangeOrigin(inputCommonState state, caerEventPacketHeader packet);
 static bool decompressTimestampSerialize(inputCommonState state, caerEventPacketHeader packet, size_t packetSize);
 static bool decompressEventPacket(inputCommonState state, caerEventPacketHeader packet, size_t packetSize);
-static int inputHandlerThread(void *stateArg);
+static int inputReaderThread(void *stateArg);
+
+static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket, packetData newPacketData);
+static caerEventPacketContainer generatePacketContainer(inputCommonState state);
+static void doTimeDelay(inputCommonState state);
+static void doPacketContainerCommit(inputCommonState state, caerEventPacketContainer packetContainer);
+static int inputAssemblerThread(void *stateArg);
+
 static void caerInputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
-
-static int packetsFirstTypeThenSizeCmp(const void *a, const void *b) {
-	const caerEventPacketHeader *aa = a;
-	const caerEventPacketHeader *bb = b;
-
-	// Sort first by type ID.
-	int16_t eventTypeA = caerEventPacketHeaderGetEventType(*aa);
-	int16_t eventTypeB = caerEventPacketHeaderGetEventType(*bb);
-
-	if (eventTypeA < eventTypeB) {
-		return (-1);
-	}
-	else if (eventTypeA > eventTypeB) {
-		return (1);
-	}
-	else {
-		// If equal, further sort by event size.
-		int32_t eventSizeA = caerEventPacketHeaderGetEventSize(*aa);
-		int32_t eventSizeB = caerEventPacketHeaderGetEventSize(*bb);
-
-		if (eventSizeA < eventSizeB) {
-			return (-1);
-		}
-		else if (eventSizeA > eventSizeB) {
-			return (1);
-		}
-		else {
-			return (0);
-		}
-	}
-}
+static int packetsFirstTypeThenSizeCmp(const void *a, const void *b);
 
 static bool newInputBuffer(inputCommonState state) {
 	// First check if the size really changed.
@@ -677,316 +666,6 @@ static bool parseHeader(inputCommonState state) {
 	}
 }
 
-/**
- * Add the given packet to a packet container that acts as accumulator. This way all
- * events are in a common place, from which the right event amounts/times can be sliced.
- * Packets are unique by type and event size, since for a packet of the same type, the
- * only global things that can change are the source ID and the event size (like for
- * Frames). The source ID is guaranteed to be the same from one source only when using
- * the input module, so we only have to check for the event size in addition to the type.
- *
- * @param state common input data structure.
- * @param newPacket packet to add/merge with accumulator packet container.
- * @param newPacketData information on the new packet.
- *
- * @return true if successfully added/merged, false on failure (memory allocation).
- */
-static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket, packetData newPacketData) {
-	// Check timestamp constraints as per AEDAT 3.X format: order-relevant timestamps
-	// of each packet (the first timestamp) must be smaller or equal than next packet's.
-	if (newPacketData->startTimestamp < state->packetContainer.lastSeenPacketTimestamp) {
-		// Discard non-compliant packets.
-		return (false);
-	}
-
-	// Remember the main timestamp of the first event of the new packet. That's the
-	// order-relevant timestamp for files/streams.
-	state->packetContainer.lastSeenPacketTimestamp = newPacketData->startTimestamp;
-
-	// If it's a special packet, it might contain TIMESTAMP_RESET as event, which affects
-	// how things are mixed and parsed. This needs to be detected first.
-	bool tsReset = false;
-	bool tsResetAlone = false;
-
-	if (newPacket->eventType == SPECIAL_EVENT) {
-		if (caerSpecialEventPacketFindValidEventByType((caerSpecialEventPacket) newPacket, TIMESTAMP_RESET) != NULL) {
-			tsReset = true;
-
-			// Check if TIMESTAMP_RESET is the only special event in that special event packet.
-			// This is the case for new versions of libcaer and provides an easy way to disambiguate
-			// between events from before and from after the reset. For old libcaer versions, this
-			// is still the case when it's the only event. If not, it becomes more involved.
-			if (newPacketData->eventValid == 1 && newPacket->eventNumber == 1) {
-				tsResetAlone = true;
-			}
-		}
-	}
-
-	// Support TIMESTAMP_WRAP, the big timestamp wrap, which results in a tsOverflow change.
-	if (caerEventPacketHeaderGetEventTSOverflow(newPacket) > state->packetContainer.lastTsOverflow) {
-		state->packetContainer.lastTsOverflow = caerEventPacketHeaderGetEventTSOverflow(newPacket);
-
-		// TSOverflow increased, commit container now.
-
-	}
-
-	// Initialize time slice counters with first packet.
-	if (state->packetContainer.newContainerTimestampStart == -1) {
-		// -1 because newPacketFirstTimestamp is part of the set!
-		state->packetContainer.newContainerTimestampStart = newPacketData->startTimestamp;
-		state->packetContainer.newContainerTimestampEnd = newPacketData->startTimestamp
-			+ (atomic_load_explicit(&state->packetContainer.timeSlice, memory_order_relaxed) - 1);
-
-		portable_clock_gettime_monotonic(&state->packetContainer.lastCommitTime);
-	}
-
-	bool packetAlreadyExists = false;
-	caerEventPacketHeader *packet = NULL;
-	while ((packet = (caerEventPacketHeader *) utarray_next(state->packetContainer.eventPackets, packet)) != NULL) {
-		int16_t packetEventType = caerEventPacketHeaderGetEventType(*packet);
-		int32_t packetEventSize = caerEventPacketHeaderGetEventSize(*packet);
-
-		if (packetEventType == newPacketData->eventType && packetEventSize == newPacket->eventSize) {
-			// Packet with this type and event size already present.
-			packetAlreadyExists = true;
-			break;
-		}
-	}
-
-	// Packet with same type and event size as newPacket found, do merge operation.
-	if (packetAlreadyExists) {
-		// Merge newPacket with '*packet'. Since packets from the same source,
-		// and having the same time, are guaranteed to have monotonic timestamps,
-		// the merge operation becomes a simple append operation.
-		int32_t packetEventValid = caerEventPacketHeaderGetEventValid(*packet);
-		int32_t packetEventNumber = caerEventPacketHeaderGetEventNumber(*packet);
-
-		int32_t newPacketEventValid = newPacketData->eventValid;
-		int32_t newPacketEventNumber = newPacketData->eventNumber;
-
-		caerEventPacketHeader mergedPacket = caerGenericEventPacketGrow(*packet,
-			(packetEventNumber + newPacketEventNumber));
-		if (mergedPacket == NULL) {
-			// Failed to allocate memory for merged packets, free new packet, as
-			// we can't do anything more with it, and signal failure.
-			free(newPacket);
-
-			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
-				"%s: Failed to allocate memory for packet merge operation.", __func__);
-			return (false);
-		}
-
-		// Memory reallocation was successful, so we can update the header, copy over the new
-		// events, and update the main pointer in the event packets array.
-		*packet = mergedPacket;
-
-		caerEventPacketHeaderSetEventValid(mergedPacket, packetEventValid + newPacketEventValid);
-		caerEventPacketHeaderSetEventNumber(mergedPacket, packetEventNumber + newPacketEventNumber);
-
-		memcpy(((uint8_t *) mergedPacket) + CAER_EVENT_PACKET_HEADER_SIZE + (newPacket->eventSize * packetEventNumber),
-			((uint8_t *) newPacket) + CAER_EVENT_PACKET_HEADER_SIZE,
-			(size_t) (newPacket->eventSize * newPacketEventNumber));
-
-		// Merged content with existing packet, data copied: free new one.
-		free(newPacket);
-
-		// Update packets statistics. FirstTimestamp can never be smaller than lowestTimestamp,
-		// since we already have events of the same type that must come before.
-		state->packetContainer.totalEventNumber += (size_t) newPacketEventNumber;
-
-		if (newPacketData->endTimestamp > state->packetContainer.highestTimestamp) {
-			state->packetContainer.highestTimestamp = newPacketData->endTimestamp;
-		}
-	}
-	else {
-		// No previous packet of this type and event size found, use this one directly.
-		utarray_push_back(state->packetContainer.eventPackets, &newPacket);
-
-		utarray_sort(state->packetContainer.eventPackets, &packetsFirstTypeThenSizeCmp);
-
-		// Update packets statistics.
-		state->packetContainer.totalEventNumber += (size_t) newPacketData->eventNumber;
-
-		if (newPacketData->endTimestamp > state->packetContainer.highestTimestamp) {
-			state->packetContainer.highestTimestamp = newPacketData->endTimestamp;
-		}
-	}
-
-	// If this is a special packet with TIMESTAMP_RESET, we just merged it correctly
-	// and now need to prepare for the new event timeline coming with the next packet.
-	if (tsReset) {
-		state->packetContainer.lastSeenPacketTimestamp = 0;
-		state->packetContainer.newContainerTimestampStart = -1;
-		state->packetContainer.newContainerTimestampEnd = -1;
-		state->packetContainer.lastTsOverflow = 0;
-		state->packetContainer.highestTimestamp = 0;
-	}
-
-	return (true);
-}
-
-static caerEventPacketContainer generatePacketContainer(inputCommonState state) {
-	// Let's generate a packet container, use the size of the event packets array as upper bound.
-	int32_t packetContainerPosition = 0;
-	caerEventPacketContainer packetContainer = caerEventPacketContainerAllocate(
-		(int32_t) utarray_len(state->packetContainer.eventPackets));
-	if (packetContainer == NULL) {
-		return (NULL);
-	}
-
-	// Iterate over each event packet, and slice out the relevant part in time.
-	caerEventPacketHeader *currPacket = NULL;
-	while ((currPacket = (caerEventPacketHeader *) utarray_next(state->packetContainer.eventPackets, currPacket))
-		!= NULL) {
-		// Search for cutoff point in time. Also count valid events encountered for later calculations.
-		int32_t cutoffIndex = -1;
-		int32_t validEventsSeen = 0;
-
-		CAER_ITERATOR_ALL_START(*currPacket, void *)
-			if (caerGenericEventGetTimestamp64(caerIteratorElement, *currPacket)
-				> state->packetContainer.newContainerTimestampEnd) {
-				cutoffIndex = caerIteratorCounter;
-				break;
-			}
-
-			if (caerGenericEventIsValid(caerIteratorElement)) {
-				validEventsSeen++;
-			}CAER_ITERATOR_ALL_END
-
-		// TODO: handle TS_WRAP and TS_RESET as split points.
-
-		// If there is no cutoff point, we can just send on the whole packet with no changes.
-		if (cutoffIndex == -1) {
-			caerEventPacketContainerSetEventPacket(packetContainer, packetContainerPosition++, *currPacket);
-
-			// Erase slot from packets array.
-			utarray_erase(state->packetContainer.eventPackets,
-				(size_t) utarray_eltidx(state->packetContainer.eventPackets, currPacket), 1);
-			currPacket = (caerEventPacketHeader *) utarray_prev(state->packetContainer.eventPackets, currPacket);
-			continue;
-		}
-
-		// If there is one on the other hand, we can only send up to that event.
-		// Special case is if the cutoff point is zero, meaning there's nothing to send.
-		if (cutoffIndex == 0) {
-			continue;
-		}
-
-		int32_t currPacketEventSize = caerEventPacketHeaderGetEventSize(*currPacket);
-		int32_t currPacketEventValid = caerEventPacketHeaderGetEventValid(*currPacket);
-		int32_t currPacketEventNumber = caerEventPacketHeaderGetEventNumber(*currPacket);
-
-		// Allocate a new packet, with space for the remaining events that we don't send off
-		// (the ones after cutoff point).
-		int32_t nextPacketEventNumber = currPacketEventNumber - cutoffIndex;
-		caerEventPacketHeader nextPacket = malloc(
-		CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (currPacketEventSize * nextPacketEventNumber));
-		if (nextPacket == NULL) {
-			// TODO: handle allocation failure.
-			caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
-				"Failed memory allocation for nextPacket.");
-			exit(EXIT_FAILURE);
-		}
-
-		// Copy header and remaining events to new packet, set header sizes correctly.
-		memcpy(nextPacket, *currPacket, CAER_EVENT_PACKET_HEADER_SIZE);
-		memcpy(((uint8_t *) nextPacket) + CAER_EVENT_PACKET_HEADER_SIZE,
-			((uint8_t *) *currPacket) + CAER_EVENT_PACKET_HEADER_SIZE + (currPacketEventSize * cutoffIndex),
-			(size_t) (currPacketEventSize * nextPacketEventNumber));
-
-		caerEventPacketHeaderSetEventValid(nextPacket, currPacketEventValid - validEventsSeen);
-		caerEventPacketHeaderSetEventNumber(nextPacket, nextPacketEventNumber);
-		caerEventPacketHeaderSetEventCapacity(nextPacket, nextPacketEventNumber);
-
-		// Resize current packet to include only the events up until cutoff point.
-		caerEventPacketHeader currPacketResized = realloc(*currPacket,
-		CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (currPacketEventSize * cutoffIndex));
-		if (currPacketResized == NULL) {
-			// TODO: handle allocation failure.
-			caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
-				"Failed memory allocation for currPacketResized.");
-			exit(EXIT_FAILURE);
-		}
-
-		// Set header sizes for resized packet correctly.
-		caerEventPacketHeaderSetEventValid(currPacketResized, validEventsSeen);
-		caerEventPacketHeaderSetEventNumber(currPacketResized, cutoffIndex);
-		caerEventPacketHeaderSetEventCapacity(currPacketResized, cutoffIndex);
-
-		// Update references: the nextPacket goes into the eventPackets array at the currPacket position.
-		// The currPacket, after resizing, goes into the packet container for output.
-		*currPacket = nextPacket;
-		caerEventPacketContainerSetEventPacket(packetContainer, packetContainerPosition++, currPacketResized);
-	}
-
-	// Update wanted timestamp for next time slice.
-	state->packetContainer.newContainerTimestampStart += atomic_load_explicit(&state->packetContainer.timeSlice,
-		memory_order_relaxed);
-	state->packetContainer.newContainerTimestampEnd += atomic_load_explicit(&state->packetContainer.timeSlice,
-		memory_order_relaxed);
-
-	return (packetContainer);
-}
-
-static void doTimeDelay(inputCommonState state) {
-	// Got packet container, delay it until user-defined time.
-	uint64_t timeDelay = U64T(atomic_load_explicit(&state->packetContainer.timeDelay, memory_order_relaxed));
-
-	if (timeDelay != 0) {
-		// Get current time (nanosecond resolution).
-		struct timespec currentTime;
-		portable_clock_gettime_monotonic(&currentTime);
-
-		// Calculate elapsed time since last commit, based on that then either
-		// wait to meet timing, or log that it's impossible with current settings.
-		uint64_t diffNanoTime = (uint64_t) (((int64_t) (currentTime.tv_sec
-			- state->packetContainer.lastCommitTime.tv_sec) * 1000000000LL)
-			+ (int64_t) (currentTime.tv_nsec - state->packetContainer.lastCommitTime.tv_nsec));
-		uint64_t diffMicroTime = diffNanoTime / 1000;
-
-		if (diffMicroTime >= timeDelay) {
-			caerLog(CAER_LOG_WARNING, state->parentModule->moduleSubSystemString,
-				"Impossible to meet timeDelay timing specification with current settings.");
-
-			// Don't delay any more by requesting time again, use old one.
-			state->packetContainer.lastCommitTime = currentTime;
-		}
-		else {
-			// Sleep for the remaining time.
-			uint64_t sleepMicroTime = timeDelay - diffMicroTime;
-			uint64_t sleepMicroTimeSec = sleepMicroTime / 1000000; // Seconds part.
-			uint64_t sleepMicroTimeNsec = (sleepMicroTime * 1000) - (sleepMicroTimeSec * 1000000000); // Nanoseconds part.
-
-			struct timespec delaySleep = { .tv_sec = I64T(sleepMicroTimeSec), .tv_nsec = I64T(sleepMicroTimeNsec) };
-
-			thrd_sleep(&delaySleep, NULL);
-
-			// Update stored time.
-			portable_clock_gettime_monotonic(&state->packetContainer.lastCommitTime);
-		}
-	}
-}
-
-static void doPacketContainerCommit(inputCommonState state, caerEventPacketContainer packetContainer) {
-	retry: if (!ringBufferPut(state->transferRing, packetContainer)) {
-		if (atomic_load_explicit(&state->keepPackets, memory_order_relaxed)) {
-			// Retry forever if requested.
-			goto retry;
-		}
-
-		caerEventPacketContainerFree(packetContainer);
-
-		caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
-			"Failed to put new packet container on transfer ring-buffer: full.");
-	}
-	else {
-		// Signal availability of new data to the mainloop on packet container commit.
-		atomic_fetch_add_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_release);
-
-		caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Submitted packet container successfully.");
-	}
-}
-
 static bool parseData(inputCommonState state) {
 	while (state->dataBuffer->bufferPosition < state->dataBuffer->bufferUsedSize) {
 		int pRes = -1;
@@ -1018,7 +697,7 @@ static bool parseData(inputCommonState state) {
 			continue;
 		}
 
-		// New packet from stream, process it.
+		// New packet from stream, send it off.
 		caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
 			"New packet read - ID: %zu, Offset: %zu, Size: %zu, Events: %" PRIi32 ", Type: %" PRIi16 ", StartTS: %" PRIi64 ", EndTS: %" PRIi64 ".",
 			state->packets.currPacketData->id, state->packets.currPacketData->offset,
@@ -1026,28 +705,11 @@ static bool parseData(inputCommonState state) {
 			state->packets.currPacketData->eventType, state->packets.currPacketData->startTimestamp,
 			state->packets.currPacketData->endTimestamp);
 
-		// We've got a full event packet, store it. It will later appear in the packet
-		// container in some form.
-		addToPacketContainer(state, state->packets.currPacket, state->packets.currPacketData);
-
-		// Check if we have read and accumulated all the event packets with a main first timestamp smaller
-		// or equal than what we want. We know this is the case when the last seen main timestamp is clearly
-		// bigger than the wanted one. If this is true, it means we do have all the possible events of all
-		// types that happen up until that point, and we can split that time range off into a packet container.
-		// If not, we just go get the next event packet.
-		if (state->packetContainer.lastSeenPacketTimestamp <= state->packetContainer.newContainerTimestampEnd) {
-			continue;
+		while (!ringBufferPut(state->transferRingPackets, state->packets.currPacket)) {
+			;
 		}
 
-		caerEventPacketContainer packetContainer = generatePacketContainer(state);
-		if (packetContainer == NULL) {
-			// On failure, just continue.
-			continue;
-		}
-
-		doTimeDelay(state);
-
-		doPacketContainerCommit(state, packetContainer);
+		state->packets.currPacket = NULL;
 	}
 
 	// All good, get next buffer.
@@ -1655,7 +1317,7 @@ static bool decompressEventPacket(inputCommonState state, caerEventPacketHeader 
 	return (retVal);
 }
 
-static int inputHandlerThread(void *stateArg) {
+static int inputReaderThread(void *stateArg) {
 	inputCommonState state = stateArg;
 
 	// Set thread name.
@@ -1664,7 +1326,7 @@ static int inputHandlerThread(void *stateArg) {
 	// Set thread priority to high. This may fail depending on your OS configuration.
 	if (thrd_set_priority(-1) != thrd_success) {
 		caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
-			"Failed to raise thread priority for Input Handler thread. You may experience lags and delays.");
+			"Failed to raise thread priority for Input Reader thread. You may experience lags and delays.");
 	}
 
 	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
@@ -1686,19 +1348,13 @@ static int inputHandlerThread(void *stateArg) {
 
 			// Distinguish EOF from errors based upon errno value.
 			if (errno == 0) {
-				// Flush last event packets/packet container on EOF.
-				caerEventPacketContainer packetContainer = generatePacketContainer(state);
-				if (packetContainer != NULL) {
-					doTimeDelay(state);
-
-					doPacketContainerCommit(state, packetContainer);
-				}
-
-				caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString, "End of file reached.");
+				caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString, "Reached End of File.");
+				atomic_store(&state->inputReaderThreadState, EOF_REACHED); // EOF
 			}
 			else {
 				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
 					"Error while reading data, error: %d.", errno);
+				atomic_store(&state->inputReaderThreadState, ERROR_READ); // Error
 			}
 			break;
 		}
@@ -1707,6 +1363,7 @@ static int inputHandlerThread(void *stateArg) {
 		if (!state->header.isValidHeader && !parseHeader(state)) {
 			// Header invalid, exit.
 			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to parse header.");
+			atomic_store(&state->inputReaderThreadState, ERROR_HEADER); // Error in Header
 			break;
 		}
 
@@ -1714,6 +1371,7 @@ static int inputHandlerThread(void *stateArg) {
 		if (!parseData(state)) {
 			// Packets invalid, exit.
 			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to parse event data.");
+			atomic_store(&state->inputReaderThreadState, ERROR_DATA); // Error in Data
 			break;
 		}
 
@@ -1724,6 +1382,371 @@ static int inputHandlerThread(void *stateArg) {
 		if (!state->isNetworkStream) {
 			state->dataBufferOffset += state->dataBuffer->bufferUsedSize;
 		}
+	}
+
+	return (thrd_success);
+}
+
+/**
+ * Add the given packet to a packet container that acts as accumulator. This way all
+ * events are in a common place, from which the right event amounts/times can be sliced.
+ * Packets are unique by type and event size, since for a packet of the same type, the
+ * only global things that can change are the source ID and the event size (like for
+ * Frames). The source ID is guaranteed to be the same from one source only when using
+ * the input module, so we only have to check for the event size in addition to the type.
+ *
+ * @param state common input data structure.
+ * @param newPacket packet to add/merge with accumulator packet container.
+ * @param newPacketData information on the new packet.
+ *
+ * @return true if successfully added/merged, false on failure (memory allocation).
+ */
+static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket, packetData newPacketData) {
+	// Check timestamp constraints as per AEDAT 3.X format: order-relevant timestamps
+	// of each packet (the first timestamp) must be smaller or equal than next packet's.
+	if (newPacketData->startTimestamp < state->packetContainer.lastSeenPacketTimestamp) {
+		// Discard non-compliant packets.
+		return (false);
+	}
+
+	// Remember the main timestamp of the first event of the new packet. That's the
+	// order-relevant timestamp for files/streams.
+	state->packetContainer.lastSeenPacketTimestamp = newPacketData->startTimestamp;
+
+	// If it's a special packet, it might contain TIMESTAMP_RESET as event, which affects
+	// how things are mixed and parsed. This needs to be detected first.
+	bool tsReset = false;
+	bool tsResetAlone = false;
+
+	if (newPacket->eventType == SPECIAL_EVENT) {
+		if (caerSpecialEventPacketFindValidEventByType((caerSpecialEventPacket) newPacket, TIMESTAMP_RESET) != NULL) {
+			tsReset = true;
+
+			// Check if TIMESTAMP_RESET is the only special event in that special event packet.
+			// This is the case for new versions of libcaer and provides an easy way to disambiguate
+			// between events from before and from after the reset. For old libcaer versions, this
+			// is still the case when it's the only event. If not, it becomes more involved.
+			if (newPacketData->eventValid == 1 && newPacket->eventNumber == 1) {
+				tsResetAlone = true;
+			}
+		}
+	}
+
+	// Support TIMESTAMP_WRAP, the big timestamp wrap, which results in a tsOverflow change.
+	if (caerEventPacketHeaderGetEventTSOverflow(newPacket) > state->packetContainer.lastTsOverflow) {
+		state->packetContainer.lastTsOverflow = caerEventPacketHeaderGetEventTSOverflow(newPacket);
+
+		// TSOverflow increased, commit container now.
+
+	}
+
+	// Initialize time slice counters with first packet.
+	if (state->packetContainer.newContainerTimestampStart == -1) {
+		// -1 because newPacketFirstTimestamp is part of the set!
+		state->packetContainer.newContainerTimestampStart = newPacketData->startTimestamp;
+		state->packetContainer.newContainerTimestampEnd = newPacketData->startTimestamp
+			+ (atomic_load_explicit(&state->packetContainer.timeSlice, memory_order_relaxed) - 1);
+
+		portable_clock_gettime_monotonic(&state->packetContainer.lastCommitTime);
+	}
+
+	bool packetAlreadyExists = false;
+	caerEventPacketHeader *packet = NULL;
+	while ((packet = (caerEventPacketHeader *) utarray_next(state->packetContainer.eventPackets, packet)) != NULL) {
+		int16_t packetEventType = caerEventPacketHeaderGetEventType(*packet);
+		int32_t packetEventSize = caerEventPacketHeaderGetEventSize(*packet);
+
+		if (packetEventType == newPacketData->eventType && packetEventSize == newPacket->eventSize) {
+			// Packet with this type and event size already present.
+			packetAlreadyExists = true;
+			break;
+		}
+	}
+
+	// Packet with same type and event size as newPacket found, do merge operation.
+	if (packetAlreadyExists) {
+		// Merge newPacket with '*packet'. Since packets from the same source,
+		// and having the same time, are guaranteed to have monotonic timestamps,
+		// the merge operation becomes a simple append operation.
+		int32_t packetEventValid = caerEventPacketHeaderGetEventValid(*packet);
+		int32_t packetEventNumber = caerEventPacketHeaderGetEventNumber(*packet);
+
+		int32_t newPacketEventValid = newPacketData->eventValid;
+		int32_t newPacketEventNumber = newPacketData->eventNumber;
+
+		caerEventPacketHeader mergedPacket = caerGenericEventPacketGrow(*packet,
+			(packetEventNumber + newPacketEventNumber));
+		if (mergedPacket == NULL) {
+			// Failed to allocate memory for merged packets, free new packet, as
+			// we can't do anything more with it, and signal failure.
+			free(newPacket);
+
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+				"%s: Failed to allocate memory for packet merge operation.", __func__);
+			return (false);
+		}
+
+		// Memory reallocation was successful, so we can update the header, copy over the new
+		// events, and update the main pointer in the event packets array.
+		*packet = mergedPacket;
+
+		caerEventPacketHeaderSetEventValid(mergedPacket, packetEventValid + newPacketEventValid);
+		caerEventPacketHeaderSetEventNumber(mergedPacket, packetEventNumber + newPacketEventNumber);
+
+		memcpy(((uint8_t *) mergedPacket) + CAER_EVENT_PACKET_HEADER_SIZE + (newPacket->eventSize * packetEventNumber),
+			((uint8_t *) newPacket) + CAER_EVENT_PACKET_HEADER_SIZE,
+			(size_t) (newPacket->eventSize * newPacketEventNumber));
+
+		// Merged content with existing packet, data copied: free new one.
+		free(newPacket);
+
+		// Update packets statistics. FirstTimestamp can never be smaller than lowestTimestamp,
+		// since we already have events of the same type that must come before.
+		state->packetContainer.totalEventNumber += (size_t) newPacketEventNumber;
+
+		if (newPacketData->endTimestamp > state->packetContainer.highestTimestamp) {
+			state->packetContainer.highestTimestamp = newPacketData->endTimestamp;
+		}
+	}
+	else {
+		// No previous packet of this type and event size found, use this one directly.
+		utarray_push_back(state->packetContainer.eventPackets, &newPacket);
+
+		utarray_sort(state->packetContainer.eventPackets, &packetsFirstTypeThenSizeCmp);
+
+		// Update packets statistics.
+		state->packetContainer.totalEventNumber += (size_t) newPacketData->eventNumber;
+
+		if (newPacketData->endTimestamp > state->packetContainer.highestTimestamp) {
+			state->packetContainer.highestTimestamp = newPacketData->endTimestamp;
+		}
+	}
+
+	// If this is a special packet with TIMESTAMP_RESET, we just merged it correctly
+	// and now need to prepare for the new event timeline coming with the next packet.
+	if (tsReset) {
+		state->packetContainer.lastSeenPacketTimestamp = 0;
+		state->packetContainer.newContainerTimestampStart = -1;
+		state->packetContainer.newContainerTimestampEnd = -1;
+		state->packetContainer.lastTsOverflow = 0;
+		state->packetContainer.highestTimestamp = 0;
+	}
+
+	return (true);
+}
+
+static caerEventPacketContainer generatePacketContainer(inputCommonState state) {
+	// Let's generate a packet container, use the size of the event packets array as upper bound.
+	int32_t packetContainerPosition = 0;
+	caerEventPacketContainer packetContainer = caerEventPacketContainerAllocate(
+		(int32_t) utarray_len(state->packetContainer.eventPackets));
+	if (packetContainer == NULL) {
+		return (NULL);
+	}
+
+	// Iterate over each event packet, and slice out the relevant part in time.
+	caerEventPacketHeader *currPacket = NULL;
+	while ((currPacket = (caerEventPacketHeader *) utarray_next(state->packetContainer.eventPackets, currPacket))
+		!= NULL) {
+		// Search for cutoff point in time. Also count valid events encountered for later calculations.
+		int32_t cutoffIndex = -1;
+		int32_t validEventsSeen = 0;
+
+		CAER_ITERATOR_ALL_START(*currPacket, void *)
+			if (caerGenericEventGetTimestamp64(caerIteratorElement, *currPacket)
+				> state->packetContainer.newContainerTimestampEnd) {
+				cutoffIndex = caerIteratorCounter;
+				break;
+			}
+
+			if (caerGenericEventIsValid(caerIteratorElement)) {
+				validEventsSeen++;
+			}CAER_ITERATOR_ALL_END
+
+		// TODO: handle TS_WRAP and TS_RESET as split points.
+
+		// If there is no cutoff point, we can just send on the whole packet with no changes.
+		if (cutoffIndex == -1) {
+			caerEventPacketContainerSetEventPacket(packetContainer, packetContainerPosition++, *currPacket);
+
+			// Erase slot from packets array.
+			utarray_erase(state->packetContainer.eventPackets,
+				(size_t) utarray_eltidx(state->packetContainer.eventPackets, currPacket), 1);
+			currPacket = (caerEventPacketHeader *) utarray_prev(state->packetContainer.eventPackets, currPacket);
+			continue;
+		}
+
+		// If there is one on the other hand, we can only send up to that event.
+		// Special case is if the cutoff point is zero, meaning there's nothing to send.
+		if (cutoffIndex == 0) {
+			continue;
+		}
+
+		int32_t currPacketEventSize = caerEventPacketHeaderGetEventSize(*currPacket);
+		int32_t currPacketEventValid = caerEventPacketHeaderGetEventValid(*currPacket);
+		int32_t currPacketEventNumber = caerEventPacketHeaderGetEventNumber(*currPacket);
+
+		// Allocate a new packet, with space for the remaining events that we don't send off
+		// (the ones after cutoff point).
+		int32_t nextPacketEventNumber = currPacketEventNumber - cutoffIndex;
+		caerEventPacketHeader nextPacket = malloc(
+		CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (currPacketEventSize * nextPacketEventNumber));
+		if (nextPacket == NULL) {
+			// TODO: handle allocation failure.
+			caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
+				"Failed memory allocation for nextPacket.");
+			exit(EXIT_FAILURE);
+		}
+
+		// Copy header and remaining events to new packet, set header sizes correctly.
+		memcpy(nextPacket, *currPacket, CAER_EVENT_PACKET_HEADER_SIZE);
+		memcpy(((uint8_t *) nextPacket) + CAER_EVENT_PACKET_HEADER_SIZE,
+			((uint8_t *) *currPacket) + CAER_EVENT_PACKET_HEADER_SIZE + (currPacketEventSize * cutoffIndex),
+			(size_t) (currPacketEventSize * nextPacketEventNumber));
+
+		caerEventPacketHeaderSetEventValid(nextPacket, currPacketEventValid - validEventsSeen);
+		caerEventPacketHeaderSetEventNumber(nextPacket, nextPacketEventNumber);
+		caerEventPacketHeaderSetEventCapacity(nextPacket, nextPacketEventNumber);
+
+		// Resize current packet to include only the events up until cutoff point.
+		caerEventPacketHeader currPacketResized = realloc(*currPacket,
+		CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (currPacketEventSize * cutoffIndex));
+		if (currPacketResized == NULL) {
+			// TODO: handle allocation failure.
+			caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
+				"Failed memory allocation for currPacketResized.");
+			exit(EXIT_FAILURE);
+		}
+
+		// Set header sizes for resized packet correctly.
+		caerEventPacketHeaderSetEventValid(currPacketResized, validEventsSeen);
+		caerEventPacketHeaderSetEventNumber(currPacketResized, cutoffIndex);
+		caerEventPacketHeaderSetEventCapacity(currPacketResized, cutoffIndex);
+
+		// Update references: the nextPacket goes into the eventPackets array at the currPacket position.
+		// The currPacket, after resizing, goes into the packet container for output.
+		*currPacket = nextPacket;
+		caerEventPacketContainerSetEventPacket(packetContainer, packetContainerPosition++, currPacketResized);
+	}
+
+	// Update wanted timestamp for next time slice.
+	state->packetContainer.newContainerTimestampStart += atomic_load_explicit(&state->packetContainer.timeSlice,
+		memory_order_relaxed);
+	state->packetContainer.newContainerTimestampEnd += atomic_load_explicit(&state->packetContainer.timeSlice,
+		memory_order_relaxed);
+
+	return (packetContainer);
+}
+
+static void doTimeDelay(inputCommonState state) {
+	// Got packet container, delay it until user-defined time.
+	uint64_t timeDelay = U64T(atomic_load_explicit(&state->packetContainer.timeDelay, memory_order_relaxed));
+
+	if (timeDelay != 0) {
+		// Get current time (nanosecond resolution).
+		struct timespec currentTime;
+		portable_clock_gettime_monotonic(&currentTime);
+
+		// Calculate elapsed time since last commit, based on that then either
+		// wait to meet timing, or log that it's impossible with current settings.
+		uint64_t diffNanoTime = (uint64_t) (((int64_t) (currentTime.tv_sec
+			- state->packetContainer.lastCommitTime.tv_sec) * 1000000000LL)
+			+ (int64_t) (currentTime.tv_nsec - state->packetContainer.lastCommitTime.tv_nsec));
+		uint64_t diffMicroTime = diffNanoTime / 1000;
+
+		if (diffMicroTime >= timeDelay) {
+			caerLog(CAER_LOG_WARNING, state->parentModule->moduleSubSystemString,
+				"Impossible to meet timeDelay timing specification with current settings.");
+
+			// Don't delay any more by requesting time again, use old one.
+			state->packetContainer.lastCommitTime = currentTime;
+		}
+		else {
+			// Sleep for the remaining time.
+			uint64_t sleepMicroTime = timeDelay - diffMicroTime;
+			uint64_t sleepMicroTimeSec = sleepMicroTime / 1000000; // Seconds part.
+			uint64_t sleepMicroTimeNsec = (sleepMicroTime * 1000) - (sleepMicroTimeSec * 1000000000); // Nanoseconds part.
+
+			struct timespec delaySleep = { .tv_sec = I64T(sleepMicroTimeSec), .tv_nsec = I64T(sleepMicroTimeNsec) };
+
+			thrd_sleep(&delaySleep, NULL);
+
+			// Update stored time.
+			portable_clock_gettime_monotonic(&state->packetContainer.lastCommitTime);
+		}
+	}
+}
+
+static void doPacketContainerCommit(inputCommonState state, caerEventPacketContainer packetContainer) {
+	retry: if (!ringBufferPut(state->transferRingPacketContainers, packetContainer)) {
+		if (atomic_load_explicit(&state->keepPackets, memory_order_relaxed)) {
+			// Retry forever if requested.
+			goto retry;
+		}
+
+		caerEventPacketContainerFree(packetContainer);
+
+		caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
+			"Failed to put new packet container on transfer ring-buffer: full.");
+	}
+	else {
+		// Signal availability of new data to the mainloop on packet container commit.
+		atomic_fetch_add_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_release);
+
+		caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Submitted packet container successfully.");
+	}
+}
+
+static int inputAssemblerThread(void *stateArg) {
+	inputCommonState state = stateArg;
+
+	// Set thread name.
+	thrd_set_name(state->parentModule->moduleSubSystemString);
+
+	// Set thread priority to high. This may fail depending on your OS configuration.
+	if (thrd_set_priority(-1) != thrd_success) {
+		caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
+			"Failed to raise thread priority for Input Assembler thread. You may experience lags and delays.");
+	}
+
+	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
+		// Get parsed packets from Reader thread.
+		caerEventPacketHeader currPacket = ringBufferGet(state->transferRingPackets);
+		if (currPacket == NULL) {
+			// Let's see why there are no more packets to read, maybe the reader failed.
+			if (atomic_load_explicit(&state->inputReaderThreadState, memory_order_relaxed) != READER_OK) {
+				break;
+			}
+
+			struct timespec delaySleep = { .tv_sec = 0, .tv_nsec = 1000 };
+
+			thrd_sleep(&delaySleep, NULL);
+
+			continue;
+		}
+
+		// We've got a full event packet, store it. It will later appear in the packet
+		// container in some form.
+		addToPacketContainer(state, currPacket, state->packets.currPacketData);
+
+		// Check if we have read and accumulated all the event packets with a main first timestamp smaller
+		// or equal than what we want. We know this is the case when the last seen main timestamp is clearly
+		// bigger than the wanted one. If this is true, it means we do have all the possible events of all
+		// types that happen up until that point, and we can split that time range off into a packet container.
+		// If not, we just go get the next event packet.
+		if (state->packetContainer.lastSeenPacketTimestamp <= state->packetContainer.newContainerTimestampEnd) {
+			continue;
+		}
+
+		caerEventPacketContainer packetContainer = generatePacketContainer(state);
+		if (packetContainer == NULL) {
+			// On failure, just continue.
+			continue;
+		}
+
+		doTimeDelay(state);
+
+		doPacketContainerCommit(state, packetContainer);
 	}
 
 	// At this point we either got terminated (running=false) or we stopped for some
@@ -1784,16 +1807,26 @@ bool isNetworkMessageBased) {
 	atomic_store(&state->packetContainer.timeSlice, sshsNodeGetInt(moduleData->moduleNode, "timeSlice"));
 	atomic_store(&state->packetContainer.timeDelay, sshsNodeGetInt(moduleData->moduleNode, "timeDelay"));
 
-	// Initialize transfer ring-buffer. transferBufferSize only changes here at init time!
-	state->transferRing = ringBufferInit((size_t) sshsNodeGetInt(moduleData->moduleNode, "transferBufferSize"));
-	if (state->transferRing == NULL) {
-		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to allocate transfer ring-buffer.");
+	// Initialize transfer ring-buffers. transferBufferSize only changes here at init time!
+	state->transferRingPackets = ringBufferInit((size_t) sshsNodeGetInt(moduleData->moduleNode, "transferBufferSize"));
+	if (state->transferRingPackets == NULL) {
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+			"Failed to allocate packets transfer ring-buffer.");
+		return (false);
+	}
+
+	state->transferRingPacketContainers = ringBufferInit(
+		(size_t) sshsNodeGetInt(moduleData->moduleNode, "transferBufferSize"));
+	if (state->transferRingPacketContainers == NULL) {
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+			"Failed to allocate packet containers transfer ring-buffer.");
 		return (false);
 	}
 
 	// Allocate data buffer. bufferSize is updated here.
 	if (!newInputBuffer(state)) {
-		ringBufferFree(state->transferRing);
+		ringBufferFree(state->transferRingPackets);
+		ringBufferFree(state->transferRingPacketContainers);
 
 		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to allocate input data buffer.");
 		return (false);
@@ -1805,14 +1838,33 @@ bool isNetworkMessageBased) {
 	state->packetContainer.newContainerTimestampStart = -1;
 	state->packetContainer.newContainerTimestampEnd = -1;
 
-	// Start input handling thread.
+	// Start input handling threads.
 	atomic_store(&state->running, true);
 
-	if (thrd_create(&state->inputThread, &inputHandlerThread, state) != thrd_success) {
-		ringBufferFree(state->transferRing);
+	if (thrd_create(&state->inputAssemblerThread, &inputAssemblerThread, state) != thrd_success) {
+		ringBufferFree(state->transferRingPackets);
+		ringBufferFree(state->transferRingPacketContainers);
 		free(state->dataBuffer);
 
-		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to start input handling thread.");
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to start input assembler thread.");
+		return (false);
+	}
+
+	if (thrd_create(&state->inputReaderThread, &inputReaderThread, state) != thrd_success) {
+		ringBufferFree(state->transferRingPackets);
+		ringBufferFree(state->transferRingPacketContainers);
+		free(state->dataBuffer);
+
+		// Stop assembler thread (started just above) and wait on it.
+		atomic_store(&state->running, false);
+
+		if ((errno = thrd_join(state->inputAssemblerThread, NULL)) != thrd_success) {
+			// This should never happen!
+			caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
+				"Failed to join input assembler thread. Error: %d.", errno);
+		}
+
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to start input reader thread.");
 		return (false);
 	}
 
@@ -1828,30 +1880,43 @@ void caerInputCommonExit(caerModuleData moduleData) {
 
 	inputCommonState state = moduleData->moduleState;
 
-	// Stop input thread and wait on it.
+	// Stop input threads and wait on them.
 	atomic_store(&state->running, false);
 
-	if ((errno = thrd_join(state->inputThread, NULL)) != thrd_success) {
+	if ((errno = thrd_join(state->inputReaderThread, NULL)) != thrd_success) {
 		// This should never happen!
 		caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
-			"Failed to join input handling thread. Error: %d.", errno);
+			"Failed to join input reader thread. Error: %d.", errno);
 	}
 
-	// Now clean up the transfer ring-buffer and its contents.
+	if ((errno = thrd_join(state->inputAssemblerThread, NULL)) != thrd_success) {
+		// This should never happen!
+		caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
+			"Failed to join input assembler thread. Error: %d.", errno);
+	}
+
+	// Now clean up the transfer ring-buffers and its contents.
 	caerEventPacketContainer packetContainer;
-	while ((packetContainer = ringBufferGet(state->transferRing)) != NULL) {
+	while ((packetContainer = ringBufferGet(state->transferRingPacketContainers)) != NULL) {
 		caerEventPacketContainerFree(packetContainer);
 
 		// If we're here, then nobody will consume this data afterwards.
 		atomic_fetch_sub_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_relaxed);
 	}
 
-	ringBufferFree(state->transferRing);
+	ringBufferFree(state->transferRingPacketContainers);
+
+	caerEventPacketHeader packet;
+	while ((packet = ringBufferGet(state->transferRingPackets)) != NULL) {
+		free(packet);
+	}
+
+	ringBufferFree(state->transferRingPackets);
 
 	// Free all waiting packets.
-	caerEventPacketHeader *packet = NULL;
-	while ((packet = (caerEventPacketHeader *) utarray_next(state->packetContainer.eventPackets, packet)) != NULL) {
-		free(*packet);
+	caerEventPacketHeader *packetPtr = NULL;
+	while ((packetPtr = (caerEventPacketHeader *) utarray_next(state->packetContainer.eventPackets, packetPtr)) != NULL) {
+		free(*packetPtr);
 	}
 
 	// Clear and free packet array used for packet container construction.
@@ -1881,7 +1946,7 @@ void caerInputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list ar
 	// Interpret variable arguments (same as above in main function).
 	caerEventPacketContainer *container = va_arg(args, caerEventPacketContainer *);
 
-	*container = ringBufferGet(state->transferRing);
+	*container = ringBufferGet(state->transferRingPacketContainers);
 
 	if (*container != NULL) {
 		// Got a container, set it up for auto-reclaim and signal it's not available anymore.
@@ -1933,6 +1998,37 @@ static void caerInputCommonConfigListener(sshsNode node, void *userData, enum ss
 		}
 		else if (changeType == INT && caerStrEquals(changeKey, "timeDelay")) {
 			atomic_store(&state->packetContainer.timeDelay, changeValue.iint);
+		}
+	}
+}
+
+static int packetsFirstTypeThenSizeCmp(const void *a, const void *b) {
+	const caerEventPacketHeader *aa = a;
+	const caerEventPacketHeader *bb = b;
+
+	// Sort first by type ID.
+	int16_t eventTypeA = caerEventPacketHeaderGetEventType(*aa);
+	int16_t eventTypeB = caerEventPacketHeaderGetEventType(*bb);
+
+	if (eventTypeA < eventTypeB) {
+		return (-1);
+	}
+	else if (eventTypeA > eventTypeB) {
+		return (1);
+	}
+	else {
+		// If equal, further sort by event size.
+		int32_t eventSizeA = caerEventPacketHeaderGetEventSize(*aa);
+		int32_t eventSizeB = caerEventPacketHeaderGetEventSize(*bb);
+
+		if (eventSizeA < eventSizeB) {
+			return (-1);
+		}
+		else if (eventSizeA > eventSizeB) {
+			return (1);
+		}
+		else {
+			return (0);
 		}
 	}
 }
