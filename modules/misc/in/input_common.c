@@ -706,7 +706,9 @@ static bool parseData(inputCommonState state) {
 			state->packets.currPacketData->endTimestamp);
 
 		while (!ringBufferPut(state->transferRingPackets, state->packets.currPacket)) {
-			;
+			if (!atomic_load_explicit(&state->running, memory_order_relaxed)) {
+				break;
+			}
 		}
 
 		state->packets.currPacket = NULL;
