@@ -190,7 +190,7 @@ static bool decompressTimestampSerialize(inputCommonState state, caerEventPacket
 static bool decompressEventPacket(inputCommonState state, caerEventPacketHeader packet, size_t packetSize);
 static int inputReaderThread(void *stateArg);
 
-static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket, packetData newPacketData);
+static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket);
 static caerEventPacketContainer generatePacketContainer(inputCommonState state);
 static void doTimeDelay(inputCommonState state);
 static void doPacketContainerCommit(inputCommonState state, caerEventPacketContainer packetContainer);
@@ -1401,24 +1401,36 @@ static int inputReaderThread(void *stateArg) {
  *
  * @return true if successfully added/merged, false on failure (memory allocation).
  */
-static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket, packetData newPacketData) {
+static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket) {
+	// Get data from new packet.
+	int32_t eventType = caerEventPacketHeaderGetEventType(newPacket);
+	int32_t eventSize = caerEventPacketHeaderGetEventSize(newPacket);
+	int32_t eventNumber = caerEventPacketHeaderGetEventNumber(newPacket);
+	int32_t eventValid = caerEventPacketHeaderGetEventValid(newPacket);
+
+	void *firstEvent = caerGenericEventGetEvent(newPacket, 0);
+	int64_t startTimestamp = caerGenericEventGetTimestamp64(firstEvent, newPacket);
+
+	void *lastEvent = caerGenericEventGetEvent(newPacket, eventNumber - 1);
+	int64_t endTimestamp = caerGenericEventGetTimestamp64(lastEvent, newPacket);
+
 	// Check timestamp constraints as per AEDAT 3.X format: order-relevant timestamps
 	// of each packet (the first timestamp) must be smaller or equal than next packet's.
-	if (newPacketData->startTimestamp < state->packetContainer.lastSeenPacketTimestamp) {
+	if (startTimestamp < state->packetContainer.lastSeenPacketTimestamp) {
 		// Discard non-compliant packets.
 		return (false);
 	}
 
 	// Remember the main timestamp of the first event of the new packet. That's the
 	// order-relevant timestamp for files/streams.
-	state->packetContainer.lastSeenPacketTimestamp = newPacketData->startTimestamp;
+	state->packetContainer.lastSeenPacketTimestamp = startTimestamp;
 
 	// If it's a special packet, it might contain TIMESTAMP_RESET as event, which affects
 	// how things are mixed and parsed. This needs to be detected first.
 	bool tsReset = false;
 	bool tsResetAlone = false;
 
-	if (newPacket->eventType == SPECIAL_EVENT) {
+	if (eventType == SPECIAL_EVENT) {
 		if (caerSpecialEventPacketFindValidEventByType((caerSpecialEventPacket) newPacket, TIMESTAMP_RESET) != NULL) {
 			tsReset = true;
 
@@ -1426,7 +1438,7 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 			// This is the case for new versions of libcaer and provides an easy way to disambiguate
 			// between events from before and from after the reset. For old libcaer versions, this
 			// is still the case when it's the only event. If not, it becomes more involved.
-			if (newPacketData->eventValid == 1 && newPacket->eventNumber == 1) {
+			if (eventValid == 1 && eventNumber == 1) {
 				tsResetAlone = true;
 			}
 		}
@@ -1443,8 +1455,8 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 	// Initialize time slice counters with first packet.
 	if (state->packetContainer.newContainerTimestampStart == -1) {
 		// -1 because newPacketFirstTimestamp is part of the set!
-		state->packetContainer.newContainerTimestampStart = newPacketData->startTimestamp;
-		state->packetContainer.newContainerTimestampEnd = newPacketData->startTimestamp
+		state->packetContainer.newContainerTimestampStart = startTimestamp;
+		state->packetContainer.newContainerTimestampEnd = startTimestamp
 			+ (atomic_load_explicit(&state->packetContainer.timeSlice, memory_order_relaxed) - 1);
 
 		portable_clock_gettime_monotonic(&state->packetContainer.lastCommitTime);
@@ -1456,7 +1468,7 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 		int16_t packetEventType = caerEventPacketHeaderGetEventType(*packet);
 		int32_t packetEventSize = caerEventPacketHeaderGetEventSize(*packet);
 
-		if (packetEventType == newPacketData->eventType && packetEventSize == newPacket->eventSize) {
+		if (packetEventType == eventType && packetEventSize == eventSize) {
 			// Packet with this type and event size already present.
 			packetAlreadyExists = true;
 			break;
@@ -1471,11 +1483,7 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 		int32_t packetEventValid = caerEventPacketHeaderGetEventValid(*packet);
 		int32_t packetEventNumber = caerEventPacketHeaderGetEventNumber(*packet);
 
-		int32_t newPacketEventValid = newPacketData->eventValid;
-		int32_t newPacketEventNumber = newPacketData->eventNumber;
-
-		caerEventPacketHeader mergedPacket = caerGenericEventPacketGrow(*packet,
-			(packetEventNumber + newPacketEventNumber));
+		caerEventPacketHeader mergedPacket = caerGenericEventPacketGrow(*packet, (packetEventNumber + eventNumber));
 		if (mergedPacket == NULL) {
 			// Failed to allocate memory for merged packets, free new packet, as
 			// we can't do anything more with it, and signal failure.
@@ -1490,22 +1498,21 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 		// events, and update the main pointer in the event packets array.
 		*packet = mergedPacket;
 
-		caerEventPacketHeaderSetEventValid(mergedPacket, packetEventValid + newPacketEventValid);
-		caerEventPacketHeaderSetEventNumber(mergedPacket, packetEventNumber + newPacketEventNumber);
+		caerEventPacketHeaderSetEventValid(mergedPacket, packetEventValid + eventValid);
+		caerEventPacketHeaderSetEventNumber(mergedPacket, packetEventNumber + eventNumber);
 
-		memcpy(((uint8_t *) mergedPacket) + CAER_EVENT_PACKET_HEADER_SIZE + (newPacket->eventSize * packetEventNumber),
-			((uint8_t *) newPacket) + CAER_EVENT_PACKET_HEADER_SIZE,
-			(size_t) (newPacket->eventSize * newPacketEventNumber));
+		memcpy(((uint8_t *) mergedPacket) + CAER_EVENT_PACKET_HEADER_SIZE + (eventSize * packetEventNumber),
+			((uint8_t *) newPacket) + CAER_EVENT_PACKET_HEADER_SIZE, (size_t) (eventSize * eventNumber));
 
 		// Merged content with existing packet, data copied: free new one.
 		free(newPacket);
 
 		// Update packets statistics. FirstTimestamp can never be smaller than lowestTimestamp,
 		// since we already have events of the same type that must come before.
-		state->packetContainer.totalEventNumber += (size_t) newPacketEventNumber;
+		state->packetContainer.totalEventNumber += (size_t) eventNumber;
 
-		if (newPacketData->endTimestamp > state->packetContainer.highestTimestamp) {
-			state->packetContainer.highestTimestamp = newPacketData->endTimestamp;
+		if (endTimestamp > state->packetContainer.highestTimestamp) {
+			state->packetContainer.highestTimestamp = endTimestamp;
 		}
 	}
 	else {
@@ -1515,10 +1522,10 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 		utarray_sort(state->packetContainer.eventPackets, &packetsFirstTypeThenSizeCmp);
 
 		// Update packets statistics.
-		state->packetContainer.totalEventNumber += (size_t) newPacketData->eventNumber;
+		state->packetContainer.totalEventNumber += (size_t) eventNumber;
 
-		if (newPacketData->endTimestamp > state->packetContainer.highestTimestamp) {
-			state->packetContainer.highestTimestamp = newPacketData->endTimestamp;
+		if (endTimestamp > state->packetContainer.highestTimestamp) {
+			state->packetContainer.highestTimestamp = endTimestamp;
 		}
 	}
 
@@ -1727,7 +1734,7 @@ static int inputAssemblerThread(void *stateArg) {
 
 		// We've got a full event packet, store it. It will later appear in the packet
 		// container in some form.
-		addToPacketContainer(state, currPacket, state->packets.currPacketData);
+		addToPacketContainer(state, currPacket);
 
 		// Check if we have read and accumulated all the event packets with a main first timestamp smaller
 		// or equal than what we want. We know this is the case when the last seen main timestamp is clearly
