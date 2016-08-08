@@ -96,6 +96,10 @@ static void caerFrameEnhancerRun(caerModuleData moduleData, size_t argsNumber, v
 #else
 		*enhancedFrame = caerFrameUtilsDemosaic(frame);
 #endif
+
+		// This creates a new, independent frame, which also needs to be
+		// correctly reclaimed at the end of the mainloop run.
+		caerMainloopFreeAfterLoop(&free, *enhancedFrame);
 	}
 
 	if (state->doWhiteBalance) {
