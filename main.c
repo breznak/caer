@@ -279,19 +279,19 @@ static bool mainloop_1(void) {
 #if defined(ENABLE_VISUALIZER) && defined(ENABLE_IMAGEGENERATOR)
 	caerVisualizer(65, "ImageStreamerHist", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) imagestreamer);
 #if defined(DAVISFX2) || defined(DAVISFX3) || defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT)
-	// add allegro bips
-	// display accumulated spike image in hist
+	// Open a second window of the visualizer
+	// display images of accumulated spikes
+	// this also requires imagegenerator
 	caerVisualizer(64, "ImageStreamerFrame", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) imagestreamer_frame);
 #ifdef ENABLE_CAFFEINTERFACE
+	//show the activations of the deep network
 	caerVisualizer(66, "DeepNetworkActivations", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) networkActivity);
 #endif
 #endif
 #endif
 
 #ifdef ENABLE_IMAGESTREAMERBEEPER
-	// Open a second window of the visualizer
-	// display images of accumulated spikes
-	// this also requires image generator
+	// add allegro sound on detection
 #ifdef ENABLE_CAFFEINTERFACE
 	if(classification_results != NULL) {
 		caerImagestreamerBeeper(22, classification_results, (int) MAX_IMG_QTY);
