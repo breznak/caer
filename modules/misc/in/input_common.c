@@ -14,9 +14,9 @@
 
 #include <libcaer/events/common.h>
 #include <libcaer/events/packetContainer.h>
+#include <libcaer/events/special.h>
 #include <libcaer/events/polarity.h>
 #include <libcaer/events/frame.h>
-#include <libcaer/events/special.h>
 
 #define MAX_HEADER_LINE_SIZE 1024
 
@@ -92,10 +92,6 @@ struct input_common_packet_data {
 struct input_common_packet_container_data {
 	/// Current events, merged into packets, sorted by type.
 	UT_array *eventPackets;
-	/// Biggest timestamp among all events currently held in 'eventPackets'.
-	int64_t highestTimestamp;
-	/// Sum of the event number for all packets currently held in 'eventPackets'.
-	size_t totalEventNumber;
 	/// The first main timestamp (the one relevant for packet ordering in streams)
 	/// of the last event packet that was handled.
 	int64_t lastPacketTimestamp;
@@ -106,6 +102,8 @@ struct input_common_packet_container_data {
 	/// output the next packet container (in time-slice mode).
 	int64_t newContainerTimestampStart;
 	int64_t newContainerTimestampEnd;
+	/// Sum of the event number for all packets currently held in 'eventPackets'.
+	size_t totalEventNumber;
 	/// Time when the last packet container was sent out, used to calculate
 	/// sleep time to reach user configured 'timeDelay'.
 	struct timespec lastCommitTime;
@@ -1458,10 +1456,6 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 	// Update packets statistics.
 	state->packetContainer.totalEventNumber += (size_t) newPacketData->eventNumber;
 
-	if (newPacketData->endTimestamp > state->packetContainer.highestTimestamp) {
-		state->packetContainer.highestTimestamp = newPacketData->endTimestamp;
-	}
-
 	return (true);
 }
 
@@ -1795,7 +1789,6 @@ static int inputAssemblerThread(void *stateArg) {
 			state->packetContainer.newContainerTimestampStart = -1;
 			state->packetContainer.newContainerTimestampEnd = -1;
 			state->packetContainer.lastTimestampOverflow = 0;
-			state->packetContainer.highestTimestamp = 0;
 
 			continue;
 		}
