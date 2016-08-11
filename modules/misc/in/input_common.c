@@ -191,7 +191,7 @@ static bool decompressEventPacket(inputCommonState state, caerEventPacketHeader 
 static int inputReaderThread(void *stateArg);
 
 static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket, packetData newPacketData);
-static caerEventPacketContainer generatePacketContainer(inputCommonState state);
+static caerEventPacketContainer generatePacketContainer(inputCommonState state, bool forceFlush);
 static void doTimeDelay(inputCommonState state);
 static void doPacketContainerCommit(inputCommonState state, caerEventPacketContainer packetContainer, bool force);
 static int inputAssemblerThread(void *stateArg);
@@ -1465,7 +1465,7 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 	return (true);
 }
 
-static caerEventPacketContainer generatePacketContainer(inputCommonState state) {
+static caerEventPacketContainer generatePacketContainer(inputCommonState state, bool forceFlush) {
 	// Let's generate a packet container, use the size of the event packets array as upper bound.
 	int32_t packetContainerPosition = 0;
 	caerEventPacketContainer packetContainer = caerEventPacketContainerAllocate(
@@ -1474,87 +1474,102 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state) 
 		return (NULL);
 	}
 
-	// Iterate over each event packet, and slice out the relevant part in time.
-	caerEventPacketHeader *currPacket = NULL;
-	while ((currPacket = (caerEventPacketHeader *) utarray_next(state->packetContainer.eventPackets, currPacket))
-		!= NULL) {
-		// Search for cutoff point in time. Also count valid events encountered for later calculations.
-		int32_t cutoffIndex = -1;
-		int32_t validEventsSeen = 0;
+	// When we force a flush commit, we put everything currently there in the packet
+	// container and return it, with no slicing being done at all.
+	if (forceFlush) {
+		caerEventPacketHeader *currPacket = NULL;
+		while ((currPacket = (caerEventPacketHeader *) utarray_next(state->packetContainer.eventPackets, currPacket))
+			!= NULL) {
+			caerEventPacketContainerSetEventPacket(packetContainer, packetContainerPosition++, *currPacket);
+		}
 
-		CAER_ITERATOR_ALL_START(*currPacket, void *)
-			if (caerGenericEventGetTimestamp64(caerIteratorElement, *currPacket)
-				> state->packetContainer.newContainerTimestampEnd) {
-				cutoffIndex = caerIteratorCounter;
-				break;
+		// Clean packets array, they are all being sent out now.
+		utarray_clear(state->packetContainer.eventPackets);
+	}
+	else {
+		// Iterate over each event packet, and slice out the relevant part in time.
+		caerEventPacketHeader *currPacket = NULL;
+		while ((currPacket = (caerEventPacketHeader *) utarray_next(state->packetContainer.eventPackets, currPacket))
+			!= NULL) {
+			// Search for cutoff point in time. Also count valid events encountered for later calculations.
+			int32_t cutoffIndex = -1;
+			int32_t validEventsSeen = 0;
+
+			CAER_ITERATOR_ALL_START(*currPacket, void *)
+				if (caerGenericEventGetTimestamp64(caerIteratorElement, *currPacket)
+					> state->packetContainer.newContainerTimestampEnd) {
+					cutoffIndex = caerIteratorCounter;
+					break;
+				}
+
+				if (caerGenericEventIsValid(caerIteratorElement)) {
+					validEventsSeen++;
+				}
+			CAER_ITERATOR_ALL_END
+
+			// If there is no cutoff point, we can just send on the whole packet with no changes.
+			if (cutoffIndex == -1) {
+				caerEventPacketContainerSetEventPacket(packetContainer, packetContainerPosition++, *currPacket);
+
+				// Erase slot from packets array.
+				utarray_erase(state->packetContainer.eventPackets,
+					(size_t) utarray_eltidx(state->packetContainer.eventPackets, currPacket), 1);
+				currPacket = (caerEventPacketHeader *) utarray_prev(state->packetContainer.eventPackets, currPacket);
+				continue;
 			}
 
-			if (caerGenericEventIsValid(caerIteratorElement)) {
-				validEventsSeen++;
-			}CAER_ITERATOR_ALL_END
+			// If there is one on the other hand, we can only send up to that event.
+			// Special case is if the cutoff point is zero, meaning there's nothing to send.
+			if (cutoffIndex == 0) {
+				continue;
+			}
 
-		// If there is no cutoff point, we can just send on the whole packet with no changes.
-		if (cutoffIndex == -1) {
-			caerEventPacketContainerSetEventPacket(packetContainer, packetContainerPosition++, *currPacket);
+			int32_t currPacketEventSize = caerEventPacketHeaderGetEventSize(*currPacket);
+			int32_t currPacketEventValid = caerEventPacketHeaderGetEventValid(*currPacket);
+			int32_t currPacketEventNumber = caerEventPacketHeaderGetEventNumber(*currPacket);
 
-			// Erase slot from packets array.
-			utarray_erase(state->packetContainer.eventPackets,
-				(size_t) utarray_eltidx(state->packetContainer.eventPackets, currPacket), 1);
-			currPacket = (caerEventPacketHeader *) utarray_prev(state->packetContainer.eventPackets, currPacket);
-			continue;
+			// Allocate a new packet, with space for the remaining events that we don't send off
+			// (the ones after cutoff point).
+			int32_t nextPacketEventNumber = currPacketEventNumber - cutoffIndex;
+			caerEventPacketHeader nextPacket = malloc(
+			CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (currPacketEventSize * nextPacketEventNumber));
+			if (nextPacket == NULL) {
+				// TODO: handle allocation failure.
+				caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
+					"Failed memory allocation for nextPacket.");
+				exit(EXIT_FAILURE);
+			}
+
+			// Copy header and remaining events to new packet, set header sizes correctly.
+			memcpy(nextPacket, *currPacket, CAER_EVENT_PACKET_HEADER_SIZE);
+			memcpy(((uint8_t *) nextPacket) + CAER_EVENT_PACKET_HEADER_SIZE,
+				((uint8_t *) *currPacket) + CAER_EVENT_PACKET_HEADER_SIZE + (currPacketEventSize * cutoffIndex),
+				(size_t) (currPacketEventSize * nextPacketEventNumber));
+
+			caerEventPacketHeaderSetEventValid(nextPacket, currPacketEventValid - validEventsSeen);
+			caerEventPacketHeaderSetEventNumber(nextPacket, nextPacketEventNumber);
+			caerEventPacketHeaderSetEventCapacity(nextPacket, nextPacketEventNumber);
+
+			// Resize current packet to include only the events up until cutoff point.
+			caerEventPacketHeader currPacketResized = realloc(*currPacket,
+			CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (currPacketEventSize * cutoffIndex));
+			if (currPacketResized == NULL) {
+				// TODO: handle allocation failure.
+				caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
+					"Failed memory allocation for currPacketResized.");
+				exit(EXIT_FAILURE);
+			}
+
+			// Set header sizes for resized packet correctly.
+			caerEventPacketHeaderSetEventValid(currPacketResized, validEventsSeen);
+			caerEventPacketHeaderSetEventNumber(currPacketResized, cutoffIndex);
+			caerEventPacketHeaderSetEventCapacity(currPacketResized, cutoffIndex);
+
+			// Update references: the nextPacket goes into the eventPackets array at the currPacket position.
+			// The currPacket, after resizing, goes into the packet container for output.
+			*currPacket = nextPacket;
+			caerEventPacketContainerSetEventPacket(packetContainer, packetContainerPosition++, currPacketResized);
 		}
-
-		// If there is one on the other hand, we can only send up to that event.
-		// Special case is if the cutoff point is zero, meaning there's nothing to send.
-		if (cutoffIndex == 0) {
-			continue;
-		}
-
-		int32_t currPacketEventSize = caerEventPacketHeaderGetEventSize(*currPacket);
-		int32_t currPacketEventValid = caerEventPacketHeaderGetEventValid(*currPacket);
-		int32_t currPacketEventNumber = caerEventPacketHeaderGetEventNumber(*currPacket);
-
-		// Allocate a new packet, with space for the remaining events that we don't send off
-		// (the ones after cutoff point).
-		int32_t nextPacketEventNumber = currPacketEventNumber - cutoffIndex;
-		caerEventPacketHeader nextPacket = malloc(
-		CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (currPacketEventSize * nextPacketEventNumber));
-		if (nextPacket == NULL) {
-			// TODO: handle allocation failure.
-			caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
-				"Failed memory allocation for nextPacket.");
-			exit(EXIT_FAILURE);
-		}
-
-		// Copy header and remaining events to new packet, set header sizes correctly.
-		memcpy(nextPacket, *currPacket, CAER_EVENT_PACKET_HEADER_SIZE);
-		memcpy(((uint8_t *) nextPacket) + CAER_EVENT_PACKET_HEADER_SIZE,
-			((uint8_t *) *currPacket) + CAER_EVENT_PACKET_HEADER_SIZE + (currPacketEventSize * cutoffIndex),
-			(size_t) (currPacketEventSize * nextPacketEventNumber));
-
-		caerEventPacketHeaderSetEventValid(nextPacket, currPacketEventValid - validEventsSeen);
-		caerEventPacketHeaderSetEventNumber(nextPacket, nextPacketEventNumber);
-		caerEventPacketHeaderSetEventCapacity(nextPacket, nextPacketEventNumber);
-
-		// Resize current packet to include only the events up until cutoff point.
-		caerEventPacketHeader currPacketResized = realloc(*currPacket,
-		CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (currPacketEventSize * cutoffIndex));
-		if (currPacketResized == NULL) {
-			// TODO: handle allocation failure.
-			caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
-				"Failed memory allocation for currPacketResized.");
-			exit(EXIT_FAILURE);
-		}
-
-		// Set header sizes for resized packet correctly.
-		caerEventPacketHeaderSetEventValid(currPacketResized, validEventsSeen);
-		caerEventPacketHeaderSetEventNumber(currPacketResized, cutoffIndex);
-		caerEventPacketHeaderSetEventCapacity(currPacketResized, cutoffIndex);
-
-		// Update references: the nextPacket goes into the eventPackets array at the currPacket position.
-		// The currPacket, after resizing, goes into the packet container for output.
-		*currPacket = nextPacket;
-		caerEventPacketContainerSetEventPacket(packetContainer, packetContainerPosition++, currPacketResized);
 	}
 
 	// Update wanted timestamp for next time slice.
@@ -1639,8 +1654,8 @@ static void getPacketInfo(caerEventPacketHeader packet, packetData packetData) {
 	packetData->endTimestamp = caerGenericEventGetTimestamp64(lastEvent, packet);
 }
 
-static bool commitPacketContainer(inputCommonState state) {
-	caerEventPacketContainer packetContainer = generatePacketContainer(state);
+static bool commitPacketContainer(inputCommonState state, bool forceFlush) {
+	caerEventPacketContainer packetContainer = generatePacketContainer(state, forceFlush);
 	if (packetContainer == NULL) {
 		return (false);
 	}
@@ -1717,6 +1732,7 @@ static int inputAssemblerThread(void *stateArg) {
 		if (currPacketData.eventType == SPECIAL_EVENT) {
 			if (caerSpecialEventPacketFindValidEventByType((caerSpecialEventPacket) currPacket, TIMESTAMP_RESET) != NULL) {
 				tsReset = true;
+				caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString, "Timestamp Reset in this packet.");
 			}
 		}
 
@@ -1729,6 +1745,7 @@ static int inputAssemblerThread(void *stateArg) {
 
 			// TSOverflow increased, commit container now.
 			tsOverflow = true;
+			caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString, "Timestamp Overflow with this packet.");
 		}
 
 		// Now we have all the information and must do some merge and commit operations.
@@ -1741,7 +1758,7 @@ static int inputAssemblerThread(void *stateArg) {
 
 		if (tsReset) {
 			// Commit all current content.
-			commitPacketContainer(state);
+			commitPacketContainer(state, true);
 
 			// Send lone packet container with just TS_RESET.
 			// Allocate packet container just for this event.
@@ -1800,7 +1817,7 @@ static int inputAssemblerThread(void *stateArg) {
 			continue;
 		}
 
-		commitPacketContainer(state);
+		commitPacketContainer(state, false);
 	}
 
 	// At this point we either got terminated (running=false) or we stopped for some
