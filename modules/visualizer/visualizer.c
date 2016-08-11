@@ -17,8 +17,6 @@ struct caer_visualizer_state {
 	atomic_bool displayWindowResize;
 	int32_t displayWindowSizeX;
 	int32_t displayWindowSizeY;
-	int32_t displayWindowStretchSizeX;
-	int32_t displayWindowStretchSizeY;
 	ALLEGRO_DISPLAY *displayWindow;
 	ALLEGRO_EVENT_QUEUE *displayEventQueue;
 	ALLEGRO_TIMER *displayTimer;
@@ -38,7 +36,7 @@ struct caer_visualizer_state {
 	int32_t packetSubsampleCount;
 };
 
-static void updateDisplaySize(caerVisualizerState state, float zoomFactor, bool showStatistics);
+static void updateDisplaySize(caerVisualizerState state, bool updateTransform);
 static void caerVisualizerConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 static bool caerVisualizerInitGraphics(caerVisualizerState state);
@@ -184,13 +182,11 @@ caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisu
 
 	atomic_store(&state->packetSubsampleRendering, sshsNodeGetInt(parentModule->moduleNode, "subsampleRendering"));
 
-	state->showStatistics = sshsNodeGetBool(parentModule->moduleNode, "showStatistics");
-
 	// Remember sizes.
 	state->bitmapRendererSizeX = bitmapSizeX;
 	state->bitmapRendererSizeY = bitmapSizeY;
 
-	updateDisplaySize(state, sshsNodeGetFloat(parentModule->moduleNode, "zoomFactor"), state->showStatistics);
+	updateDisplaySize(state, false);
 
 	// Remember rendering and event handling function.
 	state->renderer = renderer;
@@ -236,17 +232,16 @@ caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisu
 	return (state);
 }
 
-static void updateDisplaySize(caerVisualizerState state, float zoomFactor, bool showStatistics) {
-	int32_t displayWindowSizeX = I32T((float ) state->bitmapRendererSizeX * zoomFactor);
-	int32_t displayWindowSizeY = I32T((float ) state->bitmapRendererSizeY * zoomFactor);
+static void updateDisplaySize(caerVisualizerState state, bool updateTransform) {
+	state->showStatistics = sshsNodeGetBool(state->parentModule->moduleNode, "showStatistics");
+	float zoomFactor = sshsNodeGetFloat(state->parentModule->moduleNode, "zoomFactor");
 
-	// Remember just bitmap stretch size for scale operation!
-	state->displayWindowStretchSizeX = displayWindowSizeX;
-	state->displayWindowStretchSizeY = displayWindowSizeY;
+	int32_t displayWindowSizeX = state->bitmapRendererSizeX;
+	int32_t displayWindowSizeY = state->bitmapRendererSizeY;
 
 	// When statistics are turned on, we need to add some space to the
 	// X axis for displaying the whole line and the Y axis for spacing.
-	if (showStatistics) {
+	if (state->showStatistics) {
 		if (STATISTICS_WIDTH > displayWindowSizeX) {
 			displayWindowSizeX = STATISTICS_WIDTH;
 		}
@@ -254,8 +249,20 @@ static void updateDisplaySize(caerVisualizerState state, float zoomFactor, bool 
 		displayWindowSizeY += STATISTICS_HEIGHT;
 	}
 
-	state->displayWindowSizeX = displayWindowSizeX;
-	state->displayWindowSizeY = displayWindowSizeY;
+	state->displayWindowSizeX = I32T((float ) displayWindowSizeX * zoomFactor);
+	state->displayWindowSizeY = I32T((float ) displayWindowSizeY * zoomFactor);
+
+	// Update Allegro drawing transformation to implement scaling.
+	if (updateTransform) {
+		al_set_target_backbuffer(state->displayWindow);
+
+		ALLEGRO_TRANSFORM t;
+		al_identity_transform(&t);
+		al_scale_transform(&t, zoomFactor, zoomFactor);
+		al_use_transform(&t);
+
+		al_resize_display(state->displayWindow, state->displayWindowSizeX, state->displayWindowSizeY);
+	}
 }
 
 static void caerVisualizerConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
@@ -375,6 +382,9 @@ static bool caerVisualizerInitGraphics(caerVisualizerState state) {
 	al_set_target_backbuffer(state->displayWindow);
 	al_clear_to_color(al_map_rgb(0, 0, 0));
 	al_flip_display();
+
+	// Set scale transform for display window, update sizes.
+	updateDisplaySize(state, true);
 
 	// Create memory bitmap for drawing into.
 	al_set_new_bitmap_flags(ALLEGRO_MEMORY_BITMAP | ALLEGRO_MIN_LINEAR | ALLEGRO_MAG_LINEAR);
@@ -569,14 +579,8 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 	if (atomic_load_explicit(&state->displayWindowResize, memory_order_relaxed)) {
 		atomic_store(&state->displayWindowResize, false);
 
-		// Update statistics flag. We do this here to ensure screen is always properly
-		// sized for statistics display.
-		state->showStatistics = sshsNodeGetBool(state->parentModule->moduleNode, "showStatistics");
-
-		updateDisplaySize(state, sshsNodeGetFloat(state->parentModule->moduleNode, "zoomFactor"),
-			state->showStatistics);
-
-		al_resize_display(state->displayWindow, state->displayWindowSizeX, state->displayWindowSizeY);
+		// Update statistics flag and resize display appropriately.
+		updateDisplaySize(state, true);
 	}
 
 	// Render content to display.
@@ -594,10 +598,8 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 			GLOBAL_FONT_SPACING, 0, state->packetStatistics.currentStatisticsString);
 		}
 
-		// Blit bitmap to screen, taking zoom factor into consideration.
-		al_draw_scaled_bitmap(state->bitmapRenderer, 0, 0, (float) state->bitmapRendererSizeX,
-			(float) state->bitmapRendererSizeY, 0, (doStatistics) ? ((float) STATISTICS_HEIGHT) : (0),
-			(float) state->displayWindowStretchSizeX, (float) state->displayWindowStretchSizeY, 0);
+		// Blit bitmap to screen.
+		al_draw_bitmap(state->bitmapRenderer, 0, (doStatistics) ? ((float) STATISTICS_HEIGHT) : (0), 0);
 
 		al_flip_display();
 	}
