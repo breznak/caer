@@ -465,7 +465,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 			al_clear_to_color(al_map_rgb(0, 0, 0));
 		}
 
-		// Update bitmap with new content. (0, 0) is lower left corner.
+		// Update bitmap with new content. (0, 0) is upper left corner.
 		// NULL renderer is supported and simply does nothing (black screen).
 		if (state->renderer != NULL) {
 			bool didDrawSomething = (*state->renderer)(state, container);
@@ -1004,9 +1004,9 @@ bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPac
 bool caerVisualizerMultiRendererPolarityAndFrameEvents(caerVisualizerState state, caerEventPacketContainer container) {
 	bool drewFrameEvents = caerVisualizerRendererFrameEvents(state, container);
 
-	caerVisualizerRendererPolarityEvents(state, container);
+	bool drewPolarityEvents = caerVisualizerRendererPolarityEvents(state, container);
 
-	if (drewFrameEvents) {
+	if (drewFrameEvents || drewPolarityEvents) {
 		return (true);
 	}
 
