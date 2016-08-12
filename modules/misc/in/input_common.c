@@ -102,16 +102,18 @@ struct input_common_packet_container_data {
 	/// output the next packet container (in time-slice mode).
 	int64_t newContainerTimestampStart;
 	int64_t newContainerTimestampEnd;
-	/// Sum of the event number for all packets currently held in 'eventPackets'.
-	size_t totalEventNumber;
-	/// Time when the last packet container was sent out, used to calculate
-	/// sleep time to reach user configured 'timeDelay'.
-	struct timespec lastCommitTime;
+	/// If any packet has passed the size limit.
+	bool newContainerSizeHit;
+	/// Size slice (in events), for which to generate a packet container.
+	atomic_int_fast32_t sizeSlice;
 	/// Time slice (in µs), for which to generate a packet container.
 	atomic_int_fast32_t timeSlice;
 	/// Time delay (in µs) between the start of two consecutive time slices.
 	/// This is used for real-time slow-down.
 	atomic_int_fast32_t timeDelay;
+	/// Time when the last packet container was sent out, used to calculate
+	/// sleep time to reach user configured 'timeDelay'.
+	struct timespec lastCommitTime;
 };
 
 struct input_common_state {
@@ -732,6 +734,8 @@ static bool parseData(inputCommonState state) {
  * -1 on memory allocation failure.
  */
 static int aedat2GetPacket(inputCommonState state, int16_t chipID) {
+	UNUSED_ARGUMENT(chipID);
+
 	// TODO: AEDAT 2.0 not yet supported.
 	caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Reading AEDAT 2.0 data not yet supported.");
 	return (-1);
@@ -1445,6 +1449,7 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 
 		// Merged content with existing packet, data copied: free new one.
 		free(newPacket);
+		newPacket = mergedPacket;
 	}
 	else {
 		// No previous packet of this type and event size found, use this one directly.
@@ -1453,8 +1458,11 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 		utarray_sort(state->packetContainer.eventPackets, &packetsFirstTypeThenSizeCmp);
 	}
 
-	// Update packets statistics.
-	state->packetContainer.totalEventNumber += (size_t) newPacketData->eventNumber;
+	// Update size commit criteria.
+	if (caerEventPacketHeaderGetEventNumber(
+		newPacket) >= atomic_load_explicit(&state->packetContainer.sizeSlice, memory_order_relaxed)) {
+		state->packetContainer.newContainerSizeHit = true;
+	}
 
 	return (true);
 }
@@ -1649,6 +1657,17 @@ static void getPacketInfo(caerEventPacketHeader packet, packetData packetData) {
 }
 
 static bool commitPacketContainer(inputCommonState state, bool forceFlush) {
+	// Check if we hit any of the size limits (no more than X events per packet type).
+	// Check if we have read and accumulated all the event packets with a main first timestamp smaller
+	// or equal than what we want. We know this is the case when the last seen main timestamp is clearly
+	// bigger than the wanted one. If this is true, it means we do have all the possible events of all
+	// types that happen up until that point, and we can split that time range off into a packet container.
+	// If not, we just go get the next event packet.
+	if (state->packetContainer.newContainerSizeHit
+		&& state->packetContainer.lastPacketTimestamp <= state->packetContainer.newContainerTimestampEnd) {
+		return (false);
+	}
+
 	caerEventPacketContainer packetContainer = generatePacketContainer(state, forceFlush);
 	if (packetContainer == NULL) {
 		return (false);
@@ -1798,15 +1817,6 @@ static int inputAssemblerThread(void *stateArg) {
 			// Discard on merge failure.
 			free(currPacket);
 
-			continue;
-		}
-
-		// Check if we have read and accumulated all the event packets with a main first timestamp smaller
-		// or equal than what we want. We know this is the case when the last seen main timestamp is clearly
-		// bigger than the wanted one. If this is true, it means we do have all the possible events of all
-		// types that happen up until that point, and we can split that time range off into a packet container.
-		// If not, we just go get the next event packet.
-		if (state->packetContainer.lastPacketTimestamp <= state->packetContainer.newContainerTimestampEnd) {
 			continue;
 		}
 
