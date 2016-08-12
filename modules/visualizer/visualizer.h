@@ -14,7 +14,7 @@
 #define VISUALIZER_REFRESH_RATE 60.0f
 
 typedef struct caer_visualizer_state *caerVisualizerState;
-typedef bool (*caerVisualizerRenderer)(caerVisualizerState state, caerEventPacketContainer container, bool cleared);
+typedef bool (*caerVisualizerRenderer)(caerVisualizerState state, caerEventPacketContainer container, bool doClear);
 typedef void (*caerVisualizerEventHandler)(caerVisualizerState state, ALLEGRO_EVENT event);
 
 // For reuse inside other modules.
@@ -28,16 +28,16 @@ void caerVisualizerReset(caerVisualizerState state);
 void caerVisualizer(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer,
 	caerVisualizerEventHandler eventHandler, caerEventPacketHeader packetHeader);
 
-bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketContainer container, bool cleared);
-bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketContainer container, bool cleared);
-bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketContainer container, bool cleared);
-bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPacketContainer container, bool cleared);
+bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketContainer container, bool doClear);
+bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketContainer container, bool doClear);
+bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketContainer container, bool doClear);
+bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPacketContainer container, bool doClear);
 
 void caerVisualizerMulti(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer,
 	caerVisualizerEventHandler eventHandler, caerEventPacketContainer container);
 
 bool caerVisualizerMultiRendererPolarityAndFrameEvents(caerVisualizerState state, caerEventPacketContainer container,
-	bool cleared);
+	bool doClear);
 
 void caerVisualizerSystemInit(void);
 

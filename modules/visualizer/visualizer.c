@@ -459,12 +459,6 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 	if (container != NULL) {
 		al_set_target_bitmap(state->bitmapRenderer);
 
-		// Only clear bitmap to black if nothing has been
-		// rendered since the last display flip.
-		if (!state->bitmapDrawUpdate) {
-			al_clear_to_color(al_map_rgb(0, 0, 0));
-		}
-
 		// Update bitmap with new content. (0, 0) is upper left corner.
 		// NULL renderer is supported and simply does nothing (black screen).
 		if (state->renderer != NULL) {
@@ -800,9 +794,13 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 	caerVisualizerUpdate(moduleData->moduleState, container);
 }
 
-bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketContainer container, bool cleared) {
+bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketContainer container, bool doClear) {
 	UNUSED_ARGUMENT(state);
-	UNUSED_ARGUMENT(cleared);
+
+	// Clear bitmap to black to erase old events.
+	if (doClear) {
+		al_clear_to_color(al_map_rgb(0, 0, 0));
+	}
 
 	caerEventPacketHeader polarityEventPacketHeader = caerEventPacketContainerFindEventPacketByType(container,
 		POLARITY_EVENT);
@@ -828,9 +826,9 @@ bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPa
 	return (true);
 }
 
-bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketContainer container, bool cleared) {
+bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketContainer container, bool doClear) {
 	UNUSED_ARGUMENT(state);
-	UNUSED_ARGUMENT(cleared);
+	UNUSED_ARGUMENT(doClear); // Don't erase last frame.
 
 	caerEventPacketHeader frameEventPacketHeader = caerEventPacketContainerFindEventPacketByType(container,
 		FRAME_EVENT);
@@ -848,6 +846,10 @@ bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacke
 
 		// Only operate on the last, valid frame.
 		if (caerFrameEventIsValid(currFrameEvent)) {
+			// Always clear bitmap to black to erase old frame, this is needed in case ROI
+			// has its position moving around in the screen.
+			al_clear_to_color(al_map_rgb(0, 0, 0));
+
 			// Copy the frame content to the render bitmap.
 			// Use frame sizes to correctly support small ROI frames.
 			int32_t frameSizeX = caerFrameEventGetLengthX(currFrameEvent);
@@ -900,8 +902,11 @@ bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacke
 #define RESET_LIMIT_POS(VAL, LIMIT) if ((VAL) > (LIMIT)) { (VAL) = (LIMIT); }
 #define RESET_LIMIT_NEG(VAL, LIMIT) if ((VAL) < (LIMIT)) { (VAL) = (LIMIT); }
 
-bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketContainer container, bool cleared) {
-	UNUSED_ARGUMENT(cleared);
+bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketContainer container, bool doClear) {
+	// Clear bitmap to black to erase old events.
+	if (doClear) {
+		al_clear_to_color(al_map_rgb(0, 0, 0));
+	}
 
 	caerEventPacketHeader imu6EventPacketHeader = caerEventPacketContainerFindEventPacketByType(container, IMU6_EVENT);
 
@@ -983,9 +988,13 @@ bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacket
 	return (true);
 }
 
-bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPacketContainer container, bool cleared) {
+bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPacketContainer container, bool doClear) {
 	UNUSED_ARGUMENT(state);
-	UNUSED_ARGUMENT(cleared);
+
+	// Clear bitmap to black to erase old events.
+	if (doClear) {
+		al_clear_to_color(al_map_rgb(0, 0, 0));
+	}
 
 	caerEventPacketHeader point2DEventPacketHeader = caerEventPacketContainerFindEventPacketByType(container,
 		POINT2D_EVENT);
@@ -1007,15 +1016,12 @@ bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPac
 }
 
 bool caerVisualizerMultiRendererPolarityAndFrameEvents(caerVisualizerState state, caerEventPacketContainer container,
-	bool cleared) {
-	// If the bitmap was just cleared to black, we must wait for the next frame to paint as background.
-	bool drewFrameEvents = caerVisualizerRendererFrameEvents(state, container, cleared);
+	bool doClear) {
+	UNUSED_ARGUMENT(doClear); // Don't clear old frames, add events on top.
 
-	bool drewPolarityEvents = caerVisualizerRendererPolarityEvents(state, container, cleared);
+	bool drewFrameEvents = caerVisualizerRendererFrameEvents(state, container, false);
 
-	if (cleared) {
-		return (drewFrameEvents);
-	}
+	bool drewPolarityEvents = caerVisualizerRendererPolarityEvents(state, container, false);
 
 	return (drewFrameEvents || drewPolarityEvents);
 }
