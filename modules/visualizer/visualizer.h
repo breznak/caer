@@ -14,7 +14,7 @@
 #define VISUALIZER_REFRESH_RATE 60.0f
 
 typedef struct caer_visualizer_state *caerVisualizerState;
-typedef bool (*caerVisualizerRenderer)(caerVisualizerState state, caerEventPacketContainer container);
+typedef bool (*caerVisualizerRenderer)(caerVisualizerState state, caerEventPacketContainer container, bool cleared);
 typedef void (*caerVisualizerEventHandler)(caerVisualizerState state, ALLEGRO_EVENT event);
 
 // For reuse inside other modules.
@@ -28,15 +28,16 @@ void caerVisualizerReset(caerVisualizerState state);
 void caerVisualizer(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer,
 	caerVisualizerEventHandler eventHandler, caerEventPacketHeader packetHeader);
 
-bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketContainer container);
-bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketContainer container);
-bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketContainer container);
-bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPacketContainer container);
+bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketContainer container, bool cleared);
+bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketContainer container, bool cleared);
+bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketContainer container, bool cleared);
+bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPacketContainer container, bool cleared);
 
 void caerVisualizerMulti(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer,
 	caerVisualizerEventHandler eventHandler, caerEventPacketContainer container);
 
-bool caerVisualizerMultiRendererPolarityAndFrameEvents(caerVisualizerState state, caerEventPacketContainer container);
+bool caerVisualizerMultiRendererPolarityAndFrameEvents(caerVisualizerState state, caerEventPacketContainer container,
+	bool cleared);
 
 void caerVisualizerSystemInit(void);
 

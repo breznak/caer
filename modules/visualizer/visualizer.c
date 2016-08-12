@@ -468,7 +468,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		// Update bitmap with new content. (0, 0) is upper left corner.
 		// NULL renderer is supported and simply does nothing (black screen).
 		if (state->renderer != NULL) {
-			bool didDrawSomething = (*state->renderer)(state, container);
+			bool didDrawSomething = (*state->renderer)(state, container, !state->bitmapDrawUpdate);
 
 			// Remember if something was drawn, even just once.
 			if (!state->bitmapDrawUpdate) {
@@ -800,8 +800,9 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 	caerVisualizerUpdate(moduleData->moduleState, container);
 }
 
-bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketContainer container) {
+bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketContainer container, bool cleared) {
 	UNUSED_ARGUMENT(state);
+	UNUSED_ARGUMENT(cleared);
 
 	caerEventPacketHeader polarityEventPacketHeader = caerEventPacketContainerFindEventPacketByType(container,
 		POLARITY_EVENT);
@@ -827,8 +828,9 @@ bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPa
 	return (true);
 }
 
-bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketContainer container) {
+bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketContainer container, bool cleared) {
 	UNUSED_ARGUMENT(state);
+	UNUSED_ARGUMENT(cleared);
 
 	caerEventPacketHeader frameEventPacketHeader = caerEventPacketContainerFindEventPacketByType(container,
 		FRAME_EVENT);
@@ -898,7 +900,9 @@ bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacke
 #define RESET_LIMIT_POS(VAL, LIMIT) if ((VAL) > (LIMIT)) { (VAL) = (LIMIT); }
 #define RESET_LIMIT_NEG(VAL, LIMIT) if ((VAL) < (LIMIT)) { (VAL) = (LIMIT); }
 
-bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketContainer container) {
+bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketContainer container, bool cleared) {
+	UNUSED_ARGUMENT(cleared);
+
 	caerEventPacketHeader imu6EventPacketHeader = caerEventPacketContainerFindEventPacketByType(container, IMU6_EVENT);
 
 	if (imu6EventPacketHeader == NULL || caerEventPacketHeaderGetEventValid(imu6EventPacketHeader) == 0) {
@@ -979,8 +983,9 @@ bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacket
 	return (true);
 }
 
-bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPacketContainer container) {
+bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPacketContainer container, bool cleared) {
 	UNUSED_ARGUMENT(state);
+	UNUSED_ARGUMENT(cleared);
 
 	caerEventPacketHeader point2DEventPacketHeader = caerEventPacketContainerFindEventPacketByType(container,
 		POINT2D_EVENT);
@@ -1001,14 +1006,16 @@ bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPac
 	return (true);
 }
 
-bool caerVisualizerMultiRendererPolarityAndFrameEvents(caerVisualizerState state, caerEventPacketContainer container) {
-	bool drewFrameEvents = caerVisualizerRendererFrameEvents(state, container);
+bool caerVisualizerMultiRendererPolarityAndFrameEvents(caerVisualizerState state, caerEventPacketContainer container,
+	bool cleared) {
+	// If the bitmap was just cleared to black, we must wait for the next frame to paint as background.
+	bool drewFrameEvents = caerVisualizerRendererFrameEvents(state, container, cleared);
 
-	bool drewPolarityEvents = caerVisualizerRendererPolarityEvents(state, container);
+	bool drewPolarityEvents = caerVisualizerRendererPolarityEvents(state, container, cleared);
 
-	if (drewFrameEvents || drewPolarityEvents) {
-		return (true);
+	if (cleared) {
+		return (drewFrameEvents);
 	}
 
-	return (false);
+	return (drewFrameEvents || drewPolarityEvents);
 }
