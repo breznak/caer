@@ -39,7 +39,7 @@ static void caerStatisticsRun(caerModuleData moduleData, size_t argsNumber, va_l
 
 	caerStatisticsStringUpdate(packetHeader, state);
 
-	fprintf(stdout, "\r%s", state->currentStatisticsString);
+	fprintf(stdout, "\r%s - %s", state->currentStatisticsStringTotal, state->currentStatisticsStringValid);
 	fflush(stdout);
 }
 
@@ -56,10 +56,19 @@ static void caerStatisticsReset(caerModuleData moduleData) {
 }
 
 bool caerStatisticsStringInit(caerStatisticsState state) {
-	size_t maxStatStringLength = (size_t) snprintf(NULL, 0, CAER_STATISTICS_STRING, UINT64_MAX, UINT64_MAX);
+	// Total and Valid parts have same length.
+	size_t maxSplitStatStringLength = (size_t) snprintf(NULL, 0, CAER_STATISTICS_STRING_TOTAL, UINT64_MAX);
 
-	state->currentStatisticsString = calloc(maxStatStringLength + 1, sizeof(char)); // +1 for NUL termination.
-	if (state->currentStatisticsString == NULL) {
+	state->currentStatisticsStringTotal = calloc(maxSplitStatStringLength + 1, sizeof(char)); // +1 for NUL termination.
+	if (state->currentStatisticsStringTotal == NULL) {
+		return (false);
+	}
+
+	state->currentStatisticsStringValid = calloc(maxSplitStatStringLength + 1, sizeof(char)); // +1 for NUL termination.
+	if (state->currentStatisticsStringValid == NULL) {
+		free(state->currentStatisticsStringTotal);
+		state->currentStatisticsStringTotal = NULL;
+
 		return (false);
 	}
 
@@ -94,7 +103,8 @@ void caerStatisticsStringUpdate(caerEventPacketHeader packetHeader, caerStatisti
 		uint64_t validEventsPerTime = (state->validEventsCounter * (1000000000LLU / state->divisionFactor))
 			/ diffNanoTime;
 
-		sprintf(state->currentStatisticsString, CAER_STATISTICS_STRING, totalEventsPerTime, validEventsPerTime);
+		sprintf(state->currentStatisticsStringTotal, CAER_STATISTICS_STRING_TOTAL, totalEventsPerTime);
+		sprintf(state->currentStatisticsStringValid, CAER_STATISTICS_STRING_VALID, validEventsPerTime);
 
 		// Reset for next update.
 		state->totalEventsCounter = 0;
@@ -105,9 +115,14 @@ void caerStatisticsStringUpdate(caerEventPacketHeader packetHeader, caerStatisti
 
 void caerStatisticsStringExit(caerStatisticsState state) {
 	// Reclaim string memory.
-	if (state->currentStatisticsString != NULL) {
-		free(state->currentStatisticsString);
-		state->currentStatisticsString = NULL;
+	if (state->currentStatisticsStringTotal != NULL) {
+		free(state->currentStatisticsStringTotal);
+		state->currentStatisticsStringTotal = NULL;
+	}
+
+	if (state->currentStatisticsStringValid != NULL) {
+		free(state->currentStatisticsStringValid);
+		state->currentStatisticsStringValid = NULL;
 	}
 }
 

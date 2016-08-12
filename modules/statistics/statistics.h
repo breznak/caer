@@ -7,11 +7,13 @@
 #include <time.h>
 #include <sys/time.h>
 
-#define CAER_STATISTICS_STRING "Total events/second: %10" PRIu64 " - Valid events/second: %10" PRIu64
+#define CAER_STATISTICS_STRING_TOTAL "Total events/second: %10" PRIu64
+#define CAER_STATISTICS_STRING_VALID "Valid events/second: %10" PRIu64
 
 struct caer_statistics_state {
 	uint64_t divisionFactor;
-	char *currentStatisticsString;
+	char *currentStatisticsStringTotal;
+	char *currentStatisticsStringValid;
 	// Internal book-keeping.
 	struct timespec lastTime;
 	uint64_t totalEventsCounter;
