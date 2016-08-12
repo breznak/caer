@@ -120,10 +120,10 @@ void caerVisualizerSystemInit(void) {
 	}
 
 	// Determine biggest possible statistics string.
-	size_t maxStatStringLength = (size_t) snprintf(NULL, 0, CAER_STATISTICS_STRING, UINT64_MAX, UINT64_MAX);
+	size_t maxStatStringLength = (size_t) snprintf(NULL, 0, CAER_STATISTICS_STRING_TOTAL, UINT64_MAX);
 
 	char maxStatString[maxStatStringLength + 1];
-	snprintf(maxStatString, maxStatStringLength + 1, CAER_STATISTICS_STRING, UINT64_MAX, UINT64_MAX);
+	snprintf(maxStatString, maxStatStringLength + 1, CAER_STATISTICS_STRING_TOTAL, UINT64_MAX);
 	maxStatString[maxStatStringLength] = '\0';
 
 	// Load statistics font into memory.
@@ -136,7 +136,7 @@ void caerVisualizerSystemInit(void) {
 	if (font != NULL) {
 		STATISTICS_WIDTH = (2 * GLOBAL_FONT_SPACING) + al_get_text_width(font, maxStatString);
 
-		STATISTICS_HEIGHT = (2 * GLOBAL_FONT_SPACING) + GLOBAL_FONT_SIZE;
+		STATISTICS_HEIGHT = (3 * GLOBAL_FONT_SPACING) + (2 * GLOBAL_FONT_SIZE);
 
 		al_destroy_font(font);
 	}
@@ -588,8 +588,12 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		bool doStatistics = (state->showStatistics && state->displayFont != NULL);
 
 		if (doStatistics) {
+			// Split statistics string in two to use less horizontal space.
 			al_draw_text(state->displayFont, al_map_rgb(255, 255, 255), GLOBAL_FONT_SPACING,
-			GLOBAL_FONT_SPACING, 0, state->packetStatistics.currentStatisticsString);
+			GLOBAL_FONT_SPACING, 0, state->packetStatistics.currentStatisticsStringTotal);
+
+			al_draw_text(state->displayFont, al_map_rgb(255, 255, 255), GLOBAL_FONT_SPACING,
+			(2 * GLOBAL_FONT_SPACING) + GLOBAL_FONT_SIZE, 0, state->packetStatistics.currentStatisticsStringValid);
 		}
 
 		// Blit bitmap to screen.
