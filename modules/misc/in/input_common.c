@@ -1461,7 +1461,7 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 	}
 
 	// Update size commit criteria.
-	int32_t containerSizeLimit = atomic_load_explicit(&state->packetContainer.sizeSlice, memory_order_relaxed);
+	int32_t containerSizeLimit = I32T(atomic_load_explicit(&state->packetContainer.sizeSlice, memory_order_relaxed));
 	if (caerEventPacketHeaderGetEventNumber(newPacket) >= containerSizeLimit) {
 		state->packetContainer.newContainerSizeHit = true;
 		state->packetContainer.newContainerSizeLimit = containerSizeLimit;
@@ -1590,10 +1590,9 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 	}
 
 	// Update wanted timestamp for next time slice.
-	state->packetContainer.newContainerTimestampStart += atomic_load_explicit(&state->packetContainer.timeSlice,
-		memory_order_relaxed);
-	state->packetContainer.newContainerTimestampEnd += atomic_load_explicit(&state->packetContainer.timeSlice,
-		memory_order_relaxed);
+	int32_t timeSlice = I32T(atomic_load_explicit(&state->packetContainer.timeSlice,memory_order_relaxed));
+	state->packetContainer.newContainerTimestampStart += timeSlice;
+	state->packetContainer.newContainerTimestampEnd += timeSlice;
 
 	// Reset size hit.
 	state->packetContainer.newContainerSizeHit = false;
