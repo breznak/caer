@@ -104,6 +104,8 @@ struct input_common_packet_container_data {
 	int64_t newContainerTimestampEnd;
 	/// If any packet has passed the size limit.
 	bool newContainerSizeHit;
+	/// The size limit that triggered the hit above.
+	int32_t newContainerSizeLimit;
 	/// Size slice (in events), for which to generate a packet container.
 	atomic_int_fast32_t sizeSlice;
 	/// Time slice (in µs), for which to generate a packet container.
@@ -1459,9 +1461,10 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 	}
 
 	// Update size commit criteria.
-	if (caerEventPacketHeaderGetEventNumber(
-		newPacket) >= atomic_load_explicit(&state->packetContainer.sizeSlice, memory_order_relaxed)) {
+	int32_t containerSizeLimit = atomic_load_explicit(&state->packetContainer.sizeSlice, memory_order_relaxed);
+	if (caerEventPacketHeaderGetEventNumber(newPacket) >= containerSizeLimit) {
 		state->packetContainer.newContainerSizeHit = true;
+		state->packetContainer.newContainerSizeLimit = containerSizeLimit;
 	}
 
 	return (true);
@@ -1493,13 +1496,15 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 		caerEventPacketHeader *currPacket = NULL;
 		while ((currPacket = (caerEventPacketHeader *) utarray_next(state->packetContainer.eventPackets, currPacket))
 			!= NULL) {
-			// Search for cutoff point in time. Also count valid events encountered for later calculations.
+			// Search for cutoff point, either reaching the size limit first, or then the time limit.
+			// Also count valid events encountered for later setting the right values in the packet.
 			int32_t cutoffIndex = -1;
 			int32_t validEventsSeen = 0;
 
 			CAER_ITERATOR_ALL_START(*currPacket, void *)
-				if (caerGenericEventGetTimestamp64(caerIteratorElement, *currPacket)
-					> state->packetContainer.newContainerTimestampEnd) {
+				if ((caerIteratorCounter >= state->packetContainer.newContainerSizeLimit)
+					|| (caerGenericEventGetTimestamp64(caerIteratorElement, *currPacket)
+						> state->packetContainer.newContainerTimestampEnd)) {
 					cutoffIndex = caerIteratorCounter;
 					break;
 				}
@@ -1536,41 +1541,51 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 			caerEventPacketHeader nextPacket = malloc(
 			CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (currPacketEventSize * nextPacketEventNumber));
 			if (nextPacket == NULL) {
-				// TODO: handle allocation failure.
 				caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
-					"Failed memory allocation for nextPacket.");
-				exit(EXIT_FAILURE);
+					"Failed memory allocation for nextPacket. Discarding remaining data.");
 			}
+			else {
+				// Copy header and remaining events to new packet, set header sizes correctly.
+				memcpy(nextPacket, *currPacket, CAER_EVENT_PACKET_HEADER_SIZE);
+				memcpy(((uint8_t *) nextPacket) + CAER_EVENT_PACKET_HEADER_SIZE,
+					((uint8_t *) *currPacket) + CAER_EVENT_PACKET_HEADER_SIZE + (currPacketEventSize * cutoffIndex),
+					(size_t) (currPacketEventSize * nextPacketEventNumber));
 
-			// Copy header and remaining events to new packet, set header sizes correctly.
-			memcpy(nextPacket, *currPacket, CAER_EVENT_PACKET_HEADER_SIZE);
-			memcpy(((uint8_t *) nextPacket) + CAER_EVENT_PACKET_HEADER_SIZE,
-				((uint8_t *) *currPacket) + CAER_EVENT_PACKET_HEADER_SIZE + (currPacketEventSize * cutoffIndex),
-				(size_t) (currPacketEventSize * nextPacketEventNumber));
-
-			caerEventPacketHeaderSetEventValid(nextPacket, currPacketEventValid - validEventsSeen);
-			caerEventPacketHeaderSetEventNumber(nextPacket, nextPacketEventNumber);
-			caerEventPacketHeaderSetEventCapacity(nextPacket, nextPacketEventNumber);
+				caerEventPacketHeaderSetEventValid(nextPacket, currPacketEventValid - validEventsSeen);
+				caerEventPacketHeaderSetEventNumber(nextPacket, nextPacketEventNumber);
+				caerEventPacketHeaderSetEventCapacity(nextPacket, nextPacketEventNumber);
+			}
 
 			// Resize current packet to include only the events up until cutoff point.
 			caerEventPacketHeader currPacketResized = realloc(*currPacket,
 			CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (currPacketEventSize * cutoffIndex));
 			if (currPacketResized == NULL) {
-				// TODO: handle allocation failure.
+				// This is unlikely to happen as we always shrink here!
 				caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
-					"Failed memory allocation for currPacketResized.");
-				exit(EXIT_FAILURE);
+					"Failed memory allocation for currPacketResized. Discarding current data.");
+				free(*currPacket);
+			}
+			else {
+				// Set header sizes for resized packet correctly.
+				caerEventPacketHeaderSetEventValid(currPacketResized, validEventsSeen);
+				caerEventPacketHeaderSetEventNumber(currPacketResized, cutoffIndex);
+				caerEventPacketHeaderSetEventCapacity(currPacketResized, cutoffIndex);
+
+				// Update references: the currPacket, after resizing, goes into the packet container for output.
+				caerEventPacketContainerSetEventPacket(packetContainer, packetContainerPosition++, currPacketResized);
 			}
 
-			// Set header sizes for resized packet correctly.
-			caerEventPacketHeaderSetEventValid(currPacketResized, validEventsSeen);
-			caerEventPacketHeaderSetEventNumber(currPacketResized, cutoffIndex);
-			caerEventPacketHeaderSetEventCapacity(currPacketResized, cutoffIndex);
-
-			// Update references: the nextPacket goes into the eventPackets array at the currPacket position.
-			// The currPacket, after resizing, goes into the packet container for output.
-			*currPacket = nextPacket;
-			caerEventPacketContainerSetEventPacket(packetContainer, packetContainerPosition++, currPacketResized);
+			// Update references: the nextPacket goes into the eventPackets array at the currPacket position,
+			// if it exists. Else we just delete that position.
+			if (nextPacket != NULL) {
+				*currPacket = nextPacket;
+			}
+			else {
+				// Erase slot from packets array.
+				utarray_erase(state->packetContainer.eventPackets,
+					(size_t) utarray_eltidx(state->packetContainer.eventPackets, currPacket), 1);
+				currPacket = (caerEventPacketHeader *) utarray_prev(state->packetContainer.eventPackets, currPacket);
+			}
 		}
 	}
 
@@ -1579,6 +1594,9 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 		memory_order_relaxed);
 	state->packetContainer.newContainerTimestampEnd += atomic_load_explicit(&state->packetContainer.timeSlice,
 		memory_order_relaxed);
+
+	// Reset size hit.
+	state->packetContainer.newContainerSizeHit = false;
 
 	return (packetContainer);
 }
