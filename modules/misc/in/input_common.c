@@ -1512,7 +1512,7 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 				if (caerGenericEventIsValid(caerIteratorElement)) {
 					validEventsSeen++;
 				}
-			CAER_ITERATOR_ALL_END
+			}
 
 			// If there is no cutoff point, we can just send on the whole packet with no changes.
 			if (cutoffIndex == -1) {
@@ -1895,6 +1895,7 @@ bool isNetworkMessageBased) {
 	atomic_store(&state->validOnly, sshsNodeGetBool(moduleData->moduleNode, "validOnly"));
 	atomic_store(&state->keepPackets, sshsNodeGetBool(moduleData->moduleNode, "keepPackets"));
 
+	atomic_store(&state->packetContainer.sizeSlice, sshsNodeGetInt(moduleData->moduleNode, "sizeSlice"));
 	atomic_store(&state->packetContainer.timeSlice, sshsNodeGetInt(moduleData->moduleNode, "timeSlice"));
 	atomic_store(&state->packetContainer.timeDelay, sshsNodeGetInt(moduleData->moduleNode, "timeDelay"));
 
@@ -2083,6 +2084,9 @@ static void caerInputCommonConfigListener(sshsNode node, void *userData, enum ss
 		else if (changeType == INT && caerStrEquals(changeKey, "bufferSize")) {
 			// Set buffer update flag.
 			atomic_store(&state->bufferUpdate, true);
+		}
+		else if (changeType == INT && caerStrEquals(changeKey, "sizeSlice")) {
+			atomic_store(&state->packetContainer.sizeSlice, changeValue.iint);
 		}
 		else if (changeType == INT && caerStrEquals(changeKey, "timeSlice")) {
 			atomic_store(&state->packetContainer.timeSlice, changeValue.iint);
