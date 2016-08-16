@@ -662,7 +662,7 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRe
 	caerVisualizerEventHandler eventHandler, caerEventPacketContainer container);
 static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerVisualizerModuleExit(caerModuleData moduleData);
-static void caerVisualizerModuleReset(caerModuleData moduleData);
+static void caerVisualizerModuleReset(caerModuleData moduleData, uint16_t resetCallSourceID);
 
 static struct caer_module_functions caerVisualizerFunctions = { .moduleInit = NULL, .moduleRun =
 	&caerVisualizerModuleRun, .moduleConfig = NULL, .moduleExit = &caerVisualizerModuleExit, .moduleReset =
@@ -770,7 +770,9 @@ static void caerVisualizerModuleExit(caerModuleData moduleData) {
 	moduleData->moduleState = NULL;
 }
 
-static void caerVisualizerModuleReset(caerModuleData moduleData) {
+static void caerVisualizerModuleReset(caerModuleData moduleData, uint16_t resetCallSourceID) {
+	UNUSED_ARGUMENT(resetCallSourceID);
+
 	// Reset counters for statistics on reset.
 	caerVisualizerReset(moduleData->moduleState);
 }

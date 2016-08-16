@@ -43,8 +43,8 @@ void caerMainloopFreeAfterLoop(void (*func)(void *mem), void *memPtr);
 caerMainloopData caerMainloopGetReference(void);
 sshsNode caerMainloopGetSourceInfo(uint16_t sourceID);
 void *caerMainloopGetSourceState(uint16_t sourceID);
-void caerMainloopResetInputs(void);
-void caerMainloopResetOutputs(void);
-void caerMainloopResetProcessors(void);
+void caerMainloopResetInputs(uint16_t sourceID);
+void caerMainloopResetOutputs(uint16_t sourceID);
+void caerMainloopResetProcessors(uint16_t sourceID);
 
 #endif /* MAINLOOP_H_ */

@@ -41,7 +41,7 @@ struct caer_module_functions {
 	void (* const moduleRun)(caerModuleData moduleData, size_t argsNumber, va_list args);
 	void (* const moduleConfig)(caerModuleData moduleData); // Can be NULL.
 	void (* const moduleExit)(caerModuleData moduleData); // Can be NULL.
-	void (* const moduleReset)(caerModuleData moduleData); // Can be NULL.
+	void (* const moduleReset)(caerModuleData moduleData, uint16_t resetCallSourceID); // Can be NULL.
 };
 
 typedef struct caer_module_functions const * const caerModuleFunctions;

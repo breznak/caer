@@ -37,8 +37,8 @@ void caerModuleSMv(caerModuleFunctions moduleFunctions, caerModuleData moduleDat
 		if (atomic_load_explicit(&moduleData->doReset, memory_order_relaxed) != 0) {
 			if (moduleFunctions->moduleReset != NULL) {
 				// Call reset function. 'doReset' variable reset is done here.
-				atomic_store(&moduleData->doReset, 0);
-				moduleFunctions->moduleReset(moduleData);
+				uint32_t resetCallSourceID = U32T(atomic_exchange(&moduleData->doReset, 0));
+				moduleFunctions->moduleReset(moduleData, U16T(resetCallSourceID));
 			}
 		}
 	}

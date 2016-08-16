@@ -237,6 +237,17 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 		return;
 	}
 
+	// Filter out the TS_RESET packet, as we ensure that that one is always present in the
+	// caerOutputCommonReset() function, so that even if the special event stream is not
+	// output/captured by this module, the TS_RESET event will be present in the output.
+	// The TS_RESET event would be alone in a packet that is also the only one in its
+	// packetContainer/mainloop cycle, so we can check for this very efficiently.
+	if (packetsSize == 1 && caerEventPacketHeaderGetEventType(packets[0]) == SPECIAL_EVENT
+	&& caerEventPacketHeaderGetEventNumber(packets[0]) == 1
+	&& caerSpecialEventPacketFindEventByType((caerSpecialEventPacket) packets[0], TIMESTAMP_RESET) != NULL) {
+		return;
+	}
+
 	// Allocate memory for event packet array structure that will get passed to output handler thread.
 	caerEventPacketContainer eventPackets = caerEventPacketContainerAllocate((int32_t) packetsSize);
 	if (eventPackets == NULL) {
@@ -1026,7 +1037,8 @@ static int outputHandlerThread(void *stateArg) {
 	// If no header sent, it means we exited (running=false) without ever getting any
 	// event packet with a source ID, so we don't have to process anything.
 	// But we make sure to empty the transfer ring-buffer, as something may have been
-	// put there in the meantime, so we ensure it's checked and freed.
+	// put there in the meantime, so we ensure it's checked and freed. This because
+	// in caerOutputCommonExit() we expect the ring-buffer to always be empty!
 	if (!headerSent) {
 		caerEventPacketContainer packetContainer;
 		while ((packetContainer = ringBufferGet(state->transferRing)) != NULL) {
@@ -1253,11 +1265,48 @@ void caerOutputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list a
 	copyPacketsToTransferRing(state, argsNumber, args);
 }
 
-void caerOutputCommonReset(caerModuleData moduleData) {
+void caerOutputCommonReset(caerModuleData moduleData, uint16_t resetCallSourceID) {
 	outputCommonState state = moduleData->moduleState;
 
-	// Reset timestamp checking.
-	state->lastTimestamp = 0;
+	if (resetCallSourceID == I16T(atomic_load_explicit(&state->sourceID, memory_order_relaxed))) {
+		// The timestamp reset call came in from the Source ID this output module
+		// is responsible for, so we ensure the timestamps are reset and that the
+		// special event packet goes out for sure.
+
+		// Send lone packet container with just TS_RESET.
+		// Allocate packet container just for this event.
+		caerEventPacketContainer tsResetContainer = caerEventPacketContainerAllocate(1);
+		if (tsResetContainer == NULL) {
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"Failed to allocate tsReset event packet container.");
+			return;
+		}
+
+		// Allocate special packet just for this event.
+		caerSpecialEventPacket tsResetPacket = caerSpecialEventPacketAllocate(1, I16T(resetCallSourceID),
+			I32T(state->lastTimestamp >> 31));
+		if (tsResetPacket == NULL) {
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"Failed to allocate tsReset special event packet.");
+			return;
+		}
+
+		// Create timestamp reset event.
+		caerSpecialEvent tsResetEvent = caerSpecialEventPacketGetEvent(tsResetPacket, 0);
+		caerSpecialEventSetTimestamp(tsResetEvent, INT32_MAX);
+		caerSpecialEventSetType(tsResetEvent, TIMESTAMP_RESET);
+		caerSpecialEventValidate(tsResetEvent, tsResetPacket);
+
+		// Assign special packet to packet container.
+		caerEventPacketContainerSetEventPacket(tsResetContainer, SPECIAL_EVENT, (caerEventPacketHeader) tsResetPacket);
+
+		while (!ringBufferPut(state->transferRing, tsResetContainer)) {
+			; // Ensure this goes into the ring-buffer.
+		}
+
+		// Reset timestamp checking.
+		state->lastTimestamp = 0;
+	}
 }
 
 static void caerOutputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,

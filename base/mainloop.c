@@ -310,30 +310,30 @@ void *caerMainloopGetSourceState(uint16_t sourceID) {
 	return (moduleData->moduleState);
 }
 
-void caerMainloopResetInputs(void) {
+void caerMainloopResetInputs(uint16_t sourceID) {
 	caerMainloopData mainloopData = glMainloopData;
 	caerModuleData *moduleData = NULL;
 
 	while ((moduleData = (caerModuleData *) utarray_next(mainloopData->inputModules, moduleData)) != NULL) {
-		atomic_store(&(*moduleData)->doReset, 1);
+		atomic_store(&(*moduleData)->doReset, sourceID);
 	}
 }
 
-void caerMainloopResetOutputs(void) {
+void caerMainloopResetOutputs(uint16_t sourceID) {
 	caerMainloopData mainloopData = glMainloopData;
 	caerModuleData *moduleData = NULL;
 
 	while ((moduleData = (caerModuleData *) utarray_next(mainloopData->outputModules, moduleData)) != NULL) {
-		atomic_store(&(*moduleData)->doReset, 1);
+		atomic_store(&(*moduleData)->doReset, sourceID);
 	}
 }
 
-void caerMainloopResetProcessors(void) {
+void caerMainloopResetProcessors(uint16_t sourceID) {
 	caerMainloopData mainloopData = glMainloopData;
 	caerModuleData *moduleData = NULL;
 
 	while ((moduleData = (caerModuleData *) utarray_next(mainloopData->processorModules, moduleData)) != NULL) {
-		atomic_store(&(*moduleData)->doReset, 1);
+		atomic_store(&(*moduleData)->doReset, sourceID);
 	}
 }
 

@@ -191,8 +191,8 @@ static void caerInputDVS128Run(caerModuleData moduleData, size_t argsNumber, va_
 			caerSpecialEvent tsResetEvent = caerSpecialEventPacketFindEventByType(special, TIMESTAMP_RESET);
 
 			if (tsResetEvent != NULL) {
-				caerMainloopResetProcessors();
-				caerMainloopResetOutputs();
+				caerMainloopResetProcessors(moduleData->moduleID);
+				caerMainloopResetOutputs(moduleData->moduleID);
 			}
 		}
 	}

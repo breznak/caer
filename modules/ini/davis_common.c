@@ -308,8 +308,8 @@ void caerInputDAVISRun(caerModuleData moduleData, size_t argsNumber, va_list arg
 			caerSpecialEvent tsResetEvent = caerSpecialEventPacketFindEventByType(special, TIMESTAMP_RESET);
 
 			if (tsResetEvent != NULL) {
-				caerMainloopResetProcessors();
-				caerMainloopResetOutputs();
+				caerMainloopResetProcessors(moduleData->moduleID);
+				caerMainloopResetOutputs(moduleData->moduleID);
 			}
 		}
 	}

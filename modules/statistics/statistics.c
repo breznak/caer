@@ -6,7 +6,7 @@
 static bool caerStatisticsInit(caerModuleData moduleData);
 static void caerStatisticsRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerStatisticsExit(caerModuleData moduleData);
-static void caerStatisticsReset(caerModuleData moduleData);
+static void caerStatisticsReset(caerModuleData moduleData, uint16_t resetCallSourceID);
 
 static struct caer_module_functions caerStatisticsFunctions = { .moduleInit = &caerStatisticsInit, .moduleRun =
 	&caerStatisticsRun, .moduleConfig = NULL, .moduleExit = &caerStatisticsExit, .moduleReset = &caerStatisticsReset };
@@ -49,7 +49,9 @@ static void caerStatisticsExit(caerModuleData moduleData) {
 	caerStatisticsStringExit(state);
 }
 
-static void caerStatisticsReset(caerModuleData moduleData) {
+static void caerStatisticsReset(caerModuleData moduleData, uint16_t resetCallSourceID) {
+	UNUSED_ARGUMENT(resetCallSourceID);
+
 	caerStatisticsState state = moduleData->moduleState;
 
 	caerStatisticsStringReset(state);

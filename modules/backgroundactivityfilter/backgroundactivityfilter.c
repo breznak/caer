@@ -22,7 +22,7 @@ static bool caerBackgroundActivityFilterInit(caerModuleData moduleData);
 static void caerBackgroundActivityFilterRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerBackgroundActivityFilterConfig(caerModuleData moduleData);
 static void caerBackgroundActivityFilterExit(caerModuleData moduleData);
-static void caerBackgroundActivityFilterReset(caerModuleData moduleData);
+static void caerBackgroundActivityFilterReset(caerModuleData moduleData, uint16_t resetCallSourceID);
 static bool allocateTimestampMap(BAFilterState state, int16_t sourceID);
 
 static struct caer_module_functions caerBackgroundActivityFilterFunctions = { .moduleInit =
@@ -150,7 +150,9 @@ static void caerBackgroundActivityFilterExit(caerModuleData moduleData) {
 	simple2DBufferFreeLong(state->timestampMap);
 }
 
-static void caerBackgroundActivityFilterReset(caerModuleData moduleData) {
+static void caerBackgroundActivityFilterReset(caerModuleData moduleData, uint16_t resetCallSourceID) {
+	UNUSED_ARGUMENT(resetCallSourceID);
+
 	BAFilterState state = moduleData->moduleState;
 
 	// Reset timestamp map to all zeros (startup state).

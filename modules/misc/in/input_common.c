@@ -1805,7 +1805,7 @@ static int inputAssemblerThread(void *stateArg) {
 			if (tsResetPacket == NULL) {
 				caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
 					"Failed to allocate tsReset special event packet.");
-				break;;
+				break;
 			}
 
 			// Create timestamp reset event.
@@ -2058,8 +2058,8 @@ void caerInputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list ar
 			caerSpecialEvent tsResetEvent = caerSpecialEventPacketFindEventByType(special, TIMESTAMP_RESET);
 
 			if (tsResetEvent != NULL) {
-				caerMainloopResetProcessors();
-				caerMainloopResetOutputs();
+				caerMainloopResetProcessors(moduleData->moduleID);
+				caerMainloopResetOutputs(moduleData->moduleID);
 			}
 		}
 	}
