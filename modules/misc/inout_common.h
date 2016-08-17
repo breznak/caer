@@ -14,7 +14,7 @@ struct aedat3_network_header {
 	int64_t sequenceNumber;
 	int8_t versionNumber;
 	int8_t formatNumber;
-	int16_t sourceNumber;
+	int16_t sourceID;
 }__attribute__((__packed__));
 
 static inline void caerGenericEventSetTimestamp(void *eventPtr, caerEventPacketHeader headerPtr, int32_t timestamp) {

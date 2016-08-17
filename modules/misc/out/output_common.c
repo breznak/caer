@@ -976,7 +976,7 @@ static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD) {
 	networkHeader.sequenceNumber = htole64(state->networkSequenceNumber);
 	networkHeader.versionNumber = AEDAT3_NETWORK_VERSION;
 	networkHeader.formatNumber = state->formatID; // Send numeric format ID.
-	networkHeader.sourceNumber = htole16(1); // Always one source per output module.
+	networkHeader.sourceID = htole16(I16T(atomic_load_explicit(&state->sourceID, memory_order_relaxed))); // Always one source per output module.
 
 	// If message-based, we copy the header at the start of the buffer,
 	// because we want it in each message (and each buffer is a message!).

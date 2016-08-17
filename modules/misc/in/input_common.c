@@ -42,7 +42,7 @@ struct input_common_header_info {
 };
 
 struct input_packet_data {
-	/// Numerical ID of a packet. First packet hast ID 0.
+	/// Numerical ID of a packet. First packet has ID 0.
 	size_t id;
 	/// Data offset, in bytes.
 	size_t offset;
@@ -134,8 +134,6 @@ struct input_common_state {
 	/// the inputReadThread. This is separate so that delay operations don't
 	/// use up resources that could be doing read/decompression work.
 	thrd_t inputAssemblerThread;
-	/// The file descriptor for reading.
-	int fileDescriptor;
 	/// Network-like stream or file-like stream. Matters for header format.
 	bool isNetworkStream;
 	/// For network-like inputs, we differentiate between stream and message
@@ -160,6 +158,8 @@ struct input_common_state {
 	struct input_common_packet_data packets;
 	/// Packet container data structure, to generate from packets.
 	struct input_common_packet_container_data packetContainer;
+	/// The file descriptor for reading.
+	int fileDescriptor;
 	/// Data buffer for reading from file descriptor (buffered I/O).
 	simpleBuffer dataBuffer;
 	/// Offset for current data buffer.
@@ -250,7 +250,7 @@ static bool parseNetworkHeader(inputCommonState state) {
 	// Ensure endianness conversion is done if needed.
 	networkHeader.magicNumber = le64toh(networkHeader.magicNumber);
 	networkHeader.sequenceNumber = le64toh(networkHeader.sequenceNumber);
-	networkHeader.sourceNumber = le16toh(networkHeader.sourceNumber);
+	networkHeader.sourceID = le16toh(networkHeader.sourceID);
 
 	// Check header values.
 	if (networkHeader.magicNumber != AEDAT3_NETWORK_MAGIC_NUMBER) {
@@ -288,7 +288,7 @@ static bool parseNetworkHeader(inputCommonState state) {
 	state->header.formatID = networkHeader.formatNumber;
 
 	// TODO: Network: get sourceInfo node info via config-server side-channel.
-	state->header.sourceID = 1;
+	state->header.sourceID = networkHeader.sourceID;
 	sshsNodePutShort(state->sourceInfoNode, "dvsSizeX", 240);
 	sshsNodePutShort(state->sourceInfoNode, "dvsSizeY", 180);
 	sshsNodePutShort(state->sourceInfoNode, "apsSizeX", 240);
@@ -1589,14 +1589,6 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 		}
 	}
 
-	// Update wanted timestamp for next time slice.
-	int32_t timeSlice = I32T(atomic_load_explicit(&state->packetContainer.timeSlice,memory_order_relaxed));
-	state->packetContainer.newContainerTimestampStart += timeSlice;
-	state->packetContainer.newContainerTimestampEnd += timeSlice;
-
-	// Reset size hit.
-	state->packetContainer.newContainerSizeHit = false;
-
 	return (packetContainer);
 }
 
@@ -1689,6 +1681,14 @@ static bool commitPacketContainer(inputCommonState state, bool forceFlush) {
 	if (packetContainer == NULL) {
 		return (false);
 	}
+
+	// Update wanted timestamp for next time slice.
+	int32_t timeSlice = I32T(atomic_load_explicit(&state->packetContainer.timeSlice,memory_order_relaxed));
+	state->packetContainer.newContainerTimestampStart += timeSlice;
+	state->packetContainer.newContainerTimestampEnd += timeSlice;
+
+	// Reset size hit.
+	state->packetContainer.newContainerSizeHit = false;
 
 	doTimeDelay(state);
 
@@ -2076,6 +2076,7 @@ static void caerInputCommonConfigListener(sshsNode node, void *userData, enum ss
 		if (changeType == BOOL && caerStrEquals(changeKey, "validOnly")) {
 			// Set valid only flag to given value.
 			atomic_store(&state->validOnly, changeValue.boolean);
+			// TODO: validOnly support.
 		}
 		else if (changeType == BOOL && caerStrEquals(changeKey, "keepPackets")) {
 			// Set keep packets flag to given value.
