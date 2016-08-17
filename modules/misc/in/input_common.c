@@ -707,6 +707,10 @@ static bool parseData(inputCommonState state) {
 			state->packets.currPacketData->eventType, state->packets.currPacketData->startTimestamp,
 			state->packets.currPacketData->endTimestamp);
 
+		DL_APPEND(state->packets.packetsList, state->packets.currPacketData);
+
+		state->packets.currPacketData = NULL;
+
 		while (!ringBufferPut(state->transferRingPackets, state->packets.currPacket)) {
 			if (!atomic_load_explicit(&state->running, memory_order_relaxed)) {
 				break;
@@ -942,8 +946,6 @@ static int aedat3GetPacket(inputCommonState state, bool isAEDAT30) {
 			state->packets.currPacketData->eventNumber - 1);
 		state->packets.currPacketData->endTimestamp = caerGenericEventGetTimestamp64(lastEvent,
 			state->packets.currPacket);
-
-		DL_APPEND(state->packets.packetsList, state->packets.currPacketData);
 
 		// If the file was in AEDAT 3.0 format, we must change X/Y coordinate origin
 		// for Polarity and Frame events. We do this after parsing and decompression.
@@ -2030,6 +2032,7 @@ void caerInputCommonExit(caerModuleData moduleData) {
 		free(curr);
 	}
 
+	free(state->packets.currPacketData);
 	free(state->packets.currPacket);
 
 	if (sshsNodeGetBool(moduleData->moduleNode, "autoRestart")) {
