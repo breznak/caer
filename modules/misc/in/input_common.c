@@ -1510,7 +1510,8 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 			int32_t validEventsSeen = 0;
 
 			CAER_ITERATOR_ALL_START(*currPacket, void *)
-				if ((caerIteratorCounter >= state->packetContainer.newContainerSizeLimit)
+				if ((state->packetContainer.newContainerSizeHit
+					&& caerIteratorCounter >= state->packetContainer.newContainerSizeLimit)
 					|| (caerGenericEventGetTimestamp64(caerIteratorElement, *currPacket)
 						> state->packetContainer.newContainerTimestampEnd)) {
 					cutoffIndex = caerIteratorCounter;
@@ -1680,7 +1681,7 @@ static bool commitPacketContainer(inputCommonState state, bool forceFlush) {
 	// bigger than the wanted one. If this is true, it means we do have all the possible events of all
 	// types that happen up until that point, and we can split that time range off into a packet container.
 	// If not, we just go get the next event packet.
-	if (state->packetContainer.newContainerSizeHit
+	if (!state->packetContainer.newContainerSizeHit
 		&& state->packetContainer.lastPacketTimestamp <= state->packetContainer.newContainerTimestampEnd) {
 		return (false);
 	}
@@ -1691,9 +1692,11 @@ static bool commitPacketContainer(inputCommonState state, bool forceFlush) {
 	}
 
 	// Update wanted timestamp for next time slice.
-	int32_t timeSlice = I32T(atomic_load_explicit(&state->packetContainer.timeSlice,memory_order_relaxed));
-	state->packetContainer.newContainerTimestampStart += timeSlice;
-	state->packetContainer.newContainerTimestampEnd += timeSlice;
+	if (!state->packetContainer.newContainerSizeHit || forceFlush) {
+		int32_t timeSlice = I32T(atomic_load_explicit(&state->packetContainer.timeSlice,memory_order_relaxed));
+		state->packetContainer.newContainerTimestampStart += timeSlice;
+		state->packetContainer.newContainerTimestampEnd += timeSlice;
+	}
 
 	// Reset size hit.
 	state->packetContainer.newContainerSizeHit = false;
