@@ -2022,6 +2022,14 @@ void caerInputCommonExit(caerModuleData moduleData) {
 	// Free allocated memory.
 	free(state->dataBuffer);
 
+	// Remove lingering packet parsing data.
+	packetData curr, curr_tmp;
+	DL_FOREACH_SAFE(state->packets.packetsList, curr, curr_tmp)
+	{
+		DL_DELETE(state->packets.packetsList, curr);
+		free(curr);
+	}
+
 	free(state->packets.currPacket);
 
 	if (sshsNodeGetBool(moduleData->moduleNode, "autoRestart")) {
