@@ -699,7 +699,6 @@ static bool parseData(inputCommonState state) {
 			continue;
 		}
 
-		// New packet from stream, send it off.
 		caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
 			"New packet read - ID: %zu, Offset: %zu, Size: %zu, Events: %" PRIi32 ", Type: %" PRIi16 ", StartTS: %" PRIi64 ", EndTS: %" PRIi64 ".",
 			state->packets.currPacketData->id, state->packets.currPacketData->offset,
@@ -707,10 +706,16 @@ static bool parseData(inputCommonState state) {
 			state->packets.currPacketData->eventType, state->packets.currPacketData->startTimestamp,
 			state->packets.currPacketData->endTimestamp);
 
+		// New packet information, add it to the global packet info list.
+		// This is done here to prevent ambiguity about the ownership of the involved memory block:
+		// it either is inside the global list with state->packets.currPacketData NULL, or it is not
+		// in the list, but in state->packets.currPacketData itself. So if, on exit, we clear both,
+		// we'll free all the memory and have no fear of a double-free happening.
 		DL_APPEND(state->packets.packetsList, state->packets.currPacketData);
-
 		state->packets.currPacketData = NULL;
 
+		// New packet from stream, send it off to the input assembler thread. Same memory
+		// related considerations as above for state->packets.currPacketData apply here too!
 		while (!ringBufferPut(state->transferRingPackets, state->packets.currPacket)) {
 			if (!atomic_load_explicit(&state->running, memory_order_relaxed)) {
 				break;
