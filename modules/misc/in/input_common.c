@@ -1334,6 +1334,7 @@ static int inputReaderThread(void *stateArg) {
 	inputCommonState state = stateArg;
 
 	// Set thread name.
+	// TODO: set meaningful thread names for Reader and Assembler
 	thrd_set_name(state->parentModule->moduleSubSystemString);
 
 	// Set thread priority to high. This may fail depending on your OS configuration.
@@ -1795,6 +1796,7 @@ static int inputAssemblerThread(void *stateArg) {
 
 		if (tsReset) {
 			// Commit all current content.
+			free(currPacket);
 			commitPacketContainer(state, true);
 
 			// Send lone packet container with just TS_RESET.
