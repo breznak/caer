@@ -1896,6 +1896,7 @@ bool isNetworkMessageBased) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferSize", 65536); // in bytes, size of data buffer
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "transferBufferSize", 128); // in packet groups
 
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "sizeSlice", 8192); // in events, size of slice to generate
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "timeSlice", 10000); // in µs, size of time slice to generate
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "timeDelay", 10000); // in µs, delay between consecutive slices
 
