@@ -717,8 +717,11 @@ static bool parseData(inputCommonState state) {
 		// New packet from stream, send it off to the input assembler thread. Same memory
 		// related considerations as above for state->packets.currPacketData apply here too!
 		while (!ringBufferPut(state->transferRingPackets, state->packets.currPacket)) {
+			// We ensure all read packets are sent to the Assembler stage.
 			if (!atomic_load_explicit(&state->running, memory_order_relaxed)) {
-				break;
+				// On normal termination, just return without errors. The Reader thread
+				// will then also exist without error and clean up.
+				return (true);
 			}
 
 			// Delay by 10 µs if no change, to avoid a wasteful busy loop.
