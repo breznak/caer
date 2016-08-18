@@ -157,7 +157,7 @@ struct input_common_state {
 	/// does this at a global level, but we also need to keep track at a local
 	/// (module) level of this, to avoid confusion in the case multiple Inputs
 	/// are inside the same Mainloop, which is entirely possible and supported.
-	atomic_int_fast32_t dataAvailableModule;
+	atomic_uint_fast32_t dataAvailableModule;
 	/// Header parsing results.
 	struct input_common_header_info header;
 	/// Packet data parsing structures.
@@ -726,7 +726,7 @@ static bool parseData(inputCommonState state) {
 			// We ensure all read packets are sent to the Assembler stage.
 			if (!atomic_load_explicit(&state->running, memory_order_relaxed)) {
 				// On normal termination, just return without errors. The Reader thread
-				// will then also exist without error and clean up.
+				// will then also exit without errors and clean up in Exit().
 				return (true);
 			}
 
@@ -2041,8 +2041,8 @@ void caerInputCommonExit(caerModuleData moduleData) {
 	if (atomic_load(&state->dataAvailableModule) != 0) {
 		// This should never happen!
 		caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
-			"After cleanup, data is still available for consumption. Counter value: %" PRIi32 ".",
-			I32T(atomic_load(&state->dataAvailableModule)));
+			"After cleanup, data is still available for consumption. Counter value: %" PRIu32 ".",
+			U32T(atomic_load(&state->dataAvailableModule)));
 	}
 
 	caerEventPacketHeader packet;
