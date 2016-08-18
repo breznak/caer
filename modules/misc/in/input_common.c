@@ -152,6 +152,12 @@ struct input_common_state {
 	/// the mainloop. We use EventPacketContainers, as that is the standard
 	/// data structure returned from an input module.
 	RingBuffer transferRingPacketContainers;
+	/// Track how many packet containers are in the ring-buffer, ready for
+	/// consumption by the user. The Mainloop's 'dataAvailable' variable already
+	/// does this at a global level, but we also need to keep track at a local
+	/// (module) level of this, to avoid confusion in the case multiple Inputs
+	/// are inside the same Mainloop, which is entirely possible and supported.
+	atomic_int_fast32_t dataAvailableModule;
 	/// Header parsing results.
 	struct input_common_header_info header;
 	/// Packet data parsing structures.
@@ -1664,6 +1670,7 @@ static void doPacketContainerCommit(inputCommonState state, caerEventPacketConta
 	}
 	else {
 		// Signal availability of new data to the mainloop on packet container commit.
+		atomic_fetch_add_explicit(&state->dataAvailableModule, 1, memory_order_release);
 		atomic_fetch_add_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_release);
 
 		caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Submitted packet container successfully.");
@@ -1874,8 +1881,10 @@ static int inputAssemblerThread(void *stateArg) {
 	// If we hit EOF/errors though, we want the consumers to be able to finish
 	// consuming the already produced data, so we wait for the ring-buffer to be empty.
 	if (atomic_load(&state->running)) {
-		while (atomic_load(&state->mainloopReference->dataAvailable) != 0) {
-			;
+		while (atomic_load(&state->dataAvailableModule) != 0) {
+			// Delay by 1 ms if no change, to avoid a wasteful busy loop.
+			struct timespec waitSleep = { .tv_sec = 0, .tv_nsec = 1000000 };
+			thrd_sleep(&waitSleep, NULL);
 		}
 
 		// Ensure parent also shuts down, for example on read failures or EOF.
@@ -2021,11 +2030,20 @@ void caerInputCommonExit(caerModuleData moduleData) {
 	while ((packetContainer = ringBufferGet(state->transferRingPacketContainers)) != NULL) {
 		caerEventPacketContainerFree(packetContainer);
 
-		// If we're here, then nobody will consume this data afterwards.
+		// If we're here, then nobody will (or even can) consume this data afterwards.
 		atomic_fetch_sub_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_relaxed);
+		atomic_fetch_sub_explicit(&state->dataAvailableModule, 1, memory_order_relaxed);
 	}
 
 	ringBufferFree(state->transferRingPacketContainers);
+
+	// Check we indeed removed all data and counters match this expectation.
+	if (atomic_load(&state->dataAvailableModule) != 0) {
+		// This should never happen!
+		caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
+			"After cleanup, data is still available for consumption. Counter value: %" PRIi32 ".",
+			I32T(atomic_load(&state->dataAvailableModule)));
+	}
 
 	caerEventPacketHeader packet;
 	while ((packet = ringBufferGet(state->transferRingPackets)) != NULL) {
@@ -2085,6 +2103,7 @@ void caerInputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list ar
 		// No special memory order for decrease, because the acquire load to even start running
 		// through a mainloop already synchronizes with the release store above.
 		atomic_fetch_sub_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_relaxed);
+		atomic_fetch_sub_explicit(&state->dataAvailableModule, 1, memory_order_relaxed);
 
 		sshsNodePutLong(state->sourceInfoNode, "highestTimestamp",
 			caerEventPacketContainerGetHighestEventTimestamp(*container));
