@@ -1334,8 +1334,11 @@ static int inputReaderThread(void *stateArg) {
 	inputCommonState state = stateArg;
 
 	// Set thread name.
-	// TODO: set meaningful thread names for Reader and Assembler
-	thrd_set_name(state->parentModule->moduleSubSystemString);
+	size_t threadNameLength = strlen(state->parentModule->moduleSubSystemString);
+	char threadName[threadNameLength + 1 + 8]; // +1 for NUL character.
+	strcpy(threadName, state->parentModule->moduleSubSystemString);
+	strcat(threadName, "[Reader]");
+	thrd_set_name(threadName);
 
 	// Set thread priority to high. This may fail depending on your OS configuration.
 	if (thrd_set_priority(-1) != thrd_success) {
@@ -1712,7 +1715,11 @@ static int inputAssemblerThread(void *stateArg) {
 	inputCommonState state = stateArg;
 
 	// Set thread name.
-	thrd_set_name(state->parentModule->moduleSubSystemString);
+	size_t threadNameLength = strlen(state->parentModule->moduleSubSystemString);
+	char threadName[threadNameLength + 1 + 11]; // +1 for NUL character.
+	strcpy(threadName, state->parentModule->moduleSubSystemString);
+	strcat(threadName, "[Assembler]");
+	thrd_set_name(threadName);
 
 	// Set thread priority to high. This may fail depending on your OS configuration.
 	if (thrd_set_priority(-1) != thrd_success) {
