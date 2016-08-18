@@ -242,9 +242,9 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 	// output/captured by this module, the TS_RESET event will be present in the output.
 	// The TS_RESET event would be alone in a packet that is also the only one in its
 	// packetContainer/mainloop cycle, so we can check for this very efficiently.
-	if (packetsSize == 1 && caerEventPacketHeaderGetEventType(packets[0]) == SPECIAL_EVENT
-	&& caerEventPacketHeaderGetEventNumber(packets[0]) == 1
-	&& caerSpecialEventPacketFindEventByType((caerSpecialEventPacket) packets[0], TIMESTAMP_RESET) != NULL) {
+	if ((packetsSize == 1) && (caerEventPacketHeaderGetEventType(packets[0]) == SPECIAL_EVENT)
+		&& (caerEventPacketHeaderGetEventNumber(packets[0]) == 1)
+		&& (caerSpecialEventPacketFindEventByType((caerSpecialEventPacket) packets[0], TIMESTAMP_RESET) != NULL)) {
 		return;
 	}
 

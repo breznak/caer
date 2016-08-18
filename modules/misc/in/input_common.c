@@ -1781,7 +1781,7 @@ static int inputAssemblerThread(void *stateArg) {
 
 		// Initialize time slice counters with first packet.
 		if (state->packetContainer.newContainerTimestampStart == -1) {
-			// -1 because newPacketFirstTimestamp is part of the set!
+			// -1 because newPacketFirstTimestamp itself is part of the set!
 			state->packetContainer.newContainerTimestampStart = currPacketData.startTimestamp;
 			state->packetContainer.newContainerTimestampEnd = currPacketData.startTimestamp
 				+ (atomic_load_explicit(&state->packetContainer.timeSlice, memory_order_relaxed) - 1);
@@ -2108,16 +2108,13 @@ void caerInputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list ar
 		sshsNodePutLong(state->sourceInfoNode, "highestTimestamp",
 			caerEventPacketContainerGetHighestEventTimestamp(*container));
 
-		caerSpecialEventPacket special = (caerSpecialEventPacket) caerEventPacketContainerGetEventPacket(*container,
-			SPECIAL_EVENT);
+		caerEventPacketHeader special = caerEventPacketContainerGetEventPacket(*container, SPECIAL_EVENT);
 
-		if (special != NULL) {
-			caerSpecialEvent tsResetEvent = caerSpecialEventPacketFindEventByType(special, TIMESTAMP_RESET);
-
-			if (tsResetEvent != NULL) {
-				caerMainloopResetProcessors(moduleData->moduleID);
-				caerMainloopResetOutputs(moduleData->moduleID);
-			}
+		if ((special != NULL) && (caerEventPacketHeaderGetEventType(special) == SPECIAL_EVENT)
+			&& (caerEventPacketHeaderGetEventNumber(special) == 1)
+			&& (caerSpecialEventPacketFindEventByType((caerSpecialEventPacket) special, TIMESTAMP_RESET) != NULL)) {
+			caerMainloopResetProcessors(moduleData->moduleID);
+			caerMainloopResetOutputs(moduleData->moduleID);
 		}
 	}
 }

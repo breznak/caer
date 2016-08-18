@@ -184,16 +184,12 @@ static void caerInputDVS128Run(caerModuleData moduleData, size_t argsNumber, va_
 			caerEventPacketContainerGetHighestEventTimestamp(*container));
 
 		// Detect timestamp reset and call all reset functions for processors and outputs.
-		caerSpecialEventPacket special = (caerSpecialEventPacket) caerEventPacketContainerGetEventPacket(*container,
-			SPECIAL_EVENT);
+		caerEventPacketHeader special = caerEventPacketContainerGetEventPacket(*container, SPECIAL_EVENT);
 
-		if (special != NULL) {
-			caerSpecialEvent tsResetEvent = caerSpecialEventPacketFindEventByType(special, TIMESTAMP_RESET);
-
-			if (tsResetEvent != NULL) {
-				caerMainloopResetProcessors(moduleData->moduleID);
-				caerMainloopResetOutputs(moduleData->moduleID);
-			}
+		if ((special != NULL) && (caerEventPacketHeaderGetEventNumber(special) == 1)
+			&& (caerSpecialEventPacketFindEventByType((caerSpecialEventPacket) special, TIMESTAMP_RESET) != NULL)) {
+			caerMainloopResetProcessors(moduleData->moduleID);
+			caerMainloopResetOutputs(moduleData->moduleID);
 		}
 	}
 }
@@ -409,7 +405,7 @@ static void usbConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 
 static void systemConfigSend(sshsNode node, caerModuleData moduleData) {
 	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-		CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_PACKET_SIZE, U32T(sshsNodeGetInt(node, "PacketContainerMaxPacketSize")));
+	CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_PACKET_SIZE, U32T(sshsNodeGetInt(node, "PacketContainerMaxPacketSize")));
 	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
 	CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_INTERVAL, U32T(sshsNodeGetInt(node, "PacketContainerMaxInterval")));
 
