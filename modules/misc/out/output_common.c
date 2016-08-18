@@ -1019,6 +1019,10 @@ static int outputHandlerThread(void *stateArg) {
 		// Wait for source to be defined.
 		int16_t sourceID = I16T(atomic_load_explicit(&state->sourceID, memory_order_relaxed));
 		if (sourceID == -1) {
+			// Delay by 1 ms if no data, to avoid a wasteful busy loop.
+			struct timespec delaySleep = { .tv_sec = 0, .tv_nsec = 1000000 };
+			thrd_sleep(&delaySleep, NULL);
+
 			continue;
 		}
 

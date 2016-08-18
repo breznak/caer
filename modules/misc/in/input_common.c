@@ -720,6 +720,10 @@ static bool parseData(inputCommonState state) {
 			if (!atomic_load_explicit(&state->running, memory_order_relaxed)) {
 				break;
 			}
+
+			// Delay by 10 µs if no change, to avoid a wasteful busy loop.
+			struct timespec retrySleep = { .tv_sec = 0, .tv_nsec = 10000 };
+			thrd_sleep(&retrySleep, NULL);
 		}
 
 		state->packets.currPacket = NULL;
@@ -1727,6 +1731,9 @@ static int inputAssemblerThread(void *stateArg) {
 			"Failed to raise thread priority for Input Assembler thread. You may experience lags and delays.");
 	}
 
+	// Delay by 1 µs if no data, to avoid a wasteful busy loop.
+	struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 1000 };
+
 	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
 		// Get parsed packets from Reader thread.
 		caerEventPacketHeader currPacket = ringBufferGet(state->transferRingPackets);
@@ -1740,8 +1747,7 @@ static int inputAssemblerThread(void *stateArg) {
 			}
 
 			// Delay by 1 µs if no data, to avoid a wasteful busy loop.
-			struct timespec delaySleep = { .tv_sec = 0, .tv_nsec = 1000 };
-			thrd_sleep(&delaySleep, NULL);
+			thrd_sleep(&noDataSleep, NULL);
 
 			continue;
 		}
@@ -1860,9 +1866,9 @@ static int inputAssemblerThread(void *stateArg) {
 	}
 
 	// At this point we either got terminated (running=false) or we stopped for some
-	// reason: parsing error or End-of-File.
+	// reason: no more packets due to error or End-of-File.
 	// If we got hard-terminated, we empty the ring-buffer in the Exit() state.
-	// If we hit EOF/parse errors though, we want the consumers to be able to finish
+	// If we hit EOF/errors though, we want the consumers to be able to finish
 	// consuming the already produced data, so we wait for the ring-buffer to be empty.
 	if (atomic_load(&state->running)) {
 		while (atomic_load(&state->mainloopReference->dataAvailable) != 0) {
@@ -2124,6 +2130,7 @@ static void caerInputCommonConfigListener(sshsNode node, void *userData, enum ss
 		else if (changeType == INT && caerStrEquals(changeKey, "timeDelay")) {
 			atomic_store(&state->packetContainer.timeDelay, changeValue.iint);
 		}
+		// TODO: pause support.
 	}
 }
 
