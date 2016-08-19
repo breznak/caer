@@ -1693,21 +1693,21 @@ static void getPacketInfo(caerEventPacketHeader packet, packetData packetData) {
 	packetData->endTimestamp = caerGenericEventGetTimestamp64(lastEvent, packet);
 }
 
-static bool commitPacketContainer(inputCommonState state, bool forceFlush) {
+static void commitPacketContainer(inputCommonState state, bool forceFlush) {
 	// Check if we hit any of the size limits (no more than X events per packet type).
 	// Check if we have read and accumulated all the event packets with a main first timestamp smaller
 	// or equal than what we want. We know this is the case when the last seen main timestamp is clearly
 	// bigger than the wanted one. If this is true, it means we do have all the possible events of all
 	// types that happen up until that point, and we can split that time range off into a packet container.
 	// If not, we just go get the next event packet.
-	if (!state->packetContainer.newContainerSizeHit
+	if (!forceFlush && !state->packetContainer.newContainerSizeHit
 		&& state->packetContainer.lastPacketTimestamp <= state->packetContainer.newContainerTimestampEnd) {
-		return (false);
+		return;
 	}
 
 	caerEventPacketContainer packetContainer = generatePacketContainer(state, forceFlush);
 	if (packetContainer == NULL) {
-		return (false);
+		return;
 	}
 
 	// Update wanted timestamp for next time slice.
@@ -1724,7 +1724,49 @@ static bool commitPacketContainer(inputCommonState state, bool forceFlush) {
 
 	doPacketContainerCommit(state, packetContainer, atomic_load_explicit(&state->keepPackets, memory_order_relaxed));
 
-	return (true);
+	return;
+}
+
+static void handleTSReset(inputCommonState state) {
+	// Commit all current content.
+	commitPacketContainer(state, true);
+
+	// Send lone packet container with just TS_RESET.
+	// Allocate packet container just for this event.
+	caerEventPacketContainer tsResetContainer = caerEventPacketContainerAllocate(1);
+	if (tsResetContainer == NULL) {
+		caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
+			"Failed to allocate tsReset event packet container.");
+		return;
+	}
+
+	// Allocate special packet just for this event.
+	caerSpecialEventPacket tsResetPacket = caerSpecialEventPacketAllocate(1, I16T(state->parentModule->moduleID),
+		state->packetContainer.lastTimestampOverflow);
+	if (tsResetPacket == NULL) {
+		caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
+			"Failed to allocate tsReset special event packet.");
+		return;
+	}
+
+	// Create timestamp reset event.
+	caerSpecialEvent tsResetEvent = caerSpecialEventPacketGetEvent(tsResetPacket, 0);
+	caerSpecialEventSetTimestamp(tsResetEvent, INT32_MAX);
+	caerSpecialEventSetType(tsResetEvent, TIMESTAMP_RESET);
+	caerSpecialEventValidate(tsResetEvent, tsResetPacket);
+
+	// Assign special packet to packet container.
+	caerEventPacketContainerSetEventPacket(tsResetContainer, SPECIAL_EVENT, (caerEventPacketHeader) tsResetPacket);
+
+	// Guaranteed commit of timestamp reset container.
+	doPacketContainerCommit(state, tsResetContainer, true);
+
+	// Prepare for the new event timeline coming with the next packet.
+	// Reset all time related counters to initial state.
+	state->packetContainer.lastPacketTimestamp = 0;
+	state->packetContainer.newContainerTimestampStart = -1;
+	state->packetContainer.newContainerTimestampEnd = -1;
+	state->packetContainer.lastTimestampOverflow = 0;
 }
 
 static int inputAssemblerThread(void *stateArg) {
@@ -1814,23 +1856,30 @@ static int inputAssemblerThread(void *stateArg) {
 		// how things are mixed and parsed. This needs to be detected first, before merging.
 		bool tsReset = false;
 
-		if (currPacketData.eventType == SPECIAL_EVENT) {
-			if (caerSpecialEventPacketFindValidEventByType((caerSpecialEventPacket) currPacket, TIMESTAMP_RESET) != NULL) {
-				tsReset = true;
-				caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString, "Timestamp Reset in this packet.");
+		if ((currPacketData.eventType == SPECIAL_EVENT)
+			&& (caerSpecialEventPacketFindValidEventByType((caerSpecialEventPacket) currPacket, TIMESTAMP_RESET) != NULL)) {
+			tsReset = true;
+			caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString, "Timestamp Reset detected in stream.");
+
+			if (currPacketData.eventNumber != 1) {
+				caerLog(CAER_LOG_WARNING, state->parentModule->moduleSubSystemString,
+					"Timpestamp Reset detected, but it is not alone in its Special Event packet. "
+						"This may lead to issues and should never happen.");
 			}
 		}
 
 		// Support the big timestamp wrap, which changes tsOverflow, and affects
 		// how things are mixed and parsed. This needs to be detected first, before merging.
+		// TS Overflow can either be equal (okay) or bigger (detected here), never smaller due
+		// to monotonic timestamps, as checked above (lastPacketTimestamp check).
 		bool tsOverflow = false;
 
 		if (caerEventPacketHeaderGetEventTSOverflow(currPacket) > state->packetContainer.lastTimestampOverflow) {
 			state->packetContainer.lastTimestampOverflow = caerEventPacketHeaderGetEventTSOverflow(currPacket);
 
-			// TSOverflow increased, commit container now.
 			tsOverflow = true;
-			caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString, "Timestamp Overflow with this packet.");
+			caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
+				"Timestamp Overflow detected in stream.");
 		}
 
 		// Now we have all the information and must do some merge and commit operations.
@@ -1842,47 +1891,18 @@ static int inputAssemblerThread(void *stateArg) {
 		//                         epoch, so we just follow standard reset procedure (above)
 
 		if (tsReset) {
-			// Commit all current content.
+			// Current packet not used.
 			free(currPacket);
-			commitPacketContainer(state, true);
 
-			// Send lone packet container with just TS_RESET.
-			// Allocate packet container just for this event.
-			caerEventPacketContainer tsResetContainer = caerEventPacketContainerAllocate(1);
-			if (tsResetContainer == NULL) {
-				caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
-					"Failed to allocate tsReset event packet container.");
-				break;
-			}
-
-			// Allocate special packet just for this event.
-			caerSpecialEventPacket tsResetPacket = caerSpecialEventPacketAllocate(1,
-				I16T(state->parentModule->moduleID), state->packetContainer.lastTimestampOverflow);
-			if (tsResetPacket == NULL) {
-				caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
-					"Failed to allocate tsReset special event packet.");
-				break;
-			}
-
-			// Create timestamp reset event.
-			caerSpecialEvent tsResetEvent = caerSpecialEventPacketGetEvent(tsResetPacket, 0);
-			caerSpecialEventSetTimestamp(tsResetEvent, INT32_MAX);
-			caerSpecialEventSetType(tsResetEvent, TIMESTAMP_RESET);
-			caerSpecialEventValidate(tsResetEvent, tsResetPacket);
-
-			// Assign special packet to packet container.
-			caerEventPacketContainerSetEventPacket(tsResetContainer, SPECIAL_EVENT,
-				(caerEventPacketHeader) tsResetPacket);
-
-			doPacketContainerCommit(state, tsResetContainer, true);
-
-			// Prepare for the new event timeline coming with the next packet.
-			state->packetContainer.lastPacketTimestamp = 0;
-			state->packetContainer.newContainerTimestampStart = -1;
-			state->packetContainer.newContainerTimestampEnd = -1;
-			state->packetContainer.lastTimestampOverflow = 0;
+			// We don't merge the current packet, that should only contain the timestamp reset,
+			// but instead generate one to ensure that's the case. Also, all counters are reset.
+			handleTSReset(state);
 
 			continue;
+		}
+
+		if (tsOverflow) {
+			// TODO: handle timestamp overflow.
 		}
 
 		// We've got a full event packet, store it (merge with current).
@@ -1893,6 +1913,8 @@ static int inputAssemblerThread(void *stateArg) {
 			continue;
 		}
 
+		// Generate a proper packet container and commit it to the Mainloop
+		// if the user-set time/size limits are reached.
 		commitPacketContainer(state, false);
 	}
 
