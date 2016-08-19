@@ -73,6 +73,14 @@ static const char *buildFont = CM_BUILD_DIRECTORY "/" GLOBAL_RESOURCES_DIRECTORY
 static const char *globalFontPath = NULL;
 
 void caerVisualizerSystemInit(void) {
+	// Remember original thread name.
+	char originalThreadName[15 + 1]; // +1 for terminating NUL character.
+	thrd_get_name(originalThreadName, 15);
+	originalThreadName[15] = '\0';
+
+	// Set custom thread name for Allegro system init.
+	thrd_set_name("AllegroSysInit");
+
 	// Initialize the Allegro library.
 	if (al_init()) {
 		// Successfully initialized Allegro.
@@ -161,6 +169,10 @@ void caerVisualizerSystemInit(void) {
 		caerLog(CAER_LOG_EMERGENCY, "Visualizer", "Failed to initialize Allegro keyboard event source.");
 		exit(EXIT_FAILURE);
 	}
+
+	// On success, set thread name back to original. Any threads created by Allegro
+	// will have their own, unique name (AllegroSysInit) from above.
+	thrd_set_name(originalThreadName);
 }
 
 caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisualizerEventHandler eventHandler,
@@ -641,12 +653,17 @@ static int caerVisualizerRenderThread(void *visualizerState) {
 
 	caerVisualizerState state = visualizerState;
 
-	// Set thread name.
-	thrd_set_name(state->parentModule->moduleSubSystemString);
+	// Set thread name to AllegroGraphics, so that the internal Allegro
+	// threads do get a generic, recognizable name, if any are
+	// created when initializing the graphics sub-system.
+	thrd_set_name("AllegroGraphics");
 
 	if (!caerVisualizerInitGraphics(state)) {
 		return (thrd_error);
 	}
+
+	// Set thread name.
+	thrd_set_name(state->parentModule->moduleSubSystemString);
 
 	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
 		caerVisualizerUpdateScreen(state);

@@ -362,6 +362,26 @@ static inline int thrd_set_name(const char *name) {
 #endif
 }
 
+static inline int thrd_get_name(char *name, size_t maxNameLength) {
+#if defined(OS_LINUX)
+	(void)(maxNameLength); // UNUSED FOR LINUX.
+
+	if (prctl(PR_GET_NAME, name) != 0) {
+		return (thrd_error);
+	}
+
+	return (thrd_success);
+#elif defined(OS_MACOSX)
+	if (pthread_getname_np(pthread_self(), name, maxNameLength) != 0) {
+		return (thrd_error);
+	}
+
+	return (thrd_success);
+#else
+	return (thrd_error);
+#endif
+}
+
 // NON STANDARD!
 static inline int thrd_set_priority(int priority) {
 #if defined(OS_LINUX)
