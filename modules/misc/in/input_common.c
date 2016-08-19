@@ -1746,12 +1746,11 @@ static int inputAssemblerThread(void *stateArg) {
 	// Delay by 1 µs if no data, to avoid a wasteful busy loop.
 	struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 1000 };
 
-	// Wait for 1 ms in pause mode, to avoid a wasteful busy loop.
-	struct timespec pauseSleep = { .tv_sec = 0, .tv_nsec = 1000 };
-
 	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
-		// Support pause: don't get and send out new data when in pause mode.
+		// Support pause: don't get and send out new data while in pause mode.
 		if (atomic_load_explicit(&state->pause, memory_order_relaxed)) {
+			// Wait for 1 ms in pause mode, to avoid a wasteful busy loop.
+			struct timespec pauseSleep = { .tv_sec = 0, .tv_nsec = 1000000 };
 			thrd_sleep(&pauseSleep, NULL);
 
 			continue;
