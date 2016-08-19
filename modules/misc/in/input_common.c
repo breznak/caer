@@ -1791,7 +1791,7 @@ static int inputAssemblerThread(void *stateArg) {
 
 			caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
 				"Dropping packet due to incorrect timestamp order. "
-					"Order-relevant timestamp is %"PRIi64", but expected was at least %"PRIi64".",
+					"Order-relevant timestamp is %" PRIi64 ", but expected was at least %" PRIi64 ".",
 				currPacketData.startTimestamp, state->packetContainer.lastPacketTimestamp);
 			continue;
 		}

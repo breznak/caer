@@ -315,15 +315,17 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 		}
 	}
 
-	// Remember highest timestamp for check in next iteration.
-	state->lastTimestamp = highestTimestamp;
-
-	// We might have failed to copy all packets (unlikely).
+	// We might have failed to copy all packets (unlikely), or skipped all of them
+	// due to timestamp check failures.
 	if (idx == 0) {
 		caerEventPacketContainerFree(eventPackets);
 
 		return;
 	}
+
+	// Remember highest timestamp for check in next iteration. Only update
+	// if we actually got any packets through.
+	state->lastTimestamp = highestTimestamp;
 
 	// Reset packet container size so we only consider the packets we managed
 	// to successfully copy.
