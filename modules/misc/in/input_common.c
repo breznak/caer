@@ -981,10 +981,10 @@ static int aedat3GetPacket(inputCommonState state, bool isAEDAT30) {
 static void aedat30ChangeOrigin(inputCommonState state, caerEventPacketHeader packet) {
 	if (caerEventPacketHeaderGetEventType(packet) == POLARITY_EVENT) {
 		// We need to know the DVS resolution to invert the polarity Y address.
-		int16_t dvsSizeY = sshsNodeGetShort(state->sourceInfoNode, "dvsSizeY") - 1;
+		int16_t dvsSizeY = I16T(sshsNodeGetShort(state->sourceInfoNode, "dvsSizeY") - 1);
 
 		CAER_POLARITY_ITERATOR_ALL_START((caerPolarityEventPacket) packet)
-			uint16_t newYAddress = (uint16_t) dvsSizeY - caerPolarityEventGetY(caerPolarityIteratorElement);
+			uint16_t newYAddress = U16T(dvsSizeY - caerPolarityEventGetY(caerPolarityIteratorElement));
 			caerPolarityEventSetY(caerPolarityIteratorElement, newYAddress);
 		}
 	}
@@ -1679,18 +1679,18 @@ static void doPacketContainerCommit(inputCommonState state, caerEventPacketConta
 	}
 }
 
-static void getPacketInfo(caerEventPacketHeader packet, packetData packetData) {
+static void getPacketInfo(caerEventPacketHeader packet, packetData packetInfoData) {
 	// Get data from new packet.
-	packetData->eventType = caerEventPacketHeaderGetEventType(packet);
-	packetData->eventSize = caerEventPacketHeaderGetEventSize(packet);
-	packetData->eventValid = caerEventPacketHeaderGetEventValid(packet);
-	packetData->eventNumber = caerEventPacketHeaderGetEventNumber(packet);
+	packetInfoData->eventType = caerEventPacketHeaderGetEventType(packet);
+	packetInfoData->eventSize = caerEventPacketHeaderGetEventSize(packet);
+	packetInfoData->eventValid = caerEventPacketHeaderGetEventValid(packet);
+	packetInfoData->eventNumber = caerEventPacketHeaderGetEventNumber(packet);
 
 	void *firstEvent = caerGenericEventGetEvent(packet, 0);
-	packetData->startTimestamp = caerGenericEventGetTimestamp64(firstEvent, packet);
+	packetInfoData->startTimestamp = caerGenericEventGetTimestamp64(firstEvent, packet);
 
-	void *lastEvent = caerGenericEventGetEvent(packet, packetData->eventNumber - 1);
-	packetData->endTimestamp = caerGenericEventGetTimestamp64(lastEvent, packet);
+	void *lastEvent = caerGenericEventGetEvent(packet, packetInfoData->eventNumber - 1);
+	packetInfoData->endTimestamp = caerGenericEventGetTimestamp64(lastEvent, packet);
 }
 
 static void commitPacketContainer(inputCommonState state, bool forceFlush) {
