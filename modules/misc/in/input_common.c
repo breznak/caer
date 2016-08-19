@@ -1779,7 +1779,7 @@ static int inputAssemblerThread(void *stateArg) {
 			caerCleanEventPacket(currPacket);
 		}
 
-		// Get data from new packet.
+		// Get info on the new packet.
 		struct input_packet_data currPacketData;
 		getPacketInfo(currPacket, &currPacketData);
 
@@ -1789,6 +1789,10 @@ static int inputAssemblerThread(void *stateArg) {
 			// Discard non-compliant packets.
 			free(currPacket);
 
+			caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
+				"Dropping packet due to incorrect timestamp order. "
+					"Order-relevant timestamp is %"PRIi64", but expected was at least %"PRIi64".",
+				currPacketData.startTimestamp, state->packetContainer.lastPacketTimestamp);
 			continue;
 		}
 
