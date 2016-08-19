@@ -1774,6 +1774,12 @@ static int inputAssemblerThread(void *stateArg) {
 			continue;
 		}
 
+		// If validOnly flag is enabled, clean the packets up here, removing all
+		// invalid events prior to the get info and merge steps.
+		if (atomic_load_explicit(&state->validOnly, memory_order_relaxed)) {
+			caerCleanEventPacket(currPacket);
+		}
+
 		// Get data from new packet.
 		struct input_packet_data currPacketData;
 		getPacketInfo(currPacket, &currPacketData);
@@ -2144,7 +2150,6 @@ static void caerInputCommonConfigListener(sshsNode node, void *userData, enum ss
 		if (changeType == BOOL && caerStrEquals(changeKey, "validOnly")) {
 			// Set valid only flag to given value.
 			atomic_store(&state->validOnly, changeValue.boolean);
-			// TODO: validOnly support.
 		}
 		else if (changeType == BOOL && caerStrEquals(changeKey, "keepPackets")) {
 			// Set keep packets flag to given value.
