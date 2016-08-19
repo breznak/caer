@@ -145,6 +145,8 @@ struct input_common_state {
 	/// This results in no loss of data, but may deviate from the requested
 	/// real-time play-back expectations.
 	atomic_bool keepPackets;
+	/// Pause support.
+	atomic_bool pause;
 	/// Transfer packets coming from the input reading thread to the assembly
 	/// thread. Normal EventPackets are used here.
 	RingBuffer transferRingPackets;
@@ -1744,7 +1746,17 @@ static int inputAssemblerThread(void *stateArg) {
 	// Delay by 1 µs if no data, to avoid a wasteful busy loop.
 	struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 1000 };
 
+	// Wait for 1 ms in pause mode, to avoid a wasteful busy loop.
+	struct timespec pauseSleep = { .tv_sec = 0, .tv_nsec = 1000 };
+
 	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
+		// Support pause: don't get and send out new data when in pause mode.
+		if (atomic_load_explicit(&state->pause, memory_order_relaxed)) {
+			thrd_sleep(&pauseSleep, NULL);
+
+			continue;
+		}
+
 		// Get parsed packets from Reader thread.
 		caerEventPacketHeader currPacket = ringBufferGet(state->transferRingPackets);
 		if (currPacket == NULL) {
@@ -1923,6 +1935,7 @@ bool isNetworkMessageBased) {
 	// Handle configuration.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "validOnly", false); // only send valid events
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "keepPackets", false); // ensure all packets are kept
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "pause", false); // support pausing a stream
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferSize", 65536); // in bytes, size of data buffer
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "transferBufferSize", 128); // in packet groups
 
@@ -1932,6 +1945,7 @@ bool isNetworkMessageBased) {
 
 	atomic_store(&state->validOnly, sshsNodeGetBool(moduleData->moduleNode, "validOnly"));
 	atomic_store(&state->keepPackets, sshsNodeGetBool(moduleData->moduleNode, "keepPackets"));
+	atomic_store(&state->pause, sshsNodeGetBool(moduleData->moduleNode, "pause"));
 
 	atomic_store(&state->packetContainer.sizeSlice, sshsNodeGetInt(moduleData->moduleNode, "sizeSlice"));
 	atomic_store(&state->packetContainer.timeSlice, sshsNodeGetInt(moduleData->moduleNode, "timeSlice"));
@@ -2136,6 +2150,10 @@ static void caerInputCommonConfigListener(sshsNode node, void *userData, enum ss
 			// Set keep packets flag to given value.
 			atomic_store(&state->keepPackets, changeValue.boolean);
 		}
+		else if (changeType == BOOL && caerStrEquals(changeKey, "pause")) {
+			// Set pause flag to given value.
+			atomic_store(&state->pause, changeValue.boolean);
+		}
 		else if (changeType == INT && caerStrEquals(changeKey, "bufferSize")) {
 			// Set buffer update flag.
 			atomic_store(&state->bufferUpdate, true);
@@ -2149,7 +2167,6 @@ static void caerInputCommonConfigListener(sshsNode node, void *userData, enum ss
 		else if (changeType == INT && caerStrEquals(changeKey, "timeDelay")) {
 			atomic_store(&state->packetContainer.timeDelay, changeValue.iint);
 		}
-		// TODO: pause support.
 	}
 }
 
