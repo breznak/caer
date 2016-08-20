@@ -202,8 +202,11 @@ static int inputReaderThread(void *stateArg);
 
 static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader newPacket, packetData newPacketData);
 static caerEventPacketContainer generatePacketContainer(inputCommonState state, bool forceFlush);
+static void commitPacketContainer(inputCommonState state, bool forceFlush);
 static void doTimeDelay(inputCommonState state);
 static void doPacketContainerCommit(inputCommonState state, caerEventPacketContainer packetContainer, bool force);
+static void handleTSReset(inputCommonState state);
+static void getPacketInfo(caerEventPacketHeader packet, packetData packetInfoData);
 static int inputAssemblerThread(void *stateArg);
 
 static void caerInputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
@@ -1619,6 +1622,40 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 	return (packetContainer);
 }
 
+static void commitPacketContainer(inputCommonState state, bool forceFlush) {
+	// Check if we hit any of the size limits (no more than X events per packet type).
+	// Check if we have read and accumulated all the event packets with a main first timestamp smaller
+	// or equal than what we want. We know this is the case when the last seen main timestamp is clearly
+	// bigger than the wanted one. If this is true, it means we do have all the possible events of all
+	// types that happen up until that point, and we can split that time range off into a packet container.
+	// If not, we just go get the next event packet.
+	if (!forceFlush && !state->packetContainer.newContainerSizeHit
+		&& state->packetContainer.lastPacketTimestamp <= state->packetContainer.newContainerTimestampEnd) {
+		return;
+	}
+
+	caerEventPacketContainer packetContainer = generatePacketContainer(state, forceFlush);
+	if (packetContainer == NULL) {
+		return;
+	}
+
+	// Update wanted timestamp for next time slice.
+	if (!state->packetContainer.newContainerSizeHit || forceFlush) {
+		int32_t timeSlice = I32T(atomic_load_explicit(&state->packetContainer.timeSlice,memory_order_relaxed));
+		state->packetContainer.newContainerTimestampStart += timeSlice;
+		state->packetContainer.newContainerTimestampEnd += timeSlice;
+	}
+
+	// Reset size hit.
+	state->packetContainer.newContainerSizeHit = false;
+
+	doTimeDelay(state);
+
+	doPacketContainerCommit(state, packetContainer, atomic_load_explicit(&state->keepPackets, memory_order_relaxed));
+
+	return;
+}
+
 static void doTimeDelay(inputCommonState state) {
 	// Got packet container, delay it until user-defined time.
 	uint64_t timeDelay = U64T(atomic_load_explicit(&state->packetContainer.timeDelay, memory_order_relaxed));
@@ -1679,54 +1716,6 @@ static void doPacketContainerCommit(inputCommonState state, caerEventPacketConta
 	}
 }
 
-static void getPacketInfo(caerEventPacketHeader packet, packetData packetInfoData) {
-	// Get data from new packet.
-	packetInfoData->eventType = caerEventPacketHeaderGetEventType(packet);
-	packetInfoData->eventSize = caerEventPacketHeaderGetEventSize(packet);
-	packetInfoData->eventValid = caerEventPacketHeaderGetEventValid(packet);
-	packetInfoData->eventNumber = caerEventPacketHeaderGetEventNumber(packet);
-
-	void *firstEvent = caerGenericEventGetEvent(packet, 0);
-	packetInfoData->startTimestamp = caerGenericEventGetTimestamp64(firstEvent, packet);
-
-	void *lastEvent = caerGenericEventGetEvent(packet, packetInfoData->eventNumber - 1);
-	packetInfoData->endTimestamp = caerGenericEventGetTimestamp64(lastEvent, packet);
-}
-
-static void commitPacketContainer(inputCommonState state, bool forceFlush) {
-	// Check if we hit any of the size limits (no more than X events per packet type).
-	// Check if we have read and accumulated all the event packets with a main first timestamp smaller
-	// or equal than what we want. We know this is the case when the last seen main timestamp is clearly
-	// bigger than the wanted one. If this is true, it means we do have all the possible events of all
-	// types that happen up until that point, and we can split that time range off into a packet container.
-	// If not, we just go get the next event packet.
-	if (!forceFlush && !state->packetContainer.newContainerSizeHit
-		&& state->packetContainer.lastPacketTimestamp <= state->packetContainer.newContainerTimestampEnd) {
-		return;
-	}
-
-	caerEventPacketContainer packetContainer = generatePacketContainer(state, forceFlush);
-	if (packetContainer == NULL) {
-		return;
-	}
-
-	// Update wanted timestamp for next time slice.
-	if (!state->packetContainer.newContainerSizeHit || forceFlush) {
-		int32_t timeSlice = I32T(atomic_load_explicit(&state->packetContainer.timeSlice,memory_order_relaxed));
-		state->packetContainer.newContainerTimestampStart += timeSlice;
-		state->packetContainer.newContainerTimestampEnd += timeSlice;
-	}
-
-	// Reset size hit.
-	state->packetContainer.newContainerSizeHit = false;
-
-	doTimeDelay(state);
-
-	doPacketContainerCommit(state, packetContainer, atomic_load_explicit(&state->keepPackets, memory_order_relaxed));
-
-	return;
-}
-
 static void handleTSReset(inputCommonState state) {
 	// Commit all current content.
 	commitPacketContainer(state, true);
@@ -1767,6 +1756,20 @@ static void handleTSReset(inputCommonState state) {
 	state->packetContainer.newContainerTimestampStart = -1;
 	state->packetContainer.newContainerTimestampEnd = -1;
 	state->packetContainer.lastTimestampOverflow = 0;
+}
+
+static void getPacketInfo(caerEventPacketHeader packet, packetData packetInfoData) {
+	// Get data from new packet.
+	packetInfoData->eventType = caerEventPacketHeaderGetEventType(packet);
+	packetInfoData->eventSize = caerEventPacketHeaderGetEventSize(packet);
+	packetInfoData->eventValid = caerEventPacketHeaderGetEventValid(packet);
+	packetInfoData->eventNumber = caerEventPacketHeaderGetEventNumber(packet);
+
+	void *firstEvent = caerGenericEventGetEvent(packet, 0);
+	packetInfoData->startTimestamp = caerGenericEventGetTimestamp64(firstEvent, packet);
+
+	void *lastEvent = caerGenericEventGetEvent(packet, packetInfoData->eventNumber - 1);
+	packetInfoData->endTimestamp = caerGenericEventGetTimestamp64(lastEvent, packet);
 }
 
 static int inputAssemblerThread(void *stateArg) {
@@ -1902,7 +1905,9 @@ static int inputAssemblerThread(void *stateArg) {
 		}
 
 		if (tsOverflow) {
-			// TODO: handle timestamp overflow.
+			// On TS Overflow, commit all current data, and then afterwards normally
+			// merge the current packet witht the (now empty) packet container.
+			commitPacketContainer(state, true);
 		}
 
 		// We've got a full event packet, store it (merge with current).
