@@ -98,12 +98,11 @@ struct input_common_packet_container_data {
 	/// Track tsOverflow value. On change, we must commit the current packet
 	/// container content and empty it out.
 	int32_t lastTimestampOverflow;
+	/// Currently biggest packet waiting in packet container.
+	int32_t biggestPacketSize;
 	/// The timestamp up to which we want to (have to!) read, so that we can
 	/// output the next packet container (in time-slice mode).
-	int64_t newContainerTimestampStart;
 	int64_t newContainerTimestampEnd;
-	/// If any packet has passed the size limit.
-	bool newContainerSizeHit;
 	/// The size limit that triggered the hit above.
 	int32_t newContainerSizeLimit;
 	/// Size slice (in events), for which to generate a packet container.
@@ -1455,31 +1454,17 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 		// Merge newPacket with '*packet'. Since packets from the same source,
 		// and having the same time, are guaranteed to have monotonic timestamps,
 		// the merge operation becomes a simple append operation.
-		int32_t packetEventValid = caerEventPacketHeaderGetEventValid(*packet);
-		int32_t packetEventNumber = caerEventPacketHeaderGetEventNumber(*packet);
-
-		caerEventPacketHeader mergedPacket = caerGenericEventPacketGrow(*packet,
-			(packetEventNumber + newPacketData->eventNumber));
+		caerEventPacketHeader mergedPacket = caerGenericEventPacketAppend(*packet, newPacket);
 		if (mergedPacket == NULL) {
 			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
 				"%s: Failed to allocate memory for packet merge operation.", __func__);
 			return (false);
 		}
 
-		// Memory reallocation was successful, so we can update the header, copy over the new
-		// events, and update the main pointer in the event packets array.
-		*packet = mergedPacket;
-
-		caerEventPacketHeaderSetEventValid(mergedPacket, packetEventValid + newPacketData->eventValid);
-		caerEventPacketHeaderSetEventNumber(mergedPacket, packetEventNumber + newPacketData->eventNumber);
-
-		memcpy(
-			((uint8_t *) mergedPacket) + CAER_EVENT_PACKET_HEADER_SIZE + (newPacketData->eventSize * packetEventNumber),
-			((uint8_t *) newPacket) + CAER_EVENT_PACKET_HEADER_SIZE,
-			(size_t) (newPacketData->eventSize * newPacketData->eventNumber));
-
 		// Merged content with existing packet, data copied: free new one.
+		// Update references to old/new packets to point to merged one.
 		free(newPacket);
+		*packet = mergedPacket;
 		newPacket = mergedPacket;
 	}
 	else {
@@ -1490,10 +1475,8 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 	}
 
 	// Update size commit criteria.
-	int32_t containerSizeLimit = I32T(atomic_load_explicit(&state->packetContainer.sizeSlice, memory_order_relaxed));
-	if (caerEventPacketHeaderGetEventNumber(newPacket) >= containerSizeLimit) {
-		state->packetContainer.newContainerSizeHit = true;
-		state->packetContainer.newContainerSizeLimit = containerSizeLimit;
+	if (caerEventPacketHeaderGetEventNumber(newPacket) > state->packetContainer.biggestPacketSize) {
+		state->packetContainer.biggestPacketSize = caerEventPacketHeaderGetEventNumber(newPacket);
 	}
 
 	return (true);
@@ -1531,7 +1514,7 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 			int32_t validEventsSeen = 0;
 
 			CAER_ITERATOR_ALL_START(*currPacket, void *)
-				if ((state->packetContainer.newContainerSizeHit
+				if ((state->packetContainer.newContainerSizeLimit > 0
 					&& caerIteratorCounter >= state->packetContainer.newContainerSizeLimit)
 					|| (caerGenericEventGetTimestamp64(caerIteratorElement, *currPacket)
 						> state->packetContainer.newContainerTimestampEnd)) {
@@ -1629,8 +1612,8 @@ static void commitPacketContainer(inputCommonState state, bool forceFlush) {
 	// bigger than the wanted one. If this is true, it means we do have all the possible events of all
 	// types that happen up until that point, and we can split that time range off into a packet container.
 	// If not, we just go get the next event packet.
-	if (!forceFlush && !state->packetContainer.newContainerSizeHit
-		&& state->packetContainer.lastPacketTimestamp <= state->packetContainer.newContainerTimestampEnd) {
+	if (!forceFlush && (state->packetContainer.biggestPacketSize <= state->packetContainer.newContainerSizeLimit)
+		&& (state->packetContainer.lastPacketTimestamp <= state->packetContainer.newContainerTimestampEnd)) {
 		return;
 	}
 
@@ -1640,14 +1623,12 @@ static void commitPacketContainer(inputCommonState state, bool forceFlush) {
 	}
 
 	// Update wanted timestamp for next time slice.
-	if (!state->packetContainer.newContainerSizeHit || forceFlush) {
-		int32_t timeSlice = I32T(atomic_load_explicit(&state->packetContainer.timeSlice,memory_order_relaxed));
-		state->packetContainer.newContainerTimestampStart += timeSlice;
-		state->packetContainer.newContainerTimestampEnd += timeSlice;
-	}
+	state->packetContainer.newContainerTimestampEnd += I32T(
+		atomic_load_explicit(&state->packetContainer.timeSlice,memory_order_relaxed));
 
 	// Reset size hit.
-	state->packetContainer.newContainerSizeHit = false;
+	state->packetContainer.biggestPacketSize = 0;
+	state->packetContainer.newContainerSizeLimit = -1;
 
 	doTimeDelay(state);
 
@@ -1753,9 +1734,8 @@ static void handleTSReset(inputCommonState state) {
 	// Prepare for the new event timeline coming with the next packet.
 	// Reset all time related counters to initial state.
 	state->packetContainer.lastPacketTimestamp = 0;
-	state->packetContainer.newContainerTimestampStart = -1;
-	state->packetContainer.newContainerTimestampEnd = -1;
 	state->packetContainer.lastTimestampOverflow = 0;
+	state->packetContainer.newContainerTimestampEnd = -1;
 }
 
 static void getPacketInfo(caerEventPacketHeader packet, packetData packetInfoData) {
@@ -1846,13 +1826,18 @@ static int inputAssemblerThread(void *stateArg) {
 		state->packetContainer.lastPacketTimestamp = currPacketData.startTimestamp;
 
 		// Initialize time slice counters with first packet.
-		if (state->packetContainer.newContainerTimestampStart == -1) {
+		if (state->packetContainer.newContainerTimestampEnd == -1) {
 			// -1 because newPacketFirstTimestamp itself is part of the set!
-			state->packetContainer.newContainerTimestampStart = currPacketData.startTimestamp;
 			state->packetContainer.newContainerTimestampEnd = currPacketData.startTimestamp
 				+ (atomic_load_explicit(&state->packetContainer.timeSlice, memory_order_relaxed) - 1);
 
 			portable_clock_gettime_monotonic(&state->packetContainer.lastCommitTime);
+		}
+
+		// Initialize size slice counters as needed.
+		if (state->packetContainer.newContainerSizeLimit == -1) {
+			state->packetContainer.newContainerSizeLimit = atomic_load_explicit(&state->packetContainer.sizeSlice,
+				memory_order_relaxed);
 		}
 
 		// If it's a special packet, it might contain TIMESTAMP_RESET as event, which affects
@@ -2015,8 +2000,8 @@ bool isNetworkMessageBased) {
 	// Initialize array for packets -> packet container.
 	utarray_new(state->packetContainer.eventPackets, &ut_caerEventPacketHeader_icd);
 
-	state->packetContainer.newContainerTimestampStart = -1;
 	state->packetContainer.newContainerTimestampEnd = -1;
+	state->packetContainer.newContainerSizeLimit = -1;
 
 	// Start input handling threads.
 	atomic_store(&state->running, true);
