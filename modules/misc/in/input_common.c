@@ -1480,10 +1480,15 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 	// Update size commit criteria, if size limit is enabled and not already hit by a previous packet.
 	if ((state->packetContainer.newContainerSizeLimit > 0) && !state->packetContainer.sizeLimitHit
 		&& (caerEventPacketHeaderGetEventNumber(newPacket) >= state->packetContainer.newContainerSizeLimit)) {
-		state->packetContainer.sizeLimitHit = true;
-
 		void *sizeLimitEvent = caerGenericEventGetEvent(newPacket, state->packetContainer.newContainerSizeLimit - 1);
-		state->packetContainer.sizeLimitTimestamp = caerGenericEventGetTimestamp64(sizeLimitEvent, newPacket);
+		int64_t sizeLimitTimestamp = caerGenericEventGetTimestamp64(sizeLimitEvent, newPacket);
+
+		// Reject the size limit if its corresponding timestamp isn't smaller than the time limit.
+		// If not (>=), then the time limit will hit first anyway and take precedence.
+		if (sizeLimitTimestamp < state->packetContainer.newContainerTimestampEnd) {
+			state->packetContainer.sizeLimitHit = true;
+			state->packetContainer.sizeLimitTimestamp = sizeLimitTimestamp;
+		}
 	}
 
 	return (true);
@@ -1521,10 +1526,12 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 			int32_t validEventsSeen = 0;
 
 			CAER_ITERATOR_ALL_START(*currPacket, void *)
-				if ((state->packetContainer.newContainerSizeLimit > 0
-					&& caerIteratorCounter >= state->packetContainer.newContainerSizeLimit)
-					|| (caerGenericEventGetTimestamp64(caerIteratorElement, *currPacket)
-						> state->packetContainer.newContainerTimestampEnd)) {
+				int64_t caerIteratorElementTimestamp = caerGenericEventGetTimestamp64(caerIteratorElement, *currPacket);
+
+				if ((state->packetContainer.sizeLimitHit
+					&& ((caerIteratorCounter >= state->packetContainer.newContainerSizeLimit)
+						|| (caerIteratorElementTimestamp > state->packetContainer.sizeLimitTimestamp)))
+					|| (caerIteratorElementTimestamp > state->packetContainer.newContainerTimestampEnd)) {
 					cutoffIndex = caerIteratorCounter;
 					break;
 				}
