@@ -1677,6 +1677,11 @@ static void doTimeDelay(inputCommonState state) {
 }
 
 static void doPacketContainerCommit(inputCommonState state, caerEventPacketContainer packetContainer, bool force) {
+	// Could be that the packet container is empty of events. Don't commit empty containers.
+	if (caerEventPacketContainerGetEventsNumber(packetContainer) == 0) {
+		return;
+	}
+
 	retry: if (!ringBufferPut(state->transferRingPacketContainers, packetContainer)) {
 		if (force && atomic_load_explicit(&state->running, memory_order_relaxed)) {
 			// Retry forever if requested, at least while the module is running.
