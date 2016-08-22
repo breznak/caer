@@ -1424,6 +1424,24 @@ static int inputReaderThread(void *stateArg) {
 	return (thrd_success);
 }
 
+static inline void updateSizeCommitCriteria(inputCommonState state, caerEventPacketHeader newPacket) {
+	if ((state->packetContainer.newContainerSizeLimit > 0)
+		&& (caerEventPacketHeaderGetEventNumber(newPacket) >= state->packetContainer.newContainerSizeLimit)) {
+		void *sizeLimitEvent = caerGenericEventGetEvent(newPacket, state->packetContainer.newContainerSizeLimit - 1);
+		int64_t sizeLimitTimestamp = caerGenericEventGetTimestamp64(sizeLimitEvent, newPacket);
+
+		// Reject the size limit if its corresponding timestamp isn't smaller than the time limit.
+		// If not (>=), then the time limit will hit first anyway and take precedence.
+		if (sizeLimitTimestamp < state->packetContainer.newContainerTimestampEnd) {
+			state->packetContainer.sizeLimitHit = true;
+
+			if (sizeLimitTimestamp < state->packetContainer.sizeLimitTimestamp) {
+				state->packetContainer.sizeLimitTimestamp = sizeLimitTimestamp;
+			}
+		}
+	}
+}
+
 /**
  * Add the given packet to a packet container that acts as accumulator. This way all
  * events are in a common place, from which the right event amounts/times can be sliced.
@@ -1478,18 +1496,7 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 	}
 
 	// Update size commit criteria, if size limit is enabled and not already hit by a previous packet.
-	if ((state->packetContainer.newContainerSizeLimit > 0) && !state->packetContainer.sizeLimitHit
-		&& (caerEventPacketHeaderGetEventNumber(newPacket) >= state->packetContainer.newContainerSizeLimit)) {
-		void *sizeLimitEvent = caerGenericEventGetEvent(newPacket, state->packetContainer.newContainerSizeLimit - 1);
-		int64_t sizeLimitTimestamp = caerGenericEventGetTimestamp64(sizeLimitEvent, newPacket);
-
-		// Reject the size limit if its corresponding timestamp isn't smaller than the time limit.
-		// If not (>=), then the time limit will hit first anyway and take precedence.
-		if (sizeLimitTimestamp < state->packetContainer.newContainerTimestampEnd) {
-			state->packetContainer.sizeLimitHit = true;
-			state->packetContainer.sizeLimitTimestamp = sizeLimitTimestamp;
-		}
-	}
+	updateSizeCommitCriteria(state, newPacket);
 
 	return (true);
 }
@@ -1628,7 +1635,7 @@ static void commitPacketContainer(inputCommonState state, bool forceFlush) {
 	// If not, we just go get the next event packet.
 	bool sizeCommit = state->packetContainer.sizeLimitHit
 		&& (state->packetContainer.lastPacketTimestamp > state->packetContainer.sizeLimitTimestamp);
-	bool timeCommit = state->packetContainer.lastPacketTimestamp > state->packetContainer.newContainerTimestampEnd;
+	bool timeCommit = (state->packetContainer.lastPacketTimestamp > state->packetContainer.newContainerTimestampEnd);
 
 	if (!forceFlush && !sizeCommit && !timeCommit) {
 		return;
@@ -1641,15 +1648,30 @@ static void commitPacketContainer(inputCommonState state, bool forceFlush) {
 	}
 
 	// Update wanted timestamp for next time slice.
-	state->packetContainer.newContainerTimestampEnd += I32T(
-		atomic_load_explicit(&state->packetContainer.timeSlice, memory_order_relaxed));
+	// Only do this if size limit was not active, since size limit can only be active
+	// if the slice would (in time) be smaller than the time limit end, so the next run
+	// must again check and comb through the same time window.
+	// Also don't update if forceFlush is true, for the same reason of the next call
+	// having to again comb through the same time window for any of the size or time
+	// limits to hit again (on TS Overflow, on TS Reset everything just resets anyway).
+	if (!sizeCommit && !forceFlush) {
+		state->packetContainer.newContainerTimestampEnd += I32T(
+			atomic_load_explicit(&state->packetContainer.timeSlice, memory_order_relaxed));
+	}
 
 	// Update size slice for next packet container.
-	state->packetContainer.sizeLimitHit = false;
-	state->packetContainer.sizeLimitTimestamp = 0;
-
 	state->packetContainer.newContainerSizeLimit = I32T(
 		atomic_load_explicit(&state->packetContainer.sizeSlice, memory_order_relaxed));
+
+	state->packetContainer.sizeLimitHit = false;
+	state->packetContainer.sizeLimitTimestamp = INT32_MAX;
+
+	// Check if any of the remaining packets still would trigger an early size limit.
+	caerEventPacketHeader *currPacket = NULL;
+	while ((currPacket = (caerEventPacketHeader *) utarray_next(state->packetContainer.eventPackets, currPacket))
+		!= NULL) {
+		updateSizeCommitCriteria(state, *currPacket);
+	}
 
 	doTimeDelay(state);
 
@@ -1862,12 +1884,6 @@ static int inputAssemblerThread(void *stateArg) {
 			portable_clock_gettime_monotonic(&state->packetContainer.lastCommitTime);
 		}
 
-		// Initialize size slice counters as needed.
-		if (state->packetContainer.newContainerSizeLimit == -1) {
-			state->packetContainer.newContainerSizeLimit = I32T(
-				atomic_load_explicit(&state->packetContainer.sizeSlice, memory_order_relaxed));
-		}
-
 		// If it's a special packet, it might contain TIMESTAMP_RESET as event, which affects
 		// how things are mixed and parsed. This needs to be detected first, before merging.
 		bool tsReset = false;
@@ -2032,7 +2048,9 @@ bool isNetworkMessageBased) {
 	utarray_new(state->packetContainer.eventPackets, &ut_caerEventPacketHeader_icd);
 
 	state->packetContainer.newContainerTimestampEnd = -1;
-	state->packetContainer.newContainerSizeLimit = -1;
+	state->packetContainer.newContainerSizeLimit = I32T(
+		atomic_load_explicit(&state->packetContainer.sizeSlice, memory_order_relaxed));
+	state->packetContainer.sizeLimitTimestamp = INT32_MAX;
 
 	// Start input handling threads.
 	atomic_store(&state->running, true);
