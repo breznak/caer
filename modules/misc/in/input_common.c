@@ -1657,7 +1657,14 @@ static void commitPacketContainer(inputCommonState state, bool forceFlush) {
 	if (!sizeCommit && !forceFlush) {
 		state->packetContainer.newContainerTimestampEnd += I32T(
 			atomic_load_explicit(&state->packetContainer.timeSlice, memory_order_relaxed));
+
+		// Only do time delay operation if time is actually changing. On size hits or
+		// full flushes, this would slow down everything incorrectly as it would be an
+		// extra delay operation inside the same time window.
+		doTimeDelay(state);
 	}
+
+	doPacketContainerCommit(state, packetContainer, atomic_load_explicit(&state->keepPackets, memory_order_relaxed));
 
 	// Update size slice for next packet container.
 	state->packetContainer.newContainerSizeLimit = I32T(
@@ -1672,10 +1679,6 @@ static void commitPacketContainer(inputCommonState state, bool forceFlush) {
 		!= NULL) {
 		updateSizeCommitCriteria(state, *currPacket);
 	}
-
-	doTimeDelay(state);
-
-	doPacketContainerCommit(state, packetContainer, atomic_load_explicit(&state->keepPackets, memory_order_relaxed));
 
 	return;
 }
