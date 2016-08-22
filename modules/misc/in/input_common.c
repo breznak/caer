@@ -98,8 +98,11 @@ struct input_common_packet_container_data {
 	/// Track tsOverflow value. On change, we must commit the current packet
 	/// container content and empty it out.
 	int32_t lastTimestampOverflow;
-	/// Currently biggest packet waiting in packet container.
-	int32_t biggestPacketSize;
+	/// Size limit reached in any packet.
+	bool sizeLimitHit;
+	/// The timestamp that needs to be read up to, so that the size limit can
+	/// actually be committed, because we know no other events are around.
+	int64_t sizeLimitTimestamp;
 	/// The timestamp up to which we want to (have to!) read, so that we can
 	/// output the next packet container (in time-slice mode).
 	int64_t newContainerTimestampEnd;
@@ -1474,9 +1477,13 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 		utarray_sort(state->packetContainer.eventPackets, &packetsFirstTypeThenSizeCmp);
 	}
 
-	// Update size commit criteria.
-	if (caerEventPacketHeaderGetEventNumber(newPacket) > state->packetContainer.biggestPacketSize) {
-		state->packetContainer.biggestPacketSize = caerEventPacketHeaderGetEventNumber(newPacket);
+	// Update size commit criteria, if size limit is enabled and not already hit by a previous packet.
+	if ((state->packetContainer.newContainerSizeLimit > 0) && !state->packetContainer.sizeLimitHit
+		&& (caerEventPacketHeaderGetEventNumber(newPacket) >= state->packetContainer.newContainerSizeLimit)) {
+		state->packetContainer.sizeLimitHit = true;
+
+		void *sizeLimitEvent = caerGenericEventGetEvent(newPacket, state->packetContainer.newContainerSizeLimit - 1);
+		state->packetContainer.sizeLimitTimestamp = caerGenericEventGetTimestamp64(sizeLimitEvent, newPacket);
 	}
 
 	return (true);
@@ -1612,23 +1619,30 @@ static void commitPacketContainer(inputCommonState state, bool forceFlush) {
 	// bigger than the wanted one. If this is true, it means we do have all the possible events of all
 	// types that happen up until that point, and we can split that time range off into a packet container.
 	// If not, we just go get the next event packet.
-	if (!forceFlush && (state->packetContainer.biggestPacketSize <= state->packetContainer.newContainerSizeLimit)
-		&& (state->packetContainer.lastPacketTimestamp <= state->packetContainer.newContainerTimestampEnd)) {
+	bool sizeCommit = state->packetContainer.sizeLimitHit
+		&& (state->packetContainer.lastPacketTimestamp > state->packetContainer.sizeLimitTimestamp);
+	bool timeCommit = state->packetContainer.lastPacketTimestamp > state->packetContainer.newContainerTimestampEnd;
+
+	if (!forceFlush && !sizeCommit && !timeCommit) {
 		return;
 	}
 
 	caerEventPacketContainer packetContainer = generatePacketContainer(state, forceFlush);
 	if (packetContainer == NULL) {
+		// Memory allocation or other error.
 		return;
 	}
 
 	// Update wanted timestamp for next time slice.
 	state->packetContainer.newContainerTimestampEnd += I32T(
-		atomic_load_explicit(&state->packetContainer.timeSlice,memory_order_relaxed));
+		atomic_load_explicit(&state->packetContainer.timeSlice, memory_order_relaxed));
 
-	// Reset size hit.
-	state->packetContainer.biggestPacketSize = 0;
-	state->packetContainer.newContainerSizeLimit = -1;
+	// Update size slice for next packet container.
+	state->packetContainer.sizeLimitHit = false;
+	state->packetContainer.sizeLimitTimestamp = 0;
+
+	state->packetContainer.newContainerSizeLimit = I32T(
+		atomic_load_explicit(&state->packetContainer.sizeSlice, memory_order_relaxed));
 
 	doTimeDelay(state);
 
