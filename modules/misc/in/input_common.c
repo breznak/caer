@@ -204,7 +204,7 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 static void commitPacketContainer(inputCommonState state, bool forceFlush);
 static void doTimeDelay(inputCommonState state);
 static void doPacketContainerCommit(inputCommonState state, caerEventPacketContainer packetContainer, bool force);
-static void handleTSReset(inputCommonState state);
+static bool handleTSReset(inputCommonState state);
 static void getPacketInfo(caerEventPacketHeader packet, packetData packetInfoData);
 static int inputAssemblerThread(void *stateArg);
 
@@ -1678,8 +1678,8 @@ static void doTimeDelay(inputCommonState state) {
 
 static void doPacketContainerCommit(inputCommonState state, caerEventPacketContainer packetContainer, bool force) {
 	retry: if (!ringBufferPut(state->transferRingPacketContainers, packetContainer)) {
-		if (force) {
-			// Retry forever if requested.
+		if (force && atomic_load_explicit(&state->running, memory_order_relaxed)) {
+			// Retry forever if requested, at least while the module is running.
 			goto retry;
 		}
 
@@ -1697,7 +1697,7 @@ static void doPacketContainerCommit(inputCommonState state, caerEventPacketConta
 	}
 }
 
-static void handleTSReset(inputCommonState state) {
+static bool handleTSReset(inputCommonState state) {
 	// Commit all current content.
 	commitPacketContainer(state, true);
 
@@ -1707,7 +1707,7 @@ static void handleTSReset(inputCommonState state) {
 	if (tsResetContainer == NULL) {
 		caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
 			"Failed to allocate tsReset event packet container.");
-		return;
+		return (false);
 	}
 
 	// Allocate special packet just for this event.
@@ -1716,7 +1716,7 @@ static void handleTSReset(inputCommonState state) {
 	if (tsResetPacket == NULL) {
 		caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
 			"Failed to allocate tsReset special event packet.");
-		return;
+		return (false);
 	}
 
 	// Create timestamp reset event.
@@ -1736,6 +1736,8 @@ static void handleTSReset(inputCommonState state) {
 	state->packetContainer.lastPacketTimestamp = 0;
 	state->packetContainer.lastTimestampOverflow = 0;
 	state->packetContainer.newContainerTimestampEnd = -1;
+
+	return (true);
 }
 
 static void getPacketInfo(caerEventPacketHeader packet, packetData packetInfoData) {
@@ -1836,8 +1838,8 @@ static int inputAssemblerThread(void *stateArg) {
 
 		// Initialize size slice counters as needed.
 		if (state->packetContainer.newContainerSizeLimit == -1) {
-			state->packetContainer.newContainerSizeLimit = atomic_load_explicit(&state->packetContainer.sizeSlice,
-				memory_order_relaxed);
+			state->packetContainer.newContainerSizeLimit = I32T(
+				atomic_load_explicit(&state->packetContainer.sizeSlice, memory_order_relaxed));
 		}
 
 		// If it's a special packet, it might contain TIMESTAMP_RESET as event, which affects
@@ -1884,7 +1886,10 @@ static int inputAssemblerThread(void *stateArg) {
 
 			// We don't merge the current packet, that should only contain the timestamp reset,
 			// but instead generate one to ensure that's the case. Also, all counters are reset.
-			handleTSReset(state);
+			if (!handleTSReset(state)) {
+				// Critical error, exit.
+				break;
+			}
 
 			continue;
 		}
@@ -1914,7 +1919,7 @@ static int inputAssemblerThread(void *stateArg) {
 	// If we hit EOF/errors though, we want the consumers to be able to finish
 	// consuming the already produced data, so we wait for the ring-buffer to be empty.
 	if (atomic_load(&state->running)) {
-		while (atomic_load(&state->dataAvailableModule) != 0) {
+		while (atomic_load(&state->running) && atomic_load(&state->dataAvailableModule) != 0) {
 			// Delay by 1 ms if no change, to avoid a wasteful busy loop.
 			struct timespec waitSleep = { .tv_sec = 0, .tv_nsec = 1000000 };
 			thrd_sleep(&waitSleep, NULL);
