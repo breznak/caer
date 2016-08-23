@@ -3,10 +3,6 @@
 
 #include "main.h"
 #include "base/module.h"
-#include <libcaer/events/polarity.h>
-#include <libcaer/events/frame.h>
-#include <libcaer/events/imu6.h>
-#include <libcaer/events/point2d.h>
 #include <libcaer/events/packetContainer.h>
 #include <allegro5/allegro.h>
 
@@ -20,7 +16,7 @@ typedef void (*caerVisualizerEventHandler)(caerVisualizerState state, ALLEGRO_EV
 // For reuse inside other modules.
 caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisualizerEventHandler eventHandler,
 	int32_t bitmapSizeX, int32_t bitmapSizeY, float defaultZoomFactor, bool defaultShowStatistics,
-	caerModuleData parentModule);
+	caerModuleData parentModule, int16_t eventSourceID);
 void caerVisualizerUpdate(caerVisualizerState state, caerEventPacketContainer container);
 void caerVisualizerExit(caerVisualizerState state);
 void caerVisualizerReset(caerVisualizerState state);

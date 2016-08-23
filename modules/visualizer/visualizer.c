@@ -8,6 +8,10 @@
 
 #include <math.h>
 #include <stdatomic.h>
+#include <libcaer/events/polarity.h>
+#include <libcaer/events/frame.h>
+#include <libcaer/events/imu6.h>
+#include <libcaer/events/point2d.h>
 #include <allegro5/allegro_primitives.h>
 #include <allegro5/allegro_font.h>
 #include <allegro5/allegro_ttf.h>
@@ -30,6 +34,7 @@ struct caer_visualizer_state {
 	caerVisualizerRenderer renderer;
 	caerVisualizerEventHandler eventHandler;
 	caerModuleData parentModule;
+	int16_t eventSourceID;
 	bool showStatistics;
 	struct caer_statistics_state packetStatistics;
 	atomic_int_fast32_t packetSubsampleRendering;
@@ -177,7 +182,7 @@ void caerVisualizerSystemInit(void) {
 
 caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisualizerEventHandler eventHandler,
 	int32_t bitmapSizeX, int32_t bitmapSizeY, float defaultZoomFactor, bool defaultShowStatistics,
-	caerModuleData parentModule) {
+	caerModuleData parentModule, int16_t eventSourceID) {
 	// Allocate memory for visualizer state.
 	caerVisualizerState state = calloc(1, sizeof(struct caer_visualizer_state));
 	if (state == NULL) {
@@ -186,6 +191,7 @@ caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisu
 	}
 
 	state->parentModule = parentModule;
+	state->eventSourceID = eventSourceID;
 
 	// Configuration.
 	sshsNodePutIntIfAbsent(parentModule->moduleNode, "subsampleRendering", 1);
@@ -749,11 +755,12 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRe
 	// Default sizes if nothing else is specified in sourceInfo node.
 	int16_t sizeX = 20;
 	int16_t sizeY = 20;
+	int16_t sourceID = -1;
 
 	// Search for biggest sizes amongst all event packets.
 	CAER_EVENT_PACKET_CONTAINER_ITERATOR_START(container)
 		// Get size information from source.
-		int16_t sourceID = caerEventPacketHeaderGetEventSource(caerEventPacketContainerIteratorElement);
+		sourceID = caerEventPacketHeaderGetEventSource(caerEventPacketContainerIteratorElement);
 
 		sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
 		if (sourceInfoNode == NULL) {
@@ -799,7 +806,7 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRe
 	CAER_EVENT_PACKET_CONTAINER_ITERATOR_END
 
 	moduleData->moduleState = caerVisualizerInit(renderer, eventHandler, sizeX, sizeY, VISUALIZER_DEFAULT_ZOOM, true,
-		moduleData);
+		moduleData, sourceID);
 	if (moduleData->moduleState == NULL) {
 		return (false);
 	}
