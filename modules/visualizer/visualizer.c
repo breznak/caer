@@ -525,7 +525,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 
 				sshsNodePutFloat(state->parentModule->moduleNode, "zoomFactor", currentZoomFactor);
 			}
-			else if (displayEvent.type == ALLEGRO_EVENT_KEY_DOWN && displayEvent.keyboard.keycode == ALLEGRO_KEY_LEFT) {
+			else if (displayEvent.type == ALLEGRO_EVENT_KEY_DOWN && displayEvent.keyboard.keycode == ALLEGRO_KEY_A) {
 				int32_t currentSubsampling = sshsNodeGetInt(state->parentModule->moduleNode, "subsampleRendering");
 
 				currentSubsampling--;
@@ -537,8 +537,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 
 				sshsNodePutInt(state->parentModule->moduleNode, "subsampleRendering", currentSubsampling);
 			}
-			else if (displayEvent.type == ALLEGRO_EVENT_KEY_DOWN
-				&& displayEvent.keyboard.keycode == ALLEGRO_KEY_RIGHT) {
+			else if (displayEvent.type == ALLEGRO_EVENT_KEY_DOWN && displayEvent.keyboard.keycode == ALLEGRO_KEY_D) {
 				int32_t currentSubsampling = sshsNodeGetInt(state->parentModule->moduleNode, "subsampleRendering");
 
 				currentSubsampling++;
@@ -568,9 +567,36 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		|| displayEvent.type == ALLEGRO_EVENT_MOUSE_LEAVE_DISPLAY || displayEvent.type == ALLEGRO_EVENT_MOUSE_WARPED) {
 		// React to mouse movements, but only if they came from the corresponding display.
 		if (displayEvent.mouse.display == state->displayWindow) {
-			// Forward event to user-defined event handler.
-			if (state->eventHandler != NULL) {
-				(*state->eventHandler)(state, displayEvent);
+			if (displayEvent.type == ALLEGRO_EVENT_MOUSE_AXES && displayEvent.mouse.dz > 0) {
+				float currentZoomFactor = sshsNodeGetFloat(state->parentModule->moduleNode, "zoomFactor");
+
+				currentZoomFactor += (0.1f * (float) displayEvent.mouse.dz);
+
+				// Clip zoom factor.
+				if (currentZoomFactor > 50) {
+					currentZoomFactor = 50;
+				}
+
+								sshsNodePutFloat(state->parentModule->moduleNode, "zoomFactor", currentZoomFactor);
+			}
+			else if (displayEvent.type == ALLEGRO_EVENT_MOUSE_AXES && displayEvent.mouse.dz < 0) {
+				float currentZoomFactor = sshsNodeGetFloat(state->parentModule->moduleNode, "zoomFactor");
+
+				// Plus because dz is negative, so - and - is +.
+				currentZoomFactor += (0.1f * (float) displayEvent.mouse.dz);
+
+				// Clip zoom factor.
+				if (currentZoomFactor < 0.5f) {
+					currentZoomFactor = 0.5f;
+				}
+
+				sshsNodePutFloat(state->parentModule->moduleNode, "zoomFactor", currentZoomFactor);
+			}
+			else {
+				// Forward event to user-defined event handler.
+				if (state->eventHandler != NULL) {
+					(*state->eventHandler)(state, displayEvent);
+				}
 			}
 		}
 	}
