@@ -1635,8 +1635,7 @@ static void commitPacketContainer(inputCommonState state, bool forceFlush) {
 	// If not, we just go get the next event packet.
 	bool sizeCommit = false, timeCommit = false;
 
-redo:
-	sizeCommit = state->packetContainer.sizeLimitHit
+	redo: sizeCommit = state->packetContainer.sizeLimitHit
 		&& (state->packetContainer.lastPacketTimestamp > state->packetContainer.sizeLimitTimestamp);
 	timeCommit = (state->packetContainer.lastPacketTimestamp > state->packetContainer.newContainerTimestampEnd);
 
@@ -1676,16 +1675,16 @@ redo:
 	state->packetContainer.sizeLimitHit = false;
 	state->packetContainer.sizeLimitTimestamp = INT32_MAX;
 
-	// Check if any of the remaining packets still would trigger an early size limit.
-	caerEventPacketHeader *currPacket = NULL;
-	while ((currPacket = (caerEventPacketHeader *) utarray_next(state->packetContainer.eventPackets, currPacket))
-		!= NULL) {
-		updateSizeCommitCriteria(state, *currPacket);
-	}
-
-	// Run the above again, to make sure we do exhaust all possible size and time commits
-	// possible with the data we have now, before going and getting new data.
 	if (!forceFlush) {
+		// Check if any of the remaining packets still would trigger an early size limit.
+		caerEventPacketHeader *currPacket = NULL;
+		while ((currPacket = (caerEventPacketHeader *) utarray_next(state->packetContainer.eventPackets, currPacket))
+			!= NULL) {
+			updateSizeCommitCriteria(state, *currPacket);
+		}
+
+		// Run the above again, to make sure we do exhaust all possible size and time commits
+		// possible with the data we have now, before going and getting new data.
 		goto redo;
 	}
 }
