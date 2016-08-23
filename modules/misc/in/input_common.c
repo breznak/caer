@@ -1633,9 +1633,12 @@ static void commitPacketContainer(inputCommonState state, bool forceFlush) {
 	// bigger than the wanted one. If this is true, it means we do have all the possible events of all
 	// types that happen up until that point, and we can split that time range off into a packet container.
 	// If not, we just go get the next event packet.
-	bool sizeCommit = state->packetContainer.sizeLimitHit
+	bool sizeCommit = false, timeCommit = false;
+
+redo:
+	sizeCommit = state->packetContainer.sizeLimitHit
 		&& (state->packetContainer.lastPacketTimestamp > state->packetContainer.sizeLimitTimestamp);
-	bool timeCommit = (state->packetContainer.lastPacketTimestamp > state->packetContainer.newContainerTimestampEnd);
+	timeCommit = (state->packetContainer.lastPacketTimestamp > state->packetContainer.newContainerTimestampEnd);
 
 	if (!forceFlush && !sizeCommit && !timeCommit) {
 		return;
@@ -1680,7 +1683,11 @@ static void commitPacketContainer(inputCommonState state, bool forceFlush) {
 		updateSizeCommitCriteria(state, *currPacket);
 	}
 
-	return;
+	// Run the above again, to make sure we do exhaust all possible size and time commits
+	// possible with the data we have now, before going and getting new data.
+	if (!forceFlush) {
+		goto redo;
+	}
 }
 
 static void doTimeDelay(inputCommonState state) {
