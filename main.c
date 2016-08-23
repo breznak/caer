@@ -89,6 +89,10 @@ static bool mainloop_1(void) {
 	caerSpecialEventPacket special = NULL;
 	caerPolarityEventPacket polarity = NULL;
 
+#ifdef ENABLE_VISUALIZER
+	caerVisualizerEventHandler visualizerEventHandler = NULL;
+#endif
+
 	// Input modules grab data from outside sources (like devices, files, ...)
 	// and put events into an event packet.
 #ifdef DVS128
@@ -125,6 +129,10 @@ static bool mainloop_1(void) {
 	container = caerInputNetTCP(11);
 #endif
 #if defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT)
+#ifdef ENABLE_VISUALIZER
+	visualizerEventHandler = &caerInputVisualizerEventHandler;
+#endif
+
 	// Typed EventPackets contain events of a certain type.
 	// We search for them by type here, because input modules may not have all or any of them.
 	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
@@ -167,11 +175,11 @@ static bool mainloop_1(void) {
 
 	// A simple visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
-	caerVisualizer(60, "Polarity", &caerVisualizerRendererPolarityEvents, NULL, (caerEventPacketHeader) polarity);
-	caerVisualizer(61, "Frame", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) frame);
-	caerVisualizer(62, "IMU6", &caerVisualizerRendererIMU6Events, NULL, (caerEventPacketHeader) imu);
+	caerVisualizer(60, "Polarity", &caerVisualizerRendererPolarityEvents, visualizerEventHandler, (caerEventPacketHeader) polarity);
+	caerVisualizer(61, "Frame", &caerVisualizerRendererFrameEvents, visualizerEventHandler, (caerEventPacketHeader) frame);
+	caerVisualizer(62, "IMU6", &caerVisualizerRendererIMU6Events, visualizerEventHandler, (caerEventPacketHeader) imu);
 
-	//caerVisualizerMulti(68, "PolarityAndFrame", &caerVisualizerMultiRendererPolarityAndFrameEvents, NULL, container);
+	//caerVisualizerMulti(68, "PolarityAndFrame", &caerVisualizerMultiRendererPolarityAndFrameEvents, visualizerEventHandler, container);
 #endif
 
 #ifdef ENABLE_FILE_OUTPUT

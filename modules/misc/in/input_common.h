@@ -12,4 +12,10 @@ bool isNetworkMessageBased);
 void caerInputCommonExit(caerModuleData moduleData);
 void caerInputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 
+// Visualizer event handler support, for keyboard commands.
+#ifdef ENABLE_VISUALIZER
+#include "modules/visualizer/visualizer.h"
+void caerInputVisualizerEventHandler(caerVisualizerState state, ALLEGRO_EVENT event);
+#endif
+
 #endif /* INPUT_COMMON_H_ */

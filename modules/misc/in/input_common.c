@@ -2278,3 +2278,15 @@ static int packetsFirstTypeThenSizeCmp(const void *a, const void *b) {
 		}
 	}
 }
+
+#ifdef ENABLE_VISUALIZER
+void caerInputVisualizerEventHandler(caerVisualizerState state, ALLEGRO_EVENT event) {
+	if (event.type == ALLEGRO_EVENT_KEY_DOWN && event.keyboard.keycode == ALLEGRO_KEY_SPACE) {
+		sshsNode sourceNode = caerMainloopGetSourceNode(state->eventSourceID);
+
+		bool pause = sshsNodeGetBool(sourceNode, "pause");
+
+		sshsNodePutBool(sourceNode, "pause", !pause);
+	}
+}
+#endif
