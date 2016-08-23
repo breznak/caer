@@ -301,6 +301,15 @@ sshsNode caerMainloopGetSourceInfo(uint16_t sourceID) {
 	return (sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"));
 }
 
+sshsNode caerMainloopGetSourceNode(uint16_t sourceID) {
+	caerModuleData moduleData = findSourceModule(sourceID);
+	if (moduleData == NULL) {
+		return (NULL);
+	}
+
+	return (moduleData->moduleNode);
+}
+
 void *caerMainloopGetSourceState(uint16_t sourceID) {
 	caerModuleData moduleData = findSourceModule(sourceID);
 	if (moduleData == NULL) {

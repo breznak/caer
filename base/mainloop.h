@@ -42,6 +42,7 @@ caerModuleData caerMainloopFindModule(uint16_t moduleID, const char *moduleShort
 void caerMainloopFreeAfterLoop(void (*func)(void *mem), void *memPtr);
 caerMainloopData caerMainloopGetReference(void);
 sshsNode caerMainloopGetSourceInfo(uint16_t sourceID);
+sshsNode caerMainloopGetSourceNode(uint16_t sourceID);
 void *caerMainloopGetSourceState(uint16_t sourceID);
 void caerMainloopResetInputs(uint16_t sourceID);
 void caerMainloopResetOutputs(uint16_t sourceID);
