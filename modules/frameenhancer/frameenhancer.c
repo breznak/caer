@@ -46,7 +46,7 @@ static bool caerFrameEnhancerInit(caerModuleData moduleData) {
 
 #ifdef ENABLE_FRAMEENHANCER_OPENCV
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "demosaicType", "opencv_edge_aware");
-	sshsNodePutStringIfAbsent(moduleData->moduleNode, "contrastType", "opencv_clahe");
+	sshsNodePutStringIfAbsent(moduleData->moduleNode, "contrastType", "opencv_normalization");
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "whiteBalanceType", "opencv_grayworld");
 #else
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "demosaicType", "standard");
