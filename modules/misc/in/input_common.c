@@ -1,4 +1,5 @@
 #include "input_common.h"
+#include "input_visualizer_eventhandler.h"
 #include "base/mainloop.h"
 #include "ext/portable_time.h"
 #include "ext/ringbuffer/ringbuffer.h"
@@ -2280,9 +2281,9 @@ static int packetsFirstTypeThenSizeCmp(const void *a, const void *b) {
 }
 
 #ifdef ENABLE_VISUALIZER
-void caerInputVisualizerEventHandler(caerVisualizerState state, ALLEGRO_EVENT event) {
+void caerInputVisualizerEventHandler(caerVisualizerPublicState state, ALLEGRO_EVENT event) {
 	if (event.type == ALLEGRO_EVENT_KEY_DOWN && event.keyboard.keycode == ALLEGRO_KEY_SPACE) {
-		sshsNode sourceNode = caerMainloopGetSourceNode(state->eventSourceID);
+		sshsNode sourceNode = caerMainloopGetSourceNode(U16T(state->eventSourceID));
 
 		bool pause = sshsNodeGetBool(sourceNode, "pause");
 

@@ -2,6 +2,7 @@
 #define INPUT_NET_TCP_H_
 
 #include "main.h"
+#include "input_visualizer_eventhandler.h"
 
 #include <libcaer/events/packetContainer.h>
 #include <libcaer/events/special.h>
