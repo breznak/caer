@@ -13,10 +13,13 @@
 #include <libcaer/events/imu6.h>
 #include <libcaer/events/point2d.h>
 #include <allegro5/allegro_primitives.h>
-#include <allegro5/allegro_font.h>
 #include <allegro5/allegro_ttf.h>
 
 struct caer_visualizer_state {
+	int16_t eventSourceID;
+	int32_t bitmapRendererSizeX;
+	int32_t bitmapRendererSizeY;
+	ALLEGRO_FONT *displayFont;
 	atomic_bool running;
 	atomic_bool displayWindowResize;
 	int32_t displayWindowSizeX;
@@ -24,17 +27,13 @@ struct caer_visualizer_state {
 	ALLEGRO_DISPLAY *displayWindow;
 	ALLEGRO_EVENT_QUEUE *displayEventQueue;
 	ALLEGRO_TIMER *displayTimer;
-	ALLEGRO_FONT *displayFont;
 	ALLEGRO_BITMAP *bitmapRenderer;
-	int32_t bitmapRendererSizeX;
-	int32_t bitmapRendererSizeY;
 	bool bitmapDrawUpdate;
 	RingBuffer dataTransfer;
 	thrd_t renderingThread;
 	caerVisualizerRenderer renderer;
 	caerVisualizerEventHandler eventHandler;
 	caerModuleData parentModule;
-	int16_t eventSourceID;
 	bool showStatistics;
 	struct caer_statistics_state packetStatistics;
 	atomic_int_fast32_t packetSubsampleRendering;
@@ -480,7 +479,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		// Update bitmap with new content. (0, 0) is upper left corner.
 		// NULL renderer is supported and simply does nothing (black screen).
 		if (state->renderer != NULL) {
-			bool didDrawSomething = (*state->renderer)(state, container, !state->bitmapDrawUpdate);
+			bool didDrawSomething = (*state->renderer)((caerVisualizerPublicState) state, container, !state->bitmapDrawUpdate);
 
 			// Remember if something was drawn, even just once.
 			if (!state->bitmapDrawUpdate) {
@@ -563,7 +562,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 			else {
 				// Forward event to user-defined event handler.
 				if (state->eventHandler != NULL) {
-					(*state->eventHandler)(state, displayEvent);
+					(*state->eventHandler)((caerVisualizerPublicState) state, displayEvent);
 				}
 			}
 		}
@@ -601,7 +600,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 			else {
 				// Forward event to user-defined event handler.
 				if (state->eventHandler != NULL) {
-					(*state->eventHandler)(state, displayEvent);
+					(*state->eventHandler)((caerVisualizerPublicState) state, displayEvent);
 				}
 			}
 		}
@@ -850,7 +849,7 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 	caerVisualizerUpdate(moduleData->moduleState, container);
 }
 
-bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketContainer container, bool doClear) {
+bool caerVisualizerRendererPolarityEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear) {
 	UNUSED_ARGUMENT(state);
 
 	// Clear bitmap to black to erase old events.
@@ -882,7 +881,7 @@ bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPa
 	return (true);
 }
 
-bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketContainer container, bool doClear) {
+bool caerVisualizerRendererFrameEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear) {
 	UNUSED_ARGUMENT(state);
 	UNUSED_ARGUMENT(doClear); // Don't erase last frame.
 
@@ -958,7 +957,7 @@ bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacke
 #define RESET_LIMIT_POS(VAL, LIMIT) if ((VAL) > (LIMIT)) { (VAL) = (LIMIT); }
 #define RESET_LIMIT_NEG(VAL, LIMIT) if ((VAL) < (LIMIT)) { (VAL) = (LIMIT); }
 
-bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketContainer container, bool doClear) {
+bool caerVisualizerRendererIMU6Events(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear) {
 	// Clear bitmap to black to erase old events.
 	if (doClear) {
 		al_clear_to_color(al_map_rgb(0, 0, 0));
@@ -1044,7 +1043,7 @@ bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacket
 	return (true);
 }
 
-bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPacketContainer container, bool doClear) {
+bool caerVisualizerRendererPoint2DEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear) {
 	UNUSED_ARGUMENT(state);
 
 	// Clear bitmap to black to erase old events.
@@ -1071,7 +1070,7 @@ bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPac
 	return (true);
 }
 
-bool caerVisualizerMultiRendererPolarityAndFrameEvents(caerVisualizerState state, caerEventPacketContainer container,
+bool caerVisualizerMultiRendererPolarityAndFrameEvents(caerVisualizerPublicState state, caerEventPacketContainer container,
 	bool doClear) {
 	UNUSED_ARGUMENT(doClear); // Don't clear old frames, add events on top.
 
