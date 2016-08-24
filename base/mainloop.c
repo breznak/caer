@@ -291,16 +291,6 @@ static inline caerModuleData findSourceModule(uint16_t sourceID) {
 	return (moduleData);
 }
 
-sshsNode caerMainloopGetSourceInfo(uint16_t sourceID) {
-	caerModuleData moduleData = findSourceModule(sourceID);
-	if (moduleData == NULL) {
-		return (NULL);
-	}
-
-	// All sources have a sub-node in SSHS called 'sourceInfo/'.
-	return (sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"));
-}
-
 sshsNode caerMainloopGetSourceNode(uint16_t sourceID) {
 	caerModuleData moduleData = findSourceModule(sourceID);
 	if (moduleData == NULL) {
@@ -308,6 +298,16 @@ sshsNode caerMainloopGetSourceNode(uint16_t sourceID) {
 	}
 
 	return (moduleData->moduleNode);
+}
+
+sshsNode caerMainloopGetSourceInfo(uint16_t sourceID) {
+	sshsNode sourceNode = caerMainloopGetSourceNode(sourceID);
+	if (sourceNode == NULL) {
+		return (NULL);
+	}
+
+	// All sources have a sub-node in SSHS called 'sourceInfo/'.
+	return (sshsGetRelativeNode(sourceNode, "sourceInfo/"));
 }
 
 void *caerMainloopGetSourceState(uint16_t sourceID) {
