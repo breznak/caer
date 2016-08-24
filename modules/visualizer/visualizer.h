@@ -11,10 +11,10 @@
 #define VISUALIZER_REFRESH_RATE 60.0f
 
 struct caer_visualizer_public_state {
-		int16_t eventSourceID;
-		int32_t bitmapRendererSizeX;
-		int32_t bitmapRendererSizeY;
-		ALLEGRO_FONT *displayFont;
+	sshsNode eventSourceConfigNode;
+	int32_t bitmapRendererSizeX;
+	int32_t bitmapRendererSizeY;
+	ALLEGRO_FONT *displayFont;
 };
 
 typedef struct caer_visualizer_public_state *caerVisualizerPublicState;

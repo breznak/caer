@@ -16,7 +16,7 @@
 #include <allegro5/allegro_ttf.h>
 
 struct caer_visualizer_state {
-	int16_t eventSourceID;
+	sshsNode eventSourceConfigNode;
 	int32_t bitmapRendererSizeX;
 	int32_t bitmapRendererSizeY;
 	ALLEGRO_FONT *displayFont;
@@ -190,7 +190,9 @@ caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisu
 	}
 
 	state->parentModule = parentModule;
-	state->eventSourceID = eventSourceID;
+	if (eventSourceID >= 0) {
+		state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(eventSourceID));
+	}
 
 	// Configuration.
 	sshsNodePutIntIfAbsent(parentModule->moduleNode, "subsampleRendering", 1);

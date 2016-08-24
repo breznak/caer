@@ -2283,11 +2283,9 @@ static int packetsFirstTypeThenSizeCmp(const void *a, const void *b) {
 #ifdef ENABLE_VISUALIZER
 void caerInputVisualizerEventHandler(caerVisualizerPublicState state, ALLEGRO_EVENT event) {
 	if (event.type == ALLEGRO_EVENT_KEY_DOWN && event.keyboard.keycode == ALLEGRO_KEY_SPACE) {
-		sshsNode sourceNode = caerMainloopGetSourceNode(U16T(state->eventSourceID));
+		bool pause = sshsNodeGetBool(state->eventSourceConfigNode, "pause");
 
-		bool pause = sshsNodeGetBool(sourceNode, "pause");
-
-		sshsNodePutBool(sourceNode, "pause", !pause);
+		sshsNodePutBool(state->eventSourceConfigNode, "pause", !pause);
 	}
 }
 #endif
