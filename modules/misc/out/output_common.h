@@ -1,7 +1,6 @@
 #ifndef OUTPUT_COMMON_H_
 #define OUTPUT_COMMON_H_
 
-#include "main.h"
 #include "base/module.h"
 #include "modules/misc/inout_common.h"
 

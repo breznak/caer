@@ -1,6 +1,16 @@
 #include "sshs_internal.h"
 
-static void sshsHelperAllocSprintf(char **strp, const char *format, ...) __attribute__ ((format (printf, 2, 3)));
+#if defined(__GNUC__) || defined(__clang__)
+	#if defined(__USE_MINGW_ANSI_STDIO)
+		#define ATTRIBUTE_FORMAT __attribute__ ((format (gnu_printf, 2, 3)))
+	#else
+		#define ATTRIBUTE_FORMAT __attribute__ ((format (printf, 2, 3)))
+	#endif
+#else
+	#define ATTRIBUTE_FORMAT
+#endif
+
+static void sshsHelperAllocSprintf(char **strp, const char *format, ...) ATTRIBUTE_FORMAT;
 
 // Put NULL in *strp on failure (memory allocation failure).
 static void sshsHelperAllocSprintf(char **strp, const char *format, ...) {

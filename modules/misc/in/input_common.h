@@ -1,7 +1,6 @@
 #ifndef INPUT_COMMON_H_
 #define INPUT_COMMON_H_
 
-#include "main.h"
 #include "base/module.h"
 #include "modules/misc/inout_common.h"
 
