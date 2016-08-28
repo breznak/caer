@@ -1322,20 +1322,20 @@ static void caerOutputCommonConfigListener(sshsNode node, void *userData, enum s
 	caerModuleData moduleData = userData;
 	outputCommonState state = moduleData->moduleState;
 
-	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == BOOL && caerStrEquals(changeKey, "validOnly")) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+		if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "validOnly")) {
 			// Set valid only flag to given value.
 			atomic_store(&state->validOnly, changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "keepPackets")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "keepPackets")) {
 			// Set keep packets flag to given value.
 			atomic_store(&state->keepPackets, changeValue.boolean);
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "bufferSize")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "bufferSize")) {
 			// Set buffer update flag.
 			atomic_store(&state->bufferUpdate, true);
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "bufferMaxInterval")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "bufferMaxInterval")) {
 			// Set buffer update flag.
 			atomic_store(&state->bufferUpdate, true);
 		}

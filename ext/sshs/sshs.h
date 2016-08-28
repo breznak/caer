@@ -12,7 +12,15 @@
 typedef struct sshs_node *sshsNode;
 
 enum sshs_node_attr_value_type {
-	UNKNOWN = -1, BOOL = 0, BYTE = 1, SHORT = 2, INT = 3, LONG = 4, FLOAT = 5, DOUBLE = 6, STRING = 7,
+	SSHS_UNKNOWN = -1,
+	SSHS_BOOL = 0,
+	SSHS_BYTE = 1,
+	SSHS_SHORT = 2,
+	SSHS_INT = 3,
+	SSHS_LONG = 4,
+	SSHS_FLOAT = 5,
+	SSHS_DOUBLE = 6,
+	SSHS_STRING = 7,
 };
 
 union sshs_node_attr_value {
@@ -27,11 +35,12 @@ union sshs_node_attr_value {
 };
 
 enum sshs_node_node_events {
-	CHILD_NODE_ADDED = 0,
+	SSHS_CHILD_NODE_ADDED = 0,
 };
 
 enum sshs_node_attribute_events {
-	ATTRIBUTE_ADDED = 0, ATTRIBUTE_MODIFIED = 1,
+	SSHS_ATTRIBUTE_ADDED = 0,
+	SSHS_ATTRIBUTE_MODIFIED = 1,
 };
 
 const char *sshsNodeGetName(sshsNode node);

@@ -291,7 +291,7 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 			size_t keyLength = strlen(commandParts[CMD_PART_KEY]) + 1; // +1 for terminating NUL byte.
 
 			enum sshs_node_attr_value_type type = sshsHelperStringToTypeConverter(commandParts[CMD_PART_TYPE]);
-			if (type == UNKNOWN) {
+			if (type == SSHS_UNKNOWN) {
 				fprintf(stderr, "Error: invalid type parameter.\n");
 				return;
 			}
@@ -339,7 +339,7 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 			size_t valueLength = strlen(commandParts[CMD_PART_VALUE]) + 1; // +1 for terminating NUL byte.
 
 			enum sshs_node_attr_value_type type = sshsHelperStringToTypeConverter(commandParts[CMD_PART_TYPE]);
-			if (type == UNKNOWN) {
+			if (type == SSHS_UNKNOWN) {
 				fprintf(stderr, "Error: invalid type parameter.\n");
 				return;
 			}
@@ -632,7 +632,7 @@ static void nodeCompletion(const char *buf, size_t bufLength, linenoiseCompletio
 		return;
 	}
 
-	if (action == ERROR || type != STRING) {
+	if (action == ERROR || type != SSHS_STRING) {
 		// Invalid request made, no auto-completion.
 		return;
 	}
@@ -687,7 +687,7 @@ static void keyCompletion(const char *buf, size_t bufLength, linenoiseCompletion
 		return;
 	}
 
-	if (action == ERROR || type != STRING) {
+	if (action == ERROR || type != SSHS_STRING) {
 		// Invalid request made, no auto-completion.
 		return;
 	}
@@ -746,7 +746,7 @@ static void typeCompletion(const char *buf, size_t bufLength, linenoiseCompletio
 		return;
 	}
 
-	if (action == ERROR || type != STRING) {
+	if (action == ERROR || type != SSHS_STRING) {
 		// Invalid request made, no auto-completion.
 		return;
 	}
@@ -770,7 +770,7 @@ static void valueCompletion(const char *buf, size_t bufLength, linenoiseCompleti
 	UNUSED_ARGUMENT(typeStringLength);
 
 	enum sshs_node_attr_value_type type = sshsHelperStringToTypeConverter(typeString);
-	if (type == UNKNOWN) {
+	if (type == SSHS_UNKNOWN) {
 		// Invalid type, no auto-completion.
 		return;
 	}
@@ -779,7 +779,7 @@ static void valueCompletion(const char *buf, size_t bufLength, linenoiseCompleti
 		// If there already is content, we can't do any auto-completion here, as
 		// we have no idea about what a valid value would be to complete ...
 		// Unless this is a boolean, then we can propose true/false strings.
-		if (type == BOOL) {
+		if (type == SSHS_BOOL) {
 			if (strncmp("true", partialValueString, partialValueStringLength) == 0) {
 				linenoiseAddCompletionSuffix(lc, buf, bufLength - partialValueStringLength, "true", false, false);
 			}
@@ -837,7 +837,7 @@ static void valueCompletion(const char *buf, size_t bufLength, linenoiseCompleti
 	linenoiseAddCompletionSuffix(lc, buf, bufLength, (const char *) dataBuffer + 4, false, false);
 
 	// If this is a boolean value, we can also add the inverse as a second completion.
-	if (type == BOOL) {
+	if (type == SSHS_BOOL) {
 		if (strcmp((const char *) dataBuffer + 4, "true") == 0) {
 			linenoiseAddCompletionSuffix(lc, buf, bufLength, "false", false, false);
 		}

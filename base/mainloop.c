@@ -357,7 +357,7 @@ static void caerMainloopShutdownListener(sshsNode node, void *userData, enum ssh
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
 	UNUSED_ARGUMENT(node);
 
-	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && caerStrEquals(changeKey, "running")) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED && changeType == SSHS_BOOL && caerStrEquals(changeKey, "running")) {
 		// Running changed, let's see.
 		if (changeValue.boolean == false) {
 			// Shutdown requested! This goes to the mainloop/system 'running' atomic flags.

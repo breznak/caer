@@ -929,7 +929,7 @@ static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_att
 	caerModuleData moduleData = userData;
 	struct caer_davis_info devInfo = caerDavisInfoGet(moduleData->moduleState);
 
-	if (event == ATTRIBUTE_MODIFIED) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
 		const char *nodeName = sshsNodeGetName(node);
 
 		if (IS_DAVIS240(devInfo.chipID)) {
@@ -1373,109 +1373,109 @@ static void chipConfigListener(sshsNode node, void *userData, enum sshs_node_att
 	caerModuleData moduleData = userData;
 	struct caer_davis_info devInfo = caerDavisInfoGet(moduleData->moduleState);
 
-	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == BYTE && caerStrEquals(changeKey, "DigitalMux0")) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+		if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "DigitalMux0")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_DIGITALMUX0,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == BYTE && caerStrEquals(changeKey, "DigitalMux1")) {
+		else if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "DigitalMux1")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_DIGITALMUX1,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == BYTE && caerStrEquals(changeKey, "DigitalMux2")) {
+		else if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "DigitalMux2")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_DIGITALMUX2,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == BYTE && caerStrEquals(changeKey, "DigitalMux3")) {
+		else if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "DigitalMux3")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_DIGITALMUX3,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == BYTE && caerStrEquals(changeKey, "AnalogMux0")) {
+		else if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "AnalogMux0")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_ANALOGMUX0,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == BYTE && caerStrEquals(changeKey, "AnalogMux1")) {
+		else if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "AnalogMux1")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_ANALOGMUX1,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == BYTE && caerStrEquals(changeKey, "AnalogMux2")) {
+		else if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "AnalogMux2")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_ANALOGMUX2,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == BYTE && caerStrEquals(changeKey, "BiasMux0")) {
+		else if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "BiasMux0")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_BIASMUX0,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "ResetCalibNeuron")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "ResetCalibNeuron")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_RESETCALIBNEURON,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "TypeNCalibNeuron")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "TypeNCalibNeuron")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_TYPENCALIBNEURON,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "ResetTestPixel")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "ResetTestPixel")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_RESETTESTPIXEL,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "AERnArow")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "AERnArow")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_AERNAROW,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "UseAOut")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "UseAOut")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_USEAOUT,
 				changeValue.boolean);
 		}
-		else if ((IS_DAVIS240A(devInfo.chipID) || IS_DAVIS240B(devInfo.chipID)) && changeType == BOOL
+		else if ((IS_DAVIS240A(devInfo.chipID) || IS_DAVIS240B(devInfo.chipID)) && changeType == SSHS_BOOL
 			&& caerStrEquals(changeKey, "SpecialPixelControl")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS240_CONFIG_CHIP_SPECIALPIXELCONTROL,
 				changeValue.boolean);
 		}
 		else if ((IS_DAVIS128(devInfo.chipID) || IS_DAVIS208(devInfo.chipID) || IS_DAVIS346(devInfo.chipID)
-			|| IS_DAVIS640(devInfo.chipID) || IS_DAVISRGB(devInfo.chipID)) && changeType == BOOL
+			|| IS_DAVIS640(devInfo.chipID) || IS_DAVISRGB(devInfo.chipID)) && changeType == SSHS_BOOL
 			&& caerStrEquals(changeKey, "SelectGrayCounter")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS128_CONFIG_CHIP_SELECTGRAYCOUNTER,
 				changeValue.boolean);
 		}
 		else if ((IS_DAVIS346(devInfo.chipID) || IS_DAVIS640(devInfo.chipID) || IS_DAVISRGB(devInfo.chipID))
-			&& changeType == BOOL && caerStrEquals(changeKey, "TestADC")) {
+			&& changeType == SSHS_BOOL && caerStrEquals(changeKey, "TestADC")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS346_CONFIG_CHIP_TESTADC,
 				changeValue.boolean);
 		}
 
 		if (IS_DAVIS208(devInfo.chipID)) {
-			if (changeType == BOOL && caerStrEquals(changeKey, "SelectPreAmpAvg")) {
+			if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "SelectPreAmpAvg")) {
 				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS208_CONFIG_CHIP_SELECTPREAMPAVG,
 					changeValue.boolean);
 			}
-			else if (changeType == BOOL && caerStrEquals(changeKey, "SelectBiasRefSS")) {
+			else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "SelectBiasRefSS")) {
 				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS208_CONFIG_CHIP_SELECTBIASREFSS,
 					changeValue.boolean);
 			}
-			else if (changeType == BOOL && caerStrEquals(changeKey, "SelectSense")) {
+			else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "SelectSense")) {
 				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS208_CONFIG_CHIP_SELECTSENSE,
 					changeValue.boolean);
 			}
-			else if (changeType == BOOL && caerStrEquals(changeKey, "SelectPosFb")) {
+			else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "SelectPosFb")) {
 				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS208_CONFIG_CHIP_SELECTPOSFB,
 					changeValue.boolean);
 			}
-			else if (changeType == BOOL && caerStrEquals(changeKey, "SelectHighPass")) {
+			else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "SelectHighPass")) {
 				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVIS208_CONFIG_CHIP_SELECTHIGHPASS,
 					changeValue.boolean);
 			}
 		}
 
 		if (IS_DAVISRGB(devInfo.chipID)) {
-			if (changeType == BOOL && caerStrEquals(changeKey, "AdjustOVG1Lo")) {
+			if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "AdjustOVG1Lo")) {
 				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVISRGB_CONFIG_CHIP_ADJUSTOVG1LO,
 					changeValue.boolean);
 			}
-			else if (changeType == BOOL && caerStrEquals(changeKey, "AdjustOVG2Lo")) {
+			else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "AdjustOVG2Lo")) {
 				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVISRGB_CONFIG_CHIP_ADJUSTOVG2LO,
 					changeValue.boolean);
 			}
-			else if (changeType == BOOL && caerStrEquals(changeKey, "AdjustTX2OVG2Hi")) {
+			else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "AdjustTX2OVG2Hi")) {
 				caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_CHIP, DAVISRGB_CONFIG_CHIP_ADJUSTTX2OVG2HI,
 					changeValue.boolean);
 			}
@@ -1507,36 +1507,36 @@ static void muxConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 
 	caerModuleData moduleData = userData;
 
-	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == BOOL && caerStrEquals(changeKey, "TimestampReset")) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+		if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "TimestampReset")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_MUX, DAVIS_CONFIG_MUX_TIMESTAMP_RESET,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "ForceChipBiasEnable")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "ForceChipBiasEnable")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_MUX, DAVIS_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "DropDVSOnTransferStall")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "DropDVSOnTransferStall")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_MUX, DAVIS_CONFIG_MUX_DROP_DVS_ON_TRANSFER_STALL,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "DropAPSOnTransferStall")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "DropAPSOnTransferStall")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_MUX, DAVIS_CONFIG_MUX_DROP_APS_ON_TRANSFER_STALL,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "DropIMUOnTransferStall")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "DropIMUOnTransferStall")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_MUX, DAVIS_CONFIG_MUX_DROP_IMU_ON_TRANSFER_STALL,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "DropExtInputOnTransferStall")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "DropExtInputOnTransferStall")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_MUX,
 			DAVIS_CONFIG_MUX_DROP_EXTINPUT_ON_TRANSFER_STALL, changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "TimestampRun")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "TimestampRun")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_MUX, DAVIS_CONFIG_MUX_TIMESTAMP_RUN,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "Run")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "Run")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_MUX, DAVIS_CONFIG_MUX_RUN, changeValue.boolean);
 		}
 	}
@@ -1615,112 +1615,112 @@ static void dvsConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 
 	caerModuleData moduleData = userData;
 
-	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == BYTE && caerStrEquals(changeKey, "AckDelayRow")) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+		if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "AckDelayRow")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_ACK_DELAY_ROW,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == BYTE && caerStrEquals(changeKey, "AckDelayColumn")) {
+		else if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "AckDelayColumn")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_ACK_DELAY_COLUMN,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == BYTE && caerStrEquals(changeKey, "AckExtensionRow")) {
+		else if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "AckExtensionRow")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_ACK_EXTENSION_ROW,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == BYTE && caerStrEquals(changeKey, "AckExtensionColumn")) {
+		else if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "AckExtensionColumn")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_ACK_EXTENSION_COLUMN,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "WaitOnTransferStall")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "WaitOnTransferStall")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_WAIT_ON_TRANSFER_STALL,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "FilterRowOnlyEvents")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "FilterRowOnlyEvents")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_ROW_ONLY_EVENTS,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "ExternalAERControl")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "ExternalAERControl")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_EXTERNAL_AER_CONTROL,
 				changeValue.boolean);
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "FilterPixel0Row")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "FilterPixel0Row")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_PIXEL_0_ROW,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "FilterPixel0Column")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "FilterPixel0Column")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_PIXEL_0_COLUMN,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "FilterPixel1Row")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "FilterPixel1Row")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_PIXEL_1_ROW,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "FilterPixel1Column")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "FilterPixel1Column")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_PIXEL_1_COLUMN,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "FilterPixel2Row")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "FilterPixel2Row")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_PIXEL_2_ROW,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "FilterPixel2Column")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "FilterPixel2Column")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_PIXEL_2_COLUMN,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "FilterPixel3Row")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "FilterPixel3Row")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_PIXEL_3_ROW,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "FilterPixel3Column")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "FilterPixel3Column")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_PIXEL_3_COLUMN,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "FilterPixel4Row")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "FilterPixel4Row")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_PIXEL_4_ROW,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "FilterPixel4Column")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "FilterPixel4Column")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_PIXEL_4_COLUMN,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "FilterPixel5Row")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "FilterPixel5Row")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_PIXEL_5_ROW,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "FilterPixel5Column")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "FilterPixel5Column")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_PIXEL_5_COLUMN,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "FilterPixel6Row")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "FilterPixel6Row")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_PIXEL_6_ROW,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "FilterPixel6Column")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "FilterPixel6Column")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_PIXEL_6_COLUMN,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "FilterPixel7Row")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "FilterPixel7Row")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_PIXEL_7_ROW,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "FilterPixel7Column")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "FilterPixel7Column")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_PIXEL_7_COLUMN,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "FilterBackgroundActivity")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "FilterBackgroundActivity")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_BACKGROUND_ACTIVITY,
 				changeValue.boolean);
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "FilterBackgroundActivityDeltaTime")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "FilterBackgroundActivityDeltaTime")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS,
 			DAVIS_CONFIG_DVS_FILTER_BACKGROUND_ACTIVITY_DELTAT, U32T(changeValue.iint));
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "TestEventGeneratorEnable")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "TestEventGeneratorEnable")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_TEST_EVENT_GENERATOR_ENABLE,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "Run")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "Run")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_RUN, changeValue.boolean);
 		}
 	}
@@ -1830,159 +1830,159 @@ static void apsConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 
 	caerModuleData moduleData = userData;
 
-	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == BOOL && caerStrEquals(changeKey, "GlobalShutter")) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+		if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "GlobalShutter")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_GLOBAL_SHUTTER,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "ResetRead")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "ResetRead")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_RESET_READ,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "WaitOnTransferStall")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "WaitOnTransferStall")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_WAIT_ON_TRANSFER_STALL,
 				changeValue.boolean);
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "StartColumn0")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "StartColumn0")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_START_COLUMN_0,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "StartRow0")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "StartRow0")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_START_ROW_0,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "EndColumn0")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "EndColumn0")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_END_COLUMN_0,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "EndRow0")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "EndRow0")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_END_ROW_0,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "Exposure")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "Exposure")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_EXPOSURE,
 				U32T(changeValue.iint));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "FrameDelay")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "FrameDelay")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_FRAME_DELAY,
 				U32T(changeValue.iint));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "ResetSettle")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "ResetSettle")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_RESET_SETTLE,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "ColumnSettle")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "ColumnSettle")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_COLUMN_SETTLE,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "RowSettle")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "RowSettle")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_ROW_SETTLE,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "NullSettle")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "NullSettle")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_NULL_SETTLE,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "StartColumn1")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "StartColumn1")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_START_COLUMN_1,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "StartRow1")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "StartRow1")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_START_ROW_1,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "EndColumn1")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "EndColumn1")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_END_COLUMN_1,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "EndRow1")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "EndRow1")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_END_ROW_1,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "StartColumn2")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "StartColumn2")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_START_COLUMN_2,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "StartRow2")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "StartRow2")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_START_ROW_2,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "EndColumn2")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "EndColumn2")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_END_COLUMN_2,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "EndRow2")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "EndRow2")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_END_ROW_2,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "StartColumn3")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "StartColumn3")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_START_COLUMN_3,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "StartRow3")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "StartRow3")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_START_ROW_3,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "EndColumn3")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "EndColumn3")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_END_COLUMN_3,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "EndRow3")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "EndRow3")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_END_ROW_3,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "UseInternalADC")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "UseInternalADC")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_USE_INTERNAL_ADC,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "SampleEnable")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "SampleEnable")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_SAMPLE_ENABLE,
 				changeValue.boolean);
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "SampleSettle")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "SampleSettle")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_SAMPLE_SETTLE,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "RampReset")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "RampReset")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_RAMP_RESET,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "RampShortReset")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "RampShortReset")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_RAMP_SHORT_RESET,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "ADCTestMode")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "ADCTestMode")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_ADC_TEST_MODE,
 				changeValue.boolean);
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "TransferTime")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "TransferTime")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVISRGB_CONFIG_APS_TRANSFER,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "RSFDSettleTime")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "RSFDSettleTime")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVISRGB_CONFIG_APS_RSFDSETTLE,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "GSPDResetTime")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "GSPDResetTime")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVISRGB_CONFIG_APS_GSPDRESET,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "GSResetFallTime")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "GSResetFallTime")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVISRGB_CONFIG_APS_GSRESETFALL,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "GSTXFallTime")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "GSTXFallTime")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVISRGB_CONFIG_APS_GSTXFALL,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "GSFDResetTime")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "GSFDResetTime")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVISRGB_CONFIG_APS_GSFDRESET,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "Run")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "Run")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_RUN, changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "TakeSnapShot")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "TakeSnapShot")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_SNAPSHOT,
 				changeValue.boolean);
 		}
@@ -2026,12 +2026,12 @@ static void imuConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 
 	caerModuleData moduleData = userData;
 
-	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == BOOL && caerStrEquals(changeKey, "TempStandby")) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+		if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "TempStandby")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_TEMP_STANDBY,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL
+		else if (changeType == SSHS_BOOL
 			&& (caerStrEquals(changeKey, "AccelXStandby") || caerStrEquals(changeKey, "AccelYStandby")
 				|| caerStrEquals(changeKey, "AccelZStandby"))) {
 			uint8_t accelStandby = 0;
@@ -2042,7 +2042,7 @@ static void imuConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_ACCEL_STANDBY,
 				accelStandby);
 		}
-		else if (changeType == BOOL
+		else if (changeType == SSHS_BOOL
 			&& (caerStrEquals(changeKey, "GyroXStandby") || caerStrEquals(changeKey, "GyroYStandby")
 				|| caerStrEquals(changeKey, "GyroZStandby"))) {
 			uint8_t gyroStandby = 0;
@@ -2052,31 +2052,31 @@ static void imuConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_GYRO_STANDBY, gyroStandby);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "LowPowerCycle")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "LowPowerCycle")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_LP_CYCLE,
 				changeValue.boolean);
 		}
-		else if (changeType == BYTE && caerStrEquals(changeKey, "LowPowerWakeupFrequency")) {
+		else if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "LowPowerWakeupFrequency")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_LP_WAKEUP,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "SampleRateDivider")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "SampleRateDivider")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_SAMPLE_RATE_DIVIDER,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == BYTE && caerStrEquals(changeKey, "DigitalLowPassFilter")) {
+		else if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "DigitalLowPassFilter")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_DIGITAL_LOW_PASS_FILTER,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == BYTE && caerStrEquals(changeKey, "AccelFullScale")) {
+		else if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "AccelFullScale")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_ACCEL_FULL_SCALE,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == BYTE && caerStrEquals(changeKey, "GyroFullScale")) {
+		else if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "GyroFullScale")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_GYRO_FULL_SCALE,
 				U32T(changeValue.ibyte));
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "Run")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "Run")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_RUN, changeValue.boolean);
 		}
 	}
@@ -2148,104 +2148,104 @@ static void extInputConfigListener(sshsNode node, void *userData, enum sshs_node
 
 	caerModuleData moduleData = userData;
 
-	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == BOOL && caerStrEquals(changeKey, "DetectRisingEdges")) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+		if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "DetectRisingEdges")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_DETECT_RISING_EDGES, changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectFallingEdges")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "DetectFallingEdges")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_DETECT_FALLING_EDGES, changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectPulses")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "DetectPulses")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_DETECT_PULSES,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectPulsePolarity")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "DetectPulsePolarity")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_DETECT_PULSE_POLARITY, changeValue.boolean);
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "DetectPulseLength")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "DetectPulseLength")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_DETECT_PULSE_LENGTH, U32T(changeValue.iint));
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "RunDetector")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "RunDetector")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_RUN_DETECTOR,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "GenerateUseCustomSignal")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "GenerateUseCustomSignal")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_GENERATE_USE_CUSTOM_SIGNAL, changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "GeneratePulsePolarity")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "GeneratePulsePolarity")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_GENERATE_PULSE_POLARITY, changeValue.boolean);
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "GeneratePulseInterval")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "GeneratePulseInterval")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_GENERATE_PULSE_INTERVAL, U32T(changeValue.iint));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "GeneratePulseLength")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "GeneratePulseLength")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_GENERATE_PULSE_LENGTH, U32T(changeValue.iint));
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "GenerateInjectOnRisingEdge")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "GenerateInjectOnRisingEdge")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_GENERATE_INJECT_ON_RISING_EDGE, changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "GenerateInjectOnFallingEdge")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "GenerateInjectOnFallingEdge")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_GENERATE_INJECT_ON_FALLING_EDGE, changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "RunGenerator")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "RunGenerator")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_RUN_GENERATOR,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectRisingEdges1")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "DetectRisingEdges1")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_DETECT_RISING_EDGES1, changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectFallingEdges1")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "DetectFallingEdges1")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_DETECT_FALLING_EDGES1, changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectPulses1")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "DetectPulses1")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_DETECT_PULSES1,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectPulsePolarity1")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "DetectPulsePolarity1")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_DETECT_PULSE_POLARITY1, changeValue.boolean);
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "DetectPulseLength1")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "DetectPulseLength1")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_DETECT_PULSE_LENGTH1, U32T(changeValue.iint));
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "RunDetector1")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "RunDetector1")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_RUN_DETECTOR1,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectRisingEdge2s")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "DetectRisingEdge2s")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_DETECT_RISING_EDGES2, changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectFallingEdges2")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "DetectFallingEdges2")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_DETECT_FALLING_EDGES2, changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectPulses2")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "DetectPulses2")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_DETECT_PULSES2,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "DetectPulsePolarity2")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "DetectPulsePolarity2")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_DETECT_PULSE_POLARITY2, changeValue.boolean);
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "DetectPulseLength2")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "DetectPulseLength2")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT,
 			DAVIS_CONFIG_EXTINPUT_DETECT_PULSE_LENGTH2, U32T(changeValue.iint));
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "RunDetector2")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "RunDetector2")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_EXTINPUT, DAVIS_CONFIG_EXTINPUT_RUN_DETECTOR2,
 				changeValue.boolean);
 		}
@@ -2269,20 +2269,20 @@ static void usbConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 
 	caerModuleData moduleData = userData;
 
-	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == INT && caerStrEquals(changeKey, "BufferNumber")) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+		if (changeType == SSHS_INT && caerStrEquals(changeKey, "BufferNumber")) {
 			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_USB, CAER_HOST_CONFIG_USB_BUFFER_NUMBER,
 				U32T(changeValue.iint));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "BufferSize")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "BufferSize")) {
 			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_USB, CAER_HOST_CONFIG_USB_BUFFER_SIZE,
 				U32T(changeValue.iint));
 		}
-		else if (changeType == SHORT && caerStrEquals(changeKey, "EarlyPacketDelay")) {
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "EarlyPacketDelay")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_USB, DAVIS_CONFIG_USB_EARLY_PACKET_DELAY,
 				U32T(changeValue.ishort));
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "Run")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "Run")) {
 			caerDeviceConfigSet(moduleData->moduleState, DAVIS_CONFIG_USB, DAVIS_CONFIG_USB_RUN, changeValue.boolean);
 		}
 	}
@@ -2305,12 +2305,12 @@ static void systemConfigListener(sshsNode node, void *userData, enum sshs_node_a
 
 	caerModuleData moduleData = userData;
 
-	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == INT && caerStrEquals(changeKey, "PacketContainerMaxPacketSize")) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+		if (changeType == SSHS_INT && caerStrEquals(changeKey, "PacketContainerMaxPacketSize")) {
 			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
 			CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_PACKET_SIZE, U32T(changeValue.iint));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "PacketContainerMaxInterval")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "PacketContainerMaxInterval")) {
 			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
 			CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_INTERVAL, U32T(changeValue.iint));
 		}

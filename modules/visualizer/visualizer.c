@@ -290,17 +290,17 @@ static void caerVisualizerConfigListener(sshsNode node, void *userData, enum ssh
 
 	caerVisualizerState state = userData;
 
-	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == FLOAT && caerStrEquals(changeKey, "zoomFactor")) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+		if (changeType == SSHS_FLOAT && caerStrEquals(changeKey, "zoomFactor")) {
 			// Set resize flag.
 			atomic_store(&state->displayWindowResize, true);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "showStatistics")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "showStatistics")) {
 			// Set resize flag. This will then also update the showStatistics flag, ensuring
 			// statistics are never shown without the screen having been properly resized first.
 			atomic_store(&state->displayWindowResize, true);
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "subsampleRendering")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "subsampleRendering")) {
 			atomic_store(&state->packetSubsampleRendering, changeValue.iint);
 		}
 	}
@@ -778,21 +778,21 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRe
 		// Get sizes from sourceInfo node. visualizer prefix takes precedence,
 		// for APS and DVS images, alternative prefixes are provided, as well
 		// as for generic data visualization.
-		if (sshsNodeAttributeExists(sourceInfoNode, "visualizerSizeX", SHORT)) {
+		if (sshsNodeAttributeExists(sourceInfoNode, "visualizerSizeX", SSHS_SHORT)) {
 			packetSizeX = sshsNodeGetShort(sourceInfoNode, "visualizerSizeX");
 			packetSizeY = sshsNodeGetShort(sourceInfoNode, "visualizerSizeY");
 		}
-		else if (sshsNodeAttributeExists(sourceInfoNode, "dvsSizeX", SHORT)
+		else if (sshsNodeAttributeExists(sourceInfoNode, "dvsSizeX", SSHS_SHORT)
 			&& caerEventPacketHeaderGetEventType(caerEventPacketContainerIteratorElement) == POLARITY_EVENT) {
 			packetSizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
 			packetSizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 		}
-		else if (sshsNodeAttributeExists(sourceInfoNode, "apsSizeX", SHORT)
+		else if (sshsNodeAttributeExists(sourceInfoNode, "apsSizeX", SSHS_SHORT)
 			&& caerEventPacketHeaderGetEventType(caerEventPacketContainerIteratorElement) == FRAME_EVENT) {
 			packetSizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
 			packetSizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
 		}
-		else if (sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SHORT)) {
+		else if (sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SSHS_SHORT)) {
 			packetSizeX = sshsNodeGetShort(sourceInfoNode, "dataSizeX");
 			packetSizeY = sshsNodeGetShort(sourceInfoNode, "dataSizeY");
 		}

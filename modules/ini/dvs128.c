@@ -296,52 +296,52 @@ static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_att
 
 	caerModuleData moduleData = userData;
 
-	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == INT && caerStrEquals(changeKey, "cas")) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+		if (changeType == SSHS_INT && caerStrEquals(changeKey, "cas")) {
 			caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_CAS,
 				U32T(changeValue.iint));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "injGnd")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "injGnd")) {
 			caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_INJGND,
 				U32T(changeValue.iint));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "reqPd")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "reqPd")) {
 			caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_REQPD,
 				U32T(changeValue.iint));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "puX")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "puX")) {
 			caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_PUX,
 				U32T(changeValue.iint));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "diffOff")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "diffOff")) {
 			caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_DIFFOFF,
 				U32T(changeValue.iint));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "req")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "req")) {
 			caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_REQ,
 				U32T(changeValue.iint));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "refr")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "refr")) {
 			caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_REFR,
 				U32T(changeValue.iint));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "puY")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "puY")) {
 			caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_PUY,
 				U32T(changeValue.iint));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "diffOn")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "diffOn")) {
 			caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_DIFFON,
 				U32T(changeValue.iint));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "diff")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "diff")) {
 			caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_DIFF,
 				U32T(changeValue.iint));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "foll")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "foll")) {
 			caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_FOLL,
 				U32T(changeValue.iint));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "pr")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "pr")) {
 			caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_PR,
 				U32T(changeValue.iint));
 		}
@@ -363,16 +363,16 @@ static void dvsConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 
 	caerModuleData moduleData = userData;
 
-	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == BOOL && caerStrEquals(changeKey, "ArrayReset")) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+		if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "ArrayReset")) {
 			caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_DVS, DVS128_CONFIG_DVS_ARRAY_RESET,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "TimestampReset")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "TimestampReset")) {
 			caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_DVS, DVS128_CONFIG_DVS_TIMESTAMP_RESET,
 				changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "Run")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "Run")) {
 			caerDeviceConfigSet(moduleData->moduleState, DVS128_CONFIG_DVS, DVS128_CONFIG_DVS_RUN, changeValue.boolean);
 		}
 	}
@@ -391,12 +391,12 @@ static void usbConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 
 	caerModuleData moduleData = userData;
 
-	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == INT && caerStrEquals(changeKey, "BufferNumber")) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+		if (changeType == SSHS_INT && caerStrEquals(changeKey, "BufferNumber")) {
 			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_USB, CAER_HOST_CONFIG_USB_BUFFER_NUMBER,
 				U32T(changeValue.iint));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "BufferSize")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "BufferSize")) {
 			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_USB, CAER_HOST_CONFIG_USB_BUFFER_SIZE,
 				U32T(changeValue.iint));
 		}
@@ -420,12 +420,12 @@ static void systemConfigListener(sshsNode node, void *userData, enum sshs_node_a
 
 	caerModuleData moduleData = userData;
 
-	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == INT && caerStrEquals(changeKey, "PacketContainerMaxPacketSize")) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+		if (changeType == SSHS_INT && caerStrEquals(changeKey, "PacketContainerMaxPacketSize")) {
 			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
 			CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_PACKET_SIZE, U32T(changeValue.iint));
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "PacketContainerMaxInterval")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "PacketContainerMaxInterval")) {
 			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
 			CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_INTERVAL, U32T(changeValue.iint));
 		}

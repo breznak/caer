@@ -2220,30 +2220,30 @@ static void caerInputCommonConfigListener(sshsNode node, void *userData, enum ss
 	caerModuleData moduleData = userData;
 	inputCommonState state = moduleData->moduleState;
 
-	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == BOOL && caerStrEquals(changeKey, "validOnly")) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+		if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "validOnly")) {
 			// Set valid only flag to given value.
 			atomic_store(&state->validOnly, changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "keepPackets")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "keepPackets")) {
 			// Set keep packets flag to given value.
 			atomic_store(&state->keepPackets, changeValue.boolean);
 		}
-		else if (changeType == BOOL && caerStrEquals(changeKey, "pause")) {
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "pause")) {
 			// Set pause flag to given value.
 			atomic_store(&state->pause, changeValue.boolean);
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "bufferSize")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "bufferSize")) {
 			// Set buffer update flag.
 			atomic_store(&state->bufferUpdate, true);
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "sizeSlice")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "sizeSlice")) {
 			atomic_store(&state->packetContainer.sizeSlice, changeValue.iint);
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "timeSlice")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "timeSlice")) {
 			atomic_store(&state->packetContainer.timeSlice, changeValue.iint);
 		}
-		else if (changeType == INT && caerStrEquals(changeKey, "timeDelay")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "timeDelay")) {
 			atomic_store(&state->packetContainer.timeDelay, changeValue.iint);
 		}
 	}

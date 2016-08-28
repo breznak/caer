@@ -245,7 +245,7 @@ static inline void caerConfigSendError(int connectedClientSocket, const char *er
 	uint8_t response[responseLength];
 
 	response[0] = ERROR;
-	response[1] = STRING;
+	response[1] = SSHS_STRING;
 	setMsgLen(response, (uint16_t) (errorMsgLength + 1));
 	memcpy(response + 4, errorMsg, errorMsgLength);
 	response[4 + errorMsgLength] = '\0';
@@ -300,7 +300,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			// Send back result to client. Format is the same as incoming data.
 			const uint8_t *sendResult = (const uint8_t *) ((result) ? ("true") : ("false"));
 			size_t sendResultLength = (result) ? (5) : (6);
-			caerConfigSendResponse(connectedClientSocket, NODE_EXISTS, BOOL, sendResult, sendResultLength);
+			caerConfigSendResponse(connectedClientSocket, NODE_EXISTS, SSHS_BOOL, sendResult, sendResultLength);
 
 			break;
 		}
@@ -327,7 +327,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			// Send back result to client. Format is the same as incoming data.
 			const uint8_t *sendResult = (const uint8_t *) ((result) ? ("true") : ("false"));
 			size_t sendResultLength = (result) ? (5) : (6);
-			caerConfigSendResponse(connectedClientSocket, ATTR_EXISTS, BOOL, sendResult, sendResultLength);
+			caerConfigSendResponse(connectedClientSocket, ATTR_EXISTS, SSHS_BOOL, sendResult, sendResultLength);
 
 			break;
 		}
@@ -376,7 +376,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 
 			// If this is a string, we must remember to free the original result.str
 			// too, since it will also be a copy of the string coming from SSHS.
-			if (type == STRING) {
+			if (type == SSHS_STRING) {
 				free(result.string);
 			}
 
@@ -420,7 +420,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			}
 
 			// Send back confirmation to the client.
-			caerConfigSendResponse(connectedClientSocket, PUT, BOOL, (const uint8_t *) "true", 5);
+			caerConfigSendResponse(connectedClientSocket, PUT, SSHS_BOOL, (const uint8_t *) "true", 5);
 
 			break;
 		}
@@ -470,7 +470,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 				acc += len;
 			}
 
-			caerConfigSendResponse(connectedClientSocket, GET_CHILDREN, STRING, (const uint8_t *) namesBuffer,
+			caerConfigSendResponse(connectedClientSocket, GET_CHILDREN, SSHS_STRING, (const uint8_t *) namesBuffer,
 				namesLength);
 
 			break;
@@ -521,7 +521,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 				acc += len;
 			}
 
-			caerConfigSendResponse(connectedClientSocket, GET_ATTRIBUTES, STRING, (const uint8_t *) keysBuffer,
+			caerConfigSendResponse(connectedClientSocket, GET_ATTRIBUTES, SSHS_STRING, (const uint8_t *) keysBuffer,
 				keysLength);
 
 			break;
@@ -575,7 +575,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 				acc += len;
 			}
 
-			caerConfigSendResponse(connectedClientSocket, GET_TYPES, STRING, (const uint8_t *) typesBuffer,
+			caerConfigSendResponse(connectedClientSocket, GET_TYPES, SSHS_STRING, (const uint8_t *) typesBuffer,
 				typesLength);
 
 			break;

@@ -182,7 +182,7 @@ void caerModuleConfigDefaultListener(sshsNode node, void *userData, enum sshs_no
 	caerModuleData data = userData;
 
 	// Simply set the config update flag to 1 on any attribute change.
-	if (event == ATTRIBUTE_MODIFIED) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
 		atomic_store(&data->configUpdate, 1);
 	}
 }
@@ -193,7 +193,7 @@ static void caerModuleShutdownListener(sshsNode node, void *userData, enum sshs_
 
 	caerModuleData data = userData;
 
-	if (event == ATTRIBUTE_MODIFIED && changeType == BOOL && caerStrEquals(changeKey, "running")) {
+	if (event == SSHS_ATTRIBUTE_MODIFIED && changeType == SSHS_BOOL && caerStrEquals(changeKey, "running")) {
 		// Running changed, let's see.
 		if (changeValue.boolean == true) {
 			atomic_store(&data->running, true);

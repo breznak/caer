@@ -138,7 +138,7 @@ sshsNode sshsNodeAddChild(sshsNode node, const char *childName) {
 		sshsNodeListener l;
 		LL_FOREACH(node->nodeListeners, l)
 		{
-			l->node_changed(node, l->userData, CHILD_NODE_ADDED, newChild);
+			l->node_changed(node, l->userData, SSHS_CHILD_NODE_ADDED, newChild);
 		}
 
 		mtx_shared_unlock_shared(&node->node_lock);
@@ -366,7 +366,7 @@ static bool sshsNodePutAttributeIfAbsent(sshsNode node, const char *key, enum ss
 	SSHS_MALLOC_CHECK_EXIT(newAttr);
 	memset(newAttr, 0, sizeof(*newAttr));
 
-	if (type == STRING) {
+	if (type == SSHS_STRING) {
 		// Make a copy of the string so we own the memory internally.
 		char *valueCopy = strdup(value.string);
 		SSHS_MALLOC_CHECK_EXIT(valueCopy);
@@ -402,7 +402,7 @@ static bool sshsNodePutAttributeIfAbsent(sshsNode node, const char *key, enum ss
 		sshsNodeAttrListener l;
 		LL_FOREACH(node->attrListeners, l)
 		{
-			l->attribute_changed(node, l->userData, ATTRIBUTE_ADDED, key, type, value);
+			l->attribute_changed(node, l->userData, SSHS_ATTRIBUTE_ADDED, key, type, value);
 		}
 
 		mtx_shared_unlock_shared(&node->node_lock);
@@ -411,7 +411,7 @@ static bool sshsNodePutAttributeIfAbsent(sshsNode node, const char *key, enum ss
 	}
 	else {
 		// Free lookup memory, if not added to table.
-		if (type == STRING) {
+		if (type == SSHS_STRING) {
 			free((newAttr->value).string);
 		}
 
@@ -428,7 +428,7 @@ static void sshsNodePutAttribute(sshsNode node, const char *key, enum sshs_node_
 	SSHS_MALLOC_CHECK_EXIT(newAttr);
 	memset(newAttr, 0, sizeof(*newAttr));
 
-	if (type == STRING) {
+	if (type == SSHS_STRING) {
 		// Make a copy of the string so we own the memory internally.
 		char *valueCopy = strdup(value.string);
 		SSHS_MALLOC_CHECK_EXIT(valueCopy);
@@ -472,7 +472,7 @@ static void sshsNodePutAttribute(sshsNode node, const char *key, enum sshs_node_
 		sshsNodeAttrListener l;
 		LL_FOREACH(node->attrListeners, l)
 		{
-			l->attribute_changed(node, l->userData, ATTRIBUTE_ADDED, key, type, value);
+			l->attribute_changed(node, l->userData, SSHS_ATTRIBUTE_ADDED, key, type, value);
 		}
 
 		mtx_shared_unlock_shared(&node->node_lock);
@@ -487,7 +487,7 @@ static void sshsNodePutAttribute(sshsNode node, const char *key, enum sshs_node_
 			sshsNodeAttrListener l;
 			LL_FOREACH(node->attrListeners, l)
 			{
-				l->attribute_changed(node, l->userData, ATTRIBUTE_MODIFIED, key, type, value);
+				l->attribute_changed(node, l->userData, SSHS_ATTRIBUTE_MODIFIED, key, type, value);
 			}
 
 			mtx_shared_unlock_shared(&node->node_lock);
@@ -496,7 +496,7 @@ static void sshsNodePutAttribute(sshsNode node, const char *key, enum sshs_node_
 		// Free newAttr memory, if not added to table.
 		// Free also oldAttr's string memory, not newAttr's one, since that
 		// is now being used by oldAttr instead.
-		if (type == STRING) {
+		if (type == SSHS_STRING) {
 			free(oldAttrValue.string);
 		}
 
@@ -508,31 +508,31 @@ static bool sshsNodeCheckAttributeValueChanged(enum sshs_node_attr_value_type ty
 	union sshs_node_attr_value newValue) {
 	// Check that the two values changed, that there is a difference between then.
 	switch (type) {
-		case BOOL:
+		case SSHS_BOOL:
 			return (oldValue.boolean != newValue.boolean);
 
-		case BYTE:
+		case SSHS_BYTE:
 			return (oldValue.ibyte != newValue.ibyte);
 
-		case SHORT:
+		case SSHS_SHORT:
 			return (oldValue.ishort != newValue.ishort);
 
-		case INT:
+		case SSHS_INT:
 			return (oldValue.iint != newValue.iint);
 
-		case LONG:
+		case SSHS_LONG:
 			return (oldValue.ilong != newValue.ilong);
 
-		case FLOAT:
+		case SSHS_FLOAT:
 			return (oldValue.ffloat != newValue.ffloat);
 
-		case DOUBLE:
+		case SSHS_DOUBLE:
 			return (oldValue.ddouble != newValue.ddouble);
 
-		case STRING:
+		case SSHS_STRING:
 			return (strcmp(oldValue.string, newValue.string) != 0);
 
-		case UNKNOWN:
+		case SSHS_UNKNOWN:
 		default:
 			return (false);
 	}
@@ -562,7 +562,7 @@ union sshs_node_attr_value sshsNodeGetAttribute(sshsNode node, const char *key, 
 		value = attr->value;
 
 		// For strings, make a copy on the heap to give out.
-		if (type == STRING) {
+		if (type == SSHS_STRING) {
 			char *valueCopy = strdup(value.string);
 			SSHS_MALLOC_CHECK_EXIT(valueCopy);
 
@@ -578,7 +578,7 @@ union sshs_node_attr_value sshsNodeGetAttribute(sshsNode node, const char *key, 
 	// Verify that we're getting values from a valid attribute.
 	// Valid means it already exists and has a well-defined default.
 	if (attr == NULL) {
-		if (type == STRING) {
+		if (type == SSHS_STRING) {
 			free(value.string);
 		}
 
@@ -634,100 +634,100 @@ static sshsNodeAttr *sshsNodeGetAttributes(sshsNode node, size_t *numAttributes)
 }
 
 bool sshsNodePutBoolIfAbsent(sshsNode node, const char *key, bool value) {
-	return (sshsNodePutAttributeIfAbsent(node, key, BOOL, (union sshs_node_attr_value ) { .boolean = value }));
+	return (sshsNodePutAttributeIfAbsent(node, key, SSHS_BOOL, (union sshs_node_attr_value ) { .boolean = value }));
 }
 
 void sshsNodePutBool(sshsNode node, const char *key, bool value) {
-	sshsNodePutAttribute(node, key, BOOL, (union sshs_node_attr_value ) { .boolean = value });
+	sshsNodePutAttribute(node, key, SSHS_BOOL, (union sshs_node_attr_value ) { .boolean = value });
 }
 
 bool sshsNodeGetBool(sshsNode node, const char *key) {
-	return (sshsNodeGetAttribute(node, key, BOOL).boolean);
+	return (sshsNodeGetAttribute(node, key, SSHS_BOOL).boolean);
 }
 
 bool sshsNodePutByteIfAbsent(sshsNode node, const char *key, int8_t value) {
-	return (sshsNodePutAttributeIfAbsent(node, key, BYTE, (union sshs_node_attr_value ) { .ibyte = value }));
+	return (sshsNodePutAttributeIfAbsent(node, key, SSHS_BYTE, (union sshs_node_attr_value ) { .ibyte = value }));
 }
 
 void sshsNodePutByte(sshsNode node, const char *key, int8_t value) {
-	sshsNodePutAttribute(node, key, BYTE, (union sshs_node_attr_value ) { .ibyte = value });
+	sshsNodePutAttribute(node, key, SSHS_BYTE, (union sshs_node_attr_value ) { .ibyte = value });
 }
 
 int8_t sshsNodeGetByte(sshsNode node, const char *key) {
-	return (sshsNodeGetAttribute(node, key, BYTE).ibyte);
+	return (sshsNodeGetAttribute(node, key, SSHS_BYTE).ibyte);
 }
 
 bool sshsNodePutShortIfAbsent(sshsNode node, const char *key, int16_t value) {
-	return (sshsNodePutAttributeIfAbsent(node, key, SHORT, (union sshs_node_attr_value ) { .ishort = value }));
+	return (sshsNodePutAttributeIfAbsent(node, key, SSHS_SHORT, (union sshs_node_attr_value ) { .ishort = value }));
 }
 
 void sshsNodePutShort(sshsNode node, const char *key, int16_t value) {
-	sshsNodePutAttribute(node, key, SHORT, (union sshs_node_attr_value ) { .ishort = value });
+	sshsNodePutAttribute(node, key, SSHS_SHORT, (union sshs_node_attr_value ) { .ishort = value });
 }
 
 int16_t sshsNodeGetShort(sshsNode node, const char *key) {
-	return (sshsNodeGetAttribute(node, key, SHORT).ishort);
+	return (sshsNodeGetAttribute(node, key, SSHS_SHORT).ishort);
 }
 
 bool sshsNodePutIntIfAbsent(sshsNode node, const char *key, int32_t value) {
-	return (sshsNodePutAttributeIfAbsent(node, key, INT, (union sshs_node_attr_value ) { .iint = value }));
+	return (sshsNodePutAttributeIfAbsent(node, key, SSHS_INT, (union sshs_node_attr_value ) { .iint = value }));
 }
 
 void sshsNodePutInt(sshsNode node, const char *key, int32_t value) {
-	sshsNodePutAttribute(node, key, INT, (union sshs_node_attr_value ) { .iint = value });
+	sshsNodePutAttribute(node, key, SSHS_INT, (union sshs_node_attr_value ) { .iint = value });
 }
 
 int32_t sshsNodeGetInt(sshsNode node, const char *key) {
-	return (sshsNodeGetAttribute(node, key, INT).iint);
+	return (sshsNodeGetAttribute(node, key, SSHS_INT).iint);
 }
 
 bool sshsNodePutLongIfAbsent(sshsNode node, const char *key, int64_t value) {
-	return (sshsNodePutAttributeIfAbsent(node, key, LONG, (union sshs_node_attr_value ) { .ilong = value }));
+	return (sshsNodePutAttributeIfAbsent(node, key, SSHS_LONG, (union sshs_node_attr_value ) { .ilong = value }));
 }
 
 void sshsNodePutLong(sshsNode node, const char *key, int64_t value) {
-	sshsNodePutAttribute(node, key, LONG, (union sshs_node_attr_value ) { .ilong = value });
+	sshsNodePutAttribute(node, key, SSHS_LONG, (union sshs_node_attr_value ) { .ilong = value });
 }
 
 int64_t sshsNodeGetLong(sshsNode node, const char *key) {
-	return (sshsNodeGetAttribute(node, key, LONG).ilong);
+	return (sshsNodeGetAttribute(node, key, SSHS_LONG).ilong);
 }
 
 bool sshsNodePutFloatIfAbsent(sshsNode node, const char *key, float value) {
-	return (sshsNodePutAttributeIfAbsent(node, key, FLOAT, (union sshs_node_attr_value ) { .ffloat = value }));
+	return (sshsNodePutAttributeIfAbsent(node, key, SSHS_FLOAT, (union sshs_node_attr_value ) { .ffloat = value }));
 }
 
 void sshsNodePutFloat(sshsNode node, const char *key, float value) {
-	sshsNodePutAttribute(node, key, FLOAT, (union sshs_node_attr_value ) { .ffloat = value });
+	sshsNodePutAttribute(node, key, SSHS_FLOAT, (union sshs_node_attr_value ) { .ffloat = value });
 }
 
 float sshsNodeGetFloat(sshsNode node, const char *key) {
-	return (sshsNodeGetAttribute(node, key, FLOAT).ffloat);
+	return (sshsNodeGetAttribute(node, key, SSHS_FLOAT).ffloat);
 }
 
 bool sshsNodePutDoubleIfAbsent(sshsNode node, const char *key, double value) {
-	return (sshsNodePutAttributeIfAbsent(node, key, DOUBLE, (union sshs_node_attr_value ) { .ddouble = value }));
+	return (sshsNodePutAttributeIfAbsent(node, key, SSHS_DOUBLE, (union sshs_node_attr_value ) { .ddouble = value }));
 }
 
 void sshsNodePutDouble(sshsNode node, const char *key, double value) {
-	sshsNodePutAttribute(node, key, DOUBLE, (union sshs_node_attr_value ) { .ddouble = value });
+	sshsNodePutAttribute(node, key, SSHS_DOUBLE, (union sshs_node_attr_value ) { .ddouble = value });
 }
 
 double sshsNodeGetDouble(sshsNode node, const char *key) {
-	return (sshsNodeGetAttribute(node, key, DOUBLE).ddouble);
+	return (sshsNodeGetAttribute(node, key, SSHS_DOUBLE).ddouble);
 }
 
 bool sshsNodePutStringIfAbsent(sshsNode node, const char *key, const char *value) {
-	return (sshsNodePutAttributeIfAbsent(node, key, STRING, (union sshs_node_attr_value ) { .string = (char *) value }));
+	return (sshsNodePutAttributeIfAbsent(node, key, SSHS_STRING, (union sshs_node_attr_value ) { .string = (char *) value }));
 }
 
 void sshsNodePutString(sshsNode node, const char *key, const char *value) {
-	sshsNodePutAttribute(node, key, STRING, (union sshs_node_attr_value ) { .string = (char *) value });
+	sshsNodePutAttribute(node, key, SSHS_STRING, (union sshs_node_attr_value ) { .string = (char *) value });
 }
 
 // This is a copy of the string on the heap, remember to free() when done!
 char *sshsNodeGetString(sshsNode node, const char *key) {
-	return (sshsNodeGetAttribute(node, key, STRING).string);
+	return (sshsNodeGetAttribute(node, key, SSHS_STRING).string);
 }
 
 void sshsNodeExportNodeToXML(sshsNode node, int outFd, const char **filterKeys, size_t filterKeysLength) {
@@ -1064,14 +1064,14 @@ bool sshsNodeStringToNodeConverter(sshsNode node, const char *key, const char *t
 	union sshs_node_attr_value value;
 	bool conversionSuccess = sshsHelperStringToValueConverter(type, valueStr, &value);
 
-	if ((type == UNKNOWN) || !conversionSuccess) {
+	if ((type == SSHS_UNKNOWN) || !conversionSuccess) {
 		return (false);
 	}
 
 	sshsNodePutAttribute(node, key, type, value);
 
 	// Free string copy from helper.
-	if (type == STRING) {
+	if (type == SSHS_STRING) {
 		free(value.string);
 	}
 
