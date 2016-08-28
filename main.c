@@ -352,7 +352,7 @@ int main(int argc, char **argv) {
 	// Initialize logging sub-system.
 	caerLogInit();
 
-	// Daemonize the application (run in background).
+	// Daemonize the application (run in background, NOT AVAILABLE ON WINDOWS).
 	// caerDaemonize();
 
 	// Initialize visualizer framework (load fonts etc.).

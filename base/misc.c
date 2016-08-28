@@ -6,6 +6,8 @@
  */
 
 #include "misc.h"
+
+#if !defined(OS_WINDOWS)
 #include "log.h"
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -77,6 +79,7 @@ void caerDaemonize(void) {
 
 	// At this point everything should be ok and we can return!
 }
+#endif
 
 void caerBitArrayCopy(uint8_t *src, size_t srcPos, uint8_t *dest, size_t destPos, size_t length) {
 	size_t copyOffset = 0;
