@@ -81,7 +81,7 @@ static void caerLogShutDownWriteBack(void) {
 	fflush(stderr);
 
 	// Ensure proper flushing and closing of the log file at shutdown.
-	fsync(CAER_LOG_FILE_FD);
+	portable_fsync(CAER_LOG_FILE_FD);
 	close(CAER_LOG_FILE_FD);
 }
 
