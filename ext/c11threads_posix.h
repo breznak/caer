@@ -358,13 +358,15 @@ static inline int thrd_set_name(const char *name) {
 
 	return (thrd_success);
 #else
+	(void)(name); // UNUSED.
+
 	return (thrd_error);
 #endif
 }
 
 static inline int thrd_get_name(char *name, size_t maxNameLength) {
 #if defined(OS_LINUX)
-	(void)(maxNameLength); // UNUSED FOR LINUX.
+	(void)(maxNameLength); // UNUSED ON LINUX.
 
 	if (prctl(PR_GET_NAME, name) != 0) {
 		return (thrd_error);
@@ -378,6 +380,9 @@ static inline int thrd_get_name(char *name, size_t maxNameLength) {
 
 	return (thrd_success);
 #else
+	(void)(name); // UNUSED.
+	(void)(maxNameLength); // UNUSED.
+
 	return (thrd_error);
 #endif
 }
@@ -391,6 +396,8 @@ static inline int thrd_set_priority(int priority) {
 
 	return (thrd_success);
 #else
+	(void)(priority); // UNUSED.
+
 	return (thrd_error);
 #endif
 }
