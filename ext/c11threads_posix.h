@@ -149,7 +149,7 @@ static inline int mtx_trylock(mtx_t *mutex) {
 }
 
 static inline int mtx_timedlock(mtx_t *restrict mutex, const struct timespec *restrict time_point) {
-#if defined(__APPLE__)
+#if defined(OS_MACOSX)
 	// Emulate on MacOS X.
 	struct timespec sleepTime = { .tv_sec = 0, .tv_nsec = 1000000 /* 1ms */ };
 	struct timeval currentTime;
@@ -166,7 +166,7 @@ static inline int mtx_timedlock(mtx_t *restrict mutex, const struct timespec *re
 	}
 
 	return (ret);
-#elif defined(__unix__) || defined(__UNIX__)
+#else
 	int ret = pthread_mutex_timedlock(mutex, time_point);
 
 	switch (ret) {
@@ -232,7 +232,7 @@ static inline int mtx_shared_trylock_exclusive(mtx_shared_t *mutex) {
 // NON STANDARD!
 static inline int mtx_shared_timedlock_exclusive(mtx_shared_t *restrict mutex,
 	const struct timespec *restrict time_point) {
-#if defined(__APPLE__)
+#if defined(OS_MACOSX)
 	// Emulate on MacOS X.
 	struct timespec sleepTime = { .tv_sec = 0, .tv_nsec = 1000000 /* 1ms */ };
 	struct timeval currentTime;
@@ -249,7 +249,7 @@ static inline int mtx_shared_timedlock_exclusive(mtx_shared_t *restrict mutex,
 	}
 
 	return (ret);
-#elif defined(__unix__) || defined(__UNIX__)
+#else
 	int ret = pthread_rwlock_timedwrlock(mutex, time_point);
 
 	switch (ret) {
@@ -301,7 +301,7 @@ static inline int mtx_shared_trylock_shared(mtx_shared_t *mutex) {
 
 // NON STANDARD!
 static inline int mtx_shared_timedlock_shared(mtx_shared_t *restrict mutex, const struct timespec *restrict time_point) {
-#if defined(__APPLE__)
+#if defined(OS_MACOSX)
 	// Emulate on MacOS X.
 	struct timespec sleepTime = { .tv_sec = 0, .tv_nsec = 1000000 /* 1ms */ };
 	struct timeval currentTime;
@@ -318,7 +318,7 @@ static inline int mtx_shared_timedlock_shared(mtx_shared_t *restrict mutex, cons
 	}
 
 	return (ret);
-#elif defined(__unix__) || defined(__UNIX__)
+#else
 	int ret = pthread_rwlock_timedrdlock(mutex, time_point);
 
 	switch (ret) {
