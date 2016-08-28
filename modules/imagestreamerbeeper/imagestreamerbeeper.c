@@ -19,7 +19,7 @@ static struct caer_module_functions caerImagestreamerBeeperFunctions = { .module
 	NULL, .moduleExit = &caerImagestreamerBeeperExit };
 
 void caerImagestreamerBeeper(uint16_t moduleID, double  * classific_results, int max_img_qty) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageStreamerBeeper", PROCESSOR);
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageStreamerBeeper", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}
@@ -60,7 +60,7 @@ static void caerImagestreamerBeeperExit(caerModuleData moduleData) {
 
 static void caerImagestreamerBeeperRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
 	UNUSED_ARGUMENT(argsNumber);
-	
+
 	// Interpret variable arguments (same as above in main function).
 	double  * res = va_arg(args, double*);
 	int max_img_qty = va_arg(args, int);
@@ -72,7 +72,7 @@ static void caerImagestreamerBeeperRun(caerModuleData moduleData, size_t argsNum
 
 	sample = al_load_sample(AUDIO_BEEP_FILE);
 	al_reserve_samples(1);
-	
+
 	for(int uu=0; uu< 1 ; uu++){
 	        if(res[uu] != 0.0f){
 			if ( res[uu] >= state->detThreshold) {

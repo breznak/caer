@@ -146,10 +146,10 @@ caerModuleData caerMainloopFindModule(uint16_t moduleID, const char *moduleShort
 			HASH_ADD(hh, mainloopData->modules, moduleID, sizeof(uint16_t), moduleData);
 
 			// Register with mainloop. Add to appropriate type.
-			if (type == INPUT) {
+			if (type == CAER_MODULE_INPUT) {
 				utarray_push_back(mainloopData->inputModules, &moduleData);
 			}
-			else if (type == OUTPUT) {
+			else if (type == CAER_MODULE_OUTPUT) {
 				utarray_push_back(mainloopData->outputModules, &moduleData);
 			}
 			else {

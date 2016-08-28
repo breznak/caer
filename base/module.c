@@ -22,7 +22,7 @@ void caerModuleSMv(caerModuleFunctions moduleFunctions, caerModuleData moduleDat
 	va_list args) {
 	bool running = atomic_load_explicit(&moduleData->running, memory_order_relaxed);
 
-	if (moduleData->moduleStatus == RUNNING && running) {
+	if (moduleData->moduleStatus == CAER_MODULE_RUNNING && running) {
 		if (atomic_load_explicit(&moduleData->configUpdate, memory_order_relaxed) != 0) {
 			if (moduleFunctions->moduleConfig != NULL) {
 				// Call config function, which will have to reset configUpdate.
@@ -42,7 +42,7 @@ void caerModuleSMv(caerModuleFunctions moduleFunctions, caerModuleData moduleDat
 			}
 		}
 	}
-	else if (moduleData->moduleStatus == STOPPED && running) {
+	else if (moduleData->moduleStatus == CAER_MODULE_STOPPED && running) {
 		if (memSize != 0) {
 			moduleData->moduleState = calloc(1, memSize);
 			if (moduleData->moduleState == NULL) {
@@ -63,10 +63,10 @@ void caerModuleSMv(caerModuleFunctions moduleFunctions, caerModuleData moduleDat
 			}
 		}
 
-		moduleData->moduleStatus = RUNNING;
+		moduleData->moduleStatus = CAER_MODULE_RUNNING;
 	}
-	else if (moduleData->moduleStatus == RUNNING && !running) {
-		moduleData->moduleStatus = STOPPED;
+	else if (moduleData->moduleStatus == CAER_MODULE_RUNNING && !running) {
+		moduleData->moduleStatus = CAER_MODULE_STOPPED;
 
 		if (moduleFunctions->moduleExit != NULL) {
 			moduleFunctions->moduleExit(moduleData);
@@ -94,7 +94,7 @@ caerModuleData caerModuleInitialize(uint16_t moduleID, const char *moduleShortNa
 	moduleData->moduleID = moduleID;
 
 	// Put module into startup state. 'running' flag is updated later based on user startup wishes.
-	moduleData->moduleStatus = STOPPED;
+	moduleData->moduleStatus = CAER_MODULE_STOPPED;
 
 	// Determine SSHS module node. Use short name for better human recognition.
 	char sshsString[nameLength + 2];

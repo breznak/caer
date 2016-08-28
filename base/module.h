@@ -15,11 +15,11 @@
 
 // Module-related definitions.
 enum caer_module_status {
-	STOPPED = 0, RUNNING = 1,
+	CAER_MODULE_STOPPED = 0, CAER_MODULE_RUNNING = 1,
 };
 
 enum caer_module_type {
-	INPUT = 0, OUTPUT = 1, PROCESSOR = 2,
+	CAER_MODULE_INPUT = 0, CAER_MODULE_OUTPUT = 1, CAER_MODULE_PROCESSOR = 2,
 };
 
 struct caer_module_data {

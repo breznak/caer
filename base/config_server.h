@@ -3,8 +3,15 @@
 
 #include "main.h"
 
-enum config_actions {
-	NODE_EXISTS = 0, ATTR_EXISTS = 1, GET = 2, PUT = 3, ERROR = 4, GET_CHILDREN = 5, GET_ATTRIBUTES = 6, GET_TYPES = 7,
+enum caer_config_actions {
+	CAER_CONFIG_NODE_EXISTS = 0,
+	CAER_CONFIG_ATTR_EXISTS = 1,
+	CAER_CONFIG_GET = 2,
+	CAER_CONFIG_PUT = 3,
+	CAER_CONFIG_ERROR = 4,
+	CAER_CONFIG_GET_CHILDREN = 5,
+	CAER_CONFIG_GET_ATTRIBUTES = 6,
+	CAER_CONFIG_GET_TYPES = 7,
 };
 
 void caerConfigServerStart(void);

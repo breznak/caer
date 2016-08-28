@@ -12,7 +12,7 @@ static struct caer_module_functions caerInputNetTCPFunctions = { .moduleInit = &
 	&caerInputCommonRun, .moduleConfig = NULL, .moduleExit = &caerInputCommonExit };
 
 caerEventPacketContainer caerInputNetTCP(uint16_t moduleID) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "NetTCPInput", INPUT);
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "NetTCPInput", CAER_MODULE_INPUT);
 	if (moduleData == NULL) {
 		return (NULL);
 	}

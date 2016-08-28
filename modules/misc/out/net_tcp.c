@@ -13,7 +13,7 @@ static struct caer_module_functions caerOutputNetTCPFunctions = { .moduleInit = 
 	&caerOutputCommonReset };
 
 void caerOutputNetTCP(uint16_t moduleID, size_t outputTypesNumber, ...) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "NetTCPOutput", OUTPUT);
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "NetTCPOutput", CAER_MODULE_OUTPUT);
 	if (moduleData == NULL) {
 		return;
 	}

@@ -8,7 +8,7 @@
 #include "ext/nets.h"
 
 #ifdef HAVE_PTHREADS
-	#include "ext/c11threads_posix.h"
+#include "ext/c11threads_posix.h"
 #endif
 
 static struct {
@@ -244,7 +244,7 @@ static inline void caerConfigSendError(int connectedClientSocket, const char *er
 	size_t responseLength = 4 + errorMsgLength + 1; // +1 for terminating NUL byte.
 	uint8_t response[responseLength];
 
-	response[0] = ERROR;
+	response[0] = CAER_CONFIG_ERROR;
 	response[1] = SSHS_STRING;
 	setMsgLen(response, (uint16_t) (errorMsgLength + 1));
 	memcpy(response + 4, errorMsg, errorMsgLength);
@@ -293,19 +293,20 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 	sshs configStore = sshsGetGlobal();
 
 	switch (action) {
-		case NODE_EXISTS: {
+		case CAER_CONFIG_NODE_EXISTS: {
 			// We only need the node name here. Type is not used (ignored)!
 			bool result = sshsExistsNode(configStore, (const char *) node);
 
 			// Send back result to client. Format is the same as incoming data.
 			const uint8_t *sendResult = (const uint8_t *) ((result) ? ("true") : ("false"));
 			size_t sendResultLength = (result) ? (5) : (6);
-			caerConfigSendResponse(connectedClientSocket, NODE_EXISTS, SSHS_BOOL, sendResult, sendResultLength);
+			caerConfigSendResponse(connectedClientSocket, CAER_CONFIG_NODE_EXISTS, SSHS_BOOL, sendResult,
+				sendResultLength);
 
 			break;
 		}
 
-		case ATTR_EXISTS: {
+		case CAER_CONFIG_ATTR_EXISTS: {
 			bool nodeExists = sshsExistsNode(configStore, (const char *) node);
 
 			// Only allow operations on existing nodes, this is for remote
@@ -327,12 +328,13 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			// Send back result to client. Format is the same as incoming data.
 			const uint8_t *sendResult = (const uint8_t *) ((result) ? ("true") : ("false"));
 			size_t sendResultLength = (result) ? (5) : (6);
-			caerConfigSendResponse(connectedClientSocket, ATTR_EXISTS, SSHS_BOOL, sendResult, sendResultLength);
+			caerConfigSendResponse(connectedClientSocket, CAER_CONFIG_ATTR_EXISTS, SSHS_BOOL, sendResult,
+				sendResultLength);
 
 			break;
 		}
 
-		case GET: {
+		case CAER_CONFIG_GET: {
 			bool nodeExists = sshsExistsNode(configStore, (const char *) node);
 
 			// Only allow operations on existing nodes, this is for remote
@@ -368,7 +370,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 				caerConfigSendError(connectedClientSocket, "Failed to allocate memory for value string.");
 			}
 			else {
-				caerConfigSendResponse(connectedClientSocket, GET, type, (const uint8_t *) resultStr,
+				caerConfigSendResponse(connectedClientSocket, CAER_CONFIG_GET, type, (const uint8_t *) resultStr,
 					strlen(resultStr) + 1);
 
 				free(resultStr);
@@ -383,7 +385,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			break;
 		}
 
-		case PUT: {
+		case CAER_CONFIG_PUT: {
 			bool nodeExists = sshsExistsNode(configStore, (const char *) node);
 
 			// Only allow operations on existing nodes, this is for remote
@@ -420,12 +422,12 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			}
 
 			// Send back confirmation to the client.
-			caerConfigSendResponse(connectedClientSocket, PUT, SSHS_BOOL, (const uint8_t *) "true", 5);
+			caerConfigSendResponse(connectedClientSocket, CAER_CONFIG_PUT, SSHS_BOOL, (const uint8_t *) "true", 5);
 
 			break;
 		}
 
-		case GET_CHILDREN: {
+		case CAER_CONFIG_GET_CHILDREN: {
 			bool nodeExists = sshsExistsNode(configStore, (const char *) node);
 
 			// Only allow operations on existing nodes, this is for remote
@@ -470,13 +472,13 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 				acc += len;
 			}
 
-			caerConfigSendResponse(connectedClientSocket, GET_CHILDREN, SSHS_STRING, (const uint8_t *) namesBuffer,
-				namesLength);
+			caerConfigSendResponse(connectedClientSocket, CAER_CONFIG_GET_CHILDREN, SSHS_STRING,
+				(const uint8_t *) namesBuffer, namesLength);
 
 			break;
 		}
 
-		case GET_ATTRIBUTES: {
+		case CAER_CONFIG_GET_ATTRIBUTES: {
 			bool nodeExists = sshsExistsNode(configStore, (const char *) node);
 
 			// Only allow operations on existing nodes, this is for remote
@@ -521,13 +523,13 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 				acc += len;
 			}
 
-			caerConfigSendResponse(connectedClientSocket, GET_ATTRIBUTES, SSHS_STRING, (const uint8_t *) keysBuffer,
-				keysLength);
+			caerConfigSendResponse(connectedClientSocket, CAER_CONFIG_GET_ATTRIBUTES, SSHS_STRING,
+				(const uint8_t *) keysBuffer, keysLength);
 
 			break;
 		}
 
-		case GET_TYPES: {
+		case CAER_CONFIG_GET_TYPES: {
 			bool nodeExists = sshsExistsNode(configStore, (const char *) node);
 
 			// Only allow operations on existing nodes, this is for remote
@@ -575,8 +577,8 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 				acc += len;
 			}
 
-			caerConfigSendResponse(connectedClientSocket, GET_TYPES, SSHS_STRING, (const uint8_t *) typesBuffer,
-				typesLength);
+			caerConfigSendResponse(connectedClientSocket, CAER_CONFIG_GET_TYPES, SSHS_STRING,
+				(const uint8_t *) typesBuffer, typesLength);
 
 			break;
 		}

@@ -52,7 +52,7 @@ struct imagegenerator_state {
 	int32_t numSpikes; // after how many spikes will we generate an image
 	int32_t spikeCounter; // actual number of spikes seen so far, in range [0, numSpikes]
 	int32_t counterImg; // how many spikeImages did we produce so far
-	int32_t counterTxt; 
+	int32_t counterTxt;
 	int32_t counterFrame; // how many frames did we see so far
 	int16_t sizeX;
 	int16_t sizeY;
@@ -81,7 +81,7 @@ void caerImageGenerator(uint16_t moduleID, caerPolarityEventPacket polarity, cha
 	int max_img_qty, int classify_img_size, char **display_img_ptr, caerFrameEventPacket frame,
 	caerFrameEventPacket *imagestreamer, caerFrameEventPacket *imagestreamer_frame, char ** frame_ptr) {
 
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageGenerator", PROCESSOR);
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageGenerator", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}
@@ -151,11 +151,11 @@ static bool save_img(int img_counter, char *img, int size_w, int size_h, char **
 	char filename[255] = {0};
 	char filename_d[255] = {0};
 	char filename_sym[255] = {0};
-	
+
 	memset(filename, 0, 255);
 	memset(filename_d, 0, 255);
-	memset(filename_sym, 0, 255);	
-	
+	memset(filename_sym, 0, 255);
+
 	strcpy(filename, directory);
 	strcat(filename, "img_");
 	sprintf(id_img, "%d", img_counter);
@@ -178,7 +178,7 @@ static bool save_img(int img_counter, char *img, int size_w, int size_h, char **
 		printf("Error in function \"save_img\" (saving images to disk). Path may not be found");
 		return (false);
 	}
-	
+
 	//remove previous file and symlink
 	if(remove(filename_d) != 0){
 		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove file %s.", strerror(errno));
@@ -186,7 +186,7 @@ static bool save_img(int img_counter, char *img, int size_w, int size_h, char **
 	if(remove(filename_sym) != 0){
 		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove symlink %s.", strerror(errno));
 	}
-	
+
 	//create symlink
 	if(symlink(filename, filename_sym) != 0){
 		caerLog(CAER_LOG_ERROR, __func__, "Failed to create symlink errno %s.", strerror(errno));
@@ -227,11 +227,11 @@ static bool save_txt(int img_counter, char *img, int size_w, int size_h, char **
 	char filename[255] = {0};
 	char filename_d[255] = {0};
 	char filename_sym[255] = {0};
-	
+
 	memset(filename, 0, 255);
 	memset(filename_d, 0, 255);
-	memset(filename_sym, 0, 255);	
-	
+	memset(filename_sym, 0, 255);
+
 	strcpy(filename, directory);
 	strcat(filename, "img_");
 	sprintf(id_img, "%d", img_counter);
@@ -248,7 +248,7 @@ static bool save_txt(int img_counter, char *img, int size_w, int size_h, char **
 	strcat(filename_sym, directory);
 	strcat(filename_sym, "latest");
 	strcat(filename_sym, ext); //append extension
-	
+
 	FILE* fd1;
 	fd1 = fopen(filename, "wb");
 	if (fd1 == -1) {
@@ -275,7 +275,7 @@ static bool save_txt(int img_counter, char *img, int size_w, int size_h, char **
 	if(remove(filename_sym) != 0){
 		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove symlink %s.", strerror(errno));
 	}
-	
+
 	//create symlink
 	if(symlink(filename, filename_sym) != 0){
 		caerLog(CAER_LOG_ERROR, __func__, "Failed to create symlink errno %s.", strerror(errno));
@@ -286,7 +286,7 @@ static bool save_txt(int img_counter, char *img, int size_w, int size_h, char **
 		file_strings_classify[file_counter] = strdup(filename);
 		file_counter += 1;
 	}
-	
+
 	free(pixel);
 	return (true);
 }
@@ -538,7 +538,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 	state->mode = sshsNodeGetByte(moduleData->moduleNode, "mode");
 
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
-	if (!sshsNodeAttributeExists(sourceInfoNode, "apsSizeX", SHORT)) {
+	if (!sshsNodeAttributeExists(sourceInfoNode, "apsSizeX", SSHS_SHORT)) {
 		sshsNodePutShort(sourceInfoNode, "apsSizeX", CLASSIFY_IMG_SIZE);
 		sshsNodePutShort(sourceInfoNode, "apsSizeY", CLASSIFY_IMG_SIZE);
 	}
@@ -678,7 +678,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 				free(classify_frame);
 				state->counterImg += 1;
 			}
-			
+
 			if (state->doSaveTxt_frame) {
 				//create classify_txt with desired CLASSIFY_IMG_SIZE (input size of CNN)
 				unsigned char *classify_txt;
@@ -700,7 +700,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 				free(classify_txt);
 				state->counterTxt += 1;
 			}
-			
+
 			free(quadratic_image_mapf);
 		}
 

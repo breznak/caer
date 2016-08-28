@@ -14,7 +14,7 @@ static struct caer_module_functions caerOutputFileFunctions = { .moduleInit = &c
 	&caerOutputCommonReset };
 
 void caerOutputFile(uint16_t moduleID, size_t outputTypesNumber, ...) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "FileOutput", OUTPUT);
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "FileOutput", CAER_MODULE_OUTPUT);
 	if (moduleData == NULL) {
 		return;
 	}

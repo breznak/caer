@@ -31,7 +31,7 @@ static struct caer_module_functions caerBackgroundActivityFilterFunctions = { .m
 	&caerBackgroundActivityFilterReset };
 
 void caerBackgroundActivityFilter(uint16_t moduleID, caerPolarityEventPacket polarity) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "BAFilter", PROCESSOR);
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "BAFilter", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}

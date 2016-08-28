@@ -47,8 +47,12 @@ static const struct {
 	const char *name;
 	size_t nameLen;
 	uint8_t code;
-} actions[] = { { "node_exists", 11, NODE_EXISTS }, { "attr_exists", 11, ATTR_EXISTS }, { "get", 3, GET }, { "put", 3,
-	PUT } };
+} actions[] = {
+	{ "node_exists", 11, CAER_CONFIG_NODE_EXISTS },
+	{ "attr_exists", 11, CAER_CONFIG_ATTR_EXISTS },
+	{ "get", 3, CAER_CONFIG_GET },
+	{ "put", 3, CAER_CONFIG_PUT }
+};
 static const size_t actionsLength = sizeof(actions) / sizeof(actions[0]);
 
 static int sockFd = -1;
@@ -240,7 +244,7 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 
 	// Now that we know what we want to do, let's decode the command line.
 	switch (actionCode) {
-		case NODE_EXISTS: {
+		case CAER_CONFIG_NODE_EXISTS: {
 			// Check parameters needed for operation.
 			if (commandParts[CMD_PART_NODE] == NULL) {
 				fprintf(stderr, "Error: missing node parameter.\n");
@@ -267,8 +271,8 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 			break;
 		}
 
-		case ATTR_EXISTS:
-		case GET: {
+		case CAER_CONFIG_ATTR_EXISTS:
+		case CAER_CONFIG_GET: {
 			// Check parameters needed for operation.
 			if (commandParts[CMD_PART_NODE] == NULL) {
 				fprintf(stderr, "Error: missing node parameter.\n");
@@ -311,7 +315,7 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 			break;
 		}
 
-		case PUT: {
+		case CAER_CONFIG_PUT: {
 			// Check parameters needed for operation.
 			if (commandParts[CMD_PART_NODE] == NULL) {
 				fprintf(stderr, "Error: missing node parameter.\n");
@@ -395,7 +399,7 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 	const char *actionString = NULL;
 
 	// Detect error response.
-	if (action == ERROR) {
+	if (action == CAER_CONFIG_ERROR) {
 		actionString = "error";
 	}
 	else {
@@ -470,7 +474,7 @@ static void handleCommandCompletion(const char *buf, linenoiseCompletions *lc) {
 	}
 
 	switch (actionCode) {
-		case NODE_EXISTS:
+		case CAER_CONFIG_NODE_EXISTS:
 			if (commandDepth == 1) {
 				size_t cmdNodeLength = 0;
 				if (commandParts[CMD_PART_NODE] != NULL) {
@@ -482,8 +486,8 @@ static void handleCommandCompletion(const char *buf, linenoiseCompletions *lc) {
 
 			break;
 
-		case ATTR_EXISTS:
-		case GET:
+		case CAER_CONFIG_ATTR_EXISTS:
+		case CAER_CONFIG_GET:
 			if (commandDepth == 1) {
 				size_t cmdNodeLength = 0;
 				if (commandParts[CMD_PART_NODE] != NULL) {
@@ -514,7 +518,7 @@ static void handleCommandCompletion(const char *buf, linenoiseCompletions *lc) {
 
 			break;
 
-		case PUT:
+		case CAER_CONFIG_PUT:
 			if (commandDepth == 1) {
 				size_t cmdNodeLength = 0;
 				if (commandParts[CMD_PART_NODE] != NULL) {
@@ -601,7 +605,7 @@ static void nodeCompletion(const char *buf, size_t bufLength, linenoiseCompletio
 	uint8_t dataBuffer[1024];
 
 	// Send request for all children names.
-	dataBuffer[0] = GET_CHILDREN;
+	dataBuffer[0] = CAER_CONFIG_GET_CHILDREN;
 	dataBuffer[1] = 0; // UNUSED.
 	setExtraLen(dataBuffer, 0); // UNUSED.
 	setNodeLen(dataBuffer, (uint16_t) (lastNodeLength + 1)); // +1 for terminating NUL byte.
@@ -632,7 +636,7 @@ static void nodeCompletion(const char *buf, size_t bufLength, linenoiseCompletio
 		return;
 	}
 
-	if (action == ERROR || type != SSHS_STRING) {
+	if (action == CAER_CONFIG_ERROR || type != SSHS_STRING) {
 		// Invalid request made, no auto-completion.
 		return;
 	}
@@ -656,7 +660,7 @@ static void keyCompletion(const char *buf, size_t bufLength, linenoiseCompletion
 	uint8_t dataBuffer[1024];
 
 	// Send request for all attribute names for this node.
-	dataBuffer[0] = GET_ATTRIBUTES;
+	dataBuffer[0] = CAER_CONFIG_GET_ATTRIBUTES;
 	dataBuffer[1] = 0; // UNUSED.
 	setExtraLen(dataBuffer, 0); // UNUSED.
 	setNodeLen(dataBuffer, (uint16_t) (nodeStringLength + 1)); // +1 for terminating NUL byte.
@@ -687,7 +691,7 @@ static void keyCompletion(const char *buf, size_t bufLength, linenoiseCompletion
 		return;
 	}
 
-	if (action == ERROR || type != SSHS_STRING) {
+	if (action == CAER_CONFIG_ERROR || type != SSHS_STRING) {
 		// Invalid request made, no auto-completion.
 		return;
 	}
@@ -712,7 +716,7 @@ static void typeCompletion(const char *buf, size_t bufLength, linenoiseCompletio
 	uint8_t dataBuffer[1024];
 
 	// Send request for all type names for this key on this node.
-	dataBuffer[0] = GET_TYPES;
+	dataBuffer[0] = CAER_CONFIG_GET_TYPES;
 	dataBuffer[1] = 0; // UNUSED.
 	setExtraLen(dataBuffer, 0); // UNUSED.
 	setNodeLen(dataBuffer, (uint16_t) (nodeStringLength + 1)); // +1 for terminating NUL byte.
@@ -746,7 +750,7 @@ static void typeCompletion(const char *buf, size_t bufLength, linenoiseCompletio
 		return;
 	}
 
-	if (action == ERROR || type != SSHS_STRING) {
+	if (action == CAER_CONFIG_ERROR || type != SSHS_STRING) {
 		// Invalid request made, no auto-completion.
 		return;
 	}
@@ -794,7 +798,7 @@ static void valueCompletion(const char *buf, size_t bufLength, linenoiseCompleti
 	uint8_t dataBuffer[1024];
 
 	// Send request for the current value, so we can auto-complete with it as default.
-	dataBuffer[0] = GET;
+	dataBuffer[0] = CAER_CONFIG_GET;
 	dataBuffer[1] = (uint8_t) type;
 	setExtraLen(dataBuffer, 0); // UNUSED.
 	setNodeLen(dataBuffer, (uint16_t) (nodeStringLength + 1)); // +1 for terminating NUL byte.
@@ -827,7 +831,7 @@ static void valueCompletion(const char *buf, size_t bufLength, linenoiseCompleti
 		return;
 	}
 
-	if (action == ERROR) {
+	if (action == CAER_CONFIG_ERROR) {
 		// Invalid request made, no auto-completion.
 		return;
 	}

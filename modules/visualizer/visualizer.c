@@ -743,7 +743,7 @@ void caerVisualizerMulti(uint16_t moduleID, const char *name, caerVisualizerRend
 	}
 	visualizerName[10 + nameLength] = '\0';
 
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, visualizerName, PROCESSOR);
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, visualizerName, CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}
