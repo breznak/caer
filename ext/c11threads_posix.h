@@ -8,7 +8,7 @@
 #include <sched.h>
 #include <errno.h>
 
-#if defined(OS_LINUX)
+#if defined(__linux__)
 	#include <sys/prctl.h>
 	#include <sys/resource.h>
 #endif
@@ -149,7 +149,7 @@ static inline int mtx_trylock(mtx_t *mutex) {
 }
 
 static inline int mtx_timedlock(mtx_t *restrict mutex, const struct timespec *restrict time_point) {
-#if defined(OS_MACOSX)
+#if defined(__APPLE__)
 	// Emulate on MacOS X.
 	struct timespec sleepTime = { .tv_sec = 0, .tv_nsec = 1000000 /* 1ms */ };
 	struct timeval currentTime;
@@ -232,7 +232,7 @@ static inline int mtx_shared_trylock_exclusive(mtx_shared_t *mutex) {
 // NON STANDARD!
 static inline int mtx_shared_timedlock_exclusive(mtx_shared_t *restrict mutex,
 	const struct timespec *restrict time_point) {
-#if defined(OS_MACOSX)
+#if defined(__APPLE__)
 	// Emulate on MacOS X.
 	struct timespec sleepTime = { .tv_sec = 0, .tv_nsec = 1000000 /* 1ms */ };
 	struct timeval currentTime;
@@ -301,7 +301,7 @@ static inline int mtx_shared_trylock_shared(mtx_shared_t *mutex) {
 
 // NON STANDARD!
 static inline int mtx_shared_timedlock_shared(mtx_shared_t *restrict mutex, const struct timespec *restrict time_point) {
-#if defined(OS_MACOSX)
+#if defined(__APPLE__)
 	// Emulate on MacOS X.
 	struct timespec sleepTime = { .tv_sec = 0, .tv_nsec = 1000000 /* 1ms */ };
 	struct timeval currentTime;
@@ -345,13 +345,13 @@ static inline int mtx_shared_unlock_shared(mtx_shared_t *mutex) {
 
 // NON STANDARD!
 static inline int thrd_set_name(const char *name) {
-#if defined(OS_LINUX)
+#if defined(__linux__)
 	if (prctl(PR_SET_NAME, name) != 0) {
 		return (thrd_error);
 	}
 
 	return (thrd_success);
-#elif defined(OS_MACOSX)
+#elif defined(__APPLE__)
 	if (pthread_setname_np(name) != 0) {
 		return (thrd_error);
 	}
@@ -365,7 +365,7 @@ static inline int thrd_set_name(const char *name) {
 }
 
 static inline int thrd_get_name(char *name, size_t maxNameLength) {
-#if defined(OS_LINUX)
+#if defined(__linux__)
 	(void)(maxNameLength); // UNUSED ON LINUX.
 
 	if (prctl(PR_GET_NAME, name) != 0) {
@@ -373,7 +373,7 @@ static inline int thrd_get_name(char *name, size_t maxNameLength) {
 	}
 
 	return (thrd_success);
-#elif defined(OS_MACOSX)
+#elif defined(__APPLE__)
 	if (pthread_getname_np(pthread_self(), name, maxNameLength) != 0) {
 		return (thrd_error);
 	}
@@ -389,7 +389,7 @@ static inline int thrd_get_name(char *name, size_t maxNameLength) {
 
 // NON STANDARD!
 static inline int thrd_set_priority(int priority) {
-#if defined(OS_LINUX)
+#if defined(__linux__)
 	if (setpriority(PRIO_PROCESS, 0, priority) != 0) {
 		return (thrd_error);
 	}
