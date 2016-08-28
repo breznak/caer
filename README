@@ -9,7 +9,11 @@ cmake >= 2.6
 gcc >= 4.9 or clang >= 3.6
 libcaer >= 2.0.0
 mini-xml (mxml) >= 2.7
-allegro5 >= 5.0.11 (optional, only if using the Visualizer)
+libevent >= 2.0.20
+Optional: libpng >= 1.6 (input/output frame PNG compression)
+Optional: tcmalloc >= 2.2 (faster memory allocation)
+Optional: allegro5 >= 5.0.11 (visualizer module)
+Optional: OpenCV >= 3.1 (cameracalibration, poseestimation modules)
 
 INSTALLATION:
 
@@ -39,7 +43,7 @@ Optional modules:
 
 		If needed, copy the file modules/caffeinterface/cmake_extra_modules/FindCaffe.cmake to the CMake Modules folder. 
 		A custom location can be specified for the caffe library using Caffe_DIR 
-	
+
 		This module depends on the imagegenerator module  (ie. it requires -DENABLE_IMAGEGENERATOR=1)
 		It also requires Caffe installed as well as Boost/OpenCV/Protobuffer (same as Caffe).
 		You can load deep networks that have been trained with Caffe (like alexnet/caffenet/vgg etc.)
@@ -48,9 +52,8 @@ Optional modules:
 			"module/caffeinterface/settings.h"
 		-DCAFFE_CPU_ONLY=1 - to use the Caffe framework with CPU only (ie. no GPU)
 		-DCaffe_DIR=<caffe dir>  - to define custom caffe installation folder 
-	
+
  -DENABLE_IMAGESTREAMERBEEPER=1 - this module produces beeps based on classification results 
- 
 
 2) build:
 
