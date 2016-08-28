@@ -39,7 +39,8 @@ static inline int portable_fsync(int fd) {
 #if defined(_BSD_SOURCE) || defined(_XOPEN_SOURCE)
 	return (fsync(fd));
 #elif defined(_WIN32)
-	HANDLE h = (HANDLE) _get_osfhandle(fd);
+	intptr_t hFile = _get_osfhandle(fd);
+	HANDLE h = (HANDLE) hFile;
 
 	if (h == INVALID_HANDLE_VALUE) {
 		errno = EBADF;
