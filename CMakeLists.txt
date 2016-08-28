@@ -201,8 +201,8 @@ ENDIF()
 # Add math support
 SET(CAER_C_LIBS ${CAER_C_LIBS} m)
 
-# Add realtime support, not needed on MacOS X though
-IF (NOT OS_MACOSX)
+# Add realtime support, not needed on MacOS X or Windows.
+IF (OS_UNIX AND NOT OS_MACOSX)
 	SET(CAER_C_LIBS ${CAER_C_LIBS} rt)
 ENDIF()
 
