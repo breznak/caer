@@ -3,6 +3,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include "ext/portable_misc.h"
 
 static char *caerConfigFilePath = NULL;
 
@@ -19,7 +20,7 @@ void caerConfigInit(const char *configFile, int argc, char *argv[]) {
 			// File opened for reading successfully.
 			// This means it exists and we can access it, so let's remember
 			// it for writing the config later at shutdown (if permitted).
-			caerConfigFilePath = realpath(configFile, NULL);
+			caerConfigFilePath = portable_realpath(configFile);
 
 			// Determine if there is actual content to parse first.
 			struct stat configFileStat;

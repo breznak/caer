@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <event2/event.h>
+#include "ext/portable_misc.h"
 
 int CAER_LOG_FILE_FD = -1;
 
@@ -21,7 +22,7 @@ void caerLogInit(void) {
 	const char *logFileName = "/caer.log";
 
 	char *logFileDir = getcwd(NULL, 0);
-	char *logFileDirClean = realpath(logFileDir, NULL);
+	char *logFileDirClean = portable_realpath(logFileDir);
 
 	char *logFilePath = malloc(strlen(logFileDirClean) + strlen(logFileName) + 1); // +1 for terminating NUL byte.
 	strcpy(logFilePath, logFileDirClean);

@@ -2,6 +2,7 @@
 #include "base/mainloop.h"
 #include "base/module.h"
 #include "output_common.h"
+#include "ext/portable_misc.h"
 #include <sys/types.h>
 #include <pwd.h>
 #include <fcntl.h>
@@ -61,7 +62,7 @@ static char *getUserHomeDirectory(const char *subSystemString) {
 		return (NULL);
 	}
 
-	char *realHomeDir = realpath(homeDir, NULL);
+	char *realHomeDir = portable_realpath(homeDir);
 	if (realHomeDir == NULL) {
 		caerLog(CAER_LOG_CRITICAL, subSystemString, "Could not get real path for home directory '%s'.", homeDir);
 		free(homeDir);

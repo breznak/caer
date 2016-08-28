@@ -22,6 +22,7 @@
 #include <pwd.h>
 #include "ext/sshs/sshs.h"
 #include "ext/nets.h"
+#include "ext/portable_misc.h"
 #include "base/config_server.h"
 #include "utils/ext/linenoise/linenoise.h"
 
@@ -907,7 +908,7 @@ static char *getUserHomeDirectory(void) {
 		return (NULL);
 	}
 
-	char *realHomeDir = realpath(homeDir, NULL);
+	char *realHomeDir = portable_realpath(homeDir);
 	if (realHomeDir == NULL) {
 		free(homeDir);
 
