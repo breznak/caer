@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include "ext/nets.h"
+#include <event2/util.h>
 
 static bool caerOutputNetTCPServerInit(caerModuleData moduleData);
 
@@ -43,10 +44,10 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	}
 
 	// Make socket address reusable right away.
-	socketReuseAddr(serverSockFd, true);
+	evutil_make_listen_socket_reuseable(serverSockFd);
 
 	// Set server socket, on which accept() is called, to non-blocking mode.
-	if (!socketBlockingMode(serverSockFd, false)) {
+	if (evutil_make_socket_nonblocking(serverSockFd)) {
 		close(serverSockFd);
 
 		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,

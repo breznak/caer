@@ -12,43 +12,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <unistd.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <fcntl.h>
 
-static inline bool socketBlockingMode(int fd, bool blocking) {
-	if (fd < 0) {
-		return (false);
-	}
-
-	int currFlags = fcntl(fd, F_GETFL, 0);
-	if (currFlags < 0) {
-		return (false);
-	}
-
-	if (blocking) {
-		currFlags &= ~O_NONBLOCK;
-	}
-	else {
-		currFlags |= O_NONBLOCK;
-	}
-
-	return (fcntl(fd, F_SETFL, currFlags) == 0);
-}
-
-static inline bool socketReuseAddr(int fd, bool reuseAddr) {
-	if (fd < 0) {
-		return (false);
-	}
-
-	int val = 0;
-
-	if (reuseAddr) {
-		val = 1;
-	}
-
-	return (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(int)) == 0);
-}
+#if defined(_WIN32)
+	#include <winsock2.h>
+#else
+	#include <sys/socket.h>
+	#include <sys/types.h>
+#endif
 
 // Write toWrite bytes to the socket sock from buffer.
 // Return true on success, false on failure.
