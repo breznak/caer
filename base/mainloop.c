@@ -36,6 +36,17 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 	signal(SIGPIPE, SIG_IGN);
 
 	// Install signal handler for global shutdown.
+#if defined(OS_WINDOWS)
+	if (signal(SIGTERM, &caerMainloopSignalHandler) == SIG_ERR) {
+		caerLog(CAER_LOG_EMERGENCY, "Mainloop", "Failed to set signal handler for SIGTERM. Error: %d.", errno);
+		exit(EXIT_FAILURE);
+	}
+
+	if (signal(SIGINT, &caerMainloopSignalHandler) == SIG_ERR) {
+		caerLog(CAER_LOG_EMERGENCY, "Mainloop", "Failed to set signal handler for SIGINT. Error: %d.", errno);
+		exit(EXIT_FAILURE);
+	}
+#else
 	struct sigaction shutdown;
 
 	shutdown.sa_handler = &caerMainloopSignalHandler;
@@ -53,6 +64,7 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 		caerLog(CAER_LOG_EMERGENCY, "Mainloop", "Failed to set signal handler for SIGINT. Error: %d.", errno);
 		exit(EXIT_FAILURE);
 	}
+#endif
 
 	sshsNode rootNode = sshsGetNode(sshsGetGlobal(), "/");
 
