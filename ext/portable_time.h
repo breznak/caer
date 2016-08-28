@@ -68,7 +68,7 @@
 
 		return (true);
 	}
-#elif ((defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L) || (defined(_XOPEN_SOURCE) && _XOPEN_SOURCE >= 600))
+#elif ((defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L) || (defined(_XOPEN_SOURCE) && _XOPEN_SOURCE >= 600) || (defined(_WIN32) && defined(__MINGW32__)))
 	#include <time.h>
 
 	static inline bool portable_clock_gettime_monotonic(struct timespec *monoTime) {
