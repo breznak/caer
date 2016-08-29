@@ -1,3 +1,4 @@
+Always prefer the package manager version on your system if it exists and is up-to-date!
 Assorted information on installing OpenCV 3.1.0 properly on a system:
 - unzip opencv-3.1.0.zip
 - cd opencv-3.1.0

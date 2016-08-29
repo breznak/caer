@@ -5,6 +5,7 @@ AER event-based framework, written in C, targeting embedded systems.
 
 REQUIREMENTS:
 
+Linux, MacOS X or Windows (for Windows build instructions see README.Windows)
 cmake >= 2.6
 gcc >= 4.9 or clang >= 3.6
 libcaer >= 2.0.0

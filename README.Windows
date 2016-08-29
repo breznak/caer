@@ -1,0 +1,40 @@
+WINDOWS BUILD INSTRUCTIONS
+==========================
+We support building cAER on the Windows platform by using the MinGW32/64 compilers
+and the MSYS2 environment. Following are detailed step-by-step instructions to install
+the required components and get everything building, we use MinGW64 here for the
+64-bit Windows platform, if you want to build for 32-bit Windows, just replace all
+mentions of 'x86_64' with 'i686'. Whenever you want to install a package, use
+the MSYS2 shell, while to build code, use the MinGW32/64 shells!
+
+1) Install the MSYS2 environment, the MinGW64 compiler and libcaer and all its
+dependencies as described in detail in libcaer's 'README.Windows'.
+
+2) Install the required dependencies: pacman -S mingw-w64-x86_64-libevent
+
+3) Install any additional dependencies as required: pacman -S <pkg-name>
+ Input/Output modules: mingw-w64-x86_64-libpng
+ Visualizer module: mingw-w64-x86_64-allegro mingw-w64-x86_64-freetype mingw-w64-x86_64-libjpeg-turbo mingw-w64-x86_64-libpng
+ CameraCalibration, PoseEstimation modules: mingw-w64-x86_64-opencv
+
+4) Install Mini-XML by using our ZIP package: mxml-2.10-w64.zip
+Decompress it and copy the relevant files to the right directory:
+ mxml.h -> C:\msys64\mingw64\include\
+ mxml.pc -> C:\msys64\mingw64\lib\pkgconfig\
+ mxml1.dll -> C:\msys64\mingw64\bin\
+ libmxml1.a -> C:\msys64\mingw64\lib\
+
+5) Place the cAER source in a location easily accessible to MSYS2. We usually
+put the source code into 'C:\msys64\home\caer\' and use TortoiseGit
+(https://tortoisegit.org/) or git from the MSYS2 shell (pacman -S git) to get it.
+
+6) Switch to the cAER checkout directory: cd /home/caer/
+
+7) Configure, run CMake: cmake -G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX=/mingw64 -DDAVISFX2=1 -DENABLE_BAFILTER=1 .
+Change this to suit your needs, by enabling/disabling the proper modules!
+
+8) Build, run Make: make
+
+9) Install: make install
+
+Congratulations, you now have a working cAER on Windows!
