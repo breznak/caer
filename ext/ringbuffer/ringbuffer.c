@@ -57,7 +57,7 @@ RingBuffer ringBufferInit(size_t size) {
 }
 
 void ringBufferFree(RingBuffer rBuf) {
-	free(rBuf);
+	portable_aligned_free(rBuf);
 }
 
 bool ringBufferPut(RingBuffer rBuf, void *elem) {
