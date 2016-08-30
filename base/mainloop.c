@@ -43,6 +43,11 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 		caerLog(CAER_LOG_EMERGENCY, "Mainloop", "Failed to set signal handler for SIGINT. Error: %d.", errno);
 		exit(EXIT_FAILURE);
 	}
+
+	if (signal(SIGBREAK, &caerMainloopSignalHandler) == SIG_ERR) {
+		caerLog(CAER_LOG_EMERGENCY, "Mainloop", "Failed to set signal handler for SIGBREAK. Error: %d.", errno);
+		exit(EXIT_FAILURE);
+	}
 #else
 	struct sigaction shutdown;
 
@@ -359,10 +364,10 @@ void caerMainloopResetProcessors(uint16_t sourceID) {
 }
 
 static void caerMainloopSignalHandler(int signal) {
+	UNUSED_ARGUMENT(signal);
+
 	// Simply set the running flag to false on SIGTERM and SIGINT (CTRL+C) for global shutdown.
-	if (signal == SIGTERM || signal == SIGINT) {
-		atomic_store(&mainloopThreads.running, false);
-	}
+	atomic_store(&mainloopThreads.running, false);
 }
 
 static void caerMainloopShutdownListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
