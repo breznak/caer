@@ -17,12 +17,15 @@ dependencies as described in detail in libcaer's 'README.Windows'.
  Visualizer module: mingw-w64-x86_64-allegro mingw-w64-x86_64-freetype mingw-w64-x86_64-libjpeg-turbo mingw-w64-x86_64-libpng
  CameraCalibration, PoseEstimation modules: mingw-w64-x86_64-opencv
 
-4) Install Mini-XML by using our ZIP package: mxml-2.10-w64.zip
-Decompress it and copy the relevant files to the right directory:
- mxml.h -> C:\msys64\mingw64\include\
- mxml.pc -> C:\msys64\mingw64\lib\pkgconfig\
- mxml1.dll -> C:\msys64\mingw64\bin\
- libmxml1.a -> C:\msys64\mingw64\lib\
+4) Install Mini-XML manually:
+ a) Download the latest version from http://www.msweet.org/downloads.php?L+Z3 (currently 2.10).
+ b) Unpack it: tar -xvzf mxml-2.10.tar.gz
+ c) Switch to the source directory: cd mxml-2.10/
+ d) Copy the patch needed to compile it under MinGW and apply it: patch -p1 < mxml-mingw-compile.patch
+    You can find the patch in the cAER source checkout, inside the ext/ directory.
+ e) Configure: CFLAGS="-D__USE_MINGW_ANSI_STDIO=1" ./configure --prefix=/mingw64/
+ f) Make: make
+ g) Install: make install
 
 5) Place the cAER source in a location easily accessible to MSYS2. We usually
 put the source code into 'C:\msys64\home\caer\' and use TortoiseGit

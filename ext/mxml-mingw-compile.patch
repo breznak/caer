@@ -1,0 +1,58 @@
+--- mxml-2.10/mxml-file.c	2016-06-13 02:51:16.000000000 +0200
++++ mxml-2.10-mingw/mxml-file.c	2016-08-30 15:06:48.920347000 +0200
+@@ -18,7 +18,7 @@
+  * Include necessary headers...
+  */
+ 
+-#ifndef WIN32
++#if !defined(WIN32) || defined(__MINGW32__)
+ #  include <unistd.h>
+ #endif /* !WIN32 */
+ #include "mxml-private.h"
+--- mxml-2.10/mxmldoc.c	2014-01-04 22:50:06.000000000 +0100
++++ mxml-2.10-mingw/mxmldoc.c	2016-08-30 15:12:01.713233400 +0200
+@@ -24,7 +24,7 @@
+ #include "mxml.h"
+ #include <time.h>
+ #include <sys/stat.h>
+-#ifndef WIN32
++#if !defined(WIN32) || defined(__MINGW32__)
+ #  include <dirent.h>
+ #  include <unistd.h>
+ #endif /* !WIN32 */
+@@ -912,7 +912,7 @@
+ static int				/* O - 1 on success, 0 on failure */
+ remove_directory(const char *path)	/* I - Directory to remove */
+ {
+-#ifdef WIN32
++#if !defined(WIN32) || defined(__MINGW32__)
+   /* TODO: Add Windows directory removal code */
+ 
+ #else
+--- mxml-2.10/testmxml.c	2016-06-13 02:27:11.000000000 +0200
++++ mxml-2.10-mingw/testmxml.c	2016-08-30 15:12:11.282780700 +0200
+@@ -25,7 +25,7 @@
+ 
+ #include "config.h"
+ #include "mxml.h"
+-#ifndef WIN32
++#if !defined(WIN32) || defined(__MINGW32__)
+ #  include <unistd.h>
+ #endif /* !WIN32 */
+ #include <fcntl.h>
+--- mxml-2.10/config.h.in	2014-01-04 22:50:06.000000000 +0100
++++ mxml-2.10-mingw/config.h.in	2016-08-30 15:50:33.346616500 +0200
+@@ -33,13 +33,6 @@
+ 
+ 
+ /*
+- * Inline function support...
+- */
+-
+-#define inline
+-
+-
+-/*
+  * Long long support...
+  */
+ 
