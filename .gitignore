@@ -7,7 +7,7 @@ cmake_install.cmake
 /*.xml
 /*.log
 /*.sh
-/caer-bin
+/caer-bin*
 *~
 *.swp
 *.swo
