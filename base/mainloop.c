@@ -48,6 +48,19 @@ void caerMainloopRun(struct caer_mainloop_definition (*mainLoops)[], size_t numL
 		caerLog(CAER_LOG_EMERGENCY, "Mainloop", "Failed to set signal handler for SIGBREAK. Error: %d.", errno);
 		exit(EXIT_FAILURE);
 	}
+
+	// Disable closing of the console window where cAER is executing.
+	// While we do catch the signal (SIGBREAK) that such an action generates, it seems
+	// we can't reliably shut down within the hard time window that Windows enforces when
+	// pressing the close button (X in top right corner usually). This seems to be just
+	// 5 seconds, and we can't guarantee full shutdown (USB, file writing, etc.) in all
+	// cases within that time period (multiple cameras, modules etc. make this worse).
+	// So we just disable that and force the user to CTRL+C, which works fine.
+	HWND consoleWindow = GetConsoleWindow();
+	if (consoleWindow != NULL) {
+		HMENU systemMenu = GetSystemMenu(consoleWindow, false);
+		EnableMenuItem(systemMenu, SC_CLOSE, MF_GRAYED);
+	}
 #else
 	struct sigaction shutdown;
 
