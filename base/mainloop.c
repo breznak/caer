@@ -193,11 +193,10 @@ caerModuleData caerMainloopFindModule(uint16_t moduleID, const char *moduleShort
 		// actually match. This is true for all modules, including devices currently.
 		char *moduleSubSystemString = strchr(moduleData->moduleSubSystemString, '-') + 1;
 		if (!caerStrEqualsUpTo(moduleShortName, moduleSubSystemString, strlen(moduleShortName))) {
-			caerLog(CAER_LOG_ALERT, moduleData->moduleSubSystemString,
-				"Module sub-system string and module short-name do not match. "
-					"You're probably using the same ID for multiple modules! "
-					"ID = %" PRIu16 ", subSystemString = %s, shortName = %s.",
-					moduleID, moduleSubSystemString, moduleShortName);
+			caerLog(CAER_LOG_ALERT, moduleShortName, "Module sub-system string and module short-name do not match. "
+				"You're probably using the same ID for multiple modules! "
+				"ID = %" PRIu16 ", subSystemString = %s, shortName = %s.", moduleID, moduleSubSystemString,
+				moduleShortName);
 			return (NULL);
 		}
 	}

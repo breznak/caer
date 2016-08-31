@@ -161,12 +161,12 @@ bool caerInputDAVISInit(caerModuleData moduleData, uint16_t deviceType) {
 	sshsNodePutString(sourceInfoNode, "sourceString", sourceString);
 
 	// Generate sub-system string for module.
-	size_t subSystemStringLength = (size_t) snprintf(NULL, 0, "%s-SN%s[%" PRIu8 ":%" PRIu8 "]",
+	size_t subSystemStringLength = (size_t) snprintf(NULL, 0, "%s[SN %s, %" PRIu8 ":%" PRIu8 "]",
 		moduleData->moduleSubSystemString, devInfo.deviceSerialNumber, devInfo.deviceUSBBusNumber,
 		devInfo.deviceUSBDeviceAddress);
 
 	char subSystemString[subSystemStringLength + 1];
-	snprintf(subSystemString, subSystemStringLength + 1, "%s-SN%s[%" PRIu8 ":%" PRIu8 "]",
+	snprintf(subSystemString, subSystemStringLength + 1, "%s[SN %s, %" PRIu8 ":%" PRIu8 "]",
 		moduleData->moduleSubSystemString, devInfo.deviceSerialNumber, devInfo.deviceUSBBusNumber,
 		devInfo.deviceUSBDeviceAddress);
 	subSystemString[subSystemStringLength] = '\0';
