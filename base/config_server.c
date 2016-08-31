@@ -1,12 +1,7 @@
 #include "config_server.h"
 #include <stdatomic.h>
 #include <unistd.h>
-#include <poll.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include "ext/nets.h"
-#include <event2/util.h>
+#include <event2/event.h>
 
 #ifdef HAVE_PTHREADS
 #include "ext/c11threads_posix.h"
