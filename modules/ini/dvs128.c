@@ -102,7 +102,18 @@ static bool caerInputDVS128Init(caerModuleData moduleData) {
 
 	sshsNodePutString(sourceInfoNode, "sourceString", sourceString);
 
-	caerModuleSetSubSystemString(moduleData, devInfo.deviceString);
+	// Generate sub-system string for module.
+	size_t subSystemStringLength = (size_t) snprintf(NULL, 0, "%s-SN%s[%" PRIu8 ":%" PRIu8 "]",
+		moduleData->moduleSubSystemString, devInfo.deviceSerialNumber, devInfo.deviceUSBBusNumber,
+		devInfo.deviceUSBDeviceAddress);
+
+	char subSystemString[subSystemStringLength + 1];
+	snprintf(subSystemString, subSystemStringLength + 1, "%s-SN%s[%" PRIu8 ":%" PRIu8 "]",
+		moduleData->moduleSubSystemString, devInfo.deviceSerialNumber, devInfo.deviceUSBBusNumber,
+		devInfo.deviceUSBDeviceAddress);
+	subSystemString[subSystemStringLength] = '\0';
+
+	caerModuleSetSubSystemString(moduleData, subSystemString);
 
 	// Ensure good defaults for data acquisition settings.
 	// No blocking behavior due to mainloop notification, and no auto-start of
