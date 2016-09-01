@@ -3,14 +3,12 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <event2/event.h>
 #include "ext/portable_misc.h"
 
 int CAER_LOG_FILE_FD = -1;
 
 static void caerLogShutDownWriteBack(void);
 static void caerLogSSHSLogger(const char *msg);
-static void caerLogLibEventLogger(int severity, const char *msg);
 static void caerLogLevelListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
@@ -66,9 +64,6 @@ void caerLogInit(void) {
 	// set the SSHS logger to use our internal logger too.
 	sshsSetGlobalErrorLogCallback(&caerLogSSHSLogger);
 
-	// Libevent also needs to be pointed to our internal logger.
-	event_set_log_callback(&caerLogLibEventLogger);
-
 	// Log sub-system initialized fully and correctly, log this.
 	caerLog(CAER_LOG_NOTICE, "Logger", "Initialization successful with log-level %" PRIu8 ".", logLevel);
 }
@@ -88,27 +83,6 @@ static void caerLogShutDownWriteBack(void) {
 static void caerLogSSHSLogger(const char *msg) {
 	caerLog(CAER_LOG_EMERGENCY, "SSHS", "%s", msg);
 	// SSHS will exit automatically on critical errors.
-}
-
-static void caerLogLibEventLogger(int severity, const char *msg) {
-	switch (severity) {
-		case EVENT_LOG_DEBUG:
-			caerLog(CAER_LOG_DEBUG, "LibEvent", "%s", msg);
-			break;
-
-		case EVENT_LOG_MSG:
-			caerLog(CAER_LOG_NOTICE, "LibEvent", "%s", msg);
-			break;
-
-		case EVENT_LOG_WARN:
-			caerLog(CAER_LOG_WARNING, "LibEvent", "%s", msg);
-			break;
-
-		case EVENT_LOG_ERR:
-		default:
-			caerLog(CAER_LOG_ERROR, "LibEvent", "%s", msg);
-			break;
-	}
 }
 
 static void caerLogLevelListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,

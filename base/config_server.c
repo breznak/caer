@@ -1,7 +1,12 @@
 #include "config_server.h"
 #include <stdatomic.h>
 #include <unistd.h>
-#include <event2/event.h>
+#include <poll.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include "ext/nets.h"
+#include <uv.h>
 
 #ifdef HAVE_PTHREADS
 #include "ext/c11threads_posix.h"
@@ -78,7 +83,7 @@ static int caerConfigServerRunner(void *inPtr) {
 	}
 
 	// Make socket address reusable right away.
-	evutil_make_listen_socket_reuseable(configServerSocket);
+	// TODO: evutil_make_listen_socket_reuseable(configServerSocket);
 
 	struct sockaddr_in configServerAddress;
 	memset(&configServerAddress, 0, sizeof(struct sockaddr_in));
