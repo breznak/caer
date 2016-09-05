@@ -6,11 +6,14 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include "ext/nets.h"
+#include "ext/buffers.h"
 #include <uv.h>
 
 #ifdef HAVE_PTHREADS
 #include "ext/c11threads_posix.h"
 #endif
+
+#define CONFIG_SERVER_NAME "Config Server"
 
 static struct {
 	atomic_bool running;
@@ -29,11 +32,11 @@ void caerConfigServerStart(void) {
 	// Start the thread.
 	if ((errno = thrd_create(&configServerThread.thread, &caerConfigServerRunner, NULL)) == thrd_success) {
 		// Successfully started thread.
-		caerLog(CAER_LOG_DEBUG, "Config Server", "Thread created successfully.");
+		caerLog(CAER_LOG_DEBUG, CONFIG_SERVER_NAME, "Thread created successfully.");
 	}
 	else {
 		// Failed to create thread.
-		caerLog(CAER_LOG_EMERGENCY, "Config Server", "Failed to create thread. Error: %d.", errno);
+		caerLog(CAER_LOG_EMERGENCY, CONFIG_SERVER_NAME, "Failed to create thread. Error: %d.", errno);
 		exit(EXIT_FAILURE);
 	}
 }
@@ -50,13 +53,139 @@ void caerConfigServerStop(void) {
 	// Then wait on it to finish.
 	if ((errno = thrd_join(configServerThread.thread, NULL)) == thrd_success) {
 		// Successfully joined thread.
-		caerLog(CAER_LOG_DEBUG, "Config Server", "Thread terminated successfully.");
+		caerLog(CAER_LOG_DEBUG, CONFIG_SERVER_NAME, "Thread terminated successfully.");
 	}
 	else {
 		// Failed to join thread.
-		caerLog(CAER_LOG_EMERGENCY, "Config Server", "Failed to terminate thread. Error: %d.", errno);
+		caerLog(CAER_LOG_EMERGENCY, CONFIG_SERVER_NAME, "Failed to terminate thread. Error: %d.", errno);
 		exit(EXIT_FAILURE);
 	}
+}
+
+// Control message format: 1 byte ACTION, 1 byte TYPE, 2 bytes EXTRA_LEN,
+// 2 bytes NODE_LEN, 2 bytes KEY_LEN, 2 bytes VALUE_LEN, then up to 4086
+// bytes split between EXTRA, NODE, KEY, VALUE (with 4 bytes for NUL).
+// Basically: (EXTRA_LEN + NODE_LEN + KEY_LEN + VALUE_LEN) <= 4086.
+// EXTRA, NODE, KEY, VALUE have to be NUL terminated, and their length
+// must include the NUL termination byte.
+// This results in a maximum message size of 4096 bytes (4KB).
+#define CONFIG_SERVER_BUFFER_SIZE 4096
+
+#define UV_RET_CHECK(RET_VAL, FUNC_NAME, CLEANUP_ACTIONS) \
+	if (RET_VAL < 0) { \
+		caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, FUNC_NAME " failed, error %d (%s).", \
+			RET_VAL, uv_err_name(RET_VAL)); \
+		CLEANUP_ACTIONS; \
+	}
+
+static void configServerConnection(uv_stream_t *server, int status);
+static void configServerAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf);
+static void configServerRead(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf);
+static void configServerShutdown(uv_shutdown_t *clientShutdown, int status);
+static void configServerClose(uv_handle_t *client);
+
+static void configServerConnection(uv_stream_t *server, int status) {
+	UV_RET_CHECK(status, "Connection", return);
+
+	uv_tcp_t *tcpClient = malloc(sizeof(*tcpClient));
+	if (tcpClient == NULL) {
+		caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for new client.");
+		return;
+	}
+
+	int retVal;
+	bool tcpClientInitialized = false;
+
+	retVal = uv_tcp_init(server->loop, tcpClient);
+	UV_RET_CHECK(retVal, "uv_tcp_init", goto connCleanup);
+	tcpClientInitialized = true;
+
+	// We track the buffer here. Initialize to NULL.
+	tcpClient->data = NULL;
+
+	retVal = uv_accept(server, (uv_stream_t *) tcpClient);
+	UV_RET_CHECK(retVal, "uv_accept", goto connCleanup);
+
+	retVal = uv_read_start((uv_stream_t *) tcpClient, &configServerAlloc, &configServerRead);
+	UV_RET_CHECK(retVal, "uv_read_start", goto connCleanup);
+
+	// Everything done with no errors, so no cleanup!
+	return;
+
+	connCleanup: {
+		if (tcpClientInitialized) {
+			uv_close((uv_handle_t *) tcpClient, NULL);
+		}
+
+		free(tcpClient);
+		return;
+	}
+}
+
+static void configServerAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf) {
+	UNUSED_ARGUMENT(suggestedSize);
+
+	// We use one buffer per connection, with a fixed maximum size, and
+	// re-use it until we have read a full message.
+	if (client->data == NULL) {
+		client->data = simpleBufferInit(CONFIG_SERVER_BUFFER_SIZE);
+
+		if (client->data == NULL) {
+			// Allocation failure!
+			buf->base = NULL;
+			buf->len = 0;
+
+			caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client buffer.");
+			return;
+		}
+	}
+
+	simpleBuffer dataBuf = client->data;
+
+	buf->base = (char *) (dataBuf->buffer + dataBuf->bufferUsedSize);
+	buf->len = dataBuf->bufferSize - dataBuf->bufferUsedSize;
+}
+
+static void configServerRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf_t *buf) {
+	// sizeRead < 0: Error or EndOfFile (EOF).
+	if (sizeRead < 0) {
+		if (sizeRead == UV_EOF) {
+			caerLog(CAER_LOG_INFO, CONFIG_SERVER_NAME, "Client %d closed connection.", client->accepted_fd);
+		}
+		else {
+			caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Read failed, error %ld (%s).", sizeRead,
+				uv_err_name((int) sizeRead));
+		}
+
+		// Close connection.
+		uv_shutdown_t *clientShutdown = malloc(sizeof(*clientShutdown));
+		if (clientShutdown == NULL) {
+			caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client shutdown.");
+			return;
+		}
+
+		int retVal = uv_shutdown(clientShutdown, client, &configServerShutdown);
+		UV_RET_CHECK(retVal, "uv_shutdown", free(clientShutdown));
+	}
+
+	// sizeRead == 0: EAGAIN, do nothing.
+
+	// sizeRead > 0: received data.
+	if (sizeRead > 0) {
+		// TODO: read and process data.
+	}
+}
+
+static void configServerShutdown(uv_shutdown_t *clientShutdown, int status) {
+	UV_RET_CHECK(status, "Shutdown", return);
+
+	uv_close((uv_handle_t *) clientShutdown->handle, &configServerClose);
+	free(clientShutdown);
+}
+
+static void configServerClose(uv_handle_t *client) {
+	free(client->data);
+	free(client);
 }
 
 static int caerConfigServerRunner(void *inPtr) {
@@ -72,163 +201,106 @@ static int caerConfigServerRunner(void *inPtr) {
 	sshsNodePutStringIfAbsent(serverNode, "ipAddress", "127.0.0.1");
 	sshsNodePutIntIfAbsent(serverNode, "portNumber", 4040);
 	sshsNodePutShortIfAbsent(serverNode, "backlogSize", 5);
-	sshsNodePutShortIfAbsent(serverNode, "concurrentConnections", 5);
+
+	int retVal;
+	bool eventLoopInitialized = false;
+	bool tcpServerInitialized = false;
+
+	// Generate address.
+	struct sockaddr_in configServerAddress;
+
+	char *ipAddress = sshsNodeGetString(serverNode, "ipAddress");
+	retVal = uv_ip4_addr(ipAddress, sshsNodeGetInt(serverNode, "portNumber"), &configServerAddress);
+	UV_RET_CHECK(retVal, "uv_ip4_addr", free(ipAddress); goto loopCleanup);
+	free(ipAddress);
+
+	// Main event loop for handling connections.
+	uv_loop_t configServerLoop;
+	retVal = uv_loop_init(&configServerLoop);
+	UV_RET_CHECK(retVal, "uv_loop_init", goto loopCleanup);
+	eventLoopInitialized = true;
 
 	// Open a TCP server socket for configuration handling.
 	// TCP chosen for reliability, which is more important here than speed.
-	int configServerSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (configServerSocket < 0) {
-		caerLog(CAER_LOG_CRITICAL, "Config Server", "Could not create server socket. Error: %d.", errno);
-		return (EXIT_FAILURE);
-	}
-
-	// Make socket address reusable right away.
-	// TODO: evutil_make_listen_socket_reuseable(configServerSocket);
-
-	struct sockaddr_in configServerAddress;
-	memset(&configServerAddress, 0, sizeof(struct sockaddr_in));
-
-	configServerAddress.sin_family = AF_INET;
-	configServerAddress.sin_port = htons(U16T(sshsNodeGetInt(serverNode, "portNumber")));
-
-	char *ipAddress = sshsNodeGetString(serverNode, "ipAddress");
-	if (inet_pton(AF_INET, ipAddress, &configServerAddress.sin_addr) == 0) {
-		caerLog(CAER_LOG_CRITICAL, "Config Server", "No valid IP address found. '%s' is invalid!", ipAddress);
-
-		free(ipAddress);
-		return (EXIT_FAILURE);
-	}
-	free(ipAddress);
+	uv_tcp_t configServerTCP;
+	retVal = uv_tcp_init(&configServerLoop, &configServerTCP);
+	UV_RET_CHECK(retVal, "uv_tcp_init", goto loopCleanup);
+	tcpServerInitialized = true;
 
 	// Bind socket to above address.
-	if (bind(configServerSocket, (struct sockaddr *) &configServerAddress, sizeof(struct sockaddr_in)) < 0) {
-		caerLog(CAER_LOG_CRITICAL, "Config Server", "Could not bind server socket. Error: %d.", errno);
-		return (EXIT_FAILURE);
-	}
+	retVal = uv_tcp_bind(&configServerTCP, (struct sockaddr *) &configServerAddress, 0);
+	UV_RET_CHECK(retVal, "uv_tcp_bind", goto loopCleanup);
 
 	// Listen to new connections on the socket.
-	if (listen(configServerSocket, sshsNodeGetShort(serverNode, "backlogSize")) < 0) {
-		caerLog(CAER_LOG_CRITICAL, "Config Server", "Could not listen on server socket. Error: %d.", errno);
-		return (EXIT_FAILURE);
+	retVal = uv_listen((uv_stream_t *) &configServerTCP, sshsNodeGetShort(serverNode, "backlogSize"),
+		&configServerConnection);
+	UV_RET_CHECK(retVal, "uv_listen", goto loopCleanup);
+
+	// Run event loop.
+	retVal = uv_run(&configServerLoop, UV_RUN_DEFAULT);
+	UV_RET_CHECK(retVal, "uv_run", goto loopCleanup);
+
+	// Cleanup event loop and memory.
+	loopCleanup: {
+		bool errorCleanup = (retVal < 0);
+
+		if (tcpServerInitialized) {
+			uv_close((uv_handle_t *) &configServerTCP, NULL);
+		}
+
+		if (eventLoopInitialized) {
+			retVal = uv_loop_close(&configServerLoop);
+			UV_RET_CHECK(retVal, "uv_loop_close",);
+		}
+
+		if (errorCleanup) {
+			return (EXIT_FAILURE);
+		}
+		else {
+			return (EXIT_SUCCESS);
+		}
 	}
+}
 
-	// Control message format: 1 byte ACTION, 1 byte TYPE, 2 bytes EXTRA_LEN,
-	// 2 bytes NODE_LEN, 2 bytes KEY_LEN, 2 bytes VALUE_LEN, then up to 4086
-	// bytes split between EXTRA, NODE, KEY, VALUE (with 4 bytes for NUL).
-	// Basically: (EXTRA_LEN + NODE_LEN + KEY_LEN + VALUE_LEN) <= 4086.
-	// EXTRA, NODE, KEY, VALUE have to be NUL terminated, and their length
-	// must include the NUL termination byte.
-	// This results in a maximum message size of 4096 bytes (4KB).
-	uint8_t configServerBuffer[4096];
+static void caerConfigServerGetData() {
+	// Accepted client connection, let's get all the data we need: first
+	// the 10 byte header, and then whatever remains based on that.
+	if (!recvUntilDone(pollSockets[i].fd, configServerBuffer, 10)) {
+		// Closed on other side or error. Let's just close here too.
+		close(pollSockets[i].fd);
 
-	caerLog(CAER_LOG_NOTICE, "Config Server", "Ready and listening on %s:%" PRIu16 ".",
-		inet_ntop(AF_INET, &configServerAddress.sin_addr, (char[INET_ADDRSTRLEN] ) { 0x00 }, INET_ADDRSTRLEN),
-		ntohs(configServerAddress.sin_port));
-
-	size_t connections = (size_t) sshsNodeGetShort(serverNode, "concurrentConnections") + 1;// +1 for listening socket.
-
-	struct pollfd pollSockets[connections];
-
-	// Initially ignore all pollfds, and react only to POLLIN events.
-	for (size_t i = 0; i < connections; i++) {
+		caerLog(CAER_LOG_DEBUG, "Config Server", "Disconnected client on recv (fd %d).", pollSockets[i].fd);
 		pollSockets[i].fd = -1;
-		pollSockets[i].events = POLLIN;
+
+		continue;
 	}
 
-	// First pollfd is the listening socket, always.
-	pollSockets[0].fd = configServerSocket;
+	// Decode header fields (all in little-endian).
+	uint8_t action = configServerBuffer[0];
+	uint8_t type = configServerBuffer[1];
+	uint16_t extraLength = le16toh(*(uint16_t * )(configServerBuffer + 2));
+	uint16_t nodeLength = le16toh(*(uint16_t * )(configServerBuffer + 4));
+	uint16_t keyLength = le16toh(*(uint16_t * )(configServerBuffer + 6));
+	uint16_t valueLength = le16toh(*(uint16_t * )(configServerBuffer + 8));
 
-	while (atomic_load_explicit(&configServerThread.running, memory_order_relaxed)) {
-		int pollResult = poll(pollSockets, (nfds_t) connections, 1000);
+	// Total length to get for command.
+	size_t readLength = (size_t) (extraLength + nodeLength + keyLength + valueLength);
 
-		if (pollResult > 0) {
-			// First let's check if there's a new connection waiting to be accepted.
-			if ((pollSockets[0].revents & POLLIN) != 0) {
-				int newClientSocket = accept(pollSockets[0].fd, NULL, NULL);
+	if (!recvUntilDone(pollSockets[i].fd, configServerBuffer + 10, readLength)) {
+		// Closed on other side or error. Let's just close here too.
+		close(pollSockets[i].fd);
 
-				if (newClientSocket >= 0) {
-					// Put it in the list of watched fds if possible, or close.
-					bool putInFDList = false;
+		caerLog(CAER_LOG_DEBUG, "Config Server", "Disconnected client on recv (fd %d).", pollSockets[i].fd);
+		pollSockets[i].fd = -1;
 
-					for (size_t i = 1; i < connections; i++) {
-						if (pollSockets[i].fd == -1) {
-							// Empty place in watch list, add this one.
-							pollSockets[i].fd = newClientSocket;
-							putInFDList = true;
-							break;
-						}
-					}
-
-					// No space for new connection, just close it (client will exit).
-					if (!putInFDList) {
-						close(newClientSocket);
-						caerLog(CAER_LOG_DEBUG, "Config Server", "Rejected client (fd %d), queue full.",
-							newClientSocket);
-					}
-					else {
-						caerLog(CAER_LOG_DEBUG, "Config Server", "Accepted new connection from client (fd %d).",
-							newClientSocket);
-					}
-				}
-			}
-
-			for (size_t i = 1; i < connections; i++) {
-				// Work on existing connections, valid and with read events.
-				if (pollSockets[i].fd != -1 && (pollSockets[i].revents & POLLIN) != 0) {
-					// Accepted client connection, let's get all the data we need: first
-					// the 10 byte header, and then whatever remains based on that.
-					if (!recvUntilDone(pollSockets[i].fd, configServerBuffer, 10)) {
-						// Closed on other side or error. Let's just close here too.
-						close(pollSockets[i].fd);
-
-						caerLog(CAER_LOG_DEBUG, "Config Server", "Disconnected client on recv (fd %d).",
-							pollSockets[i].fd);
-						pollSockets[i].fd = -1;
-
-						continue;
-					}
-
-					// Decode header fields (all in little-endian).
-					uint8_t action = configServerBuffer[0];
-					uint8_t type = configServerBuffer[1];
-					uint16_t extraLength = le16toh(*(uint16_t * )(configServerBuffer + 2));
-					uint16_t nodeLength = le16toh(*(uint16_t * )(configServerBuffer + 4));
-					uint16_t keyLength = le16toh(*(uint16_t * )(configServerBuffer + 6));
-					uint16_t valueLength = le16toh(*(uint16_t * )(configServerBuffer + 8));
-
-					// Total length to get for command.
-					size_t readLength = (size_t) (extraLength + nodeLength + keyLength + valueLength);
-
-					if (!recvUntilDone(pollSockets[i].fd, configServerBuffer + 10, readLength)) {
-						// Closed on other side or error. Let's just close here too.
-						close(pollSockets[i].fd);
-
-						caerLog(CAER_LOG_DEBUG, "Config Server", "Disconnected client on recv (fd %d).",
-							pollSockets[i].fd);
-						pollSockets[i].fd = -1;
-
-						continue;
-					}
-
-					// Now we have everything. The header fields are already
-					// fully decoded: handle request (and send back data eventually).
-					caerConfigServerHandleRequest(pollSockets[i].fd, action, type, configServerBuffer + 10, extraLength,
-						configServerBuffer + 10 + extraLength, nodeLength,
-						configServerBuffer + 10 + extraLength + nodeLength, keyLength,
-						configServerBuffer + 10 + extraLength + nodeLength + keyLength, valueLength);
-				}
-			}
-		}
-		else if (pollResult < 0) {
-			caerLog(CAER_LOG_ALERT, "Config Server", "poll() failed. Error: %d.", errno);
-		}
-		// pollResult == 0 just means nothing to do (timeout reached).
+		continue;
 	}
 
-	// Shutdown!
-	close(configServerSocket);
-
-	return (EXIT_SUCCESS);
+	// Now we have everything. The header fields are already
+	// fully decoded: handle request (and send back data eventually).
+	caerConfigServerHandleRequest(pollSockets[i].fd, action, type, configServerBuffer + 10, extraLength,
+		configServerBuffer + 10 + extraLength, nodeLength, configServerBuffer + 10 + extraLength + nodeLength,
+		keyLength, configServerBuffer + 10 + extraLength + nodeLength + keyLength, valueLength);
 }
 
 // The response from the server follows a simplified version of the request
@@ -251,6 +323,7 @@ static inline void caerConfigSendError(int connectedClientSocket, const char *er
 	memcpy(response + 4, errorMsg, errorMsgLength);
 	response[4 + errorMsgLength] = '\0';
 
+	// TODO: use libuv write.
 	if (!sendUntilDone(connectedClientSocket, response, responseLength)) {
 		// Error on send. Log for now.
 		caerLog(CAER_LOG_DEBUG, "Config Server", "Disconnected client on send (fd %d).", connectedClientSocket);
@@ -271,6 +344,7 @@ static inline void caerConfigSendResponse(int connectedClientSocket, uint8_t act
 	memcpy(response + 4, msg, msgLength);
 	// Msg must already be NUL terminated!
 
+	// TODO: use libuv write.
 	if (!sendUntilDone(connectedClientSocket, response, responseLength)) {
 		// Error on send. Log for now.
 		caerLog(CAER_LOG_DEBUG, "Config Server", "Disconnected client on send (fd %d).", connectedClientSocket);
