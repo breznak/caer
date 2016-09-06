@@ -1,13 +1,8 @@
 #include "config_server.h"
 #include <stdatomic.h>
 #include <unistd.h>
-#include <poll.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include "ext/nets.h"
-#include "ext/buffers.h"
 #include <uv.h>
+#include "ext/buffers.h"
 
 #ifdef HAVE_PTHREADS
 #include "ext/c11threads_posix.h"
@@ -17,6 +12,7 @@
 
 static struct {
 	atomic_bool running;
+	uv_async_t asyncShutdown;
 	thrd_t thread;
 } configServerThread;
 
@@ -26,9 +22,6 @@ static void caerConfigServerHandleRequest(uv_stream_t *client, uint8_t action, u
 	const uint8_t *value, size_t valueLength);
 
 void caerConfigServerStart(void) {
-	// Enable the configuration server thread.
-	atomic_store(&configServerThread.running, true);
-
 	// Start the thread.
 	if ((errno = thrd_create(&configServerThread.thread, &caerConfigServerRunner, NULL)) == thrd_success) {
 		// Successfully started thread.
@@ -43,12 +36,12 @@ void caerConfigServerStart(void) {
 
 void caerConfigServerStop(void) {
 	// Only execute if the server thread was actually started.
-	if (!atomic_load_explicit(&configServerThread.running, memory_order_relaxed)) {
+	if (!atomic_load(&configServerThread.running)) {
 		return;
 	}
 
-	// Disable the configuration server thread first.
-	atomic_store(&configServerThread.running, false);
+	// Disable the configuration server thread.
+	uv_async_send(&configServerThread.asyncShutdown);
 
 	// Then wait on it to finish.
 	if ((errno = thrd_join(configServerThread.thread, NULL)) == thrd_success) {
@@ -90,6 +83,7 @@ static void configServerRead(uv_stream_t *client, ssize_t nread, const uv_buf_t 
 static void configServerShutdown(uv_shutdown_t *clientShutdown, int status);
 static void configServerClose(uv_handle_t *client);
 static void configServerWrite(uv_write_t *clientWrite, int status);
+static void configServerAsyncShutdown(uv_async_t *asyncShutdown);
 
 static void configServerConnection(uv_stream_t *server, int status) {
 	UV_RET_CHECK(status, "Connection", return);
@@ -239,6 +233,10 @@ static void configServerWrite(uv_write_t *clientWrite, int status) {
 	UV_RET_CHECK(status, "AfterWrite", return);
 }
 
+static void configServerAsyncShutdown(uv_async_t *asyncShutdown) {
+	uv_stop(asyncShutdown->loop);
+}
+
 static int caerConfigServerRunner(void *inPtr) {
 	UNUSED_ARGUMENT(inPtr);
 
@@ -257,19 +255,16 @@ static int caerConfigServerRunner(void *inPtr) {
 	bool eventLoopInitialized = false;
 	bool tcpServerInitialized = false;
 
-	// Generate address.
-	struct sockaddr_in configServerAddress;
-
-	char *ipAddress = sshsNodeGetString(serverNode, "ipAddress");
-	retVal = uv_ip4_addr(ipAddress, sshsNodeGetInt(serverNode, "portNumber"), &configServerAddress);
-	UV_RET_CHECK(retVal, "uv_ip4_addr", free(ipAddress); goto loopCleanup);
-	free(ipAddress);
-
 	// Main event loop for handling connections.
 	uv_loop_t configServerLoop;
 	retVal = uv_loop_init(&configServerLoop);
 	UV_RET_CHECK(retVal, "uv_loop_init", goto loopCleanup);
 	eventLoopInitialized = true;
+
+	// Initialize async callback to stop the event loop on termination.
+	retVal = uv_async_init(&configServerLoop, &configServerThread.asyncShutdown, &configServerAsyncShutdown);
+	UV_RET_CHECK(retVal, "uv_async_init", goto loopCleanup);
+	atomic_store(&configServerThread.running, true);
 
 	// Open a TCP server socket for configuration handling.
 	// TCP chosen for reliability, which is more important here than speed.
@@ -277,6 +272,14 @@ static int caerConfigServerRunner(void *inPtr) {
 	retVal = uv_tcp_init(&configServerLoop, &configServerTCP);
 	UV_RET_CHECK(retVal, "uv_tcp_init", goto loopCleanup);
 	tcpServerInitialized = true;
+
+	// Generate address.
+	struct sockaddr_in configServerAddress;
+
+	char *ipAddress = sshsNodeGetString(serverNode, "ipAddress");
+	retVal = uv_ip4_addr(ipAddress, sshsNodeGetInt(serverNode, "portNumber"), &configServerAddress);
+	UV_RET_CHECK(retVal, "uv_ip4_addr", free(ipAddress); goto loopCleanup);
+	free(ipAddress);
 
 	// Bind socket to above address.
 	retVal = uv_tcp_bind(&configServerTCP, (struct sockaddr *) &configServerAddress, 0);
@@ -299,10 +302,17 @@ static int caerConfigServerRunner(void *inPtr) {
 			uv_close((uv_handle_t *) &configServerTCP, NULL);
 		}
 
+		if (atomic_load(&configServerThread.running)) {
+			uv_close((uv_handle_t *) &configServerThread.asyncShutdown, NULL);
+		}
+
 		if (eventLoopInitialized) {
 			retVal = uv_loop_close(&configServerLoop);
 			UV_RET_CHECK(retVal, "uv_loop_close",);
 		}
+
+		// Mark the configuration server thread as stopped.
+		atomic_store(&configServerThread.running, false);
 
 		if (errorCleanup) {
 			return (EXIT_FAILURE);
