@@ -21,7 +21,7 @@ static struct {
 } configServerThread;
 
 static int caerConfigServerRunner(void *inPtr);
-static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t action, uint8_t type, const uint8_t *extra,
+static void caerConfigServerHandleRequest(uv_stream_t *client, uint8_t action, uint8_t type, const uint8_t *extra,
 	size_t extraLength, const uint8_t *node, size_t nodeLength, const uint8_t *key, size_t keyLength,
 	const uint8_t *value, size_t valueLength);
 
@@ -70,6 +70,7 @@ void caerConfigServerStop(void) {
 // must include the NUL termination byte.
 // This results in a maximum message size of 4096 bytes (4KB).
 #define CONFIG_SERVER_BUFFER_SIZE 4096
+#define CONFIG_HEADER_LENGTH 10
 
 #define UV_RET_CHECK(RET_VAL, FUNC_NAME, CLEANUP_ACTIONS) \
 	if (RET_VAL < 0) { \
@@ -78,11 +79,17 @@ void caerConfigServerStop(void) {
 		CLEANUP_ACTIONS; \
 	}
 
+struct writeBuf {
+	uv_buf_t buf;
+	uint8_t dataBuf[];
+};
+
 static void configServerConnection(uv_stream_t *server, int status);
 static void configServerAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf);
 static void configServerRead(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf);
 static void configServerShutdown(uv_shutdown_t *clientShutdown, int status);
 static void configServerClose(uv_handle_t *client);
+static void configServerWrite(uv_write_t *clientWrite, int status);
 
 static void configServerConnection(uv_stream_t *server, int status) {
 	UV_RET_CHECK(status, "Connection", return);
@@ -147,6 +154,8 @@ static void configServerAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_
 }
 
 static void configServerRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf_t *buf) {
+	UNUSED_ARGUMENT(buf); // Use our own buffer directly.
+
 	// sizeRead < 0: Error or EndOfFile (EOF).
 	if (sizeRead < 0) {
 		if (sizeRead == UV_EOF) {
@@ -161,31 +170,73 @@ static void configServerRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf
 		uv_shutdown_t *clientShutdown = malloc(sizeof(*clientShutdown));
 		if (clientShutdown == NULL) {
 			caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client shutdown.");
+
+			// Hard close.
+			uv_close((uv_handle_t *) client, &configServerClose);
 			return;
 		}
 
 		int retVal = uv_shutdown(clientShutdown, client, &configServerShutdown);
-		UV_RET_CHECK(retVal, "uv_shutdown", free(clientShutdown));
+		UV_RET_CHECK(retVal, "uv_shutdown", free(clientShutdown); uv_close((uv_handle_t *) client, &configServerClose));
 	}
 
 	// sizeRead == 0: EAGAIN, do nothing.
 
 	// sizeRead > 0: received data.
 	if (sizeRead > 0) {
-		// TODO: read and process data.
+		simpleBuffer dataBuf = client->data;
+
+		// Update main client buffer with just read data.
+		dataBuf->bufferUsedSize += (size_t) sizeRead;
+
+		// If we have enough data, we start parsing the lengths.
+		// The main header is 10 bytes.
+		if (dataBuf->bufferUsedSize >= CONFIG_HEADER_LENGTH) {
+			// Decode length header fields (all in little-endian).
+			uint16_t extraLength = le16toh(*(uint16_t * )(dataBuf->buffer + 2));
+			uint16_t nodeLength = le16toh(*(uint16_t * )(dataBuf->buffer + 4));
+			uint16_t keyLength = le16toh(*(uint16_t * )(dataBuf->buffer + 6));
+			uint16_t valueLength = le16toh(*(uint16_t * )(dataBuf->buffer + 8));
+
+			// Total length to get for command.
+			size_t readLength = (size_t) (extraLength + nodeLength + keyLength + valueLength);
+
+			if (dataBuf->bufferUsedSize >= (CONFIG_HEADER_LENGTH + readLength)) {
+				// Decode remaining header fields.
+				uint8_t action = dataBuf->buffer[0];
+				uint8_t type = dataBuf->buffer[1];
+
+				// Now we have everything. The header fields are already
+				// fully decoded: handle request (and send back data eventually).
+				caerConfigServerHandleRequest(client, action, type, dataBuf->buffer + CONFIG_HEADER_LENGTH, extraLength,
+					dataBuf->buffer + CONFIG_HEADER_LENGTH + extraLength, nodeLength,
+					dataBuf->buffer + CONFIG_HEADER_LENGTH + extraLength + nodeLength, keyLength,
+					dataBuf->buffer + CONFIG_HEADER_LENGTH + extraLength + nodeLength + keyLength, valueLength);
+
+				// Reset buffer for next request.
+				dataBuf->bufferUsedSize = 0;
+			}
+		}
 	}
 }
 
 static void configServerShutdown(uv_shutdown_t *clientShutdown, int status) {
-	UV_RET_CHECK(status, "Shutdown", return);
-
 	uv_close((uv_handle_t *) clientShutdown->handle, &configServerClose);
 	free(clientShutdown);
+
+	UV_RET_CHECK(status, "AfterShutdown", return);
 }
 
 static void configServerClose(uv_handle_t *client) {
 	free(client->data);
 	free(client);
+}
+
+static void configServerWrite(uv_write_t *clientWrite, int status) {
+	free(clientWrite->data);
+	free(clientWrite);
+
+	UV_RET_CHECK(status, "AfterWrite", return);
 }
 
 static int caerConfigServerRunner(void *inPtr) {
@@ -262,47 +313,6 @@ static int caerConfigServerRunner(void *inPtr) {
 	}
 }
 
-static void caerConfigServerGetData() {
-	// Accepted client connection, let's get all the data we need: first
-	// the 10 byte header, and then whatever remains based on that.
-	if (!recvUntilDone(pollSockets[i].fd, configServerBuffer, 10)) {
-		// Closed on other side or error. Let's just close here too.
-		close(pollSockets[i].fd);
-
-		caerLog(CAER_LOG_DEBUG, "Config Server", "Disconnected client on recv (fd %d).", pollSockets[i].fd);
-		pollSockets[i].fd = -1;
-
-		continue;
-	}
-
-	// Decode header fields (all in little-endian).
-	uint8_t action = configServerBuffer[0];
-	uint8_t type = configServerBuffer[1];
-	uint16_t extraLength = le16toh(*(uint16_t * )(configServerBuffer + 2));
-	uint16_t nodeLength = le16toh(*(uint16_t * )(configServerBuffer + 4));
-	uint16_t keyLength = le16toh(*(uint16_t * )(configServerBuffer + 6));
-	uint16_t valueLength = le16toh(*(uint16_t * )(configServerBuffer + 8));
-
-	// Total length to get for command.
-	size_t readLength = (size_t) (extraLength + nodeLength + keyLength + valueLength);
-
-	if (!recvUntilDone(pollSockets[i].fd, configServerBuffer + 10, readLength)) {
-		// Closed on other side or error. Let's just close here too.
-		close(pollSockets[i].fd);
-
-		caerLog(CAER_LOG_DEBUG, "Config Server", "Disconnected client on recv (fd %d).", pollSockets[i].fd);
-		pollSockets[i].fd = -1;
-
-		continue;
-	}
-
-	// Now we have everything. The header fields are already
-	// fully decoded: handle request (and send back data eventually).
-	caerConfigServerHandleRequest(pollSockets[i].fd, action, type, configServerBuffer + 10, extraLength,
-		configServerBuffer + 10 + extraLength, nodeLength, configServerBuffer + 10 + extraLength + nodeLength,
-		keyLength, configServerBuffer + 10 + extraLength + nodeLength + keyLength, valueLength);
-}
-
 // The response from the server follows a simplified version of the request
 // protocol. A byte for ACTION, a byte for TYPE, 2 bytes for MSG_LEN and then
 // up to 4092 bytes of MSG, for a maximum total of 4096 bytes again.
@@ -311,51 +321,78 @@ static inline void setMsgLen(uint8_t *buf, uint16_t msgLen) {
 	*((uint16_t *) (buf + 2)) = htole16(msgLen);
 }
 
-static inline void caerConfigSendError(int connectedClientSocket, const char *errorMsg) {
+static inline void caerConfigSendError(uv_stream_t *client, const char *errorMsg) {
 	size_t errorMsgLength = strlen(errorMsg);
-
 	size_t responseLength = 4 + errorMsgLength + 1; // +1 for terminating NUL byte.
-	uint8_t response[responseLength];
 
-	response[0] = CAER_CONFIG_ERROR;
-	response[1] = SSHS_STRING;
-	setMsgLen(response, (uint16_t) (errorMsgLength + 1));
-	memcpy(response + 4, errorMsg, errorMsgLength);
-	response[4 + errorMsgLength] = '\0';
-
-	// TODO: use libuv write.
-	if (!sendUntilDone(connectedClientSocket, response, responseLength)) {
-		// Error on send. Log for now.
-		caerLog(CAER_LOG_DEBUG, "Config Server", "Disconnected client on send (fd %d).", connectedClientSocket);
+	struct writeBuf *response = malloc(sizeof(*response) + responseLength);
+	if (response == NULL) {
+		caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client error response.");
 		return;
 	}
+
+	response->buf.base = (char *) response->dataBuf;
+	response->buf.len = responseLength;
+
+	response->dataBuf[0] = CAER_CONFIG_ERROR;
+	response->dataBuf[1] = SSHS_STRING;
+	setMsgLen(response->dataBuf, (uint16_t) (errorMsgLength + 1));
+	memcpy(response->dataBuf + 4, errorMsg, errorMsgLength);
+	response->dataBuf[4 + errorMsgLength] = '\0';
+
+	uv_write_t *clientWrite = malloc(sizeof(*clientWrite));
+	if (clientWrite == NULL) {
+		free(response);
+
+		caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client error write.");
+		return;
+	}
+
+	clientWrite->data = response;
+
+	int retVal = uv_write(clientWrite, client, &response->buf, 1, &configServerWrite);
+	UV_RET_CHECK(retVal, "uv_write", free(response); free(clientWrite));
 
 	caerLog(CAER_LOG_DEBUG, "Config Server", "Sent back error message '%s' to client.", errorMsg);
 }
 
-static inline void caerConfigSendResponse(int connectedClientSocket, uint8_t action, uint8_t type, const uint8_t *msg,
+static inline void caerConfigSendResponse(uv_stream_t *client, uint8_t action, uint8_t type, const uint8_t *msg,
 	size_t msgLength) {
 	size_t responseLength = 4 + msgLength;
-	uint8_t response[responseLength];
 
-	response[0] = action;
-	response[1] = type;
-	setMsgLen(response, (uint16_t) msgLength);
-	memcpy(response + 4, msg, msgLength);
-	// Msg must already be NUL terminated!
-
-	// TODO: use libuv write.
-	if (!sendUntilDone(connectedClientSocket, response, responseLength)) {
-		// Error on send. Log for now.
-		caerLog(CAER_LOG_DEBUG, "Config Server", "Disconnected client on send (fd %d).", connectedClientSocket);
+	struct writeBuf *response = malloc(sizeof(*response) + responseLength);
+	if (response == NULL) {
+		caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client response.");
 		return;
 	}
+
+	response->buf.base = (char *) response->dataBuf;
+	response->buf.len = responseLength;
+
+	response->dataBuf[0] = action;
+	response->dataBuf[1] = type;
+	setMsgLen(response->dataBuf, (uint16_t) msgLength);
+	memcpy(response->dataBuf + 4, msg, msgLength);
+	// Msg must already be NUL terminated!
+
+	uv_write_t *clientWrite = malloc(sizeof(*clientWrite));
+	if (clientWrite == NULL) {
+		free(response);
+
+		caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client write.");
+		return;
+	}
+
+	clientWrite->data = response;
+
+	int retVal = uv_write(clientWrite, client, &response->buf, 1, &configServerWrite);
+	UV_RET_CHECK(retVal, "uv_write", free(response); free(clientWrite));
 
 	caerLog(CAER_LOG_DEBUG, "Config Server",
 		"Sent back message to client: action=%" PRIu8 ", type=%" PRIu8 ", msgLength=%zu.", action, type, msgLength);
 }
 
-static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t action, uint8_t type, const uint8_t *extra,
+static void caerConfigServerHandleRequest(uv_stream_t *client, uint8_t action, uint8_t type, const uint8_t *extra,
 	size_t extraLength, const uint8_t *node, size_t nodeLength, const uint8_t *key, size_t keyLength,
 	const uint8_t *value, size_t valueLength) {
 	UNUSED_ARGUMENT(extra);
@@ -375,8 +412,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			// Send back result to client. Format is the same as incoming data.
 			const uint8_t *sendResult = (const uint8_t *) ((result) ? ("true") : ("false"));
 			size_t sendResultLength = (result) ? (5) : (6);
-			caerConfigSendResponse(connectedClientSocket, CAER_CONFIG_NODE_EXISTS, SSHS_BOOL, sendResult,
-				sendResultLength);
+			caerConfigSendResponse(client, CAER_CONFIG_NODE_EXISTS, SSHS_BOOL, sendResult, sendResultLength);
 
 			break;
 		}
@@ -388,8 +424,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			// control, so we only manipulate what's already there!
 			if (!nodeExists) {
 				// Send back error message to client.
-				caerConfigSendError(connectedClientSocket,
-					"Node doesn't exist. Operations are only allowed on existing data.");
+				caerConfigSendError(client, "Node doesn't exist. Operations are only allowed on existing data.");
 
 				break;
 			}
@@ -403,8 +438,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			// Send back result to client. Format is the same as incoming data.
 			const uint8_t *sendResult = (const uint8_t *) ((result) ? ("true") : ("false"));
 			size_t sendResultLength = (result) ? (5) : (6);
-			caerConfigSendResponse(connectedClientSocket, CAER_CONFIG_ATTR_EXISTS, SSHS_BOOL, sendResult,
-				sendResultLength);
+			caerConfigSendResponse(client, CAER_CONFIG_ATTR_EXISTS, SSHS_BOOL, sendResult, sendResultLength);
 
 			break;
 		}
@@ -416,8 +450,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			// control, so we only manipulate what's already there!
 			if (!nodeExists) {
 				// Send back error message to client.
-				caerConfigSendError(connectedClientSocket,
-					"Node doesn't exist. Operations are only allowed on existing data.");
+				caerConfigSendError(client, "Node doesn't exist. Operations are only allowed on existing data.");
 
 				break;
 			}
@@ -430,7 +463,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 
 			if (!attrExists) {
 				// Send back error message to client.
-				caerConfigSendError(connectedClientSocket,
+				caerConfigSendError(client,
 					"Attribute of given type doesn't exist. Operations are only allowed on existing data.");
 
 				break;
@@ -442,10 +475,10 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 
 			if (resultStr == NULL) {
 				// Send back error message to client.
-				caerConfigSendError(connectedClientSocket, "Failed to allocate memory for value string.");
+				caerConfigSendError(client, "Failed to allocate memory for value string.");
 			}
 			else {
-				caerConfigSendResponse(connectedClientSocket, CAER_CONFIG_GET, type, (const uint8_t *) resultStr,
+				caerConfigSendResponse(client, CAER_CONFIG_GET, type, (const uint8_t *) resultStr,
 					strlen(resultStr) + 1);
 
 				free(resultStr);
@@ -467,8 +500,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			// control, so we only manipulate what's already there!
 			if (!nodeExists) {
 				// Send back error message to client.
-				caerConfigSendError(connectedClientSocket,
-					"Node doesn't exist. Operations are only allowed on existing data.");
+				caerConfigSendError(client, "Node doesn't exist. Operations are only allowed on existing data.");
 
 				break;
 			}
@@ -481,7 +513,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 
 			if (!attrExists) {
 				// Send back error message to client.
-				caerConfigSendError(connectedClientSocket,
+				caerConfigSendError(client,
 					"Attribute of given type doesn't exist. Operations are only allowed on existing data.");
 
 				break;
@@ -491,13 +523,13 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			const char *typeStr = sshsHelperTypeToStringConverter(type);
 			if (!sshsNodeStringToNodeConverter(wantedNode, (const char *) key, typeStr, (const char *) value)) {
 				// Send back error message to client.
-				caerConfigSendError(connectedClientSocket, "Impossible to convert value according to type.");
+				caerConfigSendError(client, "Impossible to convert value according to type.");
 
 				break;
 			}
 
 			// Send back confirmation to the client.
-			caerConfigSendResponse(connectedClientSocket, CAER_CONFIG_PUT, SSHS_BOOL, (const uint8_t *) "true", 5);
+			caerConfigSendResponse(client, CAER_CONFIG_PUT, SSHS_BOOL, (const uint8_t *) "true", 5);
 
 			break;
 		}
@@ -509,8 +541,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			// control, so we only manipulate what's already there!
 			if (!nodeExists) {
 				// Send back error message to client.
-				caerConfigSendError(connectedClientSocket,
-					"Node doesn't exist. Operations are only allowed on existing data.");
+				caerConfigSendError(client, "Node doesn't exist. Operations are only allowed on existing data.");
 
 				break;
 			}
@@ -525,7 +556,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			// No children at all, return empty.
 			if (childNames == NULL) {
 				// Send back error message to client.
-				caerConfigSendError(connectedClientSocket, "Node has no children.");
+				caerConfigSendError(client, "Node has no children.");
 
 				break;
 			}
@@ -547,8 +578,8 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 				acc += len;
 			}
 
-			caerConfigSendResponse(connectedClientSocket, CAER_CONFIG_GET_CHILDREN, SSHS_STRING,
-				(const uint8_t *) namesBuffer, namesLength);
+			caerConfigSendResponse(client, CAER_CONFIG_GET_CHILDREN, SSHS_STRING, (const uint8_t *) namesBuffer,
+				namesLength);
 
 			break;
 		}
@@ -560,8 +591,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			// control, so we only manipulate what's already there!
 			if (!nodeExists) {
 				// Send back error message to client.
-				caerConfigSendError(connectedClientSocket,
-					"Node doesn't exist. Operations are only allowed on existing data.");
+				caerConfigSendError(client, "Node doesn't exist. Operations are only allowed on existing data.");
 
 				break;
 			}
@@ -576,7 +606,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			// No attributes at all, return empty.
 			if (attrKeys == NULL) {
 				// Send back error message to client.
-				caerConfigSendError(connectedClientSocket, "Node has no attributes.");
+				caerConfigSendError(client, "Node has no attributes.");
 
 				break;
 			}
@@ -598,8 +628,8 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 				acc += len;
 			}
 
-			caerConfigSendResponse(connectedClientSocket, CAER_CONFIG_GET_ATTRIBUTES, SSHS_STRING,
-				(const uint8_t *) keysBuffer, keysLength);
+			caerConfigSendResponse(client, CAER_CONFIG_GET_ATTRIBUTES, SSHS_STRING, (const uint8_t *) keysBuffer,
+				keysLength);
 
 			break;
 		}
@@ -611,8 +641,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			// control, so we only manipulate what's already there!
 			if (!nodeExists) {
 				// Send back error message to client.
-				caerConfigSendError(connectedClientSocket,
-					"Node doesn't exist. Operations are only allowed on existing data.");
+				caerConfigSendError(client, "Node doesn't exist. Operations are only allowed on existing data.");
 
 				break;
 			}
@@ -628,7 +657,7 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 			// No attributes for specified key, return empty.
 			if (attrTypes == NULL) {
 				// Send back error message to client.
-				caerConfigSendError(connectedClientSocket, "Node has no attributes with specified key.");
+				caerConfigSendError(client, "Node has no attributes with specified key.");
 
 				break;
 			}
@@ -652,15 +681,15 @@ static void caerConfigServerHandleRequest(int connectedClientSocket, uint8_t act
 				acc += len;
 			}
 
-			caerConfigSendResponse(connectedClientSocket, CAER_CONFIG_GET_TYPES, SSHS_STRING,
-				(const uint8_t *) typesBuffer, typesLength);
+			caerConfigSendResponse(client, CAER_CONFIG_GET_TYPES, SSHS_STRING, (const uint8_t *) typesBuffer,
+				typesLength);
 
 			break;
 		}
 
 		default:
 			// Unknown action, send error back to client.
-			caerConfigSendError(connectedClientSocket, "Unknown action.");
+			caerConfigSendError(client, "Unknown action.");
 
 			break;
 	}
