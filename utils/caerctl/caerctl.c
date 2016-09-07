@@ -12,17 +12,11 @@
 #include <inttypes.h>
 #include <string.h>
 #include <strings.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <pwd.h>
+#include "ext/libuv.h"
 #include "ext/sshs/sshs.h"
-#include "ext/nets.h"
-#include "ext/portable_misc.h"
 #include "base/config_server.h"
 #include "utils/ext/linenoise/linenoise.h"
 

@@ -4,10 +4,7 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <string.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include "ext/nets.h"
+#include "ext/libuv.h"
 
 #include <libcaer/events/common.h>
 

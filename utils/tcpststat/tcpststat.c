@@ -1,21 +1,10 @@
-/*
- * tcpststat.c
- *
- *  Created on: Jan 19, 2014
- *      Author: llongi
- */
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <string.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include "ext/nets.h"
+#include "ext/libuv.h"
 
 #include <libcaer/events/common.h>
 
