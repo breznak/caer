@@ -2,7 +2,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include "ext/libuv.h"
+#include <unistd.h>
+#include "ext/portable_misc.h"
 
 int CAER_LOG_FILE_FD = -1;
 
