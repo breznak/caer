@@ -37,11 +37,15 @@ static inline bool simpleBufferFileWrite(uv_loop_t *loop, uv_file file, int64_t 
 		writeBuffer.base = (char *) buffer->buffer + buffer->bufferPosition + curWritten;
 		writeBuffer.len = bytesToWrite - curWritten;
 
-		retVal = uv_fs_write(loop, &fileWrite, file, &writeBuffer, 1, fileOffset + I64T(curWritten), NULL);
-		UV_RET_CHECK(retVal, "libuv", "simpleBufferFileWrite", break);
+		retVal = uv_fs_write(loop, &fileWrite, file, &writeBuffer, 1, fileOffset + (int64_t) curWritten, NULL);
+		if (retVal < 0) {
+			errno = retVal;
+			break;
+		}
 
 		if (fileWrite.result < 0) {
 			// Error.
+			errno = (int) fileWrite.result;
 			break;
 		}
 		else if (fileWrite.result == 0) {
@@ -74,8 +78,11 @@ static inline bool simpleBufferFileRead(uv_loop_t *loop, uv_file file, int64_t f
 		readBuffer.base = (char *) buffer->buffer + buffer->bufferPosition + curRead;
 		readBuffer.len = bytesToRead - curRead;
 
-		retVal = uv_fs_read(loop, &fileRead, file, &readBuffer, 1, fileOffset + I64T(curRead), NULL);
-		UV_RET_CHECK(retVal, "libuv", "simpleBufferFileRead", errno = retVal; break);
+		retVal = uv_fs_read(loop, &fileRead, file, &readBuffer, 1, fileOffset + (int64_t) curRead, NULL);
+		if (retVal < 0) {
+			errno = retVal;
+			break;
+		}
 
 		if (fileRead.result < 0) {
 			// Error.
@@ -123,7 +130,7 @@ static inline libuvWriteBuf libuvWriteBufInit(size_t size) {
 }
 
 static inline void libuvCloseLoopWalk(uv_handle_t *handle, void *arg) {
-	UNUSED_ARGUMENT(arg);
+	(void) (arg);
 
 	if (!uv_is_closing(handle)) {
 		uv_close(handle, NULL);
