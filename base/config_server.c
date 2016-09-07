@@ -1,14 +1,13 @@
 #include "config_server.h"
 #include <stdatomic.h>
-#include <unistd.h>
-#include <uv.h>
-#include "ext/buffers.h"
+#include "ext/libuv.h"
 
 #ifdef HAVE_PTHREADS
 #include "ext/c11threads_posix.h"
 #endif
 
 #define CONFIG_SERVER_NAME "Config Server"
+#define UV_RET_CHECK_CS(RET_VAL, FUNC_NAME, CLEANUP_ACTIONS) UV_RET_CHECK(RET_VAL, CONFIG_SERVER_NAME, FUNC_NAME, CLEANUP_ACTIONS)
 
 static struct {
 	atomic_bool running;
@@ -65,18 +64,6 @@ void caerConfigServerStop(void) {
 #define CONFIG_SERVER_BUFFER_SIZE 4096
 #define CONFIG_HEADER_LENGTH 10
 
-#define UV_RET_CHECK(RET_VAL, FUNC_NAME, CLEANUP_ACTIONS) \
-	if (RET_VAL < 0) { \
-		caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, FUNC_NAME " failed, error %d (%s).", \
-			RET_VAL, uv_err_name(RET_VAL)); \
-		CLEANUP_ACTIONS; \
-	}
-
-struct writeBuf {
-	uv_buf_t buf;
-	uint8_t dataBuf[];
-};
-
 static void configServerConnection(uv_stream_t *server, int status);
 static void configServerAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf);
 static void configServerRead(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf);
@@ -86,7 +73,7 @@ static void configServerWrite(uv_write_t *clientWrite, int status);
 static void configServerAsyncShutdown(uv_async_t *asyncShutdown);
 
 static void configServerConnection(uv_stream_t *server, int status) {
-	UV_RET_CHECK(status, "Connection", return);
+	UV_RET_CHECK_CS(status, "Connection", return);
 
 	uv_tcp_t *tcpClient = malloc(sizeof(*tcpClient));
 	if (tcpClient == NULL) {
@@ -98,17 +85,17 @@ static void configServerConnection(uv_stream_t *server, int status) {
 	bool tcpClientInitialized = false;
 
 	retVal = uv_tcp_init(server->loop, tcpClient);
-	UV_RET_CHECK(retVal, "uv_tcp_init", goto connCleanup);
+	UV_RET_CHECK_CS(retVal, "uv_tcp_init", goto connCleanup);
 	tcpClientInitialized = true;
 
 	// We track the buffer here. Initialize to NULL.
 	tcpClient->data = NULL;
 
 	retVal = uv_accept(server, (uv_stream_t *) tcpClient);
-	UV_RET_CHECK(retVal, "uv_accept", goto connCleanup);
+	UV_RET_CHECK_CS(retVal, "uv_accept", goto connCleanup);
 
 	retVal = uv_read_start((uv_stream_t *) tcpClient, &configServerAlloc, &configServerRead);
-	UV_RET_CHECK(retVal, "uv_read_start", goto connCleanup);
+	UV_RET_CHECK_CS(retVal, "uv_read_start", goto connCleanup);
 
 	// Everything done with no errors, so no cleanup!
 	return;
@@ -171,7 +158,8 @@ static void configServerRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf
 		}
 
 		int retVal = uv_shutdown(clientShutdown, client, &configServerShutdown);
-		UV_RET_CHECK(retVal, "uv_shutdown", free(clientShutdown); uv_close((uv_handle_t *) client, &configServerClose));
+		UV_RET_CHECK_CS(retVal, "uv_shutdown",
+			free(clientShutdown); uv_close((uv_handle_t *) client, &configServerClose));
 	}
 
 	// sizeRead == 0: EAGAIN, do nothing.
@@ -218,7 +206,7 @@ static void configServerShutdown(uv_shutdown_t *clientShutdown, int status) {
 	uv_close((uv_handle_t *) clientShutdown->handle, &configServerClose);
 	free(clientShutdown);
 
-	UV_RET_CHECK(status, "AfterShutdown", return);
+	UV_RET_CHECK_CS(status, "AfterShutdown", return);
 }
 
 static void configServerClose(uv_handle_t *client) {
@@ -230,7 +218,7 @@ static void configServerWrite(uv_write_t *clientWrite, int status) {
 	free(clientWrite->data);
 	free(clientWrite);
 
-	UV_RET_CHECK(status, "AfterWrite", return);
+	UV_RET_CHECK_CS(status, "AfterWrite", return);
 }
 
 static void configServerAsyncShutdown(uv_async_t *asyncShutdown) {
@@ -258,19 +246,19 @@ static int caerConfigServerRunner(void *inPtr) {
 	// Main event loop for handling connections.
 	uv_loop_t configServerLoop;
 	retVal = uv_loop_init(&configServerLoop);
-	UV_RET_CHECK(retVal, "uv_loop_init", goto loopCleanup);
+	UV_RET_CHECK_CS(retVal, "uv_loop_init", goto loopCleanup);
 	eventLoopInitialized = true;
 
 	// Initialize async callback to stop the event loop on termination.
 	retVal = uv_async_init(&configServerLoop, &configServerThread.asyncShutdown, &configServerAsyncShutdown);
-	UV_RET_CHECK(retVal, "uv_async_init", goto loopCleanup);
+	UV_RET_CHECK_CS(retVal, "uv_async_init", goto loopCleanup);
 	atomic_store(&configServerThread.running, true);
 
 	// Open a TCP server socket for configuration handling.
 	// TCP chosen for reliability, which is more important here than speed.
 	uv_tcp_t configServerTCP;
 	retVal = uv_tcp_init(&configServerLoop, &configServerTCP);
-	UV_RET_CHECK(retVal, "uv_tcp_init", goto loopCleanup);
+	UV_RET_CHECK_CS(retVal, "uv_tcp_init", goto loopCleanup);
 	tcpServerInitialized = true;
 
 	// Generate address.
@@ -278,21 +266,21 @@ static int caerConfigServerRunner(void *inPtr) {
 
 	char *ipAddress = sshsNodeGetString(serverNode, "ipAddress");
 	retVal = uv_ip4_addr(ipAddress, sshsNodeGetInt(serverNode, "portNumber"), &configServerAddress);
-	UV_RET_CHECK(retVal, "uv_ip4_addr", free(ipAddress); goto loopCleanup);
+	UV_RET_CHECK_CS(retVal, "uv_ip4_addr", free(ipAddress); goto loopCleanup);
 	free(ipAddress);
 
 	// Bind socket to above address.
 	retVal = uv_tcp_bind(&configServerTCP, (struct sockaddr *) &configServerAddress, 0);
-	UV_RET_CHECK(retVal, "uv_tcp_bind", goto loopCleanup);
+	UV_RET_CHECK_CS(retVal, "uv_tcp_bind", goto loopCleanup);
 
 	// Listen to new connections on the socket.
 	retVal = uv_listen((uv_stream_t *) &configServerTCP, sshsNodeGetShort(serverNode, "backlogSize"),
 		&configServerConnection);
-	UV_RET_CHECK(retVal, "uv_listen", goto loopCleanup);
+	UV_RET_CHECK_CS(retVal, "uv_listen", goto loopCleanup);
 
 	// Run event loop.
 	retVal = uv_run(&configServerLoop, UV_RUN_DEFAULT);
-	UV_RET_CHECK(retVal, "uv_run", goto loopCleanup);
+	UV_RET_CHECK_CS(retVal, "uv_run", goto loopCleanup);
 
 	// Cleanup event loop and memory.
 	loopCleanup: {
@@ -306,9 +294,13 @@ static int caerConfigServerRunner(void *inPtr) {
 			uv_close((uv_handle_t *) &configServerThread.asyncShutdown, NULL);
 		}
 
+		// Cleanup all remaining handles and run until all callbacks are done.
+		retVal = libuvCloseLoopHandles(&configServerLoop);
+		UV_RET_CHECK_CS(retVal, "libuvCloseLoopHandles",);
+
 		if (eventLoopInitialized) {
 			retVal = uv_loop_close(&configServerLoop);
-			UV_RET_CHECK(retVal, "uv_loop_close",);
+			UV_RET_CHECK_CS(retVal, "uv_loop_close",);
 		}
 
 		// Mark the configuration server thread as stopped.
@@ -335,14 +327,11 @@ static inline void caerConfigSendError(uv_stream_t *client, const char *errorMsg
 	size_t errorMsgLength = strlen(errorMsg);
 	size_t responseLength = 4 + errorMsgLength + 1; // +1 for terminating NUL byte.
 
-	struct writeBuf *response = malloc(sizeof(*response) + responseLength);
+	libuvWriteBuf response = libuvWriteBufInit(responseLength);
 	if (response == NULL) {
 		caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client error response.");
 		return;
 	}
-
-	response->buf.base = (char *) response->dataBuf;
-	response->buf.len = responseLength;
 
 	response->dataBuf[0] = CAER_CONFIG_ERROR;
 	response->dataBuf[1] = SSHS_STRING;
@@ -361,7 +350,7 @@ static inline void caerConfigSendError(uv_stream_t *client, const char *errorMsg
 	clientWrite->data = response;
 
 	int retVal = uv_write(clientWrite, client, &response->buf, 1, &configServerWrite);
-	UV_RET_CHECK(retVal, "uv_write", free(response); free(clientWrite));
+	UV_RET_CHECK_CS(retVal, "uv_write", free(response); free(clientWrite));
 
 	caerLog(CAER_LOG_DEBUG, "Config Server", "Sent back error message '%s' to client.", errorMsg);
 }
@@ -370,14 +359,11 @@ static inline void caerConfigSendResponse(uv_stream_t *client, uint8_t action, u
 	size_t msgLength) {
 	size_t responseLength = 4 + msgLength;
 
-	struct writeBuf *response = malloc(sizeof(*response) + responseLength);
+	libuvWriteBuf response = libuvWriteBufInit(responseLength);
 	if (response == NULL) {
 		caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client response.");
 		return;
 	}
-
-	response->buf.base = (char *) response->dataBuf;
-	response->buf.len = responseLength;
 
 	response->dataBuf[0] = action;
 	response->dataBuf[1] = type;
@@ -396,7 +382,7 @@ static inline void caerConfigSendResponse(uv_stream_t *client, uint8_t action, u
 	clientWrite->data = response;
 
 	int retVal = uv_write(clientWrite, client, &response->buf, 1, &configServerWrite);
-	UV_RET_CHECK(retVal, "uv_write", free(response); free(clientWrite));
+	UV_RET_CHECK_CS(retVal, "uv_write", free(response); free(clientWrite));
 
 	caerLog(CAER_LOG_DEBUG, "Config Server",
 		"Sent back message to client: action=%" PRIu8 ", type=%" PRIu8 ", msgLength=%zu.", action, type, msgLength);
