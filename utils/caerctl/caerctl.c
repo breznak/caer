@@ -17,9 +17,19 @@
 #include <pwd.h>
 #include "ext/libuv.h"
 #include "ext/sshs/sshs.h"
+#include "ext/portable_misc.h"
 #include "base/config_server.h"
 #include "utils/ext/linenoise/linenoise.h"
 
+#define UV_RET_CHECK_CC(RET_VAL, FUNC_NAME, CLEANUP_ACTIONS) \
+	if (RET_VAL < 0) { \
+		fprintf(stderr, FUNC_NAME " failed, error %d (%s).\n", \
+			RET_VAL, uv_err_name(RET_VAL)); \
+		CLEANUP_ACTIONS; \
+	}
+
+static void onConnect(uv_connect_t *client, int status);
+static void handleRequest(uv_connect_t *client, int status);
 static void handleInputLine(const char *buf, size_t bufLength);
 static void handleCommandCompletion(const char *buf, linenoiseCompletions *lc);
 static void actionCompletion(const char *buf, size_t bufLength, linenoiseCompletions *lc,
@@ -42,15 +52,13 @@ static const struct {
 	const char *name;
 	size_t nameLen;
 	uint8_t code;
-} actions[] = {
-	{ "node_exists", 11, CAER_CONFIG_NODE_EXISTS },
-	{ "attr_exists", 11, CAER_CONFIG_ATTR_EXISTS },
-	{ "get", 3, CAER_CONFIG_GET },
-	{ "put", 3, CAER_CONFIG_PUT }
-};
+} actions[] = { { "node_exists", 11, CAER_CONFIG_NODE_EXISTS }, { "attr_exists", 11, CAER_CONFIG_ATTR_EXISTS }, { "get",
+	3, CAER_CONFIG_GET }, { "put", 3, CAER_CONFIG_PUT } };
 static const size_t actionsLength = sizeof(actions) / sizeof(actions[0]);
 
-static int sockFd = -1;
+static uv_stream_t *ttyIn = NULL;
+static uv_stream_t *ttyOut = NULL;
+static uv_stream_t *tcpClient = NULL;
 
 int main(int argc, char *argv[]) {
 	// First of all, parse the IP:Port we need to connect to.
@@ -71,37 +79,99 @@ int main(int argc, char *argv[]) {
 		sscanf(argv[2], "%" SCNu16, &portNumber);
 	}
 
-	// Connect to the remote cAER config server.
-	sockFd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (sockFd < 0) {
-		fprintf(stderr, "Failed to create TCP socket.\n");
-		return (EXIT_FAILURE);
-	}
-
+	// Generate address to connect to.
 	struct sockaddr_in configServerAddress;
-	memset(&configServerAddress, 0, sizeof(struct sockaddr_in));
 
-	configServerAddress.sin_family = AF_INET;
-	configServerAddress.sin_port = htons(portNumber);
-
-	if (inet_pton(AF_INET, ipAddress, &configServerAddress.sin_addr) == 0) {
-		close(sockFd);
-
-		fprintf(stderr, "No valid IP address found. '%s' is invalid!\n", ipAddress);
-		return (EXIT_FAILURE);
-	}
-
-	if (connect(sockFd, (struct sockaddr *) &configServerAddress, sizeof(struct sockaddr_in)) < 0) {
-		close(sockFd);
-
-		fprintf(stderr, "Failed to connect to remote config server.\n");
-		return (EXIT_FAILURE);
-	}
+	int retVal = uv_ip4_addr(ipAddress, portNumber, &configServerAddress);
+	UV_RET_CHECK_CC(retVal, "uv_ip4_addr", return (EXIT_FAILURE));
 
 	// Create a shell prompt with the IP:Port displayed.
 	size_t shellPromptLength = (size_t) snprintf(NULL, 0, "cAER @ %s:%" PRIu16 " >> ", ipAddress, portNumber);
 	char shellPrompt[shellPromptLength + 1]; // +1 for terminating NUL byte.
 	snprintf(shellPrompt, shellPromptLength + 1, "cAER @ %s:%" PRIu16 " >> ", ipAddress, portNumber);
+
+	// Main event loop for connection handling.
+	uv_loop_t caerctlLoop;
+	retVal = uv_loop_init(&caerctlLoop);
+	UV_RET_CHECK_CC(retVal, "uv_loop_init", return (EXIT_FAILURE));
+
+	// Initialize stdin and stdout TTYs.
+	uv_tty_t caerctlTTYInput;
+	uv_tty_init(&caerctlLoop, &caerctlTTYInput, 0, true);
+	UV_RET_CHECK_CC(retVal, "uv_tty_init(0)", goto loopCleanup);
+	ttyIn = (uv_stream_t *) &caerctlTTYInput;
+
+	uv_tty_t caerctlTTYOutput;
+	uv_tty_init(&caerctlLoop, &caerctlTTYOutput, 1, false);
+	UV_RET_CHECK_CC(retVal, "uv_tty_init(1)", goto ttyInCleanup);
+	ttyOut = (uv_stream_t *) &caerctlTTYOutput;
+
+	// Open a TCP client socket for configuration handling.
+	uv_tcp_t caerctlTCPClient;
+	retVal = uv_tcp_init(&caerctlLoop, &caerctlTCPClient);
+	UV_RET_CHECK_CC(retVal, "uv_tcp_init", goto ttyOutCleanup);
+	tcpClient = (uv_stream_t *) &caerctlTCPClient;
+
+	// Start reading on TTYs, as they are ready now.
+	uv_read_start(ttyIn, &ttyAlloc, &ttyRead);
+
+	// Connect to the remote TCP server.
+	uv_connect_t caerctlTCPConnect;
+	caerctlTCPConnect.data = shellPrompt; // Pass to handler.
+	retVal = uv_tcp_connect(&caerctlTCPConnect, &caerctlTCPClient, (struct sockaddr *) &configServerAddress,
+		&onConnect);
+	UV_RET_CHECK_CC(retVal, "uv_tcp_connect", goto tcpCleanup);
+
+	// Run event loop.
+	retVal = uv_run(&caerctlLoop, UV_RUN_DEFAULT);
+	UV_RET_CHECK_CC(retVal, "uv_run", goto tcpCleanup);
+
+	// Cleanup event loop and memory.
+	tcpCleanup: {
+		uv_close((uv_handle_t *) &caerctlTCPClient, NULL);
+	}
+
+	ttyOutCleanup: {
+		uv_close((uv_handle_t *) &caerctlTTYOutput, NULL);
+	}
+
+	ttyInCleanup: {
+		uv_close((uv_handle_t *) &caerctlTTYInput, NULL);
+	}
+
+	loopCleanup: {
+		bool errorCleanup = (retVal < 0);
+
+		// Cleanup all remaining handles and run until all callbacks are done.
+		retVal = libuvCloseLoopHandles(&caerctlLoop);
+		UV_RET_CHECK_CC(retVal, "libuvCloseLoopHandles",);
+
+		retVal = uv_loop_close(&caerctlLoop);
+		UV_RET_CHECK_CC(retVal, "uv_loop_close",);
+
+		if (errorCleanup) {
+			return (EXIT_FAILURE);
+		}
+		else {
+			return (EXIT_SUCCESS);
+		}
+	}
+}
+
+static void onConnect(uv_connect_t *client, int status) {
+	UV_RET_CHECK_CC(status, "Connection", return);
+
+	if (client->handle != tcpClient) {
+		// Critical error.
+
+		exit(EXIT_FAILURE);
+	}
+
+	uv_read_start(tcpClient, &ttyAlloc, &ttyRead);
+}
+
+static void handleRequest(uv_connect_t *client, int status) {
+	UV_RET_CHECK_CC(status, "Connection", return);
 
 	// Set our own command completion function.
 	linenoiseSetCompletionCallback(&handleCommandCompletion);
@@ -111,10 +181,8 @@ int main(int argc, char *argv[]) {
 
 	char *userHomeDir = getUserHomeDirectory();
 	if (userHomeDir == NULL) {
-		close(sockFd);
-
 		fprintf(stderr, "Failed to determine user's home directory.\n");
-		return (EXIT_FAILURE);
+		return;
 	}
 
 	snprintf(commandHistoryFilePath, 1024, "%s/.caerctl_history", userHomeDir);
@@ -125,7 +193,7 @@ int main(int argc, char *argv[]) {
 
 	while (true) {
 		// Display prompt and read input (NOTE: remember to free input after use!).
-		char *inputLine = linenoise(shellPrompt);
+		char *inputLine = linenoise(client->data);
 
 		// Check for EOF first.
 		if (inputLine == NULL) {
@@ -154,13 +222,8 @@ int main(int argc, char *argv[]) {
 		free(inputLine);
 	}
 
-	// Close connection.
-	close(sockFd);
-
 	// Save command history file.
 	linenoiseHistorySave(commandHistoryFilePath);
-
-	return (EXIT_SUCCESS);
 }
 
 static inline void setExtraLen(uint8_t *buf, uint16_t extraLen) {
