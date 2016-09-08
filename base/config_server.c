@@ -68,7 +68,6 @@ static void configServerConnection(uv_stream_t *server, int status);
 static void configServerAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf);
 static void configServerRead(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf);
 static void configServerShutdown(uv_shutdown_t *clientShutdown, int status);
-static void configServerWrite(uv_write_t *clientWrite, int status);
 static void configServerAsyncShutdown(uv_async_t *asyncShutdown);
 
 static void configServerConnection(uv_stream_t *server, int status) {
@@ -190,13 +189,6 @@ static void configServerShutdown(uv_shutdown_t *clientShutdown, int status) {
 	uv_close((uv_handle_t *) clientShutdown->handle, &libuvCloseFree);
 
 	UV_RET_CHECK_CS(status, "AfterShutdown", return);
-}
-
-
-static void configServerWrite(uv_write_t *clientWrite, int status) {
-	libuvCloseFree((uv_handle_t *) clientWrite);
-
-	UV_RET_CHECK_CS(status, "AfterWrite", return);
 }
 
 static void configServerAsyncShutdown(uv_async_t *asyncShutdown) {

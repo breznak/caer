@@ -135,7 +135,7 @@ static inline void libuvCloseFree(uv_handle_t *handle) {
 }
 
 static inline void libuvCloseLoopWalk(uv_handle_t *handle, void *arg) {
-	(void) (arg);
+	(void) (arg); // UNUSED.
 
 	if (!uv_is_closing(handle)) {
 		uv_close(handle, &libuvCloseFree);
@@ -146,6 +146,31 @@ static inline int libuvCloseLoopHandles(uv_loop_t *loop) {
 	uv_walk(loop, &libuvCloseLoopWalk, NULL);
 
 	return (uv_run(loop, UV_RUN_DEFAULT));
+}
+
+static inline void libuvWriteFree(uv_write_t *clientWrite, int status) {
+	(void) (status); // UNUSED.
+
+	libuvCloseFree((uv_handle_t *) clientWrite);
+}
+
+// buffer has to be dynamically allocated. On success, will get free'd
+// automatically, also on failure. This function takes over memory ownership!
+static inline int libuvWrite(uv_stream_t *dest, libuvWriteBuf buffer) {
+	uv_write_t *writeRequest = calloc(1, sizeof(*writeRequest));
+	if (writeRequest == NULL) {
+		return (UV_ENOMEM);
+	}
+
+	writeRequest->data = buffer;
+
+	int retVal = uv_write(writeRequest, dest, &buffer->buf, 1, &libuvWriteFree);
+	if (retVal < 0) {
+		free(writeRequest);
+		free(buffer);
+	}
+
+	return (retVal);
 }
 
 #endif /* EXT_LIBUV_H_ */
