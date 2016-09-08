@@ -552,6 +552,8 @@ static void caerConfigServerHandleRequest(uv_stream_t *client, uint8_t action, u
 				acc += len;
 			}
 
+			free(childNames);
+
 			caerConfigSendResponse(client, CAER_CONFIG_GET_CHILDREN, SSHS_STRING, (const uint8_t *) namesBuffer,
 				namesLength);
 
@@ -601,6 +603,8 @@ static void caerConfigServerHandleRequest(uv_stream_t *client, uint8_t action, u
 				memcpy(keysBuffer + acc, attrKeys[i], len);
 				acc += len;
 			}
+
+			free(attrKeys);
 
 			caerConfigSendResponse(client, CAER_CONFIG_GET_ATTRIBUTES, SSHS_STRING, (const uint8_t *) keysBuffer,
 				keysLength);
@@ -654,6 +658,8 @@ static void caerConfigServerHandleRequest(uv_stream_t *client, uint8_t action, u
 				memcpy(typesBuffer + acc, typeString, len);
 				acc += len;
 			}
+
+			free(attrTypes);
 
 			caerConfigSendResponse(client, CAER_CONFIG_GET_TYPES, SSHS_STRING, (const uint8_t *) typesBuffer,
 				typesLength);
