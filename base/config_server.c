@@ -68,46 +68,28 @@ static void configServerConnection(uv_stream_t *server, int status);
 static void configServerAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf);
 static void configServerRead(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf);
 static void configServerShutdown(uv_shutdown_t *clientShutdown, int status);
-static void configServerClose(uv_handle_t *client);
 static void configServerWrite(uv_write_t *clientWrite, int status);
 static void configServerAsyncShutdown(uv_async_t *asyncShutdown);
 
 static void configServerConnection(uv_stream_t *server, int status) {
 	UV_RET_CHECK_CS(status, "Connection", return);
 
-	uv_tcp_t *tcpClient = malloc(sizeof(*tcpClient));
+	uv_tcp_t *tcpClient = calloc(1, sizeof(*tcpClient));
 	if (tcpClient == NULL) {
 		caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for new client.");
 		return;
 	}
 
 	int retVal;
-	bool tcpClientInitialized = false;
 
 	retVal = uv_tcp_init(server->loop, tcpClient);
-	UV_RET_CHECK_CS(retVal, "uv_tcp_init", goto connCleanup);
-	tcpClientInitialized = true;
-
-	// We track the buffer here. Initialize to NULL.
-	tcpClient->data = NULL;
+	UV_RET_CHECK_CS(retVal, "uv_tcp_init", free(tcpClient));
 
 	retVal = uv_accept(server, (uv_stream_t *) tcpClient);
-	UV_RET_CHECK_CS(retVal, "uv_accept", goto connCleanup);
+	UV_RET_CHECK_CS(retVal, "uv_accept", uv_close((uv_handle_t *) tcpClient, &libuvCloseFree));
 
 	retVal = uv_read_start((uv_stream_t *) tcpClient, &configServerAlloc, &configServerRead);
-	UV_RET_CHECK_CS(retVal, "uv_read_start", goto connCleanup);
-
-	// Everything done with no errors, so no cleanup!
-	return;
-
-	connCleanup: {
-		if (tcpClientInitialized) {
-			uv_close((uv_handle_t *) tcpClient, NULL);
-		}
-
-		free(tcpClient);
-		return;
-	}
+	UV_RET_CHECK_CS(retVal, "uv_read_start", uv_close((uv_handle_t *) tcpClient, &libuvCloseFree));
 }
 
 static void configServerAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf) {
@@ -148,18 +130,18 @@ static void configServerRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf
 		}
 
 		// Close connection.
-		uv_shutdown_t *clientShutdown = malloc(sizeof(*clientShutdown));
+		uv_shutdown_t *clientShutdown = calloc(1, sizeof(*clientShutdown));
 		if (clientShutdown == NULL) {
 			caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client shutdown.");
 
 			// Hard close.
-			uv_close((uv_handle_t *) client, &configServerClose);
+			uv_close((uv_handle_t *) client, &libuvCloseFree);
 			return;
 		}
 
 		int retVal = uv_shutdown(clientShutdown, client, &configServerShutdown);
 		UV_RET_CHECK_CS(retVal, "uv_shutdown",
-			free(clientShutdown); uv_close((uv_handle_t *) client, &configServerClose));
+			free(clientShutdown); uv_close((uv_handle_t *) client, &libuvCloseFree));
 	}
 
 	// sizeRead == 0: EAGAIN, do nothing.
@@ -203,20 +185,16 @@ static void configServerRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf
 }
 
 static void configServerShutdown(uv_shutdown_t *clientShutdown, int status) {
-	uv_close((uv_handle_t *) clientShutdown->handle, &configServerClose);
-	free(clientShutdown);
+	libuvCloseFree((uv_handle_t *) clientShutdown);
+
+	uv_close((uv_handle_t *) clientShutdown->handle, &libuvCloseFree);
 
 	UV_RET_CHECK_CS(status, "AfterShutdown", return);
 }
 
-static void configServerClose(uv_handle_t *client) {
-	free(client->data);
-	free(client);
-}
 
 static void configServerWrite(uv_write_t *clientWrite, int status) {
-	free(clientWrite->data);
-	free(clientWrite);
+	libuvCloseFree((uv_handle_t *) clientWrite);
 
 	UV_RET_CHECK_CS(status, "AfterWrite", return);
 }
@@ -339,7 +317,7 @@ static inline void caerConfigSendError(uv_stream_t *client, const char *errorMsg
 	memcpy(response->dataBuf + 4, errorMsg, errorMsgLength);
 	response->dataBuf[4 + errorMsgLength] = '\0';
 
-	uv_write_t *clientWrite = malloc(sizeof(*clientWrite));
+	uv_write_t *clientWrite = calloc(1, sizeof(*clientWrite));
 	if (clientWrite == NULL) {
 		free(response);
 
@@ -371,7 +349,7 @@ static inline void caerConfigSendResponse(uv_stream_t *client, uint8_t action, u
 	memcpy(response->dataBuf + 4, msg, msgLength);
 	// Msg must already be NUL terminated!
 
-	uv_write_t *clientWrite = malloc(sizeof(*clientWrite));
+	uv_write_t *clientWrite = calloc(1, sizeof(*clientWrite));
 	if (clientWrite == NULL) {
 		free(response);
 

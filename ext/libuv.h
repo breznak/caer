@@ -118,7 +118,7 @@ struct libuvWriteBufStruct {
 typedef struct libuvWriteBufStruct *libuvWriteBuf;
 
 static inline libuvWriteBuf libuvWriteBufInit(size_t size) {
-	libuvWriteBuf writeBuf = malloc(sizeof(*writeBuf) + size);
+	libuvWriteBuf writeBuf = calloc(1, sizeof(*writeBuf) + size);
 	if (writeBuf == NULL) {
 		return (NULL);
 	}
@@ -129,11 +129,16 @@ static inline libuvWriteBuf libuvWriteBufInit(size_t size) {
 	return (writeBuf);
 }
 
+static inline void libuvCloseFree(uv_handle_t *handle) {
+	free(handle->data);
+	free(handle);
+}
+
 static inline void libuvCloseLoopWalk(uv_handle_t *handle, void *arg) {
 	(void) (arg);
 
 	if (!uv_is_closing(handle)) {
-		uv_close(handle, NULL);
+		uv_close(handle, &libuvCloseFree);
 	}
 }
 
