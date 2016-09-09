@@ -139,8 +139,7 @@ static void configServerRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf
 		}
 
 		int retVal = uv_shutdown(clientShutdown, client, &configServerShutdown);
-		UV_RET_CHECK_CS(retVal, "uv_shutdown",
-			free(clientShutdown); uv_close((uv_handle_t *) client, &libuvCloseFree));
+		UV_RET_CHECK_CS(retVal, "uv_shutdown", free(clientShutdown); uv_close((uv_handle_t *) client, &libuvCloseFree));
 	}
 
 	// sizeRead == 0: EAGAIN, do nothing.
@@ -309,18 +308,8 @@ static inline void caerConfigSendError(uv_stream_t *client, const char *errorMsg
 	memcpy(response->dataBuf + 4, errorMsg, errorMsgLength);
 	response->dataBuf[4 + errorMsgLength] = '\0';
 
-	uv_write_t *clientWrite = calloc(1, sizeof(*clientWrite));
-	if (clientWrite == NULL) {
-		free(response);
-
-		caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client error write.");
-		return;
-	}
-
-	clientWrite->data = response;
-
-	int retVal = uv_write(clientWrite, client, &response->buf, 1, &configServerWrite);
-	UV_RET_CHECK_CS(retVal, "uv_write", free(response); free(clientWrite));
+	int retVal = libuvWrite(client, response);
+	UV_RET_CHECK_CS(retVal, "libuvWrite", free(response); return);
 
 	caerLog(CAER_LOG_DEBUG, "Config Server", "Sent back error message '%s' to client.", errorMsg);
 }
@@ -341,18 +330,8 @@ static inline void caerConfigSendResponse(uv_stream_t *client, uint8_t action, u
 	memcpy(response->dataBuf + 4, msg, msgLength);
 	// Msg must already be NUL terminated!
 
-	uv_write_t *clientWrite = calloc(1, sizeof(*clientWrite));
-	if (clientWrite == NULL) {
-		free(response);
-
-		caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client write.");
-		return;
-	}
-
-	clientWrite->data = response;
-
-	int retVal = uv_write(clientWrite, client, &response->buf, 1, &configServerWrite);
-	UV_RET_CHECK_CS(retVal, "uv_write", free(response); free(clientWrite));
+	int retVal = libuvWrite(client, response);
+	UV_RET_CHECK_CS(retVal, "libuvWrite", free(response); return);
 
 	caerLog(CAER_LOG_DEBUG, "Config Server",
 		"Sent back message to client: action=%" PRIu8 ", type=%" PRIu8 ", msgLength=%zu.", action, type, msgLength);
