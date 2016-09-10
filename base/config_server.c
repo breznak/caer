@@ -27,7 +27,7 @@ static struct {
 
 static void configServerConnection(uv_stream_t *server, int status);
 static void configServerAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf);
-static void configServerRead(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf);
+static void configServerRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf_t *buf);
 static void configServerShutdown(uv_shutdown_t *clientShutdown, int status);
 static void configServerAsyncShutdown(uv_async_t *asyncShutdown);
 static int caerConfigServerRunner(void *inPtr);
