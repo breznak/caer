@@ -9,12 +9,27 @@
 #define CONFIG_SERVER_NAME "Config Server"
 #define UV_RET_CHECK_CS(RET_VAL, FUNC_NAME, CLEANUP_ACTIONS) UV_RET_CHECK(RET_VAL, CONFIG_SERVER_NAME, FUNC_NAME, CLEANUP_ACTIONS)
 
+// Control message format: 1 byte ACTION, 1 byte TYPE, 2 bytes EXTRA_LEN,
+// 2 bytes NODE_LEN, 2 bytes KEY_LEN, 2 bytes VALUE_LEN, then up to 4086
+// bytes split between EXTRA, NODE, KEY, VALUE (with 4 bytes for NUL).
+// Basically: (EXTRA_LEN + NODE_LEN + KEY_LEN + VALUE_LEN) <= 4086.
+// EXTRA, NODE, KEY, VALUE have to be NUL terminated, and their length
+// must include the NUL termination byte.
+// This results in a maximum message size of 4096 bytes (4KB).
+#define CONFIG_SERVER_BUFFER_SIZE 4096
+#define CONFIG_HEADER_LENGTH 10
+
 static struct {
 	atomic_bool running;
 	uv_async_t asyncShutdown;
 	thrd_t thread;
 } configServerThread;
 
+static void configServerConnection(uv_stream_t *server, int status);
+static void configServerAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf);
+static void configServerRead(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf);
+static void configServerShutdown(uv_shutdown_t *clientShutdown, int status);
+static void configServerAsyncShutdown(uv_async_t *asyncShutdown);
 static int caerConfigServerRunner(void *inPtr);
 static void caerConfigServerHandleRequest(uv_stream_t *client, uint8_t action, uint8_t type, const uint8_t *extra,
 	size_t extraLength, const uint8_t *node, size_t nodeLength, const uint8_t *key, size_t keyLength,
@@ -53,22 +68,6 @@ void caerConfigServerStop(void) {
 		exit(EXIT_FAILURE);
 	}
 }
-
-// Control message format: 1 byte ACTION, 1 byte TYPE, 2 bytes EXTRA_LEN,
-// 2 bytes NODE_LEN, 2 bytes KEY_LEN, 2 bytes VALUE_LEN, then up to 4086
-// bytes split between EXTRA, NODE, KEY, VALUE (with 4 bytes for NUL).
-// Basically: (EXTRA_LEN + NODE_LEN + KEY_LEN + VALUE_LEN) <= 4086.
-// EXTRA, NODE, KEY, VALUE have to be NUL terminated, and their length
-// must include the NUL termination byte.
-// This results in a maximum message size of 4096 bytes (4KB).
-#define CONFIG_SERVER_BUFFER_SIZE 4096
-#define CONFIG_HEADER_LENGTH 10
-
-static void configServerConnection(uv_stream_t *server, int status);
-static void configServerAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf);
-static void configServerRead(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf);
-static void configServerShutdown(uv_shutdown_t *clientShutdown, int status);
-static void configServerAsyncShutdown(uv_async_t *asyncShutdown);
 
 static void configServerConnection(uv_stream_t *server, int status) {
 	UV_RET_CHECK_CS(status, "Connection", return);
