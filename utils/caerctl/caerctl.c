@@ -12,6 +12,7 @@
 #include <inttypes.h>
 #include <string.h>
 #include <strings.h>
+#include <assert.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <pwd.h>
@@ -28,7 +29,12 @@
 		CLEANUP_ACTIONS; \
 	}
 
-static void onConnect(uv_connect_t *client, int status);
+static void ttyAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf);
+static void ttyRead(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf);
+static void tcpConnect(uv_connect_t *client, int status);
+static void tcpAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf);
+static void tcpRead(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf);
+
 static void handleRequest(uv_connect_t *client, int status);
 static void handleInputLine(const char *buf, size_t bufLength);
 static void handleCommandCompletion(const char *buf, linenoiseCompletions *lc);
@@ -59,6 +65,7 @@ static const size_t actionsLength = sizeof(actions) / sizeof(actions[0]);
 static uv_stream_t *ttyIn = NULL;
 static uv_stream_t *ttyOut = NULL;
 static uv_stream_t *tcpClient = NULL;
+static char *shellPromptStr = NULL;
 
 int main(int argc, char *argv[]) {
 	// First of all, parse the IP:Port we need to connect to.
@@ -89,6 +96,7 @@ int main(int argc, char *argv[]) {
 	size_t shellPromptLength = (size_t) snprintf(NULL, 0, "cAER @ %s:%" PRIu16 " >> ", ipAddress, portNumber);
 	char shellPrompt[shellPromptLength + 1]; // +1 for terminating NUL byte.
 	snprintf(shellPrompt, shellPromptLength + 1, "cAER @ %s:%" PRIu16 " >> ", ipAddress, portNumber);
+	shellPromptStr = shellPrompt;
 
 	// Main event loop for connection handling.
 	uv_loop_t caerctlLoop;
@@ -113,13 +121,13 @@ int main(int argc, char *argv[]) {
 	tcpClient = (uv_stream_t *) &caerctlTCPClient;
 
 	// Start reading on TTYs, as they are ready now.
-	uv_read_start(ttyIn, &ttyAlloc, &ttyRead);
+	retVal = uv_read_start(ttyIn, &ttyAlloc, &ttyRead);
+	UV_RET_CHECK_CC(retVal, "uv_read_start(tty)", goto tcpCleanup);
 
 	// Connect to the remote TCP server.
 	uv_connect_t caerctlTCPConnect;
-	caerctlTCPConnect.data = shellPrompt; // Pass to handler.
 	retVal = uv_tcp_connect(&caerctlTCPConnect, &caerctlTCPClient, (struct sockaddr *) &configServerAddress,
-		&onConnect);
+		&tcpConnect);
 	UV_RET_CHECK_CC(retVal, "uv_tcp_connect", goto tcpCleanup);
 
 	// Run event loop.
@@ -158,16 +166,29 @@ int main(int argc, char *argv[]) {
 	}
 }
 
-static void onConnect(uv_connect_t *client, int status) {
-	UV_RET_CHECK_CC(status, "Connection", return);
+static void ttyAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf) {
 
-	if (client->handle != tcpClient) {
-		// Critical error.
+}
 
-		exit(EXIT_FAILURE);
-	}
+static void ttyRead(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 
-	uv_read_start(tcpClient, &ttyAlloc, &ttyRead);
+}
+
+static void tcpConnect(uv_connect_t *client, int status) {
+	assert(client->handle == tcpClient);
+
+	UV_RET_CHECK_CC(status, "Connection", uv_stop(client->handle->loop); return);
+
+	int retVal = uv_read_start(client->handle, &tcpAlloc, &tcpRead);
+	UV_RET_CHECK_CC(retVal, "uv_read_start(tcp)", uv_stop(client->handle->loop); return);
+}
+
+static void tcpAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf) {
+
+}
+
+static void tcpRead(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
+
 }
 
 static void handleRequest(uv_connect_t *client, int status) {
