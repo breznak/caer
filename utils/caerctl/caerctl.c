@@ -29,11 +29,11 @@
 		CLEANUP_ACTIONS; \
 	}
 
-static void ttyAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf);
-static void ttyRead(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf);
-static void tcpConnect(uv_connect_t *client, int status);
+static void ttyAlloc(uv_handle_t *tty, size_t suggestedSize, uv_buf_t *buf);
+static void ttyRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf);
+static void tcpConnect(uv_connect_t *clientConnect, int status);
 static void tcpAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf);
-static void tcpRead(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf);
+static void tcpRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf_t *buf);
 
 static void handleRequest(uv_connect_t *client, int status);
 static void handleInputLine(const char *buf, size_t bufLength);
@@ -103,22 +103,26 @@ int main(int argc, char *argv[]) {
 	retVal = uv_loop_init(&caerctlLoop);
 	UV_RET_CHECK_CC(retVal, "uv_loop_init", return (EXIT_FAILURE));
 
-	// Initialize stdin and stdout TTYs.
+	// Initialize stdin TTY.
 	uv_tty_t caerctlTTYInput;
-	uv_tty_init(&caerctlLoop, &caerctlTTYInput, 0, true);
-	UV_RET_CHECK_CC(retVal, "uv_tty_init(0)", goto loopCleanup);
+	uv_tty_init(&caerctlLoop, &caerctlTTYInput, STDIN_FILENO, true);
+	UV_RET_CHECK_CC(retVal, "uv_tty_init(STDIN)", goto loopCleanup);
 	ttyIn = (uv_stream_t *) &caerctlTTYInput;
+	caerctlTTYInput.data = NULL;
 
+	// Initialize stdout TTY.
 	uv_tty_t caerctlTTYOutput;
-	uv_tty_init(&caerctlLoop, &caerctlTTYOutput, 1, false);
-	UV_RET_CHECK_CC(retVal, "uv_tty_init(1)", goto ttyInCleanup);
+	uv_tty_init(&caerctlLoop, &caerctlTTYOutput, STDOUT_FILENO, false);
+	UV_RET_CHECK_CC(retVal, "uv_tty_init(STDOUT)", goto ttyInCleanup);
 	ttyOut = (uv_stream_t *) &caerctlTTYOutput;
+	caerctlTTYOutput.data = NULL;
 
 	// Open a TCP client socket for configuration handling.
 	uv_tcp_t caerctlTCPClient;
 	retVal = uv_tcp_init(&caerctlLoop, &caerctlTCPClient);
 	UV_RET_CHECK_CC(retVal, "uv_tcp_init", goto ttyOutCleanup);
 	tcpClient = (uv_stream_t *) &caerctlTCPClient;
+	caerctlTCPClient.data = NULL;
 
 	// Start reading on TTYs, as they are ready now.
 	retVal = uv_read_start(ttyIn, &ttyAlloc, &ttyRead);
@@ -166,28 +170,77 @@ int main(int argc, char *argv[]) {
 	}
 }
 
-static void ttyAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf) {
+static void ttyAlloc(uv_handle_t *tty, size_t suggestedSize, uv_buf_t *buf) {
+	UNUSED_ARGUMENT(suggestedSize);
 
+	// We use one buffer per connection, with a fixed maximum size, and
+	// re-use it until we have read a full message.
+	if (tty->data == NULL) {
+		tty->data = simpleBufferInit(4096);
+
+		if (tty->data == NULL) {
+			// Allocation failure!
+			buf->base = NULL;
+			buf->len = 0;
+
+			fprintf(stderr, "Failed to allocate memory for client buffer.");
+			return;
+		}
+	}
+
+	simpleBuffer dataBuf = tty->data;
+
+	buf->base = (char *) (dataBuf->buffer + dataBuf->bufferUsedSize);
+	buf->len = dataBuf->bufferSize - dataBuf->bufferUsedSize;
 }
 
-static void ttyRead(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
+static void ttyRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf) {
+	fprintf(stderr, "Read STDIN\n");
 
+	if (sizeRead < 0) {
+		fprintf(stderr, "STDIN closed: %s\n", uv_err_name(sizeRead));
+		uv_read_stop(tty);
+		return;
+	}
+
+	fprintf(stderr, "Input length: %zu\n", sizeRead);
+	fprintf(stderr, "Buffer length: %zu (%s)\n", buf->len, buf->base);
 }
 
-static void tcpConnect(uv_connect_t *client, int status) {
-	assert(client->handle == tcpClient);
+static void tcpConnect(uv_connect_t *clientConnect, int status) {
+	assert(clientConnect->handle == tcpClient);
 
-	UV_RET_CHECK_CC(status, "Connection", uv_stop(client->handle->loop); return);
+	UV_RET_CHECK_CC(status, "Connection", uv_stop(clientConnect->handle->loop); return);
 
-	int retVal = uv_read_start(client->handle, &tcpAlloc, &tcpRead);
-	UV_RET_CHECK_CC(retVal, "uv_read_start(tcp)", uv_stop(client->handle->loop); return);
+	int retVal = uv_read_start(clientConnect->handle, &tcpAlloc, &tcpRead);
+	UV_RET_CHECK_CC(retVal, "uv_read_start(tcp)", uv_stop(clientConnect->handle->loop); return);
 }
 
 static void tcpAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf) {
+	UNUSED_ARGUMENT(suggestedSize);
 
+	// We use one buffer per connection, with a fixed maximum size, and
+	// re-use it until we have read a full message.
+	if (client->data == NULL) {
+		client->data = simpleBufferInit(4096);
+
+		if (client->data == NULL) {
+			// Allocation failure!
+			buf->base = NULL;
+			buf->len = 0;
+
+			fprintf(stderr, "Failed to allocate memory for client buffer.");
+			return;
+		}
+	}
+
+	simpleBuffer dataBuf = client->data;
+
+	buf->base = (char *) (dataBuf->buffer + dataBuf->bufferUsedSize);
+	buf->len = dataBuf->bufferSize - dataBuf->bufferUsedSize;
 }
 
-static void tcpRead(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
+static void tcpRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf_t *buf) {
 
 }
 
@@ -449,19 +502,19 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 	}
 
 	// Send formatted command to configuration server.
-	if (!sendUntilDone(sockFd, dataBuffer, dataBufferLength)) {
-		fprintf(stderr, "Error: unable to send data to config server (%d).\n", errno);
-		return;
-	}
+//	if (!sendUntilDone(sockFd, dataBuffer, dataBufferLength)) {
+//		fprintf(stderr, "Error: unable to send data to config server (%d).\n", errno);
+//		return;
+//	}
 
 	// The response from the server follows a simplified version of the request
 	// protocol. A byte for ACTION, a byte for TYPE, 2 bytes for MSG_LEN and then
 	// up to 4092 bytes of MSG, for a maximum total of 4096 bytes again.
 	// MSG must be NUL terminated, and the NUL byte shall be part of the length.
-	if (!recvUntilDone(sockFd, dataBuffer, 4)) {
-		fprintf(stderr, "Error: unable to receive data from config server (%d).\n", errno);
-		return;
-	}
+//	if (!recvUntilDone(sockFd, dataBuffer, 4)) {
+//		fprintf(stderr, "Error: unable to receive data from config server (%d).\n", errno);
+//		return;
+//	}
 
 	// Decode response header fields (all in little-endian).
 	uint8_t action = dataBuffer[0];
@@ -469,10 +522,10 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 	uint16_t msgLength = le16toh(*(uint16_t * )(dataBuffer + 2));
 
 	// Total length to get for response.
-	if (!recvUntilDone(sockFd, dataBuffer + 4, msgLength)) {
-		fprintf(stderr, "Error: unable to receive data from config server (%d).\n", errno);
-		return;
-	}
+//	if (!recvUntilDone(sockFd, dataBuffer + 4, msgLength)) {
+//		fprintf(stderr, "Error: unable to receive data from config server (%d).\n", errno);
+//		return;
+//	}
 
 	// Convert action back to a string.
 	const char *actionString = NULL;
@@ -694,15 +747,15 @@ static void nodeCompletion(const char *buf, size_t bufLength, linenoiseCompletio
 	memcpy(dataBuffer + 10, partialNodeString, lastNodeLength);
 	dataBuffer[10 + lastNodeLength] = '\0';
 
-	if (!sendUntilDone(sockFd, dataBuffer, 10 + lastNodeLength + 1)) {
-		// Failed to contact remote host, no auto-completion!
-		return;
-	}
-
-	if (!recvUntilDone(sockFd, dataBuffer, 4)) {
-		// Failed to contact remote host, no auto-completion!
-		return;
-	}
+//	if (!sendUntilDone(sockFd, dataBuffer, 10 + lastNodeLength + 1)) {
+//		// Failed to contact remote host, no auto-completion!
+//		return;
+//	}
+//
+//	if (!recvUntilDone(sockFd, dataBuffer, 4)) {
+//		// Failed to contact remote host, no auto-completion!
+//		return;
+//	}
 
 	// Decode response header fields (all in little-endian).
 	uint8_t action = dataBuffer[0];
@@ -710,10 +763,10 @@ static void nodeCompletion(const char *buf, size_t bufLength, linenoiseCompletio
 	uint16_t msgLength = le16toh(*(uint16_t * )(dataBuffer + 2));
 
 	// Total length to get for response.
-	if (!recvUntilDone(sockFd, dataBuffer + 4, msgLength)) {
-		// Failed to contact remote host, no auto-completion!
-		return;
-	}
+//	if (!recvUntilDone(sockFd, dataBuffer + 4, msgLength)) {
+//		// Failed to contact remote host, no auto-completion!
+//		return;
+//	}
 
 	if (action == CAER_CONFIG_ERROR || type != SSHS_STRING) {
 		// Invalid request made, no auto-completion.
@@ -749,15 +802,15 @@ static void keyCompletion(const char *buf, size_t bufLength, linenoiseCompletion
 	memcpy(dataBuffer + 10, nodeString, nodeStringLength);
 	dataBuffer[10 + nodeStringLength] = '\0';
 
-	if (!sendUntilDone(sockFd, dataBuffer, 10 + nodeStringLength + 1)) {
-		// Failed to contact remote host, no auto-completion!
-		return;
-	}
-
-	if (!recvUntilDone(sockFd, dataBuffer, 4)) {
-		// Failed to contact remote host, no auto-completion!
-		return;
-	}
+//	if (!sendUntilDone(sockFd, dataBuffer, 10 + nodeStringLength + 1)) {
+//		// Failed to contact remote host, no auto-completion!
+//		return;
+//	}
+//
+//	if (!recvUntilDone(sockFd, dataBuffer, 4)) {
+//		// Failed to contact remote host, no auto-completion!
+//		return;
+//	}
 
 	// Decode response header fields (all in little-endian).
 	uint8_t action = dataBuffer[0];
@@ -765,10 +818,10 @@ static void keyCompletion(const char *buf, size_t bufLength, linenoiseCompletion
 	uint16_t msgLength = le16toh(*(uint16_t * )(dataBuffer + 2));
 
 	// Total length to get for response.
-	if (!recvUntilDone(sockFd, dataBuffer + 4, msgLength)) {
-		// Failed to contact remote host, no auto-completion!
-		return;
-	}
+//	if (!recvUntilDone(sockFd, dataBuffer + 4, msgLength)) {
+//		// Failed to contact remote host, no auto-completion!
+//		return;
+//	}
 
 	if (action == CAER_CONFIG_ERROR || type != SSHS_STRING) {
 		// Invalid request made, no auto-completion.
@@ -808,15 +861,15 @@ static void typeCompletion(const char *buf, size_t bufLength, linenoiseCompletio
 	memcpy(dataBuffer + 10 + nodeStringLength + 1, keyString, keyStringLength);
 	dataBuffer[10 + nodeStringLength + 1 + keyStringLength] = '\0';
 
-	if (!sendUntilDone(sockFd, dataBuffer, 10 + nodeStringLength + 1 + keyStringLength + 1)) {
-		// Failed to contact remote host, no auto-completion!
-		return;
-	}
-
-	if (!recvUntilDone(sockFd, dataBuffer, 4)) {
-		// Failed to contact remote host, no auto-completion!
-		return;
-	}
+//	if (!sendUntilDone(sockFd, dataBuffer, 10 + nodeStringLength + 1 + keyStringLength + 1)) {
+//		// Failed to contact remote host, no auto-completion!
+//		return;
+//	}
+//
+//	if (!recvUntilDone(sockFd, dataBuffer, 4)) {
+//		// Failed to contact remote host, no auto-completion!
+//		return;
+//	}
 
 	// Decode response header fields (all in little-endian).
 	uint8_t action = dataBuffer[0];
@@ -824,10 +877,10 @@ static void typeCompletion(const char *buf, size_t bufLength, linenoiseCompletio
 	uint16_t msgLength = le16toh(*(uint16_t * )(dataBuffer + 2));
 
 	// Total length to get for response.
-	if (!recvUntilDone(sockFd, dataBuffer + 4, msgLength)) {
-		// Failed to contact remote host, no auto-completion!
-		return;
-	}
+//	if (!recvUntilDone(sockFd, dataBuffer + 4, msgLength)) {
+//		// Failed to contact remote host, no auto-completion!
+//		return;
+//	}
 
 	if (action == CAER_CONFIG_ERROR || type != SSHS_STRING) {
 		// Invalid request made, no auto-completion.
@@ -890,25 +943,25 @@ static void valueCompletion(const char *buf, size_t bufLength, linenoiseCompleti
 	memcpy(dataBuffer + 10 + nodeStringLength + 1, keyString, keyStringLength);
 	dataBuffer[10 + nodeStringLength + 1 + keyStringLength] = '\0';
 
-	if (!sendUntilDone(sockFd, dataBuffer, 10 + nodeStringLength + 1 + keyStringLength + 1)) {
-		// Failed to contact remote host, no auto-completion!
-		return;
-	}
-
-	if (!recvUntilDone(sockFd, dataBuffer, 4)) {
-		// Failed to contact remote host, no auto-completion!
-		return;
-	}
+//	if (!sendUntilDone(sockFd, dataBuffer, 10 + nodeStringLength + 1 + keyStringLength + 1)) {
+//		// Failed to contact remote host, no auto-completion!
+//		return;
+//	}
+//
+//	if (!recvUntilDone(sockFd, dataBuffer, 4)) {
+//		// Failed to contact remote host, no auto-completion!
+//		return;
+//	}
 
 	// Decode response header fields (all in little-endian).
 	uint8_t action = dataBuffer[0];
 	uint16_t msgLength = le16toh(*(uint16_t * )(dataBuffer + 2));
 
 	// Total length to get for response.
-	if (!recvUntilDone(sockFd, dataBuffer + 4, msgLength)) {
-		// Failed to contact remote host, no auto-completion!
-		return;
-	}
+//	if (!recvUntilDone(sockFd, dataBuffer + 4, msgLength)) {
+//		// Failed to contact remote host, no auto-completion!
+//		return;
+//	}
 
 	if (action == CAER_CONFIG_ERROR) {
 		// Invalid request made, no auto-completion.
