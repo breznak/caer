@@ -1,10 +1,3 @@
-/*
- * caerctl.c
- *
- *  Created on: Jan 5, 2014
- *      Author: chtekk
- */
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -20,7 +13,6 @@
 #include "ext/sshs/sshs.h"
 #include "ext/portable_misc.h"
 #include "base/config_server.h"
-#include "utils/ext/linenoise/linenoise.h"
 
 #define UV_RET_CHECK_CC(RET_VAL, FUNC_NAME, CLEANUP_ACTIONS) \
 	if (RET_VAL < 0) { \
@@ -35,24 +27,47 @@ static void tcpConnect(uv_connect_t *clientConnect, int status);
 static void tcpAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf);
 static void tcpRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf_t *buf);
 
+
+struct completions_struct {
+	char *basedOnString;
+	size_t selectedCompletion;
+	size_t completionsLength;
+	char *completions[];
+};
+
+typedef struct completions_struct *completions;
+
+static completions cmpl = NULL;
+
 static void handleRequest(uv_connect_t *client, int status);
 static void handleInputLine(const char *buf, size_t bufLength);
-static void handleCommandCompletion(const char *buf, linenoiseCompletions *lc);
-static void actionCompletion(const char *buf, size_t bufLength, linenoiseCompletions *lc,
+static void handleCommandCompletion(const char *buf, completions lc);
+static void actionCompletion(const char *buf, size_t bufLength, completions lc,
 	const char *partialActionString, size_t partialActionStringLength);
-static void nodeCompletion(const char *buf, size_t bufLength, linenoiseCompletions *lc, uint8_t actionCode,
+static void nodeCompletion(const char *buf, size_t bufLength, completions lc, uint8_t actionCode,
 	const char *partialNodeString, size_t partialNodeStringLength);
-static void keyCompletion(const char *buf, size_t bufLength, linenoiseCompletions *lc, uint8_t actionCode,
+static void keyCompletion(const char *buf, size_t bufLength, completions lc, uint8_t actionCode,
 	const char *nodeString, size_t nodeStringLength, const char *partialKeyString, size_t partialKeyStringLength);
-static void typeCompletion(const char *buf, size_t bufLength, linenoiseCompletions *lc, uint8_t actionCode,
+static void typeCompletion(const char *buf, size_t bufLength, completions lc, uint8_t actionCode,
 	const char *nodeString, size_t nodeStringLength, const char *keyString, size_t keyStringLength,
 	const char *partialTypeString, size_t partialTypeStringLength);
-static void valueCompletion(const char *buf, size_t bufLength, linenoiseCompletions *lc, uint8_t actionCode,
+static void valueCompletion(const char *buf, size_t bufLength, completions lc, uint8_t actionCode,
 	const char *nodeString, size_t nodeStringLength, const char *keyString, size_t keyStringLength,
 	const char *typeString, size_t typeStringLength, const char *partialValueString, size_t partialValueStringLength);
-static void linenoiseAddCompletionSuffix(linenoiseCompletions *lc, const char *buf, size_t completionPoint,
+static void linenoiseAddCompletionSuffix(completions lc, const char *buf, size_t completionPoint,
 	const char *suffix, bool endSpace, bool endSlash);
 static char *getUserHomeDirectory(void);
+
+#define SHELL_MAX_LINELEN 4096
+
+#define ESCAPE "\x1B"
+#define BACKSPACE '\x08'
+#define DELETE '\x7F'
+#define ETX '\x03'
+#define EOT '\x04'
+#define NEWLINE '\x0A'
+#define CARRIAGERETURN '\x0D'
+#define TAB '\x09'
 
 static const struct {
 	const char *name;
@@ -65,7 +80,10 @@ static const size_t actionsLength = sizeof(actions) / sizeof(actions[0]);
 static uv_stream_t *ttyIn = NULL;
 static uv_stream_t *ttyOut = NULL;
 static uv_stream_t *tcpClient = NULL;
-static char *shellPromptStr = NULL;
+static char *shellPromptStrPrint = NULL;
+static char *shellPromptStrEdit = NULL;
+static size_t shellPromptLength = 0;
+static size_t shellPromptIndex = 0;
 
 int main(int argc, char *argv[]) {
 	// First of all, parse the IP:Port we need to connect to.
@@ -93,10 +111,11 @@ int main(int argc, char *argv[]) {
 	UV_RET_CHECK_CC(retVal, "uv_ip4_addr", return (EXIT_FAILURE));
 
 	// Create a shell prompt with the IP:Port displayed.
-	size_t shellPromptLength = (size_t) snprintf(NULL, 0, "cAER @ %s:%" PRIu16 " >> ", ipAddress, portNumber);
-	char shellPrompt[shellPromptLength + 1]; // +1 for terminating NUL byte.
-	snprintf(shellPrompt, shellPromptLength + 1, "cAER @ %s:%" PRIu16 " >> ", ipAddress, portNumber);
-	shellPromptStr = shellPrompt;
+	shellPromptLength = (size_t) snprintf(NULL, 0, ESCAPE "[2K\rcAER @ %s:%" PRIu16 " >> ", ipAddress, portNumber);
+	char shellPrompt[shellPromptLength + 1 + SHELL_MAX_LINELEN]; // +1 for terminating NUL byte.
+	snprintf(shellPrompt, shellPromptLength + 1, ESCAPE "[2K\rcAER @ %s:%" PRIu16 " >> ", ipAddress, portNumber);
+	shellPromptStrPrint = shellPrompt;
+	shellPromptStrEdit = shellPrompt + shellPromptLength;
 
 	// Main event loop for connection handling.
 	uv_loop_t caerctlLoop;
@@ -132,6 +151,10 @@ int main(int argc, char *argv[]) {
 	// Start reading on TTYs, as they are ready now.
 	retVal = uv_read_start(ttyIn, &ttyAlloc, &ttyRead);
 	UV_RET_CHECK_CC(retVal, "uv_read_start(tty)", goto tcpCleanup);
+
+	libuvWriteBuf prompt = libuvWriteBufInit(shellPromptLength);
+	memcpy(prompt->dataBuf, shellPromptStrPrint, shellPromptLength);
+	libuvWrite(ttyOut, prompt);
 
 	// Connect to the remote TCP server.
 	uv_connect_t caerctlTCPConnect;
@@ -200,36 +223,77 @@ static void ttyAlloc(uv_handle_t *tty, size_t suggestedSize, uv_buf_t *buf) {
 	buf->len = dataBuf->bufferSize - dataBuf->bufferUsedSize;
 }
 
-#define ESCAPE "\x1B"
+static void updatePossibleCompletions(const char *currentString);
 
 static void ttyRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf) {
-	fprintf(stderr, "Read STDIN.\n");
-
 	if (sizeRead < 0) {
 		fprintf(stderr, "STDIN closed: %s.\n", uv_err_name((int) sizeRead));
 		uv_read_stop(tty);
 		return;
 	}
 
-	fprintf(stderr, "Input length: %zu.\n", sizeRead);
-
 	if (sizeRead == 1) {
-		// Got char.
-		fprintf(stderr, "Char is: (%X).\n", buf->base[0]);
+		char c = buf->base[0];
+
+		// Detect termination.
+		if (c == EOT || c == ETX) {
+			libuvWriteBuf prompt = libuvWriteBufInit(1);
+			memcpy(prompt->dataBuf, "\n", 1);
+			libuvWrite(ttyOut, prompt);
+
+			uv_read_stop(tty);
+			return;
+		}
+
+		// Detect newline -> go to newline and submit request.
+		if (c == NEWLINE || c == CARRIAGERETURN) {
+			libuvWriteBuf prompt = libuvWriteBufInit(1);
+			memcpy(prompt->dataBuf, "\n", 1);
+			libuvWrite(ttyOut, prompt);
+
+			// TODO: interpret line, send request.
+
+			// Reset line to empty.
+			shellPromptIndex = 0;
+			shellPromptStrEdit[0] = '\0';
+		}
+		else if (c == TAB) {
+			// Auto-completion support.
+			updatePossibleCompletions(shellPromptStrEdit);
+			// TODO: do.
+		}
+		else if (c == BACKSPACE || c == DELETE) {
+			if (shellPromptIndex == 0) {
+				return;
+			}
+			shellPromptIndex--;
+			shellPromptStrEdit[shellPromptIndex] = '\0';
+		}
+		else {
+			// Got char. Add to current line.
+			shellPromptStrEdit[shellPromptIndex] = c;
+			shellPromptIndex++;
+			shellPromptStrEdit[shellPromptIndex] = '\0';
+		}
+
+		// Write updated line to stdout.
+		libuvWriteBuf prompt = libuvWriteBufInit(shellPromptLength + shellPromptIndex);
+		memcpy(prompt->dataBuf, shellPromptStrPrint, shellPromptLength + shellPromptIndex);
+		libuvWrite(ttyOut, prompt);
 	}
 	else if (sizeRead == 3) {
 		// Arrow keys.
 		if (memcmp(buf->base, ESCAPE "[A", 3) == 0) {
-			fprintf(stderr, "Got UP key.\n");
+
 		}
 		else if (memcmp(buf->base, ESCAPE "[B", 3) == 0) {
-			fprintf(stderr, "Got DOWN key.\n");
+
 		}
 		else if (memcmp(buf->base, ESCAPE "[D", 3) == 0) {
-			fprintf(stderr, "Got LEFT key.\n");
+
 		}
 		else if (memcmp(buf->base, ESCAPE "[C", 3) == 0) {
-			fprintf(stderr, "Got RIGHT key.\n");
+
 		}
 		else {
 			fprintf(stderr, "Got unknown sequence: (%X) (%X) (%X).\n", buf->base[0], buf->base[1], buf->base[2]);
@@ -279,6 +343,28 @@ static void tcpAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf) {
 
 static void tcpRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf_t *buf) {
 
+}
+
+static void addCompletion(completions lc, const char *completion) {
+
+}
+
+static void updatePossibleCompletions(const char *currentString) {
+	if (cmpl == NULL) {
+		cmpl = calloc(1, sizeof(struct completions_struct) + (2 * sizeof(char *)));
+		cmpl->completionsLength = 2;
+	}
+
+	// If we never generated completions, or the we have new information on the completions,
+	// we re-generate the list and reset the index to zero.
+	if (cmpl->basedOnString == NULL || !caerStrEquals(cmpl->basedOnString, currentString)) {
+
+		cmpl->selectedCompletion = 0;
+	}
+	else {
+		// Same completion, just hit TAB again.
+		cmpl->selectedCompletion++;
+	}
 }
 
 static void handleRequest(uv_connect_t *client, int status) {
@@ -584,7 +670,7 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 		sshsHelperTypeToStringConverter(type), msgLength, dataBuffer + 4);
 }
 
-static void handleCommandCompletion(const char *buf, linenoiseCompletions *lc) {
+static void handleCommandCompletion(const char *buf, completions lc) {
 	size_t bufLength = strlen(buf);
 
 	// First let's split up the command into its constituents.
@@ -731,7 +817,7 @@ static void handleCommandCompletion(const char *buf, linenoiseCompletions *lc) {
 	}
 }
 
-static void actionCompletion(const char *buf, size_t bufLength, linenoiseCompletions *lc,
+static void actionCompletion(const char *buf, size_t bufLength, completions lc,
 	const char *partialActionString, size_t partialActionStringLength) {
 	UNUSED_ARGUMENT(buf);
 	UNUSED_ARGUMENT(bufLength);
@@ -752,7 +838,7 @@ static void actionCompletion(const char *buf, size_t bufLength, linenoiseComplet
 	}
 }
 
-static void nodeCompletion(const char *buf, size_t bufLength, linenoiseCompletions *lc, uint8_t actionCode,
+static void nodeCompletion(const char *buf, size_t bufLength, completions lc, uint8_t actionCode,
 	const char *partialNodeString, size_t partialNodeStringLength) {
 	UNUSED_ARGUMENT(actionCode);
 
@@ -822,7 +908,7 @@ static void nodeCompletion(const char *buf, size_t bufLength, linenoiseCompletio
 	}
 }
 
-static void keyCompletion(const char *buf, size_t bufLength, linenoiseCompletions *lc, uint8_t actionCode,
+static void keyCompletion(const char *buf, size_t bufLength, completions lc, uint8_t actionCode,
 	const char *nodeString, size_t nodeStringLength, const char *partialKeyString, size_t partialKeyStringLength) {
 	UNUSED_ARGUMENT(actionCode);
 
@@ -877,7 +963,7 @@ static void keyCompletion(const char *buf, size_t bufLength, linenoiseCompletion
 	}
 }
 
-static void typeCompletion(const char *buf, size_t bufLength, linenoiseCompletions *lc, uint8_t actionCode,
+static void typeCompletion(const char *buf, size_t bufLength, completions lc, uint8_t actionCode,
 	const char *nodeString, size_t nodeStringLength, const char *keyString, size_t keyStringLength,
 	const char *partialTypeString, size_t partialTypeStringLength) {
 	UNUSED_ARGUMENT(actionCode);
@@ -936,7 +1022,7 @@ static void typeCompletion(const char *buf, size_t bufLength, linenoiseCompletio
 	}
 }
 
-static void valueCompletion(const char *buf, size_t bufLength, linenoiseCompletions *lc, uint8_t actionCode,
+static void valueCompletion(const char *buf, size_t bufLength, completions lc, uint8_t actionCode,
 	const char *nodeString, size_t nodeStringLength, const char *keyString, size_t keyStringLength,
 	const char *typeString, size_t typeStringLength, const char *partialValueString, size_t partialValueStringLength) {
 	UNUSED_ARGUMENT(actionCode);
@@ -1020,7 +1106,7 @@ static void valueCompletion(const char *buf, size_t bufLength, linenoiseCompleti
 	}
 }
 
-static void linenoiseAddCompletionSuffix(linenoiseCompletions *lc, const char *buf, size_t completionPoint,
+static void linenoiseAddCompletionSuffix(completions lc, const char *buf, size_t completionPoint,
 	const char *suffix, bool endSpace, bool endSlash) {
 	char concat[2048];
 
@@ -1041,7 +1127,7 @@ static void linenoiseAddCompletionSuffix(linenoiseCompletions *lc, const char *b
 		}
 	}
 
-	linenoiseAddCompletion(lc, concat);
+	addCompletion(lc, concat);
 }
 
 // Remember to free strings returned by this.
