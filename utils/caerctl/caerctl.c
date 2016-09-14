@@ -110,6 +110,11 @@ int main(int argc, char *argv[]) {
 	ttyIn = (uv_stream_t *) &caerctlTTYInput;
 	caerctlTTYInput.data = NULL;
 
+	// Switch stdin TTY to RAW mode, so we get every character and can build
+	// up auto-completion and console like input.
+	retVal = uv_tty_set_mode(&caerctlTTYInput, UV_TTY_MODE_RAW);
+	UV_RET_CHECK_CC(retVal, "uv_tty_set_mode", goto ttyInCleanup);
+
 	// Initialize stdout TTY.
 	uv_tty_t caerctlTTYOutput;
 	uv_tty_init(&caerctlLoop, &caerctlTTYOutput, STDOUT_FILENO, false);
@@ -130,8 +135,7 @@ int main(int argc, char *argv[]) {
 
 	// Connect to the remote TCP server.
 	uv_connect_t caerctlTCPConnect;
-	retVal = uv_tcp_connect(&caerctlTCPConnect, &caerctlTCPClient, (struct sockaddr *) &configServerAddress,
-		&tcpConnect);
+	//retVal = uv_tcp_connect(&caerctlTCPConnect, &caerctlTCPClient, (struct sockaddr *) &configServerAddress,&tcpConnect);
 	UV_RET_CHECK_CC(retVal, "uv_tcp_connect", goto tcpCleanup);
 
 	// Run event loop.
@@ -148,6 +152,8 @@ int main(int argc, char *argv[]) {
 	}
 
 	ttyInCleanup: {
+		uv_tty_reset_mode();
+
 		uv_close((uv_handle_t *) &caerctlTTYInput, NULL);
 	}
 
@@ -194,17 +200,48 @@ static void ttyAlloc(uv_handle_t *tty, size_t suggestedSize, uv_buf_t *buf) {
 	buf->len = dataBuf->bufferSize - dataBuf->bufferUsedSize;
 }
 
+#define ESCAPE "\x1B"
+
 static void ttyRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf) {
-	fprintf(stderr, "Read STDIN\n");
+	fprintf(stderr, "Read STDIN.\n");
 
 	if (sizeRead < 0) {
-		fprintf(stderr, "STDIN closed: %s\n", uv_err_name(sizeRead));
+		fprintf(stderr, "STDIN closed: %s.\n", uv_err_name((int) sizeRead));
 		uv_read_stop(tty);
 		return;
 	}
 
-	fprintf(stderr, "Input length: %zu\n", sizeRead);
-	fprintf(stderr, "Buffer length: %zu (%s)\n", buf->len, buf->base);
+	fprintf(stderr, "Input length: %zu.\n", sizeRead);
+
+	if (sizeRead == 1) {
+		// Got char.
+		fprintf(stderr, "Char is: (%X).\n", buf->base[0]);
+	}
+	else if (sizeRead == 3) {
+		// Arrow keys.
+		if (memcmp(buf->base, ESCAPE "[A", 3) == 0) {
+			fprintf(stderr, "Got UP key.\n");
+		}
+		else if (memcmp(buf->base, ESCAPE "[B", 3) == 0) {
+			fprintf(stderr, "Got DOWN key.\n");
+		}
+		else if (memcmp(buf->base, ESCAPE "[D", 3) == 0) {
+			fprintf(stderr, "Got LEFT key.\n");
+		}
+		else if (memcmp(buf->base, ESCAPE "[C", 3) == 0) {
+			fprintf(stderr, "Got RIGHT key.\n");
+		}
+		else {
+			fprintf(stderr, "Got unknown sequence: (%X) (%X) (%X).\n", buf->base[0], buf->base[1], buf->base[2]);
+		}
+	}
+	else {
+		fprintf(stderr, "Got unknown sequence: ");
+		for (size_t i = 0; i < (size_t) sizeRead; i++) {
+			fprintf(stderr, "(%X) ", buf->base[i]);
+		}
+		fprintf(stderr, ".\n");
+	}
 }
 
 static void tcpConnect(uv_connect_t *clientConnect, int status) {
