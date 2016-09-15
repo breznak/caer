@@ -112,6 +112,7 @@ static inline bool simpleBufferFileRead(uv_loop_t *loop, uv_file file, int64_t f
 
 struct libuvWriteBufStruct {
 	uv_buf_t buf;
+	void *data; // Allow arbitrary data to be attached to buffer. Must be on heap.
 	uint8_t dataBuf[];
 };
 
@@ -151,10 +152,14 @@ static inline int libuvCloseLoopHandles(uv_loop_t *loop) {
 static inline void libuvWriteFree(uv_write_t *writeRequest, int status) {
 	(void) (status); // UNUSED.
 
-	libuvCloseFree((uv_handle_t *) writeRequest);
+	libuvWriteBuf buf = writeRequest->data;
+	free(buf->data);
+	free(buf);
+
+	free(writeRequest);
 }
 
-// buffer has to be dynamically allocated. On success, will get free'd
+// buffer has to be dynamically allocated (on heap). On success, will get free'd
 // automatically. On failure, buffer won't be touched.
 static inline int libuvWrite(uv_stream_t *dest, libuvWriteBuf buffer) {
 	uv_write_t *writeRequest = calloc(1, sizeof(*writeRequest));

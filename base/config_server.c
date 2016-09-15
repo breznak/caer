@@ -182,9 +182,9 @@ static void configServerRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf
 }
 
 static void configServerShutdown(uv_shutdown_t *clientShutdown, int status) {
-	libuvCloseFree((uv_handle_t *) clientShutdown);
-
 	uv_close((uv_handle_t *) clientShutdown->handle, &libuvCloseFree);
+
+	free(clientShutdown);
 
 	UV_RET_CHECK_CS(status, "AfterShutdown", return);
 }
