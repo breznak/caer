@@ -308,7 +308,8 @@ void caerInputDAVISRun(caerModuleData moduleData, size_t argsNumber, va_list arg
 	if (*container != NULL) {
 		caerMainloopFreeAfterLoop((void (*)(void *)) &caerEventPacketContainerFree, *container);
 
-		sshsNodePutLong(sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"), "highestTimestamp",
+		sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
+		sshsNodePutLong(sourceInfoNode, "highestTimestamp",
 			caerEventPacketContainerGetHighestEventTimestamp(*container));
 
 		// Detect timestamp reset and call all reset functions for processors and outputs.
@@ -318,6 +319,10 @@ void caerInputDAVISRun(caerModuleData moduleData, size_t argsNumber, va_list arg
 			&& (caerSpecialEventPacketFindEventByType((caerSpecialEventPacket) special, TIMESTAMP_RESET) != NULL)) {
 			caerMainloopResetProcessors(moduleData->moduleID);
 			caerMainloopResetOutputs(moduleData->moduleID);
+
+			// Update master/slave information.
+			struct caer_davis_info devInfo = caerDavisInfoGet(moduleData->moduleState);
+			sshsNodePutBool(sourceInfoNode, "deviceIsMaster", devInfo.deviceIsMaster);
 		}
 	}
 }
