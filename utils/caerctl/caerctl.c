@@ -11,8 +11,11 @@
 #include <pwd.h>
 #include "ext/libuv.h"
 #include "ext/sshs/sshs.h"
+#include "ext/nets.h"
 #include "ext/portable_misc.h"
 #include "base/config_server.h"
+
+static int sockFd = -1;
 
 #define UV_RET_CHECK_CC(RET_VAL, FUNC_NAME, CLEANUP_ACTIONS) \
 	if (RET_VAL < 0) { \
@@ -23,9 +26,6 @@
 
 static void ttyAlloc(uv_handle_t *tty, size_t suggestedSize, uv_buf_t *buf);
 static void ttyRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf);
-static void tcpConnect(uv_connect_t *clientConnect, int status);
-static void tcpAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf);
-static void tcpRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf_t *buf);
 
 struct completions_struct {
 	char *basedOnString;
@@ -37,19 +37,6 @@ struct completions_struct {
 typedef struct completions_struct *completions;
 
 static completions cmpl = NULL;
-
-enum requestTypes {
-	NONE = 0, COMMAND = 1, NODE_COMPLETION = 2, KEY_COMPLETION = 3, TYPE_COMPLETION = 4, VALUE_COMPLETION = 5,
-};
-
-static struct {
-	enum requestTypes type;
-	completions lc;
-	char *buf;
-	size_t bufLength;
-	char *string;
-	size_t stringLength;
-} callbackers = { .type = NONE, .lc = NULL, .buf = NULL, .bufLength = 0, .string = NULL, .stringLength = 0 };
 
 static void handleInputLine(const char *buf, size_t bufLength);
 static void handleCommandCompletion(const char *buf, completions lc);
@@ -90,7 +77,6 @@ static const size_t actionsLength = sizeof(actions) / sizeof(actions[0]);
 
 static uv_stream_t *ttyIn = NULL;
 static uv_stream_t *ttyOut = NULL;
-static uv_stream_t *tcpClient = NULL;
 static char *shellPromptStrPrint = NULL;
 static char *shellPromptStrEdit = NULL;
 static size_t shellPromptLength = 0;
@@ -120,6 +106,20 @@ int main(int argc, char *argv[]) {
 
 	int retVal = uv_ip4_addr(ipAddress, portNumber, &configServerAddress);
 	UV_RET_CHECK_CC(retVal, "uv_ip4_addr", return (EXIT_FAILURE));
+
+	// Connect to the remote cAER config server.
+	sockFd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (sockFd < 0) {
+		fprintf(stderr, "Failed to create TCP socket.\n");
+		return (EXIT_FAILURE);
+	}
+
+	if (connect(sockFd, (struct sockaddr *) &configServerAddress, sizeof(struct sockaddr_in)) < 0) {
+		close(sockFd);
+
+		fprintf(stderr, "Failed to connect to remote config server.\n");
+		return (EXIT_FAILURE);
+	}
 
 	// Create a shell prompt with the IP:Port displayed.
 	shellPromptLength = (size_t) snprintf(NULL, 0, ESCAPE "[2K\rcAER @ %s:%" PRIu16 " >> ", ipAddress, portNumber);
@@ -152,36 +152,19 @@ int main(int argc, char *argv[]) {
 	ttyOut = (uv_stream_t *) &caerctlTTYOutput;
 	caerctlTTYOutput.data = NULL;
 
-	// Open a TCP client socket for configuration handling.
-	uv_tcp_t caerctlTCPClient;
-	retVal = uv_tcp_init(&caerctlLoop, &caerctlTCPClient);
-	UV_RET_CHECK_CC(retVal, "uv_tcp_init", goto ttyOutCleanup);
-	tcpClient = (uv_stream_t *) &caerctlTCPClient;
-	caerctlTCPClient.data = NULL;
-
 	// Start reading on TTYs, as they are ready now.
 	retVal = uv_read_start(ttyIn, &ttyAlloc, &ttyRead);
-	UV_RET_CHECK_CC(retVal, "uv_read_start(tty)", goto tcpCleanup);
+	UV_RET_CHECK_CC(retVal, "uv_read_start(tty)", goto ttyOutCleanup);
 
 	libuvWriteBuf prompt = libuvWriteBufInit(shellPromptLength);
 	memcpy(prompt->dataBuf, shellPromptStrPrint, shellPromptLength);
 	libuvWrite(ttyOut, prompt);
 
-	// Connect to the remote TCP server.
-	uv_connect_t caerctlTCPConnect;
-	retVal = uv_tcp_connect(&caerctlTCPConnect, &caerctlTCPClient, (struct sockaddr *) &configServerAddress,
-		&tcpConnect);
-	UV_RET_CHECK_CC(retVal, "uv_tcp_connect", goto tcpCleanup);
-
 	// Run event loop.
 	retVal = uv_run(&caerctlLoop, UV_RUN_DEFAULT);
-	UV_RET_CHECK_CC(retVal, "uv_run", goto tcpCleanup);
+	UV_RET_CHECK_CC(retVal, "uv_run", goto ttyOutCleanup);
 
 	// Cleanup event loop and memory.
-	tcpCleanup: {
-		uv_close((uv_handle_t *) &caerctlTCPClient, NULL);
-	}
-
 	ttyOutCleanup: {
 		uv_close((uv_handle_t *) &caerctlTTYOutput, NULL);
 	}
@@ -350,228 +333,6 @@ static void ttyRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf) {
 	}
 }
 
-static void tcpConnect(uv_connect_t *clientConnect, int status) {
-	assert(clientConnect->handle == tcpClient);
-
-	UV_RET_CHECK_CC(status, "Connection", uv_stop(clientConnect->handle->loop); return);
-
-	int retVal = uv_read_start(clientConnect->handle, &tcpAlloc, &tcpRead);
-	UV_RET_CHECK_CC(retVal, "uv_read_start(tcp)", uv_stop(clientConnect->handle->loop); return);
-}
-
-static void tcpAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_t *buf) {
-	UNUSED_ARGUMENT(suggestedSize);
-
-	// We use one buffer per connection, with a fixed maximum size, and
-	// re-use it until we have read a full message.
-	if (client->data == NULL) {
-		client->data = simpleBufferInit(4096);
-
-		if (client->data == NULL) {
-			// Allocation failure!
-			buf->base = NULL;
-			buf->len = 0;
-
-			fprintf(stderr, "Failed to allocate memory for client buffer.");
-			return;
-		}
-	}
-
-	simpleBuffer dataBuf = client->data;
-
-	buf->base = (char *) (dataBuf->buffer + dataBuf->bufferUsedSize);
-	buf->len = dataBuf->bufferSize - dataBuf->bufferUsedSize;
-}
-
-static void configServerShutdown(uv_shutdown_t *clientShutdown, int status) {
-	libuvCloseFree((uv_handle_t *) clientShutdown);
-
-	uv_close((uv_handle_t *) clientShutdown->handle, &libuvCloseFree);
-
-	UV_RET_CHECK_CC(status, "AfterShutdown", return);
-}
-
-static void tcpRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf_t *buf) {
-	UNUSED_ARGUMENT(buf); // Use our own buffer directly.
-
-	// sizeRead < 0: Error or EndOfFile (EOF).
-	if (sizeRead < 0) {
-		if (sizeRead == UV_EOF) {
-			fprintf(stderr, "Client %d closed connection.", client->accepted_fd);
-		}
-		else {
-			fprintf(stderr, "Read failed, error %ld (%s).", sizeRead, uv_err_name((int) sizeRead));
-		}
-
-		// Close connection.
-		uv_shutdown_t *clientShutdown = calloc(1, sizeof(*clientShutdown));
-		if (clientShutdown == NULL) {
-			fprintf(stderr, "Failed to allocate memory for client shutdown.");
-
-			// Hard close.
-			uv_close((uv_handle_t *) client, &libuvCloseFree);
-			return;
-		}
-
-		int retVal = uv_shutdown(clientShutdown, client, &configServerShutdown);
-		UV_RET_CHECK_CC(retVal, "uv_shutdown", free(clientShutdown); uv_close((uv_handle_t *) client, &libuvCloseFree));
-	}
-
-	// sizeRead == 0: EAGAIN, do nothing.
-
-	// sizeRead > 0: received data.
-	if (sizeRead > 0) {
-		simpleBuffer dataBuf = client->data;
-
-		// Update main client buffer with just read data.
-		dataBuf->bufferUsedSize += (size_t) sizeRead;
-
-		// The response from the server follows a simplified version of the request
-		// protocol. A byte for ACTION, a byte for TYPE, 2 bytes for MSG_LEN and then
-		// up to 4092 bytes of MSG, for a maximum total of 4096 bytes again.
-		// MSG must be NUL terminated, and the NUL byte shall be part of the length.
-		if (dataBuf->bufferUsedSize >= 4) {
-			// Decode response header fields (all in little-endian).
-			uint16_t msgLength = le16toh(*(uint16_t * )(dataBuf->buffer + 2));
-
-			// Total length to get for response.
-			if (dataBuf->bufferUsedSize >= (4 + msgLength)) {
-				uint8_t action = dataBuf->buffer[0];
-				uint8_t type = dataBuf->buffer[1];
-
-				switch (callbackers.type) {
-					case NODE_COMPLETION: {
-						if (action == CAER_CONFIG_ERROR || type != SSHS_STRING) {
-							// Invalid request made, no auto-completion.
-							return;
-						}
-
-						// At this point we made a valid request and got back a full response.
-						for (size_t i = 0; i < msgLength; i++) {
-							if (strncasecmp((const char *) dataBuf->buffer + 4 + i, callbackers.string + 1,
-								strlen(callbackers.string + 1)) == 0) {
-								linenoiseAddCompletionSuffix(callbackers.lc, callbackers.buf,
-									callbackers.bufLength - strlen(callbackers.string + 1),
-									(const char *) dataBuf->buffer + 4 + i,
-									false, true);
-							}
-
-							// Jump to the NUL character after this string.
-							i += strlen((const char *) dataBuf->buffer + 4 + i);
-						}
-						break;
-					}
-
-					case KEY_COMPLETION: {
-						if (action == CAER_CONFIG_ERROR || type != SSHS_STRING) {
-							// Invalid request made, no auto-completion.
-							return;
-						}
-
-						// At this point we made a valid request and got back a full response.
-						for (size_t i = 0; i < msgLength; i++) {
-							if (strncasecmp((const char *) dataBuf->buffer + 4 + i, callbackers.string,
-								callbackers.stringLength) == 0) {
-								linenoiseAddCompletionSuffix(callbackers.lc, callbackers.buf,
-									callbackers.bufLength - callbackers.stringLength,
-									(const char *) dataBuf->buffer + 4 + i,
-									true, false);
-							}
-
-							// Jump to the NUL character after this string.
-							i += strlen((const char *) dataBuf->buffer + 4 + i);
-						}
-						break;
-					}
-
-					case TYPE_COMPLETION: {
-						if (action == CAER_CONFIG_ERROR || type != SSHS_STRING) {
-							// Invalid request made, no auto-completion.
-							return;
-						}
-
-						// At this point we made a valid request and got back a full response.
-						for (size_t i = 0; i < msgLength; i++) {
-							if (strncasecmp((const char *) dataBuf->buffer + 4 + i, callbackers.string,
-								callbackers.stringLength) == 0) {
-								linenoiseAddCompletionSuffix(callbackers.lc, callbackers.buf,
-									callbackers.bufLength - callbackers.stringLength,
-									(const char *) dataBuf->buffer + 4 + i, true, false);
-							}
-
-							// Jump to the NUL character after this string.
-							i += strlen((const char *) dataBuf->buffer + 4 + i);
-						}
-						break;
-					}
-
-					case VALUE_COMPLETION: {
-						if (action == CAER_CONFIG_ERROR) {
-							// Invalid request made, no auto-completion.
-							return;
-						}
-
-						// At this point we made a valid request and got back a full response.
-						// We can just use it directly and paste it in as completion.
-						linenoiseAddCompletionSuffix(callbackers.lc, callbackers.buf, callbackers.bufLength,
-							(const char *) dataBuf->buffer + 4, false, false);
-
-						// If this is a boolean value, we can also add the inverse as a second completion.
-						if (type == SSHS_BOOL) {
-							if (strcmp((const char *) dataBuf->buffer + 4, "true") == 0) {
-								linenoiseAddCompletionSuffix(callbackers.lc, callbackers.buf, callbackers.bufLength,
-									"false", false, false);
-							}
-							else {
-								linenoiseAddCompletionSuffix(callbackers.lc, callbackers.buf, callbackers.bufLength,
-									"true", false, false);
-							}
-						}
-						break;
-					}
-
-					case COMMAND: {
-						// Convert action back to a string.
-						const char *actionString = NULL;
-
-						// Detect error response.
-						if (action == CAER_CONFIG_ERROR) {
-							actionString = "error";
-						}
-						else {
-							for (size_t i = 0; i < actionsLength; i++) {
-								if (actions[i].code == action) {
-									actionString = actions[i].name;
-								}
-							}
-						}
-
-						// Display results.
-						printf("Result: action=%s, type=%s, msgLength=%" PRIu16 ", msg='%s'.\n", actionString,
-							sshsHelperTypeToStringConverter(type), msgLength, dataBuf->buffer + 4);
-						break;
-					}
-
-					case NONE:
-					default: {
-						fprintf(stderr, "Unknown request type.\n");
-						break;
-					}
-				}
-
-				free(callbackers.buf);
-				callbackers.buf = NULL;
-
-				free(callbackers.string);
-				callbackers.string = NULL;
-
-				// Reset buffer for next request.
-				dataBuf->bufferUsedSize = 0;
-			}
-		}
-	}
-}
-
 static void addCompletion(completions lc, const char *completion) {
 	for (size_t i = 0; i < lc->completionsLength; i++) {
 		if (lc->completions[i] == NULL) {
@@ -691,7 +452,7 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 	// EXTRA, NODE, KEY, VALUE have to be NUL terminated, and their length
 	// must include the NUL termination byte.
 	// This results in a maximum message size of 4096 bytes (4KB).
-	libuvWriteBuf dataBuffer = libuvWriteBufInit(4096);
+	uint8_t dataBuffer[4096];
 	size_t dataBufferLength = 0;
 
 	// Now that we know what we want to do, let's decode the command line.
@@ -709,14 +470,14 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 
 			size_t nodeLength = strlen(commandParts[CMD_PART_NODE]) + 1; // +1 for terminating NUL byte.
 
-			dataBuffer->dataBuf[0] = actionCode;
-			dataBuffer->dataBuf[1] = 0; // UNUSED.
-			setExtraLen(dataBuffer->dataBuf, 0); // UNUSED.
-			setNodeLen(dataBuffer->dataBuf, (uint16_t) nodeLength);
-			setKeyLen(dataBuffer->dataBuf, 0); // UNUSED.
-			setValueLen(dataBuffer->dataBuf, 0); // UNUSED.
+			dataBuffer[0] = actionCode;
+			dataBuffer[1] = 0; // UNUSED.
+			setExtraLen(dataBuffer, 0); // UNUSED.
+			setNodeLen(dataBuffer, (uint16_t) nodeLength);
+			setKeyLen(dataBuffer, 0); // UNUSED.
+			setValueLen(dataBuffer, 0); // UNUSED.
 
-			memcpy(dataBuffer->dataBuf + 10, commandParts[CMD_PART_NODE], nodeLength);
+			memcpy(dataBuffer + 10, commandParts[CMD_PART_NODE], nodeLength);
 
 			dataBufferLength = 10 + nodeLength;
 
@@ -752,15 +513,15 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 				return;
 			}
 
-			dataBuffer->dataBuf[0] = actionCode;
-			dataBuffer->dataBuf[1] = (uint8_t) type;
-			setExtraLen(dataBuffer->dataBuf, 0); // UNUSED.
-			setNodeLen(dataBuffer->dataBuf, (uint16_t) nodeLength);
-			setKeyLen(dataBuffer->dataBuf, (uint16_t) keyLength);
-			setValueLen(dataBuffer->dataBuf, 0); // UNUSED.
+			dataBuffer[0] = actionCode;
+			dataBuffer[1] = (uint8_t) type;
+			setExtraLen(dataBuffer, 0); // UNUSED.
+			setNodeLen(dataBuffer, (uint16_t) nodeLength);
+			setKeyLen(dataBuffer, (uint16_t) keyLength);
+			setValueLen(dataBuffer, 0); // UNUSED.
 
-			memcpy(dataBuffer->dataBuf + 10, commandParts[CMD_PART_NODE], nodeLength);
-			memcpy(dataBuffer->dataBuf + 10 + nodeLength, commandParts[CMD_PART_KEY], keyLength);
+			memcpy(dataBuffer + 10, commandParts[CMD_PART_NODE], nodeLength);
+			memcpy(dataBuffer + 10 + nodeLength, commandParts[CMD_PART_KEY], keyLength);
 
 			dataBufferLength = 10 + nodeLength + keyLength;
 
@@ -800,16 +561,16 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 				return;
 			}
 
-			dataBuffer->dataBuf[0] = actionCode;
-			dataBuffer->dataBuf[1] = (uint8_t) type;
-			setExtraLen(dataBuffer->dataBuf, 0); // UNUSED.
-			setNodeLen(dataBuffer->dataBuf, (uint16_t) nodeLength);
-			setKeyLen(dataBuffer->dataBuf, (uint16_t) keyLength);
-			setValueLen(dataBuffer->dataBuf, (uint16_t) valueLength);
+			dataBuffer[0] = actionCode;
+			dataBuffer[1] = (uint8_t) type;
+			setExtraLen(dataBuffer, 0); // UNUSED.
+			setNodeLen(dataBuffer, (uint16_t) nodeLength);
+			setKeyLen(dataBuffer, (uint16_t) keyLength);
+			setValueLen(dataBuffer, (uint16_t) valueLength);
 
-			memcpy(dataBuffer->dataBuf + 10, commandParts[CMD_PART_NODE], nodeLength);
-			memcpy(dataBuffer->dataBuf + 10 + nodeLength, commandParts[CMD_PART_KEY], keyLength);
-			memcpy(dataBuffer->dataBuf + 10 + nodeLength + keyLength, commandParts[CMD_PART_VALUE], valueLength);
+			memcpy(dataBuffer + 10, commandParts[CMD_PART_NODE], nodeLength);
+			memcpy(dataBuffer + 10 + nodeLength, commandParts[CMD_PART_KEY], keyLength);
+			memcpy(dataBuffer + 10 + nodeLength + keyLength, commandParts[CMD_PART_VALUE], valueLength);
 
 			dataBufferLength = 10 + nodeLength + keyLength + valueLength;
 
@@ -821,9 +582,50 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 			return;
 	}
 
-	callbackers.type = COMMAND;
-	dataBuffer->buf.len = dataBufferLength;
-	libuvWrite(tcpClient, dataBuffer);
+	// Send formatted command to configuration server.
+	if (!sendUntilDone(sockFd, dataBuffer, dataBufferLength)) {
+		fprintf(stderr, "Error: unable to send data to config server (%d).\n", errno);
+		return;
+	}
+
+	// The response from the server follows a simplified version of the request
+	// protocol. A byte for ACTION, a byte for TYPE, 2 bytes for MSG_LEN and then
+	// up to 4092 bytes of MSG, for a maximum total of 4096 bytes again.
+	// MSG must be NUL terminated, and the NUL byte shall be part of the length.
+	if (!recvUntilDone(sockFd, dataBuffer, 4)) {
+		fprintf(stderr, "Error: unable to receive data from config server (%d).\n", errno);
+		return;
+	}
+
+	// Decode response header fields (all in little-endian).
+	uint8_t action = dataBuffer[0];
+	uint8_t type = dataBuffer[1];
+	uint16_t msgLength = le16toh(*(uint16_t * )(dataBuffer + 2));
+
+	// Total length to get for response.
+	if (!recvUntilDone(sockFd, dataBuffer + 4, msgLength)) {
+		fprintf(stderr, "Error: unable to receive data from config server (%d).\n", errno);
+		return;
+	}
+
+	// Convert action back to a string.
+	const char *actionString = NULL;
+
+	// Detect error response.
+	if (action == CAER_CONFIG_ERROR) {
+		actionString = "error";
+	}
+	else {
+		for (size_t i = 0; i < actionsLength; i++) {
+			if (actions[i].code == action) {
+				actionString = actions[i].name;
+			}
+		}
+	}
+
+	// Display results.
+	printf("Result: action=%s, type=%s, msgLength=%" PRIu16 ", msg='%s'.\n", actionString,
+		sshsHelperTypeToStringConverter(type), msgLength, dataBuffer + 4);
 }
 
 static void handleCommandCompletion(const char *buf, completions lc) {
@@ -973,8 +775,8 @@ static void handleCommandCompletion(const char *buf, completions lc) {
 	}
 }
 
-static void actionCompletion(const char *buf, size_t bufLength, completions lc, const char *partialActionString,
-	size_t partialActionStringLength) {
+static void actionCompletion(const char *buf, size_t bufLength, completions lc,
+	const char *partialActionString, size_t partialActionStringLength) {
 	UNUSED_ARGUMENT(buf);
 	UNUSED_ARGUMENT(bufLength);
 
@@ -1013,54 +815,110 @@ static void nodeCompletion(const char *buf, size_t bufLength, completions lc, ui
 
 	size_t lastNodeLength = (size_t) (lastNode - partialNodeString) + 1;
 
-	libuvWriteBuf dataBuffer = libuvWriteBufInit(10 + lastNodeLength + 1);
+	uint8_t dataBuffer[1024];
 
 	// Send request for all children names.
-	dataBuffer->dataBuf[0] = CAER_CONFIG_GET_CHILDREN;
-	dataBuffer->dataBuf[1] = 0; // UNUSED.
-	setExtraLen(dataBuffer->dataBuf, 0); // UNUSED.
-	setNodeLen(dataBuffer->dataBuf, (uint16_t) (lastNodeLength + 1)); // +1 for terminating NUL byte.
-	setKeyLen(dataBuffer->dataBuf, 0); // UNUSED.
-	setValueLen(dataBuffer->dataBuf, 0); // UNUSED.
+	dataBuffer[0] = CAER_CONFIG_GET_CHILDREN;
+	dataBuffer[1] = 0; // UNUSED.
+	setExtraLen(dataBuffer, 0); // UNUSED.
+	setNodeLen(dataBuffer, (uint16_t) (lastNodeLength + 1)); // +1 for terminating NUL byte.
+	setKeyLen(dataBuffer, 0); // UNUSED.
+	setValueLen(dataBuffer, 0); // UNUSED.
 
-	memcpy(dataBuffer->dataBuf + 10, partialNodeString, lastNodeLength);
-	dataBuffer->dataBuf[10 + lastNodeLength] = '\0';
+	memcpy(dataBuffer + 10, partialNodeString, lastNodeLength);
+	dataBuffer[10 + lastNodeLength] = '\0';
 
-	callbackers.type = NODE_COMPLETION;
-	callbackers.lc = lc;
-	callbackers.buf = strdup(buf);
-	callbackers.bufLength = bufLength;
-	callbackers.string = (lastNode == NULL) ? (NULL) : (strdup(lastNode));
-	callbackers.stringLength = lastNodeLength;
+	if (!sendUntilDone(sockFd, dataBuffer, 10 + lastNodeLength + 1)) {
+		// Failed to contact remote host, no auto-completion!
+		return;
+	}
 
-	libuvWrite(tcpClient, dataBuffer);
+	if (!recvUntilDone(sockFd, dataBuffer, 4)) {
+		// Failed to contact remote host, no auto-completion!
+		return;
+	}
+
+	// Decode response header fields (all in little-endian).
+	uint8_t action = dataBuffer[0];
+	uint8_t type = dataBuffer[1];
+	uint16_t msgLength = le16toh(*(uint16_t * )(dataBuffer + 2));
+
+	// Total length to get for response.
+	if (!recvUntilDone(sockFd, dataBuffer + 4, msgLength)) {
+		// Failed to contact remote host, no auto-completion!
+		return;
+	}
+
+	if (action == CAER_CONFIG_ERROR || type != SSHS_STRING) {
+		// Invalid request made, no auto-completion.
+		return;
+	}
+
+	// At this point we made a valid request and got back a full response.
+	for (size_t i = 0; i < msgLength; i++) {
+		if (strncasecmp((const char *) dataBuffer + 4 + i, lastNode + 1, strlen(lastNode + 1)) == 0) {
+			linenoiseAddCompletionSuffix(lc, buf, bufLength - strlen(lastNode + 1), (const char *) dataBuffer + 4 + i,
+			false, true);
+		}
+
+		// Jump to the NUL character after this string.
+		i += strlen((const char *) dataBuffer + 4 + i);
+	}
 }
 
-static void keyCompletion(const char *buf, size_t bufLength, completions lc, uint8_t actionCode, const char *nodeString,
-	size_t nodeStringLength, const char *partialKeyString, size_t partialKeyStringLength) {
+static void keyCompletion(const char *buf, size_t bufLength, completions lc, uint8_t actionCode,
+	const char *nodeString, size_t nodeStringLength, const char *partialKeyString, size_t partialKeyStringLength) {
 	UNUSED_ARGUMENT(actionCode);
 
-	libuvWriteBuf dataBuffer = libuvWriteBufInit(10 + nodeStringLength + 1);
+	uint8_t dataBuffer[1024];
 
 	// Send request for all attribute names for this node.
-	dataBuffer->dataBuf[0] = CAER_CONFIG_GET_ATTRIBUTES;
-	dataBuffer->dataBuf[1] = 0; // UNUSED.
-	setExtraLen(dataBuffer->dataBuf, 0); // UNUSED.
-	setNodeLen(dataBuffer->dataBuf, (uint16_t) (nodeStringLength + 1)); // +1 for terminating NUL byte.
-	setKeyLen(dataBuffer->dataBuf, 0); // UNUSED.
-	setValueLen(dataBuffer->dataBuf, 0); // UNUSED.
+	dataBuffer[0] = CAER_CONFIG_GET_ATTRIBUTES;
+	dataBuffer[1] = 0; // UNUSED.
+	setExtraLen(dataBuffer, 0); // UNUSED.
+	setNodeLen(dataBuffer, (uint16_t) (nodeStringLength + 1)); // +1 for terminating NUL byte.
+	setKeyLen(dataBuffer, 0); // UNUSED.
+	setValueLen(dataBuffer, 0); // UNUSED.
 
-	memcpy(dataBuffer->dataBuf + 10, nodeString, nodeStringLength);
-	dataBuffer->dataBuf[10 + nodeStringLength] = '\0';
+	memcpy(dataBuffer + 10, nodeString, nodeStringLength);
+	dataBuffer[10 + nodeStringLength] = '\0';
 
-	callbackers.type = KEY_COMPLETION;
-	callbackers.lc = lc;
-	callbackers.buf = strdup(buf);
-	callbackers.bufLength = bufLength;
-	callbackers.string = (partialKeyString == NULL) ? (NULL) : (strdup(partialKeyString));
-	callbackers.stringLength = partialKeyStringLength;
+	if (!sendUntilDone(sockFd, dataBuffer, 10 + nodeStringLength + 1)) {
+		// Failed to contact remote host, no auto-completion!
+		return;
+	}
 
-	libuvWrite(tcpClient, dataBuffer);
+	if (!recvUntilDone(sockFd, dataBuffer, 4)) {
+		// Failed to contact remote host, no auto-completion!
+		return;
+	}
+
+	// Decode response header fields (all in little-endian).
+	uint8_t action = dataBuffer[0];
+	uint8_t type = dataBuffer[1];
+	uint16_t msgLength = le16toh(*(uint16_t * )(dataBuffer + 2));
+
+	// Total length to get for response.
+	if (!recvUntilDone(sockFd, dataBuffer + 4, msgLength)) {
+		// Failed to contact remote host, no auto-completion!
+		return;
+	}
+
+	if (action == CAER_CONFIG_ERROR || type != SSHS_STRING) {
+		// Invalid request made, no auto-completion.
+		return;
+	}
+
+	// At this point we made a valid request and got back a full response.
+	for (size_t i = 0; i < msgLength; i++) {
+		if (strncasecmp((const char *) dataBuffer + 4 + i, partialKeyString, partialKeyStringLength) == 0) {
+			linenoiseAddCompletionSuffix(lc, buf, bufLength - partialKeyStringLength, (const char *) dataBuffer + 4 + i,
+			true, false);
+		}
+
+		// Jump to the NUL character after this string.
+		i += strlen((const char *) dataBuffer + 4 + i);
+	}
 }
 
 static void typeCompletion(const char *buf, size_t bufLength, completions lc, uint8_t actionCode,
@@ -1068,30 +926,58 @@ static void typeCompletion(const char *buf, size_t bufLength, completions lc, ui
 	const char *partialTypeString, size_t partialTypeStringLength) {
 	UNUSED_ARGUMENT(actionCode);
 
-	libuvWriteBuf dataBuffer = libuvWriteBufInit(10 + nodeStringLength + 1 + keyStringLength + 1);
+	uint8_t dataBuffer[1024];
 
 	// Send request for all type names for this key on this node.
-	dataBuffer->dataBuf[0] = CAER_CONFIG_GET_TYPES;
-	dataBuffer->dataBuf[1] = 0; // UNUSED.
-	setExtraLen(dataBuffer->dataBuf, 0); // UNUSED.
-	setNodeLen(dataBuffer->dataBuf, (uint16_t) (nodeStringLength + 1)); // +1 for terminating NUL byte.
-	setKeyLen(dataBuffer->dataBuf, (uint16_t) (keyStringLength + 1)); // +1 for terminating NUL byte.
-	setValueLen(dataBuffer->dataBuf, 0); // UNUSED.
+	dataBuffer[0] = CAER_CONFIG_GET_TYPES;
+	dataBuffer[1] = 0; // UNUSED.
+	setExtraLen(dataBuffer, 0); // UNUSED.
+	setNodeLen(dataBuffer, (uint16_t) (nodeStringLength + 1)); // +1 for terminating NUL byte.
+	setKeyLen(dataBuffer, (uint16_t) (keyStringLength + 1)); // +1 for terminating NUL byte.
+	setValueLen(dataBuffer, 0); // UNUSED.
 
-	memcpy(dataBuffer->dataBuf + 10, nodeString, nodeStringLength);
-	dataBuffer->dataBuf[10 + nodeStringLength] = '\0';
+	memcpy(dataBuffer + 10, nodeString, nodeStringLength);
+	dataBuffer[10 + nodeStringLength] = '\0';
 
-	memcpy(dataBuffer->dataBuf + 10 + nodeStringLength + 1, keyString, keyStringLength);
-	dataBuffer->dataBuf[10 + nodeStringLength + 1 + keyStringLength] = '\0';
+	memcpy(dataBuffer + 10 + nodeStringLength + 1, keyString, keyStringLength);
+	dataBuffer[10 + nodeStringLength + 1 + keyStringLength] = '\0';
 
-	callbackers.type = TYPE_COMPLETION;
-	callbackers.lc = lc;
-	callbackers.buf = strdup(buf);
-	callbackers.bufLength = bufLength;
-	callbackers.string = (partialTypeString == NULL) ? (NULL) : (strdup(partialTypeString));
-	callbackers.stringLength = partialTypeStringLength;
+	if (!sendUntilDone(sockFd, dataBuffer, 10 + nodeStringLength + 1 + keyStringLength + 1)) {
+		// Failed to contact remote host, no auto-completion!
+		return;
+	}
 
-	libuvWrite(tcpClient, dataBuffer);
+	if (!recvUntilDone(sockFd, dataBuffer, 4)) {
+		// Failed to contact remote host, no auto-completion!
+		return;
+	}
+
+	// Decode response header fields (all in little-endian).
+	uint8_t action = dataBuffer[0];
+	uint8_t type = dataBuffer[1];
+	uint16_t msgLength = le16toh(*(uint16_t * )(dataBuffer + 2));
+
+	// Total length to get for response.
+	if (!recvUntilDone(sockFd, dataBuffer + 4, msgLength)) {
+		// Failed to contact remote host, no auto-completion!
+		return;
+	}
+
+	if (action == CAER_CONFIG_ERROR || type != SSHS_STRING) {
+		// Invalid request made, no auto-completion.
+		return;
+	}
+
+	// At this point we made a valid request and got back a full response.
+	for (size_t i = 0; i < msgLength; i++) {
+		if (strncasecmp((const char *) dataBuffer + 4 + i, partialTypeString, partialTypeStringLength) == 0) {
+			linenoiseAddCompletionSuffix(lc, buf, bufLength - partialTypeStringLength,
+				(const char *) dataBuffer + 4 + i, true, false);
+		}
+
+		// Jump to the NUL character after this string.
+		i += strlen((const char *) dataBuffer + 4 + i);
+	}
 }
 
 static void valueCompletion(const char *buf, size_t bufLength, completions lc, uint8_t actionCode,
@@ -1122,30 +1008,60 @@ static void valueCompletion(const char *buf, size_t bufLength, completions lc, u
 		return;
 	}
 
-	libuvWriteBuf dataBuffer = libuvWriteBufInit(10 + nodeStringLength + 1 + keyStringLength + 1);
+	uint8_t dataBuffer[1024];
 
 	// Send request for the current value, so we can auto-complete with it as default.
-	dataBuffer->dataBuf[0] = CAER_CONFIG_GET;
-	dataBuffer->dataBuf[1] = (uint8_t) type;
-	setExtraLen(dataBuffer->dataBuf, 0); // UNUSED.
-	setNodeLen(dataBuffer->dataBuf, (uint16_t) (nodeStringLength + 1)); // +1 for terminating NUL byte.
-	setKeyLen(dataBuffer->dataBuf, (uint16_t) (keyStringLength + 1)); // +1 for terminating NUL byte.
-	setValueLen(dataBuffer->dataBuf, 0); // UNUSED.
+	dataBuffer[0] = CAER_CONFIG_GET;
+	dataBuffer[1] = (uint8_t) type;
+	setExtraLen(dataBuffer, 0); // UNUSED.
+	setNodeLen(dataBuffer, (uint16_t) (nodeStringLength + 1)); // +1 for terminating NUL byte.
+	setKeyLen(dataBuffer, (uint16_t) (keyStringLength + 1)); // +1 for terminating NUL byte.
+	setValueLen(dataBuffer, 0); // UNUSED.
 
-	memcpy(dataBuffer->dataBuf + 10, nodeString, nodeStringLength);
-	dataBuffer->dataBuf[10 + nodeStringLength] = '\0';
+	memcpy(dataBuffer + 10, nodeString, nodeStringLength);
+	dataBuffer[10 + nodeStringLength] = '\0';
 
-	memcpy(dataBuffer->dataBuf + 10 + nodeStringLength + 1, keyString, keyStringLength);
-	dataBuffer->dataBuf[10 + nodeStringLength + 1 + keyStringLength] = '\0';
+	memcpy(dataBuffer + 10 + nodeStringLength + 1, keyString, keyStringLength);
+	dataBuffer[10 + nodeStringLength + 1 + keyStringLength] = '\0';
 
-	callbackers.type = VALUE_COMPLETION;
-	callbackers.lc = lc;
-	callbackers.buf = strdup(buf);
-	callbackers.bufLength = bufLength;
-	callbackers.string = (partialValueString == NULL) ? (NULL) : (strdup(partialValueString));
-	callbackers.stringLength = partialValueStringLength;
+	if (!sendUntilDone(sockFd, dataBuffer, 10 + nodeStringLength + 1 + keyStringLength + 1)) {
+		// Failed to contact remote host, no auto-completion!
+		return;
+	}
 
-	libuvWrite(tcpClient, dataBuffer);
+	if (!recvUntilDone(sockFd, dataBuffer, 4)) {
+		// Failed to contact remote host, no auto-completion!
+		return;
+	}
+
+	// Decode response header fields (all in little-endian).
+	uint8_t action = dataBuffer[0];
+	uint16_t msgLength = le16toh(*(uint16_t * )(dataBuffer + 2));
+
+	// Total length to get for response.
+	if (!recvUntilDone(sockFd, dataBuffer + 4, msgLength)) {
+		// Failed to contact remote host, no auto-completion!
+		return;
+	}
+
+	if (action == CAER_CONFIG_ERROR) {
+		// Invalid request made, no auto-completion.
+		return;
+	}
+
+	// At this point we made a valid request and got back a full response.
+	// We can just use it directly and paste it in as completion.
+	linenoiseAddCompletionSuffix(lc, buf, bufLength, (const char *) dataBuffer + 4, false, false);
+
+	// If this is a boolean value, we can also add the inverse as a second completion.
+	if (type == SSHS_BOOL) {
+		if (strcmp((const char *) dataBuffer + 4, "true") == 0) {
+			linenoiseAddCompletionSuffix(lc, buf, bufLength, "false", false, false);
+		}
+		else {
+			linenoiseAddCompletionSuffix(lc, buf, bufLength, "true", false, false);
+		}
+	}
 }
 
 static void linenoiseAddCompletionSuffix(completions lc, const char *buf, size_t completionPoint, const char *suffix,
