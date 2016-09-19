@@ -1030,7 +1030,7 @@ static void nodeCompletion(const char *buf, size_t bufLength, completions lc, ui
 	callbackers.lc = lc;
 	callbackers.buf = strdup(buf);
 	callbackers.bufLength = bufLength;
-	callbackers.string = strdup(lastNode);
+	callbackers.string = (lastNode == NULL) ? (NULL) : (strdup(lastNode));
 	callbackers.stringLength = lastNodeLength;
 
 	libuvWrite(tcpClient, dataBuffer);
@@ -1057,7 +1057,7 @@ static void keyCompletion(const char *buf, size_t bufLength, completions lc, uin
 	callbackers.lc = lc;
 	callbackers.buf = strdup(buf);
 	callbackers.bufLength = bufLength;
-	callbackers.string = strdup(partialKeyString);
+	callbackers.string = (partialKeyString == NULL) ? (NULL) : (strdup(partialKeyString));
 	callbackers.stringLength = partialKeyStringLength;
 
 	libuvWrite(tcpClient, dataBuffer);
@@ -1088,7 +1088,7 @@ static void typeCompletion(const char *buf, size_t bufLength, completions lc, ui
 	callbackers.lc = lc;
 	callbackers.buf = strdup(buf);
 	callbackers.bufLength = bufLength;
-	callbackers.string = strdup(partialTypeString);
+	callbackers.string = (partialTypeString == NULL) ? (NULL) : (strdup(partialTypeString));
 	callbackers.stringLength = partialTypeStringLength;
 
 	libuvWrite(tcpClient, dataBuffer);
@@ -1142,7 +1142,7 @@ static void valueCompletion(const char *buf, size_t bufLength, completions lc, u
 	callbackers.lc = lc;
 	callbackers.buf = strdup(buf);
 	callbackers.bufLength = bufLength;
-	callbackers.string = strdup(partialValueString);
+	callbackers.string = (partialValueString == NULL) ? (NULL) : (strdup(partialValueString));
 	callbackers.stringLength = partialValueStringLength;
 
 	libuvWrite(tcpClient, dataBuffer);
