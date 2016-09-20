@@ -73,17 +73,17 @@ int main(int argc, char *argv[]) {
 		sscanf(argv[2], "%" SCNu16, &portNumber);
 	}
 
+	struct sockaddr_in listenUDPAddress;
+
+	int retVal = uv_ip4_addr(ipAddress, portNumber, &listenUDPAddress);
+	UV_RET_CHECK_STDERR(retVal, "uv_ip4_addr", return (EXIT_FAILURE));
+
 	// Create listening socket for UDP data.
 	int listenUDPSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (listenUDPSocket < 0) {
 		fprintf(stderr, "Failed to create UDP socket.\n");
 		return (EXIT_FAILURE);
 	}
-
-	struct sockaddr_in listenUDPAddress;
-
-	int retVal = uv_ip4_addr(ipAddress, portNumber, &listenUDPAddress);
-	UV_RET_CHECK_STDERR(retVal, "uv_ip4_addr", return (EXIT_FAILURE));
 
 	if (bind(listenUDPSocket, (struct sockaddr *) &listenUDPAddress, sizeof(struct sockaddr_in)) < 0) {
 		close(listenUDPSocket);

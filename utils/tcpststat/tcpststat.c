@@ -74,17 +74,17 @@ int main(int argc, char *argv[]) {
 		sscanf(argv[2], "%" SCNu16, &portNumber);
 	}
 
+	struct sockaddr_in listenTCPAddress;
+
+	int retVal = uv_ip4_addr(ipAddress, portNumber, &listenTCPAddress);
+	UV_RET_CHECK_STDERR(retVal, "uv_ip4_addr", return (EXIT_FAILURE));
+
 	// Create listening socket for TCP data.
 	int listenTCPSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (listenTCPSocket < 0) {
 		fprintf(stderr, "Failed to create TCP socket.\n");
 		return (EXIT_FAILURE);
 	}
-
-	struct sockaddr_in listenTCPAddress;
-
-	int retVal = uv_ip4_addr(ipAddress, portNumber, &listenTCPAddress);
-	UV_RET_CHECK_STDERR(retVal, "uv_ip4_addr", return (EXIT_FAILURE));
 
 	if (connect(listenTCPSocket, (struct sockaddr *) &listenTCPAddress, sizeof(struct sockaddr_in)) < 0) {
 		close(listenTCPSocket);
