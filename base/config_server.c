@@ -211,8 +211,18 @@ static int caerConfigServerRunner(void *inPtr) {
 	bool eventLoopInitialized = false;
 	bool tcpServerInitialized = false;
 
-	// Main event loop for handling connections.
 	uv_loop_t configServerLoop;
+	uv_tcp_t configServerTCP;
+
+	// Generate address.
+	struct sockaddr_in configServerAddress;
+
+	char *ipAddress = sshsNodeGetString(serverNode, "ipAddress");
+	retVal = uv_ip4_addr(ipAddress, sshsNodeGetInt(serverNode, "portNumber"), &configServerAddress);
+	UV_RET_CHECK_CS(retVal, "uv_ip4_addr", free(ipAddress); goto loopCleanup);
+	free(ipAddress);
+
+	// Main event loop for handling connections.
 	retVal = uv_loop_init(&configServerLoop);
 	UV_RET_CHECK_CS(retVal, "uv_loop_init", goto loopCleanup);
 	eventLoopInitialized = true;
@@ -224,18 +234,9 @@ static int caerConfigServerRunner(void *inPtr) {
 
 	// Open a TCP server socket for configuration handling.
 	// TCP chosen for reliability, which is more important here than speed.
-	uv_tcp_t configServerTCP;
 	retVal = uv_tcp_init(&configServerLoop, &configServerTCP);
 	UV_RET_CHECK_CS(retVal, "uv_tcp_init", goto loopCleanup);
 	tcpServerInitialized = true;
-
-	// Generate address.
-	struct sockaddr_in configServerAddress;
-
-	char *ipAddress = sshsNodeGetString(serverNode, "ipAddress");
-	retVal = uv_ip4_addr(ipAddress, sshsNodeGetInt(serverNode, "portNumber"), &configServerAddress);
-	UV_RET_CHECK_CS(retVal, "uv_ip4_addr", free(ipAddress); goto loopCleanup);
-	free(ipAddress);
 
 	// Bind socket to above address.
 	retVal = uv_tcp_bind(&configServerTCP, (struct sockaddr *) &configServerAddress, 0);
@@ -262,11 +263,11 @@ static int caerConfigServerRunner(void *inPtr) {
 			uv_close((uv_handle_t *) &configServerThread.asyncShutdown, NULL);
 		}
 
-		// Cleanup all remaining handles and run until all callbacks are done.
-		retVal = libuvCloseLoopHandles(&configServerLoop);
-		UV_RET_CHECK_CS(retVal, "libuvCloseLoopHandles",);
-
 		if (eventLoopInitialized) {
+			// Cleanup all remaining handles and run until all callbacks are done.
+			retVal = libuvCloseLoopHandles(&configServerLoop);
+			UV_RET_CHECK_CS(retVal, "libuvCloseLoopHandles",);
+
 			retVal = uv_loop_close(&configServerLoop);
 			UV_RET_CHECK_CS(retVal, "uv_loop_close",);
 		}
