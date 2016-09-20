@@ -4,7 +4,11 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/socket.h>
 #include "ext/libuv.h"
+#include "ext/nets.h"
+#include "modules/misc/inout_common.h"
 
 #include <libcaer/events/common.h>
 
@@ -22,6 +26,17 @@ static void globalShutdownSignalHandler(int signal) {
 
 int main(int argc, char *argv[]) {
 	// Install signal handler for global shutdown.
+#if defined(_WIN32)
+	if (signal(SIGTERM, &globalShutdownSignalHandler) == SIG_ERR) {
+		caerLog(CAER_LOG_CRITICAL, "ShutdownAction", "Failed to set signal handler for SIGTERM. Error: %d.", errno);
+		return (EXIT_FAILURE);
+	}
+
+	if (signal(SIGINT, &globalShutdownSignalHandler) == SIG_ERR) {
+		caerLog(CAER_LOG_CRITICAL, "ShutdownAction", "Failed to set signal handler for SIGINT. Error: %d.", errno);
+		return (EXIT_FAILURE);
+	}
+#else
 	struct sigaction shutdownAction;
 
 	shutdownAction.sa_handler = &globalShutdownSignalHandler;
@@ -39,6 +54,7 @@ int main(int argc, char *argv[]) {
 		caerLog(CAER_LOG_CRITICAL, "ShutdownAction", "Failed to set signal handler for SIGINT. Error: %d.", errno);
 		return (EXIT_FAILURE);
 	}
+#endif
 
 	// First of all, parse the IP:Port we need to listen on.
 	// Those are for now also the only two parameters permitted.
@@ -66,17 +82,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	struct sockaddr_in listenTCPAddress;
-	memset(&listenTCPAddress, 0, sizeof(struct sockaddr_in));
 
-	listenTCPAddress.sin_family = AF_INET;
-	listenTCPAddress.sin_port = htons(portNumber);
-
-	if (inet_pton(AF_INET, ipAddress, &listenTCPAddress.sin_addr) == 0) {
-		close(listenTCPSocket);
-
-		fprintf(stderr, "No valid IP address found. '%s' is invalid!\n", ipAddress);
-		return (EXIT_FAILURE);
-	}
+	int retVal = uv_ip4_addr(ipAddress, portNumber, &listenTCPAddress);
+	UV_RET_CHECK_STDERR(retVal, "uv_ip4_addr", return (EXIT_FAILURE));
 
 	if (connect(listenTCPSocket, (struct sockaddr *) &listenTCPAddress, sizeof(struct sockaddr_in)) < 0) {
 		close(listenTCPSocket);
@@ -96,7 +104,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Get network header (20 bytes).
-	if (!recvUntilDone(listenTCPSocket, dataBuffer, 20)) {
+	if (!recvUntilDone(listenTCPSocket, dataBuffer, AEDAT3_NETWORK_HEADER_LENGTH)) {
 		free(dataBuffer);
 		close(listenTCPSocket);
 
@@ -104,11 +112,14 @@ int main(int argc, char *argv[]) {
 		return (EXIT_FAILURE);
 	}
 
-	printf("Magic number: %" PRIi64 "\n", *((int64_t *) (dataBuffer + 0)));
-	printf("Sequence number: %" PRIi64 "\n", *((int64_t *) (dataBuffer + 8)));
-	printf("Version number: %" PRIi8 "\n", *((int8_t *) (dataBuffer + 16)));
-	printf("Format number: %" PRIi8 "\n", *((int8_t *) (dataBuffer + 17)));
-	printf("Source number: %" PRIi16 "\n", *((int16_t *) (dataBuffer + 18)));
+	// Decode network header.
+	struct aedat3_network_header networkHeader = caerParseNetworkHeader(dataBuffer);
+
+	printf("Magic number: %" PRIi64 "\n", networkHeader.magicNumber);
+	printf("Sequence number: %" PRIi64 "\n", networkHeader.sequenceNumber);
+	printf("Version number: %" PRIi8 "\n", networkHeader.versionNumber);
+	printf("Format number: %" PRIi8 "\n", networkHeader.formatNumber);
+	printf("Source ID: %" PRIi16 "\n", networkHeader.sourceID);
 
 	while (!atomic_load_explicit(&globalShutdown, memory_order_relaxed)) {
 		// Get packet header, to calculate packet size.

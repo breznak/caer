@@ -4,7 +4,11 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <string.h>
-#include "ext/libuv.h"
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include "ext/nets.h"
+#include "modules/misc/inout_common.h"
 
 #include <libcaer/events/common.h>
 
@@ -77,7 +81,7 @@ int main(int argc, char *argv[]) {
 		return (EXIT_FAILURE);
 	}
 
-	// 1M data buffer should be enough for the TCP event packets. Frames are very big!
+	// 1M data buffer should be enough for the Unix Socket event packets. Frames are very big!
 	size_t dataBufferLength = 1024 * 1024;
 	uint8_t *dataBuffer = malloc(dataBufferLength);
 	if (dataBuffer == NULL) {
@@ -88,7 +92,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Get network header (20 bytes).
-	if (!recvUntilDone(listenUnixSocket, dataBuffer, 20)) {
+	if (!recvUntilDone(listenUnixSocket, dataBuffer, AEDAT3_NETWORK_HEADER_LENGTH)) {
 		free(dataBuffer);
 		close(listenUnixSocket);
 
@@ -96,11 +100,14 @@ int main(int argc, char *argv[]) {
 		return (EXIT_FAILURE);
 	}
 
-	printf("Magic number: %" PRIi64 "\n", *((int64_t *) (dataBuffer + 0)));
-	printf("Sequence number: %" PRIi64 "\n", *((int64_t *) (dataBuffer + 8)));
-	printf("Version number: %" PRIi8 "\n", *((int8_t *) (dataBuffer + 16)));
-	printf("Format number: %" PRIi8 "\n", *((int8_t *) (dataBuffer + 17)));
-	printf("Source number: %" PRIi16 "\n", *((int16_t *) (dataBuffer + 18)));
+	// Decode network header.
+	struct aedat3_network_header networkHeader = caerParseNetworkHeader(dataBuffer);
+
+	printf("Magic number: %" PRIi64 "\n", networkHeader.magicNumber);
+	printf("Sequence number: %" PRIi64 "\n", networkHeader.sequenceNumber);
+	printf("Version number: %" PRIi8 "\n", networkHeader.versionNumber);
+	printf("Format number: %" PRIi8 "\n", networkHeader.formatNumber);
+	printf("Source ID: %" PRIi16 "\n", networkHeader.sourceID);
 
 	while (!atomic_load_explicit(&globalShutdown, memory_order_relaxed)) {
 		// Get packet header, to calculate packet size.

@@ -1,10 +1,3 @@
-/*
- * udpststat.c
- *
- *  Created on: Jan 14, 2014
- *      Author: llongi
- */
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -13,8 +6,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
+#include "ext/libuv.h"
+#include "modules/misc/inout_common.h"
 
 #include <libcaer/events/common.h>
 
@@ -32,6 +25,17 @@ static void globalShutdownSignalHandler(int signal) {
 
 int main(int argc, char *argv[]) {
 	// Install signal handler for global shutdown.
+#if defined(_WIN32)
+	if (signal(SIGTERM, &globalShutdownSignalHandler) == SIG_ERR) {
+		caerLog(CAER_LOG_CRITICAL, "ShutdownAction", "Failed to set signal handler for SIGTERM. Error: %d.", errno);
+		return (EXIT_FAILURE);
+	}
+
+	if (signal(SIGINT, &globalShutdownSignalHandler) == SIG_ERR) {
+		caerLog(CAER_LOG_CRITICAL, "ShutdownAction", "Failed to set signal handler for SIGINT. Error: %d.", errno);
+		return (EXIT_FAILURE);
+	}
+#else
 	struct sigaction shutdownAction;
 
 	shutdownAction.sa_handler = &globalShutdownSignalHandler;
@@ -49,6 +53,7 @@ int main(int argc, char *argv[]) {
 		caerLog(CAER_LOG_CRITICAL, "ShutdownAction", "Failed to set signal handler for SIGINT. Error: %d.", errno);
 		return (EXIT_FAILURE);
 	}
+#endif
 
 	// First of all, parse the IP:Port we need to listen on.
 	// Those are for now also the only two parameters permitted.
@@ -76,17 +81,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	struct sockaddr_in listenUDPAddress;
-	memset(&listenUDPAddress, 0, sizeof(struct sockaddr_in));
 
-	listenUDPAddress.sin_family = AF_INET;
-	listenUDPAddress.sin_port = htons(portNumber);
-
-	if (inet_pton(AF_INET, ipAddress, &listenUDPAddress.sin_addr) == 0) {
-		close(listenUDPSocket);
-
-		fprintf(stderr, "No valid IP address found. '%s' is invalid!\n", ipAddress);
-		return (EXIT_FAILURE);
-	}
+	int retVal = uv_ip4_addr(ipAddress, portNumber, &listenUDPAddress);
+	UV_RET_CHECK_STDERR(retVal, "uv_ip4_addr", return (EXIT_FAILURE));
 
 	if (bind(listenUDPSocket, (struct sockaddr *) &listenUDPAddress, sizeof(struct sockaddr_in)) < 0) {
 		close(listenUDPSocket);
@@ -95,7 +92,8 @@ int main(int argc, char *argv[]) {
 		return (EXIT_FAILURE);
 	}
 
-	// 64K data buffer should be enough for the UDP packets.
+	// 64K data buffer should be enough for the UDP packets. That should be the
+	// maximum single datagram size.
 	size_t dataBufferLength = 1024 * 64;
 	uint8_t *dataBuffer = malloc(dataBufferLength);
 	if (dataBuffer == NULL) {
@@ -118,11 +116,13 @@ int main(int argc, char *argv[]) {
 		printf("Result of recv() call: %zd\n", result);
 
 		// Decode network header.
-		printf("Magic number: %" PRIi64 "\n", *((int64_t *) (dataBuffer + 0)));
-		printf("Sequence number: %" PRIi64 "\n", *((int64_t *) (dataBuffer + 8)));
-		printf("Version number: %" PRIi8 "\n", *((int8_t *) (dataBuffer + 16)));
-		printf("Format number: %" PRIi8 "\n", *((int8_t *) (dataBuffer + 17)));
-		printf("Source number: %" PRIi16 "\n", *((int16_t *) (dataBuffer + 18)));
+		struct aedat3_network_header networkHeader = caerParseNetworkHeader(dataBuffer);
+
+		printf("Magic number: %" PRIi64 "\n", networkHeader.magicNumber);
+		printf("Sequence number: %" PRIi64 "\n", networkHeader.sequenceNumber);
+		printf("Version number: %" PRIi8 "\n", networkHeader.versionNumber);
+		printf("Format number: %" PRIi8 "\n", networkHeader.formatNumber);
+		printf("Source ID: %" PRIi16 "\n", networkHeader.sourceID);
 
 		// Decode successfully received data.
 		caerEventPacketHeader header = (caerEventPacketHeader) dataBuffer + 20;
