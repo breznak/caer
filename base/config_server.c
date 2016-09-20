@@ -119,16 +119,30 @@ static void configServerRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf
 
 	// sizeRead < 0: Error or EndOfFile (EOF).
 	if (sizeRead < 0) {
+		uv_shutdown_t *clientShutdown = NULL;
+
+		struct sockaddr_in tcpClientAddr;
+		int tcpClientAddrLength = sizeof(struct sockaddr_in);
+		char tcpClientIP[16] = { 0 };
+
+		int retVal = uv_tcp_getpeername((uv_tcp_t *) client, (struct sockaddr *) &tcpClientAddr, &tcpClientAddrLength);
+		UV_RET_CHECK_CS(retVal, "uv_tcp_getpeername", goto closeConnection);
+
+		retVal = uv_ip4_name(&tcpClientAddr, tcpClientIP, 16);
+		UV_RET_CHECK_CS(retVal, "uv_ip4_name", goto closeConnection);
+
 		if (sizeRead == UV_EOF) {
-			caerLog(CAER_LOG_INFO, CONFIG_SERVER_NAME, "Client %d closed connection.", client->accepted_fd);
+			caerLog(CAER_LOG_INFO, CONFIG_SERVER_NAME, "Client %s:%d closed connection.", tcpClientIP,
+				tcpClientAddr.sin_port);
 		}
 		else {
-			caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Read failed, error %ld (%s).", sizeRead,
-				uv_err_name((int) sizeRead));
+			caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Read failed with client %s:%d, error %ld (%s).", tcpClientIP,
+				tcpClientAddr.sin_port, sizeRead, uv_err_name((int) sizeRead));
 		}
 
+		closeConnection:
 		// Close connection.
-		uv_shutdown_t *clientShutdown = calloc(1, sizeof(*clientShutdown));
+		clientShutdown = calloc(1, sizeof(*clientShutdown));
 		if (clientShutdown == NULL) {
 			caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client shutdown.");
 
@@ -137,7 +151,7 @@ static void configServerRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf
 			return;
 		}
 
-		int retVal = uv_shutdown(clientShutdown, client, &configServerShutdown);
+		retVal = uv_shutdown(clientShutdown, client, &configServerShutdown);
 		UV_RET_CHECK_CS(retVal, "uv_shutdown", free(clientShutdown); uv_close((uv_handle_t *) client, &libuvCloseFree));
 	}
 
