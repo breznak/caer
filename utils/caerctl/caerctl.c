@@ -47,7 +47,6 @@ typedef struct libuv_tty_struct *libuvTTY;
 struct libuv_tty_struct {
 	// TTY I/O support.
 	uv_tty_t ttyIn;
-	uv_tty_t ttyOut;
 	char ttyCmdIn[LIBUV_SHELL_MAX_CMDINLENGTH];
 	char *shellPrompt;
 	size_t shellPromptLength;
@@ -63,15 +62,13 @@ static int libuvTTYInit(uv_loop_t *loop, libuvTTY tty, const char *shellPrompt,
 	void (*generateCompletions)(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete));
 static void libuvTTYClose(libuvTTY tty);
 static void libuvTTYOnInputClose(uv_handle_t *handle);
-static void libuvTTYPrintShellPrompt(libuvTTY tty);
-static void libuvTTYPrintNewline(libuvTTY tty);
 static void libuvTTYAlloc(uv_handle_t *tty, size_t suggestedSize, uv_buf_t *buf);
 static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf);
 
 static libuvTTYCompletions libuvTTYAutoCompleteAlloc(size_t maxSize);
 static void libuvTTYAutoCompleteFree(libuvTTYCompletions autoComplete);
-static void libuvTTYAutoCompleteAddCompletion(libuvTTYCompletions autoComplete, const char *completion);
 static void libuvTTYAutoCompleteClearCompletions(libuvTTYCompletions autoComplete);
+static void libuvTTYAutoCompleteAddCompletion(libuvTTYCompletions autoComplete, const char *completion);
 static void libuvTTYAutoCompleteUpdateCompletions(libuvTTYCompletions autoComplete, const char *currentString);
 
 static int libuvTTYInit(uv_loop_t *loop, libuvTTY tty, const char *shellPrompt,
@@ -118,19 +115,11 @@ static int libuvTTYInit(uv_loop_t *loop, libuvTTY tty, const char *shellPrompt,
 	// Associate TTY with its data.
 	tty->ttyIn.data = tty;
 
-	// Initialize stdout TTY.
-	retVal = uv_tty_init(loop, &tty->ttyOut, STDOUT_FILENO, false);
-	if (retVal < 0) {
-		uv_close((uv_handle_t *) &tty->ttyIn, &libuvTTYOnInputClose);
-		return (retVal);
-	}
-
 	// Switch stdin TTY to RAW mode, so we get every character and can build
 	// up auto-completion and console like input.
 	retVal = uv_tty_set_mode(&tty->ttyIn, UV_TTY_MODE_RAW);
 	if (retVal < 0) {
 		uv_close((uv_handle_t *) &tty->ttyIn, &libuvTTYOnInputClose);
-		uv_close((uv_handle_t *) &tty->ttyOut, NULL);
 		return (retVal);
 	}
 
@@ -139,12 +128,12 @@ static int libuvTTYInit(uv_loop_t *loop, libuvTTY tty, const char *shellPrompt,
 	if (retVal < 0) {
 		uv_tty_reset_mode();
 		uv_close((uv_handle_t *) &tty->ttyIn, &libuvTTYOnInputClose);
-		uv_close((uv_handle_t *) &tty->ttyOut, NULL);
 		return (retVal);
 	}
 
-	// Output shell prompt.
-	libuvTTYPrintShellPrompt(tty);
+	// Output shell prompt. Disable buffering on stdout.
+	setvbuf(stdout, NULL, _IONBF, 0);
+	fprintf(stdout, "%s", tty->shellPrompt);
 
 	// Return success.
 	return (0);
@@ -153,7 +142,6 @@ static int libuvTTYInit(uv_loop_t *loop, libuvTTY tty, const char *shellPrompt,
 static void libuvTTYClose(libuvTTY tty) {
 	uv_tty_reset_mode();
 
-	uv_close((uv_handle_t *) &tty->ttyOut, NULL);
 	uv_close((uv_handle_t *) &tty->ttyIn, &libuvTTYOnInputClose);
 }
 
@@ -163,24 +151,6 @@ static void libuvTTYOnInputClose(uv_handle_t *handle) {
 	free(tty->shellPrompt);
 
 	libuvTTYAutoCompleteFree(tty->autoComplete);
-}
-
-static void libuvTTYPrintShellPrompt(libuvTTY tty) {
-	libuvWriteBuf prompt = libuvWriteBufInit(tty->shellPromptLength);
-	memcpy(prompt->dataBuf, tty->shellPrompt, tty->shellPromptLength);
-	libuvWrite((uv_stream_t *) &tty->ttyOut, prompt);
-}
-
-static void libuvTTYPrintNewline(libuvTTY tty) {
-	libuvWriteBuf prompt = libuvWriteBufInit(1);
-	prompt->dataBuf[0] = '\n';
-	libuvWrite((uv_stream_t *) &tty->ttyOut, prompt);
-}
-
-static void libuvTTYPrintString(libuvTTY tty, const char *str, size_t strLength) {
-	libuvWriteBuf prompt = libuvWriteBufInit(strLength);
-	memcpy(prompt->dataBuf, str, strLength);
-	libuvWrite((uv_stream_t *) &tty->ttyOut, prompt);
 }
 
 static void libuvTTYAlloc(uv_handle_t *tty, size_t suggestedSize, uv_buf_t *buf) {
@@ -207,14 +177,14 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 
 		// Detect termination.
 		if (c == EOT || c == ETX) {
-			libuvTTYPrintNewline(ttyData);
+			fprintf(stdout, "\n");
 			uv_read_stop(tty);
 			return;
 		}
 
 		// Detect newline -> go to newline and submit request.
 		if (c == NEWLINE || c == CARRIAGERETURN) {
-			libuvTTYPrintNewline(ttyData);
+			fprintf(stdout, "\n");
 
 			ttyData->handleInputLine(ttyData->shellContent, ttyData->shellContentIndex);
 
@@ -233,10 +203,7 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 				ttyData->autoComplete->completionInProgress = true;
 
 				// Print current completion, if it exists.
-				size_t currCompletionLength = strlen(currCompletion);
-
-				libuvTTYPrintShellPrompt(ttyData);
-				libuvTTYPrintString(ttyData, currCompletion, currCompletionLength);
+				fprintf(stdout, "%s%s", ttyData->shellPrompt, currCompletion);
 
 				return;
 			}
@@ -267,8 +234,7 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 		}
 
 		// Write updated line to stdout.
-		libuvTTYPrintShellPrompt(ttyData);
-		libuvTTYPrintString(ttyData, ttyData->shellContent, ttyData->shellContentIndex);
+		fprintf(stdout, "%s%s", ttyData->shellPrompt, ttyData->shellContent);
 	}
 	else if (sizeRead == 3) {
 		// Arrow keys.
@@ -717,7 +683,7 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 	}
 
 	// Display results.
-	printf("Result: action=%s, type=%s, msgLength=%" PRIu16 ", msg='%s'.\n", actionString,
+	fprintf(stdout, "Result: action=%s, type=%s, msgLength=%" PRIu16 ", msg='%s'.\n", actionString,
 		sshsHelperTypeToStringConverter(type), msgLength, dataBuffer + 4);
 }
 
