@@ -15,6 +15,13 @@
 		CLEANUP_ACTIONS; \
 	}
 
+#define UV_RET_CHECK_STDERR(RET_VAL, FUNC_NAME, CLEANUP_ACTIONS) \
+	if (RET_VAL < 0) { \
+		fprintf(stderr, FUNC_NAME " failed, error %d (%s).\n", \
+			RET_VAL, uv_err_name(RET_VAL)); \
+		CLEANUP_ACTIONS; \
+	}
+
 static inline bool simpleBufferFileWrite(uv_loop_t *loop, uv_file file, int64_t fileOffset, simpleBuffer buffer) {
 	if (buffer->bufferUsedSize > buffer->bufferSize) {
 		// Using more memory than available, this can't work!
