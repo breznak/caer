@@ -151,8 +151,10 @@ static int libuvTTYInit(uv_loop_t *loop, libuvTTY tty, const char *shellPrompt,
 }
 
 static void libuvTTYClose(libuvTTY tty) {
-	uv_close((uv_handle_t *) &tty->ttyIn, &libuvTTYOnInputClose);
+	uv_tty_reset_mode();
+
 	uv_close((uv_handle_t *) &tty->ttyOut, NULL);
+	uv_close((uv_handle_t *) &tty->ttyIn, &libuvTTYOnInputClose);
 }
 
 static void libuvTTYOnInputClose(uv_handle_t *handle) {
@@ -161,12 +163,9 @@ static void libuvTTYOnInputClose(uv_handle_t *handle) {
 	free(tty->shellPrompt);
 
 	libuvTTYAutoCompleteFree(tty->autoComplete);
-
-	uv_tty_reset_mode();
 }
 
 static void libuvTTYPrintShellPrompt(libuvTTY tty) {
-	// Output shell prompt.
 	libuvWriteBuf prompt = libuvWriteBufInit(tty->shellPromptLength);
 	memcpy(prompt->dataBuf, tty->shellPrompt, tty->shellPromptLength);
 	libuvWrite((uv_stream_t *) &tty->ttyOut, prompt);
@@ -175,6 +174,12 @@ static void libuvTTYPrintShellPrompt(libuvTTY tty) {
 static void libuvTTYPrintNewline(libuvTTY tty) {
 	libuvWriteBuf prompt = libuvWriteBufInit(1);
 	prompt->dataBuf[0] = '\n';
+	libuvWrite((uv_stream_t *) &tty->ttyOut, prompt);
+}
+
+static void libuvTTYPrintString(libuvTTY tty, const char *str, size_t strLength) {
+	libuvWriteBuf prompt = libuvWriteBufInit(strLength);
+	memcpy(prompt->dataBuf, str, strLength);
 	libuvWrite((uv_stream_t *) &tty->ttyOut, prompt);
 }
 
@@ -211,11 +216,11 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 		if (c == NEWLINE || c == CARRIAGERETURN) {
 			libuvTTYPrintNewline(ttyData);
 
-			// TODO: interpret line, send request.
+			ttyData->handleInputLine(ttyData->shellContent, ttyData->shellContentIndex);
 
 			// Reset line to empty.
-			ttyData->shellContentIndex = 0;
 			ttyData->shellContent[0] = '\0';
+			ttyData->shellContentIndex = 0;
 		}
 		else if (c == TAB && ttyData->autoComplete != NULL) {
 			// Auto-completion support.
@@ -231,10 +236,7 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 				size_t currCompletionLength = strlen(currCompletion);
 
 				libuvTTYPrintShellPrompt(ttyData);
-
-				libuvWriteBuf completionPrompt = libuvWriteBufInit(currCompletionLength);
-				memcpy(completionPrompt->dataBuf, currCompletion, currCompletionLength);
-				libuvWrite((uv_stream_t *) &ttyData->ttyOut, completionPrompt);
+				libuvTTYPrintString(ttyData, currCompletion, currCompletionLength);
 
 				return;
 			}
@@ -266,10 +268,7 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 
 		// Write updated line to stdout.
 		libuvTTYPrintShellPrompt(ttyData);
-
-		libuvWriteBuf contentPrompt = libuvWriteBufInit(ttyData->shellContentIndex);
-		memcpy(contentPrompt->dataBuf, ttyData->shellContent, ttyData->shellContentIndex);
-		libuvWrite((uv_stream_t *) &ttyData->ttyOut, contentPrompt);
+		libuvTTYPrintString(ttyData, ttyData->shellContent, ttyData->shellContentIndex);
 	}
 	else if (sizeRead == 3) {
 		// Arrow keys.
