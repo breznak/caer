@@ -42,7 +42,6 @@ struct libuv_tty_struct {
 	uv_tty_t ttyIn;
 	char ttyCmdIn[LIBUV_SHELL_MAX_CMDINLENGTH];
 	char *shellPrompt;
-	size_t shellPromptLength;
 	char shellContent[LIBUV_SHELL_MAX_LINELENGTH];
 	size_t shellContentIndex;
 	void (*handleInputLine)(const char *buf, size_t bufLength);
@@ -75,16 +74,25 @@ static int libuvTTYInit(uv_loop_t *loop, libuvTTY tty, const char *shellPrompt,
 	tty->handleInputLine = handleInputLine;
 
 	// Generate shell prompt.
-	tty->shellPromptLength = strlen(shellPrompt) + 9; // For ESCAPE "[2K\r" " >> ".
-	tty->shellPrompt = malloc(tty->shellPromptLength);
+	size_t shellPromptLength = strlen(shellPrompt);
+	tty->shellPrompt = malloc(shellPromptLength + 10); // For ESCAPE "[2K\r" " >> " and NUL character.
 	if (tty->shellPrompt == NULL) {
 		return (UV_ENOMEM);
 	}
 
-	// Erase current line, carriage return, shell prompt, separator.
-	memcpy(tty->shellPrompt, ESCAPE "[2K\r", 5);
-	memcpy(tty->shellPrompt + 5, shellPrompt, tty->shellPromptLength - 9);
-	memcpy(tty->shellPrompt + tty->shellPromptLength - 4, " >> ", 4);
+	// Erase current line, carriage return, shell prompt, separator, NUL character.
+	size_t memIdx = 0;
+
+	memcpy(tty->shellPrompt + memIdx, ESCAPE "[2K\r", 5);
+	memIdx += 5;
+
+	memcpy(tty->shellPrompt + memIdx, shellPrompt, shellPromptLength);
+	memIdx += shellPromptLength;
+
+	memcpy(tty->shellPrompt + memIdx, " >> ", 4);
+	memIdx += 4;
+
+	tty->shellPrompt[memIdx] = '\0';
 
 	// Initialize auto-complete support.
 	if (generateCompletions != NULL) {
