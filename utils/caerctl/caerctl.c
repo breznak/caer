@@ -3,16 +3,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <inttypes.h>
-#include <string.h>
-#include <strings.h>
-#include <assert.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <pwd.h>
 #include "ext/libuv.h"
-#include "ext/sshs/sshs.h"
 #include "ext/nets.h"
-#include "ext/portable_misc.h"
+#include "ext/sshs/sshs.h"
 #include "base/config_server.h"
 
 // LIBUV TTY CODE.
@@ -438,7 +431,6 @@ static void valueCompletion(const char *buf, size_t bufLength, libuvTTYCompletio
 static void addCompletionSuffix(libuvTTYCompletions autoComplete, const char *buf, size_t completionPoint,
 	const char *suffix,
 	bool endSpace, bool endSlash);
-static char *getUserHomeDirectory(void);
 
 static inline void setExtraLen(uint8_t *buf, uint16_t extraLen) {
 	*((uint16_t *) (buf + 2)) = htole16(extraLen);
@@ -1145,48 +1137,4 @@ static void addCompletionSuffix(libuvTTYCompletions autoComplete, const char *bu
 	}
 
 	libuvTTYAutoCompleteAddCompletion(autoComplete, concat);
-}
-
-// Remember to free strings returned by this.
-static char *getUserHomeDirectory(void) {
-	char *homeDir = NULL;
-
-	// First check the environment for $HOME.
-	char *homeVar = getenv("HOME");
-
-	if (homeVar != NULL) {
-		homeDir = strdup(homeVar);
-	}
-
-	// Else try to get it from the user data storage.
-	if (homeDir == NULL) {
-		struct passwd userPasswd;
-		struct passwd *userPasswdPtr;
-		char userPasswdBuf[2048];
-
-		if (getpwuid_r(getuid(), &userPasswd, userPasswdBuf, sizeof(userPasswdBuf), &userPasswdPtr) == 0) {
-			homeDir = strdup(userPasswd.pw_dir);
-		}
-	}
-
-	if (homeDir == NULL) {
-		// Else just return /tmp as a place to write to.
-		homeDir = strdup("/tmp");
-	}
-
-	// Check if anything worked.
-	if (homeDir == NULL) {
-		return (NULL);
-	}
-
-	char *realHomeDir = portable_realpath(homeDir);
-	if (realHomeDir == NULL) {
-		free(homeDir);
-
-		return (NULL);
-	}
-
-	free(homeDir);
-
-	return (realHomeDir);
 }
