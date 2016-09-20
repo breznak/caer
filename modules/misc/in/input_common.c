@@ -255,16 +255,8 @@ static bool newInputBuffer(inputCommonState state) {
 
 static bool parseNetworkHeader(inputCommonState state) {
 	// Network header is 20 bytes long. Use struct to interpret.
-	struct aedat3_network_header networkHeader;
-
-	// Copy data into packet struct.
-	memcpy(&networkHeader, state->dataBuffer->buffer, AEDAT3_NETWORK_HEADER_LENGTH);
+	struct aedat3_network_header networkHeader = caerParseNetworkHeader(state->dataBuffer->buffer);
 	state->dataBuffer->bufferPosition += AEDAT3_NETWORK_HEADER_LENGTH;
-
-	// Ensure endianness conversion is done if needed.
-	networkHeader.magicNumber = le64toh(networkHeader.magicNumber);
-	networkHeader.sequenceNumber = le64toh(networkHeader.sequenceNumber);
-	networkHeader.sourceID = le16toh(networkHeader.sourceID);
 
 	// Check header values.
 	if (networkHeader.magicNumber != AEDAT3_NETWORK_MAGIC_NUMBER) {

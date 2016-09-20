@@ -18,6 +18,21 @@ PACKED_STRUCT(struct aedat3_network_header {
 	int16_t sourceID;
 });
 
+static inline struct aedat3_network_header caerParseNetworkHeader(uint8_t *dataBuffer) {
+	// Network header is 20 bytes long. Use struct to interpret.
+	struct aedat3_network_header networkHeader;
+
+	// Copy data into packet struct.
+	memcpy(&networkHeader, dataBuffer, AEDAT3_NETWORK_HEADER_LENGTH);
+
+	// Ensure endianness conversion is done if needed.
+	networkHeader.magicNumber = le64toh(networkHeader.magicNumber);
+	networkHeader.sequenceNumber = le64toh(networkHeader.sequenceNumber);
+	networkHeader.sourceID = le16toh(networkHeader.sourceID);
+
+	return (networkHeader);
+}
+
 static inline void caerGenericEventSetTimestamp(void *eventPtr, caerEventPacketHeader headerPtr, int32_t timestamp) {
 	*((int32_t *) (((uint8_t *) eventPtr) + U64T(caerEventPacketHeaderGetEventTSOffset(headerPtr)))) = htole32(
 		timestamp);
