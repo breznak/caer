@@ -14,14 +14,14 @@
 #define LIBUV_SHELL_MAX_CMDINLENGTH 8
 #define LIBUV_SHELL_MAX_COMPLETIONS 128
 
-#define ESCAPE "\x1B"
-#define BACKSPACE '\x08'
-#define DELETE '\x7F'
-#define ETX '\x03'
-#define EOT '\x04'
-#define NEWLINE '\x0A'
-#define CARRIAGERETURN '\x0D'
-#define TAB '\x09'
+#define LIBUV_SHELL_ESCAPE "\x1B"
+#define LIBUV_SHELL_BACKSPACE '\x08'
+#define LIBUV_SHELL_DELETE '\x7F'
+#define LIBUV_SHELL_ETX '\x03'
+#define LIBUV_SHELL_EOT '\x04'
+#define LIBUV_SHELL_NEWLINE '\x0A'
+#define LIBUV_SHELL_CARRIAGERETURN '\x0D'
+#define LIBUV_SHELL_TAB '\x09'
 
 typedef struct libuv_tty_completions_struct *libuvTTYCompletions;
 
@@ -83,7 +83,7 @@ static int libuvTTYInit(uv_loop_t *loop, libuvTTY tty, const char *shellPrompt,
 	// Erase current line, carriage return, shell prompt, separator, NUL character.
 	size_t memIdx = 0;
 
-	memcpy(tty->shellPrompt + memIdx, ESCAPE "[2K\r", 5);
+	memcpy(tty->shellPrompt + memIdx, LIBUV_SHELL_ESCAPE "[2K\r", 5);
 	memIdx += 5;
 
 	memcpy(tty->shellPrompt + memIdx, shellPrompt, shellPromptLength);
@@ -177,14 +177,14 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 		char c = buf->base[0];
 
 		// Detect termination.
-		if (c == EOT || c == ETX) {
+		if (c == LIBUV_SHELL_EOT || c == LIBUV_SHELL_ETX) {
 			fprintf(stdout, "\n");
 			uv_read_stop(tty);
 			return;
 		}
 
 		// Detect newline -> go to newline and submit request.
-		if (c == NEWLINE || c == CARRIAGERETURN) {
+		if (c == LIBUV_SHELL_NEWLINE || c == LIBUV_SHELL_CARRIAGERETURN) {
 			fprintf(stdout, "\n");
 
 			// Always support using 'exit' or 'quit' commands to stop the application.
@@ -202,7 +202,7 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 			ttyData->shellContent[0] = '\0';
 			ttyData->shellContentIndex = 0;
 		}
-		else if (c == TAB && ttyData->autoComplete != NULL) {
+		else if (c == LIBUV_SHELL_TAB && ttyData->autoComplete != NULL) {
 			// Auto-completion support.
 			libuvTTYAutoCompleteUpdateCompletions(ttyData->autoComplete, ttyData->shellContent);
 
@@ -229,7 +229,7 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 			ttyData->shellContentIndex = currCompletionLength;
 			ttyData->shellContent[ttyData->shellContentIndex] = '\0';
 		}
-		else if (c == BACKSPACE || c == DELETE) {
+		else if (c == LIBUV_SHELL_BACKSPACE || c == LIBUV_SHELL_DELETE) {
 			if (ttyData->shellContentIndex == 0) {
 				return;
 			}
@@ -249,16 +249,16 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 	else if (sizeRead == 3) {
 		// Arrow keys.
 		// TODO: history support.
-		if (memcmp(buf->base, ESCAPE "[A", 3) == 0) {
+		if (memcmp(buf->base, LIBUV_SHELL_ESCAPE "[A", 3) == 0) {
 
 		}
-		else if (memcmp(buf->base, ESCAPE "[B", 3) == 0) {
+		else if (memcmp(buf->base, LIBUV_SHELL_ESCAPE "[B", 3) == 0) {
 
 		}
-		else if (memcmp(buf->base, ESCAPE "[D", 3) == 0) {
+		else if (memcmp(buf->base, LIBUV_SHELL_ESCAPE "[D", 3) == 0) {
 
 		}
-		else if (memcmp(buf->base, ESCAPE "[C", 3) == 0) {
+		else if (memcmp(buf->base, LIBUV_SHELL_ESCAPE "[C", 3) == 0) {
 
 		}
 		else {
