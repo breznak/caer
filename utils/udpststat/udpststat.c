@@ -4,8 +4,6 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <string.h>
-#include <unistd.h>
-#include <sys/socket.h>
 #include "ext/libuv.h"
 #include "modules/misc/inout_common.h"
 
