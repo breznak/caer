@@ -64,7 +64,7 @@ static inline bool recvUntilDone(uv_os_sock_t sock, uint8_t *buffer, size_t byte
  *
  * @return Return true on success, false on failure.
  */
-static inline bool writeUntilDone(uv_os_fd_t fd, const uint8_t *buffer, size_t bytesToWrite) {
+static inline bool writeUntilDone(int fd, const uint8_t *buffer, size_t bytesToWrite) {
 	size_t curWritten = 0;
 
 	while (curWritten < bytesToWrite) {
@@ -94,7 +94,7 @@ static inline bool writeUntilDone(uv_os_fd_t fd, const uint8_t *buffer, size_t b
  * @return Return bytesToRead if all bytes were successfully read, or a smaller
  * value (down to and including zero) if EOF is reached. Return -1 on any kind of error.
  */
-static inline ssize_t readUntilDone(uv_os_fd_t fd, uint8_t *buffer, size_t bytesToRead) {
+static inline ssize_t readUntilDone(int fd, uint8_t *buffer, size_t bytesToRead) {
 	size_t curRead = 0;
 
 	while (curRead < bytesToRead) {

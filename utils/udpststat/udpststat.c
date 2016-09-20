@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
 	UV_RET_CHECK_STDERR(retVal, "uv_ip4_addr", return (EXIT_FAILURE));
 
 	// Create listening socket for UDP data.
-	int listenUDPSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	uv_os_sock_t listenUDPSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (listenUDPSocket < 0) {
 		fprintf(stderr, "Failed to create UDP socket.\n");
 		return (EXIT_FAILURE);

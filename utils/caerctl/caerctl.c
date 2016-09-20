@@ -347,7 +347,7 @@ static const struct {
 	3, CAER_CONFIG_GET }, { "put", 3, CAER_CONFIG_PUT } };
 static const size_t actionsLength = sizeof(actions) / sizeof(actions[0]);
 
-static int sockFd = -1;
+static uv_os_sock_t sockFd = -1;
 
 int main(int argc, char *argv[]) {
 	// First of all, parse the IP:Port we need to connect to.

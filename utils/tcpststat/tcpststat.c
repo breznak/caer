@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
 	UV_RET_CHECK_STDERR(retVal, "uv_ip4_addr", return (EXIT_FAILURE));
 
 	// Create listening socket for TCP data.
-	int listenTCPSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	uv_os_sock_t listenTCPSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (listenTCPSocket < 0) {
 		fprintf(stderr, "Failed to create TCP socket.\n");
 		return (EXIT_FAILURE);
