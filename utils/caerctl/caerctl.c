@@ -187,7 +187,16 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 		if (c == NEWLINE || c == CARRIAGERETURN) {
 			fprintf(stdout, "\n");
 
-			ttyData->handleInputLine(ttyData->shellContent, ttyData->shellContentIndex);
+			// Always support using 'exit' or 'quit' commands to stop the application.
+			if (strncmp(ttyData->shellContent, "quit", 4) == 0 || strncmp(ttyData->shellContent, "exit", 4) == 0) {
+				uv_read_stop(tty);
+				return;
+			}
+
+			// Call input handler if there is any input.
+			if (ttyData->shellContentIndex > 0) {
+				ttyData->handleInputLine(ttyData->shellContent, ttyData->shellContentIndex);
+			}
 
 			// Reset line to empty.
 			ttyData->shellContent[0] = '\0';
