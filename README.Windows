@@ -10,7 +10,7 @@ the MSYS2 shell, while to build code, use the MinGW32/64 shells!
 1) Install the MSYS2 environment, the MinGW64 compiler and libcaer and all its
 dependencies as described in detail in libcaer's 'README.Windows'.
 
-2) Install the required dependencies: pacman -S mingw-w64-x86_64-libevent
+2) Install the required dependencies: pacman -S mingw-w64-x86_64-libuv
 
 3) Install any additional dependencies as required: pacman -S <pkg-name>
  Input/Output modules: mingw-w64-x86_64-libpng
