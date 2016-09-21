@@ -7,337 +7,26 @@
 #include "ext/nets.h"
 #include "ext/sshs/sshs.h"
 #include "base/config_server.h"
-
-// LIBUV TTY CODE.
-
-#define LIBUV_SHELL_MAX_LINELENGTH 4096
-#define LIBUV_SHELL_MAX_CMDINLENGTH 8
-#define LIBUV_SHELL_MAX_COMPLETIONS 128
-
-#define LIBUV_SHELL_ESCAPE "\x1B"
-#define LIBUV_SHELL_BACKSPACE '\x08'
-#define LIBUV_SHELL_DELETE '\x7F'
-#define LIBUV_SHELL_ETX '\x03'
-#define LIBUV_SHELL_EOT '\x04'
-#define LIBUV_SHELL_NEWLINE '\x0A'
-#define LIBUV_SHELL_CARRIAGERETURN '\x0D'
-#define LIBUV_SHELL_TAB '\x09'
-
-typedef struct libuv_tty_completions_struct *libuvTTYCompletions;
-
-struct libuv_tty_completions_struct {
-	// Auto-completion support.
-	void (*generateCompletions)(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete);
-	char *basedOnString;
-	bool completionInProgress;
-	size_t selectedCompletion;
-	size_t completionsLength;
-	char *completions[];
-};
-
-typedef struct libuv_tty_struct *libuvTTY;
-
-struct libuv_tty_struct {
-	// TTY I/O support.
-	uv_tty_t ttyIn;
-	char ttyCmdIn[LIBUV_SHELL_MAX_CMDINLENGTH];
-	char *shellPrompt;
-	char shellContent[LIBUV_SHELL_MAX_LINELENGTH];
-	size_t shellContentIndex;
-	void (*handleInputLine)(const char *buf, size_t bufLength);
-	// Auto-completion support.
-	libuvTTYCompletions autoComplete;
-};
-
-static int libuvTTYInit(uv_loop_t *loop, libuvTTY tty, const char *shellPrompt,
-	void (*handleInputLine)(const char *buf, size_t bufLength),
-	void (*generateCompletions)(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete));
-static void libuvTTYClose(libuvTTY tty);
-static void libuvTTYOnInputClose(uv_handle_t *handle);
-static void libuvTTYAlloc(uv_handle_t *tty, size_t suggestedSize, uv_buf_t *buf);
-static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf);
-
-static libuvTTYCompletions libuvTTYAutoCompleteAlloc(size_t maxSize);
-static void libuvTTYAutoCompleteFree(libuvTTYCompletions autoComplete);
-static void libuvTTYAutoCompleteClearCompletions(libuvTTYCompletions autoComplete);
-static void libuvTTYAutoCompleteAddCompletion(libuvTTYCompletions autoComplete, const char *completion);
-static void libuvTTYAutoCompleteUpdateCompletions(libuvTTYCompletions autoComplete, const char *currentString);
-
-static int libuvTTYInit(uv_loop_t *loop, libuvTTY tty, const char *shellPrompt,
-	void (*handleInputLine)(const char *buf, size_t bufLength),
-	void (*generateCompletions)(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete)) {
-	int retVal;
-
-	// Reset TTY memory.
-	memset(tty, 0, sizeof(*tty));
-
-	tty->handleInputLine = handleInputLine;
-
-	// Generate shell prompt.
-	size_t shellPromptLength = strlen(shellPrompt);
-	tty->shellPrompt = malloc(shellPromptLength + 10); // For ESCAPE "[2K\r" " >> " and NUL character.
-	if (tty->shellPrompt == NULL) {
-		return (UV_ENOMEM);
-	}
-
-	// Erase current line, carriage return, shell prompt, separator, NUL character.
-	size_t memIdx = 0;
-
-	memcpy(tty->shellPrompt + memIdx, LIBUV_SHELL_ESCAPE "[2K\r", 5);
-	memIdx += 5;
-
-	memcpy(tty->shellPrompt + memIdx, shellPrompt, shellPromptLength);
-	memIdx += shellPromptLength;
-
-	memcpy(tty->shellPrompt + memIdx, " >> ", 4);
-	memIdx += 4;
-
-	tty->shellPrompt[memIdx] = '\0';
-
-	// Initialize auto-complete support.
-	if (generateCompletions != NULL) {
-		tty->autoComplete = libuvTTYAutoCompleteAlloc(LIBUV_SHELL_MAX_COMPLETIONS);
-		if (tty->autoComplete == NULL) {
-			free(tty->shellPrompt);
-			return (UV_ENOMEM);
-		}
-
-		tty->autoComplete->generateCompletions = generateCompletions;
-	}
-
-	// Initialize stdin TTY.
-	retVal = uv_tty_init(loop, &tty->ttyIn, STDIN_FILENO, true);
-	if (retVal < 0) {
-		libuvTTYAutoCompleteFree(tty->autoComplete);
-		free(tty->shellPrompt);
-		return (retVal);
-	}
-
-	// Associate TTY with its data.
-	tty->ttyIn.data = tty;
-
-	// Switch stdin TTY to RAW mode, so we get every character and can build
-	// up auto-completion and console like input.
-	retVal = uv_tty_set_mode(&tty->ttyIn, UV_TTY_MODE_RAW);
-	if (retVal < 0) {
-		uv_close((uv_handle_t *) &tty->ttyIn, &libuvTTYOnInputClose);
-		return (retVal);
-	}
-
-	// Start reading on input TTY.
-	retVal = uv_read_start((uv_stream_t *) &tty->ttyIn, &libuvTTYAlloc, &libuvTTYRead);
-	if (retVal < 0) {
-		uv_tty_reset_mode();
-		uv_close((uv_handle_t *) &tty->ttyIn, &libuvTTYOnInputClose);
-		return (retVal);
-	}
-
-	// Output shell prompt. Disable buffering on stdout.
-	setvbuf(stdout, NULL, _IONBF, 0);
-	fprintf(stdout, "%s", tty->shellPrompt);
-
-	// Return success.
-	return (0);
-}
-
-static void libuvTTYClose(libuvTTY tty) {
-	uv_tty_reset_mode();
-
-	uv_close((uv_handle_t *) &tty->ttyIn, &libuvTTYOnInputClose);
-}
-
-static void libuvTTYOnInputClose(uv_handle_t *handle) {
-	libuvTTY tty = handle->data;
-
-	free(tty->shellPrompt);
-
-	libuvTTYAutoCompleteFree(tty->autoComplete);
-}
-
-static void libuvTTYAlloc(uv_handle_t *tty, size_t suggestedSize, uv_buf_t *buf) {
-	UNUSED_ARGUMENT(suggestedSize);
-
-	// We use one fixed, small buffer in the main TTY. data structure.
-	libuvTTY ttyData = tty->data;
-
-	buf->base = ttyData->ttyCmdIn;
-	buf->len = LIBUV_SHELL_MAX_CMDINLENGTH;
-}
-
-static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf) {
-	if (sizeRead < 0) {
-		fprintf(stderr, "STDIN closed: %s.\n", uv_err_name((int) sizeRead));
-		uv_read_stop(tty);
-		return;
-	}
-
-	libuvTTY ttyData = tty->data;
-
-	if (sizeRead == 1) {
-		char c = buf->base[0];
-
-		// Detect termination.
-		if (c == LIBUV_SHELL_EOT || c == LIBUV_SHELL_ETX) {
-			fprintf(stdout, "\n");
-			uv_read_stop(tty);
-			return;
-		}
-
-		// Detect newline -> go to newline and submit request.
-		if (c == LIBUV_SHELL_NEWLINE || c == LIBUV_SHELL_CARRIAGERETURN) {
-			fprintf(stdout, "\n");
-
-			// Always support using 'exit' or 'quit' commands to stop the application.
-			if (strncmp(ttyData->shellContent, "quit", 4) == 0 || strncmp(ttyData->shellContent, "exit", 4) == 0) {
-				uv_read_stop(tty);
-				return;
-			}
-
-			// Call input handler if there is any input.
-			if (ttyData->shellContentIndex > 0) {
-				ttyData->handleInputLine(ttyData->shellContent, ttyData->shellContentIndex);
-			}
-
-			// Reset line to empty.
-			ttyData->shellContent[0] = '\0';
-			ttyData->shellContentIndex = 0;
-		}
-		else if (c == LIBUV_SHELL_TAB && ttyData->autoComplete != NULL) {
-			// Auto-completion support.
-			libuvTTYAutoCompleteUpdateCompletions(ttyData->autoComplete, ttyData->shellContent);
-
-			// Select current completion.
-			char *currCompletion = ttyData->autoComplete->completions[ttyData->autoComplete->selectedCompletion];
-
-			if (currCompletion != NULL) {
-				ttyData->autoComplete->completionInProgress = true;
-
-				// Print current completion, if it exists.
-				fprintf(stdout, "%s%s", ttyData->shellPrompt, currCompletion);
-
-				return;
-			}
-		}
-		else if (c == ' ' && ttyData->autoComplete != NULL && ttyData->autoComplete->completionInProgress) {
-			ttyData->autoComplete->completionInProgress = false;
-
-			// Confirmed hit! Update current string with new one.
-			char *currCompletion = ttyData->autoComplete->completions[ttyData->autoComplete->selectedCompletion];
-			size_t currCompletionLength = strlen(currCompletion);
-
-			memcpy(ttyData->shellContent, currCompletion, currCompletionLength);
-			ttyData->shellContentIndex = currCompletionLength;
-			ttyData->shellContent[ttyData->shellContentIndex] = '\0';
-		}
-		else if (c == LIBUV_SHELL_BACKSPACE || c == LIBUV_SHELL_DELETE) {
-			if (ttyData->shellContentIndex == 0) {
-				return;
-			}
-			ttyData->shellContentIndex--;
-			ttyData->shellContent[ttyData->shellContentIndex] = '\0';
-		}
-		else {
-			// Got char. Add to current line.
-			ttyData->shellContent[ttyData->shellContentIndex] = c;
-			ttyData->shellContentIndex++;
-			ttyData->shellContent[ttyData->shellContentIndex] = '\0';
-		}
-
-		// Write updated line to stdout.
-		fprintf(stdout, "%s%s", ttyData->shellPrompt, ttyData->shellContent);
-	}
-	else if (sizeRead == 3) {
-		// Arrow keys.
-		// TODO: history support.
-		if (memcmp(buf->base, LIBUV_SHELL_ESCAPE "[A", 3) == 0) {
-
-		}
-		else if (memcmp(buf->base, LIBUV_SHELL_ESCAPE "[B", 3) == 0) {
-
-		}
-		else if (memcmp(buf->base, LIBUV_SHELL_ESCAPE "[D", 3) == 0) {
-
-		}
-		else if (memcmp(buf->base, LIBUV_SHELL_ESCAPE "[C", 3) == 0) {
-
-		}
-		else {
-			fprintf(stderr, "Got unknown sequence: (%X) (%X) (%X).\n", buf->base[0], buf->base[1], buf->base[2]);
-		}
-	}
-	else {
-		fprintf(stderr, "Got unknown sequence: ");
-		for (size_t i = 0; i < (size_t) sizeRead; i++) {
-			fprintf(stderr, "(%X) ", buf->base[i]);
-		}
-		fprintf(stderr, ".\n");
-	}
-}
-
-static libuvTTYCompletions libuvTTYAutoCompleteAlloc(size_t maxSize) {
-	libuvTTYCompletions autoComplete = calloc(1, sizeof(*autoComplete) + (maxSize * sizeof(char *)));
-	if (autoComplete == NULL) {
-		return (NULL);
-	}
-
-	autoComplete->completionsLength = maxSize;
-
-	return (autoComplete);
-}
-
-static void libuvTTYAutoCompleteFree(libuvTTYCompletions autoComplete) {
-	if (autoComplete != NULL) {
-		libuvTTYAutoCompleteClearCompletions(autoComplete);
-
-		free(autoComplete);
-	}
-}
-
-static void libuvTTYAutoCompleteClearCompletions(libuvTTYCompletions autoComplete) {
-	for (size_t i = 0; i < autoComplete->completionsLength; i++) {
-		free(autoComplete->completions[i]);
-		autoComplete->completions[i] = NULL;
-	}
-
-	autoComplete->selectedCompletion = 0;
-
-	free(autoComplete->basedOnString);
-	autoComplete->basedOnString = NULL;
-}
-
-static void libuvTTYAutoCompleteAddCompletion(libuvTTYCompletions autoComplete, const char *completion) {
-	for (size_t i = 0; i < autoComplete->completionsLength; i++) {
-		if (autoComplete->completions[i] == NULL) {
-			autoComplete->completions[i] = strdup(completion);
-			break;
-		}
-	}
-}
-
-static void libuvTTYAutoCompleteUpdateCompletions(libuvTTYCompletions autoComplete, const char *currentString) {
-	// If we never generated completions, or the we have new information on the completions,
-	// we re-generate the list and reset the index to zero.
-	if (autoComplete->basedOnString == NULL || !caerStrEquals(autoComplete->basedOnString, currentString)) {
-		libuvTTYAutoCompleteClearCompletions(autoComplete);
-
-		(*autoComplete->generateCompletions)(currentString, strlen(currentString), autoComplete);
-
-		autoComplete->basedOnString = strdup(currentString);
-	}
-	else {
-		// Same completion, just hit TAB again.
-		autoComplete->selectedCompletion++;
-
-		if (autoComplete->completions[autoComplete->selectedCompletion] == NULL) {
-			autoComplete->selectedCompletion = 0; // Wrap around at end.
-		}
-	}
-}
-
-// CAERCTL CODE.
+#include "utils/ext/libuvline/libuvline.h"
 
 static void handleInputLine(const char *buf, size_t bufLength);
 static void handleCommandCompletion(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete);
+
+static void actionCompletion(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete,
+	const char *partialActionString, size_t partialActionStringLength);
+static void nodeCompletion(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete, uint8_t actionCode,
+	const char *partialNodeString, size_t partialNodeStringLength);
+static void keyCompletion(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete, uint8_t actionCode,
+	const char *nodeString, size_t nodeStringLength, const char *partialKeyString, size_t partialKeyStringLength);
+static void typeCompletion(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete, uint8_t actionCode,
+	const char *nodeString, size_t nodeStringLength, const char *keyString, size_t keyStringLength,
+	const char *partialTypeString, size_t partialTypeStringLength);
+static void valueCompletion(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete, uint8_t actionCode,
+	const char *nodeString, size_t nodeStringLength, const char *keyString, size_t keyStringLength,
+	const char *typeString, size_t typeStringLength, const char *partialValueString, size_t partialValueStringLength);
+static void addCompletionSuffix(libuvTTYCompletions autoComplete, const char *buf, size_t completionPoint,
+	const char *suffix,
+	bool endSpace, bool endSlash);
 
 static const struct {
 	const char *name;
@@ -400,8 +89,11 @@ int main(int argc, char *argv[]) {
 
 	// TTY handling.
 	struct libuv_tty_struct caerctlTTY;
-	retVal = libuvTTYInit(&caerctlLoop, &caerctlTTY, shellPrompt, &handleInputLine, &handleCommandCompletion);
+	retVal = libuvTTYInit(&caerctlLoop, &caerctlTTY, shellPrompt, &handleInputLine);
 	UV_RET_CHECK_STDERR(retVal, "libuvTTYInit", goto loopCleanup);
+
+	retVal = libuvTTYAutoCompleteSetCallback(&caerctlTTY, &handleCommandCompletion);
+	UV_RET_CHECK_STDERR(retVal, "libuvTTYAutoCompleteSetCallback", goto ttyCleanup);
 
 	// Run event loop.
 	retVal = uv_run(&caerctlLoop, UV_RUN_DEFAULT);
@@ -432,22 +124,6 @@ int main(int argc, char *argv[]) {
 		}
 	}
 }
-
-static void actionCompletion(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete,
-	const char *partialActionString, size_t partialActionStringLength);
-static void nodeCompletion(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete, uint8_t actionCode,
-	const char *partialNodeString, size_t partialNodeStringLength);
-static void keyCompletion(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete, uint8_t actionCode,
-	const char *nodeString, size_t nodeStringLength, const char *partialKeyString, size_t partialKeyStringLength);
-static void typeCompletion(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete, uint8_t actionCode,
-	const char *nodeString, size_t nodeStringLength, const char *keyString, size_t keyStringLength,
-	const char *partialTypeString, size_t partialTypeStringLength);
-static void valueCompletion(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete, uint8_t actionCode,
-	const char *nodeString, size_t nodeStringLength, const char *keyString, size_t keyStringLength,
-	const char *typeString, size_t typeStringLength, const char *partialValueString, size_t partialValueStringLength);
-static void addCompletionSuffix(libuvTTYCompletions autoComplete, const char *buf, size_t completionPoint,
-	const char *suffix,
-	bool endSpace, bool endSlash);
 
 static inline void setExtraLen(uint8_t *buf, uint16_t extraLen) {
 	*((uint16_t *) (buf + 2)) = htole16(extraLen);
