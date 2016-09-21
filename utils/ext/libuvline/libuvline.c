@@ -157,7 +157,10 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 			// Call input handler if there is any input.
 			if (ttyData->shellContentIndex > 0) {
 				ttyData->handleInputLine(ttyData->shellContent, ttyData->shellContentIndex);
-				utarray_push_back(ttyData->history, &ttyData->shellContent);
+
+				// Add handled strings to history.
+				char *shellContentPtr = ttyData->shellContent;
+				utarray_push_back(ttyData->history, &shellContentPtr);
 			}
 
 			// Reset line to empty.
