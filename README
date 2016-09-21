@@ -10,7 +10,7 @@ cmake >= 2.6
 gcc >= 4.9 or clang >= 3.6
 libcaer >= 2.0.0
 mini-xml (mxml) >= 2.7
-libevent >= 2.0.20
+libuv >= 1.7.5
 Optional: libpng >= 1.6 (input/output frame PNG compression)
 Optional: tcmalloc >= 2.2 (faster memory allocation)
 Optional: allegro5 >= 5.0.11 (visualizer module)
