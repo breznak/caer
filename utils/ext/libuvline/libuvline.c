@@ -170,14 +170,9 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 			else {
 				// Multiple completions possible, cycle through them all.
 				// Select current completion.
-				char *currCompletion = ttyData->autoComplete->completions[ttyData->autoComplete->selectedCompletion];
+				libuvTTYUpdateWithCompletion(ttyData, ttyData->autoComplete->selectedCompletion);
 
 				ttyData->autoComplete->completionInProgress = true;
-
-				// Print current completion, if it exists.
-				fprintf(stdout, "%s%s", ttyData->shellPrompt, currCompletion);
-
-				return;
 			}
 		}
 		else if (ttyData->autoComplete != NULL && c == ttyData->autoComplete->completionConfirmChar
@@ -287,9 +282,6 @@ void libuvTTYAutoCompleteClearCompletions(libuvTTYCompletions autoComplete) {
 	autoComplete->selectedCompletion = 0;
 	autoComplete->completionsCount = 0;
 	autoComplete->completionInProgress = false;
-
-	free(autoComplete->basedOnString);
-	autoComplete->basedOnString = NULL;
 }
 
 void libuvTTYAutoCompleteAddCompletion(libuvTTYCompletions autoComplete, const char *completion) {
@@ -308,18 +300,16 @@ void libuvTTYAutoCompleteAddCompletion(libuvTTYCompletions autoComplete, const c
 static void libuvTTYAutoCompleteUpdateCompletions(libuvTTYCompletions autoComplete, const char *currentString) {
 	// If we never generated completions, or the we have new information on the completions,
 	// we re-generate the list and reset the index to zero.
-	if (autoComplete->basedOnString == NULL || strcasecmp(autoComplete->basedOnString, currentString)) {
+	if (!autoComplete->completionInProgress) {
 		libuvTTYAutoCompleteClearCompletions(autoComplete);
 
 		(*autoComplete->generateCompletions)(currentString, strlen(currentString), autoComplete);
-
-		autoComplete->basedOnString = strdup(currentString);
 	}
 	else {
 		// Same completion, just hit TAB again.
 		autoComplete->selectedCompletion++;
 
-		if (autoComplete->completions[autoComplete->selectedCompletion] == NULL) {
+		if (autoComplete->selectedCompletion >= autoComplete->completionsCount) {
 			autoComplete->selectedCompletion = 0; // Wrap around at end.
 		}
 	}

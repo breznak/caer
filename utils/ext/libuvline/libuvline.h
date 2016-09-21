@@ -12,7 +12,6 @@ typedef struct libuv_tty_completions_struct *libuvTTYCompletions;
 struct libuv_tty_completions_struct {
 	// Auto-completion support.
 	void (*generateCompletions)(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete);
-	char *basedOnString;
 	char completionConfirmChar;
 	bool completionInProgress;
 	size_t selectedCompletion;
