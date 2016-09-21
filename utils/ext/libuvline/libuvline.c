@@ -46,6 +46,9 @@ int libuvTTYInit(uv_loop_t *loop, libuvTTY tty, const char *shellPrompt,
 
 	tty->shellPrompt[memIdx] = '\0';
 
+	// Initialize history support.
+	utarray_new(tty->history, &ut_str_icd);
+
 	// Initialize stdin TTY.
 	retVal = uv_tty_init(loop, &tty->ttyIn, STDIN_FILENO, true);
 	if (retVal < 0) {
@@ -92,6 +95,15 @@ static void libuvTTYOnInputClose(uv_handle_t *handle) {
 	free(tty->shellPrompt);
 
 	libuvTTYAutoCompleteFree(tty->autoComplete);
+
+	// Take all history elements and print them out.
+	char **historyElement = NULL;
+	while ((historyElement = (char **) utarray_next(tty->history, historyElement)) != NULL) {
+		fprintf(stderr, "%s\n", *historyElement);
+	}
+
+	// Clear and free array used to contain history elements.
+	utarray_free(tty->history);
 }
 
 static void libuvTTYAlloc(uv_handle_t *tty, size_t suggestedSize, uv_buf_t *buf) {
@@ -145,6 +157,7 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 			// Call input handler if there is any input.
 			if (ttyData->shellContentIndex > 0) {
 				ttyData->handleInputLine(ttyData->shellContent, ttyData->shellContentIndex);
+				utarray_push_back(ttyData->history, &ttyData->shellContent);
 			}
 
 			// Reset line to empty.

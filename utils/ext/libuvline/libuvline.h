@@ -6,6 +6,7 @@
 #define LIBUV_SHELL_MAX_COMPLETIONS 128
 
 #include "ext/libuv.h"
+#include "ext/uthash/utarray.h"
 
 typedef struct libuv_tty_completions_struct *libuvTTYCompletions;
 
@@ -31,6 +32,8 @@ struct libuv_tty_struct {
 	void (*handleInputLine)(const char *buf, size_t bufLength);
 	// Auto-completion support.
 	libuvTTYCompletions autoComplete;
+	// History support.
+	UT_array *history;
 };
 
 int libuvTTYInit(uv_loop_t *loop, libuvTTY tty, const char *shellPrompt,
