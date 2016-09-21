@@ -104,6 +104,15 @@ static void libuvTTYAlloc(uv_handle_t *tty, size_t suggestedSize, uv_buf_t *buf)
 	buf->len = LIBUV_SHELL_MAX_CMDINLENGTH;
 }
 
+static inline void libuvTTYUpdateWithCompletion(libuvTTY tty, size_t n) {
+	char *currCompletion = tty->autoComplete->completions[n];
+	size_t currCompletionLength = strlen(currCompletion);
+
+	memcpy(tty->shellContent, currCompletion, currCompletionLength);
+	tty->shellContentIndex = currCompletionLength;
+	tty->shellContent[tty->shellContentIndex] = '\0';
+}
+
 static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf) {
 	if (sizeRead < 0) {
 		fprintf(stderr, "STDIN closed: %s.\n", uv_err_name((int) sizeRead));
@@ -149,10 +158,20 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 			// Auto-completion support.
 			libuvTTYAutoCompleteUpdateCompletions(ttyData->autoComplete, ttyData->shellContent);
 
-			// Select current completion.
-			char *currCompletion = ttyData->autoComplete->completions[ttyData->autoComplete->selectedCompletion];
+			// No completions, nothing to do when reacting to TAB.
+			if (ttyData->autoComplete->completionsCount == 0) {
+				return;
+			}
 
-			if (currCompletion != NULL) {
+			// Only one completion possible, so we select it automatically.
+			if (ttyData->autoComplete->completionsCount == 1) {
+				libuvTTYUpdateWithCompletion(ttyData, 0);
+			}
+			else {
+				// Multiple completions possible, cycle through them all.
+				// Select current completion.
+				char *currCompletion = ttyData->autoComplete->completions[ttyData->autoComplete->selectedCompletion];
+
 				ttyData->autoComplete->completionInProgress = true;
 
 				// Print current completion, if it exists.
@@ -166,12 +185,7 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 			ttyData->autoComplete->completionInProgress = false;
 
 			// Confirmed hit! Update current string with new one.
-			char *currCompletion = ttyData->autoComplete->completions[ttyData->autoComplete->selectedCompletion];
-			size_t currCompletionLength = strlen(currCompletion);
-
-			memcpy(ttyData->shellContent, currCompletion, currCompletionLength);
-			ttyData->shellContentIndex = currCompletionLength;
-			ttyData->shellContent[ttyData->shellContentIndex] = '\0';
+			libuvTTYUpdateWithCompletion(ttyData, ttyData->autoComplete->selectedCompletion);
 		}
 		else if (c == LIBUV_SHELL_BACKSPACE || c == LIBUV_SHELL_DELETE) {
 			// Manual change to string, reset auto-completion.
@@ -265,12 +279,13 @@ void libuvTTYAutoCompleteClearCompletions(libuvTTYCompletions autoComplete) {
 		return;
 	}
 
-	for (size_t i = 0; i < LIBUV_SHELL_MAX_COMPLETIONS; i++) {
+	for (size_t i = 0; i < autoComplete->completionsCount; i++) {
 		free(autoComplete->completions[i]);
 		autoComplete->completions[i] = NULL;
 	}
 
 	autoComplete->selectedCompletion = 0;
+	autoComplete->completionsCount = 0;
 	autoComplete->completionInProgress = false;
 
 	free(autoComplete->basedOnString);
@@ -282,13 +297,12 @@ void libuvTTYAutoCompleteAddCompletion(libuvTTYCompletions autoComplete, const c
 		return;
 	}
 
-	// Put copy of completion proposal into next free slot.
-	for (size_t i = 0; i < LIBUV_SHELL_MAX_COMPLETIONS; i++) {
-		if (autoComplete->completions[i] == NULL) {
-			autoComplete->completions[i] = strdup(completion);
-			break;
-		}
+	if (autoComplete->completionsCount >= LIBUV_SHELL_MAX_COMPLETIONS) {
+		return;
 	}
+
+	// Put copy of completion proposal into next free slot.
+	autoComplete->completions[autoComplete->completionsCount++] = strdup(completion);
 }
 
 static void libuvTTYAutoCompleteUpdateCompletions(libuvTTYCompletions autoComplete, const char *currentString) {

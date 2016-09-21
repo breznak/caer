@@ -16,6 +16,7 @@ struct libuv_tty_completions_struct {
 	char completionConfirmChar;
 	bool completionInProgress;
 	size_t selectedCompletion;
+	size_t completionsCount;
 	char *completions[LIBUV_SHELL_MAX_COMPLETIONS];
 };
 
