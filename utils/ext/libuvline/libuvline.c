@@ -13,6 +13,8 @@ static void libuvTTYOnInputClose(uv_handle_t *handle);
 static void libuvTTYAlloc(uv_handle_t *tty, size_t suggestedSize, uv_buf_t *buf);
 static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf);
 
+static void libuvTTYHistoryPrint(libuvTTY tty, bool up);
+
 static void libuvTTYAutoCompleteFree(libuvTTYCompletions autoComplete);
 static void libuvTTYAutoCompleteUpdateCompletions(libuvTTYCompletions autoComplete, const char *currentString);
 
@@ -96,10 +98,18 @@ static void libuvTTYOnInputClose(uv_handle_t *handle) {
 
 	libuvTTYAutoCompleteFree(tty->autoComplete);
 
-	// Take all history elements and print them out.
-	char **historyElement = NULL;
-	while ((historyElement = (char **) utarray_next(tty->history, historyElement)) != NULL) {
-		fprintf(stderr, "%s\n", *historyElement);
+	if (tty->historyFile != NULL) {
+		FILE *histFp = fopen(tty->historyFile, "w");
+
+		if (histFp != NULL) {
+			// Take all history elements and write them to user-specified file.
+			char **historyElement = NULL;
+			while ((historyElement = (char **) utarray_next(tty->history, historyElement)) != NULL) {
+				fprintf(histFp, "%s\n", *historyElement);
+			}
+
+			fclose(histFp);
+		}
 	}
 
 	// Clear and free array used to contain history elements.
@@ -234,18 +244,19 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 	}
 	else if (sizeRead == 3) {
 		// Arrow keys.
-		// TODO: history support.
 		if (memcmp(buf->base, LIBUV_SHELL_ESCAPE "[A", 3) == 0) {
-
+			// UP. Go to history element above.
+			libuvTTYHistoryPrint(ttyData, true);
 		}
 		else if (memcmp(buf->base, LIBUV_SHELL_ESCAPE "[B", 3) == 0) {
-
+			// DOWN. Go to history element below.
+			libuvTTYHistoryPrint(ttyData, false);
 		}
 		else if (memcmp(buf->base, LIBUV_SHELL_ESCAPE "[D", 3) == 0) {
-
+			// LEFT.
 		}
 		else if (memcmp(buf->base, LIBUV_SHELL_ESCAPE "[C", 3) == 0) {
-
+			// RIGHT.
 		}
 		else {
 			fprintf(stderr, "Got unknown sequence: (%X) (%X) (%X).\n", buf->base[0], buf->base[1], buf->base[2]);
@@ -258,6 +269,59 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 		}
 		fprintf(stderr, ".\n");
 	}
+}
+
+static void libuvTTYHistoryPrint(libuvTTY tty, bool up) {
+	if (tty->historyCurrentElem == NULL) {
+		if (up) {
+			// First press, initialize history by taking last element.
+			// Going down from the last line doesn't change anything,
+			// so we only do this when the first call is an UP.
+			tty->historyCurrentElem = (char **) utarray_back(tty->history);
+		}
+	}
+	else {
+		if (up) {
+			tty->historyCurrentElem = (char **) utarray_prev(tty->history, tty->historyCurrentElem);
+		}
+		else {
+			tty->historyCurrentElem = (char **) utarray_next(tty->history, tty->historyCurrentElem);
+		}
+	}
+
+	if (tty->historyCurrentElem != NULL) {
+		fprintf(stdout, "%s%s", tty->shellPrompt, *tty->historyCurrentElem);
+	}
+}
+
+void libuvTTYHistorySetFile(libuvTTY tty, const char *historyFile) {
+	if (historyFile != NULL) {
+		tty->historyFile = strdup(historyFile);
+
+		// Try to load existing history from the given file.
+		FILE *histFp = fopen(tty->historyFile, "r");
+
+		if (histFp != NULL) {
+			char histStr[LIBUV_SHELL_MAX_LINELENGTH];
+			char *histStrPtr = histStr;
+
+			while (fgets(histStrPtr, LIBUV_SHELL_MAX_LINELENGTH, histFp) != NULL) {
+				// Remove newline.
+				histStrPtr[strcspn(histStrPtr, "\n")] = '\0';
+
+				utarray_push_back(tty->history, &histStrPtr);
+			}
+
+			fclose(histFp);
+		}
+	}
+	else {
+		tty->historyFile = NULL;
+	}
+}
+
+void libuvTTYHistoryClear(libuvTTY tty) {
+	utarray_clear(tty->history);
 }
 
 int libuvTTYAutoCompleteSetCallback(libuvTTY tty,

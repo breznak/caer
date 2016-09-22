@@ -57,10 +57,19 @@ int main(int argc, char *argv[]) {
 		sscanf(argv[2], "%" SCNu16, &portNumber);
 	}
 
+	// Get history file path relative to home directory.
+	char homeDir[PATH_MAX];
+	size_t homeDirLength = PATH_MAX;
+
+	int retVal = uv_os_homedir(homeDir, &homeDirLength);
+	UV_RET_CHECK_STDERR(retVal, "uv_os_homedir", return (EXIT_FAILURE));
+
+	strcat(homeDir, "/.caerctl_history");
+
 	// Generate address to connect to.
 	struct sockaddr_in configServerAddress;
 
-	int retVal = uv_ip4_addr(ipAddress, portNumber, &configServerAddress);
+	retVal = uv_ip4_addr(ipAddress, portNumber, &configServerAddress);
 	UV_RET_CHECK_STDERR(retVal, "uv_ip4_addr", return (EXIT_FAILURE));
 
 	// Connect to the remote cAER config server.
@@ -91,6 +100,8 @@ int main(int argc, char *argv[]) {
 	struct libuv_tty_struct caerctlTTY;
 	retVal = libuvTTYInit(&caerctlLoop, &caerctlTTY, shellPrompt, &handleInputLine);
 	UV_RET_CHECK_STDERR(retVal, "libuvTTYInit", goto loopCleanup);
+
+	libuvTTYHistorySetFile(&caerctlTTY, homeDir);
 
 	retVal = libuvTTYAutoCompleteSetCallback(&caerctlTTY, &handleCommandCompletion);
 	UV_RET_CHECK_STDERR(retVal, "libuvTTYAutoCompleteSetCallback", goto ttyCleanup);

@@ -34,11 +34,16 @@ struct libuv_tty_struct {
 	libuvTTYCompletions autoComplete;
 	// History support.
 	UT_array *history;
+	char **historyCurrentElem;
+	char *historyFile;
 };
 
 int libuvTTYInit(uv_loop_t *loop, libuvTTY tty, const char *shellPrompt,
 	void (*handleInputLine)(const char *buf, size_t bufLength));
 void libuvTTYClose(libuvTTY tty);
+
+void libuvTTYHistorySetFile(libuvTTY tty, const char *historyFile);
+void libuvTTYHistoryClear(libuvTTY tty);
 
 int libuvTTYAutoCompleteSetCallback(libuvTTY tty,
 	void (*generateCompletions)(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete));
