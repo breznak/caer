@@ -153,9 +153,20 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 				uv_read_stop(tty);
 				return;
 			}
+			// Help menu.
+			else if (strncmp(ttyData->shellContent, "help", 4) == 0) {
+				fprintf(stdout,
+					"Use 'quit' or 'exit' to close the application. Use 'help' to display this informative text.\n"
+						"You can move through the history of commands with the UP and DOWN arrow keys.\n");
 
+				if (ttyData->autoComplete != NULL) {
+					fprintf(stdout,
+						"Press TAB for auto-completion. When presented with multiple choices, use '%c' to confirm your choice.\n",
+						ttyData->autoComplete->completionConfirmChar);
+				}
+			}
 			// Call input handler if there is any input.
-			if (ttyData->shellContentIndex > 0) {
+			else if (ttyData->shellContentIndex > 0) {
 				ttyData->handleInputLine(ttyData->shellContent, ttyData->shellContentIndex);
 
 				// Add handled strings to history.
