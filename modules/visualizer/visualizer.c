@@ -532,7 +532,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 
 				sshsNodePutFloat(state->parentModule->moduleNode, "zoomFactor", currentZoomFactor);
 			}
-			else if (displayEvent.type == ALLEGRO_EVENT_KEY_DOWN && displayEvent.keyboard.keycode == ALLEGRO_KEY_A) {
+			else if (displayEvent.type == ALLEGRO_EVENT_KEY_DOWN && displayEvent.keyboard.keycode == ALLEGRO_KEY_W) {
 				int32_t currentSubsampling = sshsNodeGetInt(state->parentModule->moduleNode, "subsampleRendering");
 
 				currentSubsampling--;
@@ -544,7 +544,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 
 				sshsNodePutInt(state->parentModule->moduleNode, "subsampleRendering", currentSubsampling);
 			}
-			else if (displayEvent.type == ALLEGRO_EVENT_KEY_DOWN && displayEvent.keyboard.keycode == ALLEGRO_KEY_D) {
+			else if (displayEvent.type == ALLEGRO_EVENT_KEY_DOWN && displayEvent.keyboard.keycode == ALLEGRO_KEY_E) {
 				int32_t currentSubsampling = sshsNodeGetInt(state->parentModule->moduleNode, "subsampleRendering");
 
 				currentSubsampling++;
@@ -556,7 +556,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 
 				sshsNodePutInt(state->parentModule->moduleNode, "subsampleRendering", currentSubsampling);
 			}
-			else if (displayEvent.type == ALLEGRO_EVENT_KEY_DOWN && displayEvent.keyboard.keycode == ALLEGRO_KEY_S) {
+			else if (displayEvent.type == ALLEGRO_EVENT_KEY_DOWN && displayEvent.keyboard.keycode == ALLEGRO_KEY_Q) {
 				bool currentShowStatistics = sshsNodeGetBool(state->parentModule->moduleNode, "showStatistics");
 
 				sshsNodePutBool(state->parentModule->moduleNode, "showStatistics", !currentShowStatistics);

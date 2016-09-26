@@ -2274,10 +2274,23 @@ static int packetsFirstTypeThenSizeCmp(const void *a, const void *b) {
 
 #ifdef ENABLE_VISUALIZER
 void caerInputVisualizerEventHandler(caerVisualizerPublicState state, ALLEGRO_EVENT event) {
+	// PAUSE.
 	if (event.type == ALLEGRO_EVENT_KEY_DOWN && event.keyboard.keycode == ALLEGRO_KEY_SPACE) {
 		bool pause = sshsNodeGetBool(state->eventSourceConfigNode, "pause");
 
 		sshsNodePutBool(state->eventSourceConfigNode, "pause", !pause);
+	}
+	// SLOW DOWN.
+	else if (event.type == ALLEGRO_EVENT_KEY_DOWN && event.keyboard.keycode == ALLEGRO_KEY_S) {
+		int timeSlice = sshsNodeGetInt(state->eventSourceConfigNode, "timeSlice");
+
+		sshsNodePutInt(state->eventSourceConfigNode, "timeSlice", timeSlice / 2);
+	}
+	// SPEED UP.
+	else if (event.type == ALLEGRO_EVENT_KEY_DOWN && event.keyboard.keycode == ALLEGRO_KEY_F) {
+		int timeSlice = sshsNodeGetInt(state->eventSourceConfigNode, "timeSlice");
+
+		sshsNodePutInt(state->eventSourceConfigNode, "timeSlice", timeSlice * 2);
 	}
 }
 #endif
