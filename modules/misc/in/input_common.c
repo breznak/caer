@@ -1400,7 +1400,8 @@ static int inputReaderThread(void *stateArg) {
 		// Parse header and setup header info structure.
 		if (!state->header.isValidHeader && !parseHeader(state)) {
 			// Header invalid, exit.
-			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to parse header.");
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+				"Failed to parse header. Only AEDAT 2.X and 3.x compliant files are supported.");
 			atomic_store(&state->inputReaderThreadState, ERROR_HEADER); // Error in Header
 			break;
 		}
