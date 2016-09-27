@@ -6,6 +6,7 @@
 #include "ext/uthash/utarray.h"
 #include "ext/uthash/utlist.h"
 #include "ext/buffers.h"
+#include "ext/nets.h"
 #ifdef HAVE_PTHREADS
 #include "ext/c11threads_posix.h"
 #endif
@@ -1371,13 +1372,14 @@ static int inputReaderThread(void *stateArg) {
 		}
 
 		// Read data from disk or socket.
-		if (!simpleBufferRead(state->fileDescriptor, state->dataBuffer)) {
+		ssize_t result = readUntilDone(state->fileDescriptor, state->dataBuffer->buffer, state->dataBuffer->bufferSize);
+		if (result <= 0) {
 			// Error or EOF with no data. Let's just stop at this point.
 			close(state->fileDescriptor);
 			state->fileDescriptor = -1;
 
 			// Distinguish EOF from errors based upon errno value.
-			if (errno == 0) {
+			if (result == 0) {
 				caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString, "Reached End of File.");
 				atomic_store(&state->inputReaderThreadState, EOF_REACHED); // EOF
 			}
@@ -1388,6 +1390,7 @@ static int inputReaderThread(void *stateArg) {
 			}
 			break;
 		}
+		state->dataBuffer->bufferUsedSize = (size_t) result;
 
 		// Parse header and setup header info structure.
 		if (!state->header.isValidHeader && !parseHeader(state)) {

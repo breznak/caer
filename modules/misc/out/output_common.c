@@ -71,8 +71,7 @@
 #include "ext/portable_time.h"
 #include "ext/ringbuffer/ringbuffer.h"
 #include "ext/buffers.h"
-#include <arpa/inet.h>
-#include <netinet/in.h>
+#include "ext/nets.h"
 #ifdef HAVE_PTHREADS
 #include "ext/c11threads_posix.h"
 #endif
