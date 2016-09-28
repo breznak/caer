@@ -102,8 +102,10 @@ struct output_common_state {
 	/// Source information node for that particular source ID.
 	/// Must be set by mainloop, external threads cannot get it directly!
 	sshsNode sourceInfoNode;
-	/// The file descriptors for writing and server mode.
-	outputCommonFDs fileDescriptors;
+	/// The libuv stream descriptors for network writing and server mode.
+	outputCommonNetIO networkIO;
+	/// The file descriptor for file writing.
+	int fileIO;
 	/// Network-like stream or file-like stream. Matters for header format.
 	bool isNetworkStream;
 	/// For network-like outputs, we differentiate between stream and message
@@ -144,44 +146,67 @@ typedef struct output_common_state *outputCommonState;
 
 size_t CAER_OUTPUT_COMMON_STATE_STRUCT_SIZE = sizeof(struct output_common_state);
 
-static void copyPacketsToTransferRing(outputCommonState state, size_t packetsListSize, va_list packetsList);
-static int packetsFirstTimestampThenTypeCmp(const void *a, const void *b);
-static bool newOutputBuffer(outputCommonState state);
-static void commitOutputBuffer(outputCommonState state);
-static size_t compressTimestampSerialize(outputCommonState state, caerEventPacketHeader packet);
-static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader packet, size_t packetSize);
-static void sendEventPacket(outputCommonState state, caerEventPacketHeader packet);
-static void orderAndSendEventPackets(outputCommonState state, caerEventPacketContainer currPacketContainer);
-static void handleNewServerConnections(outputCommonState state);
-static void sendFileHeader(outputCommonState state);
-static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD);
-static int outputHandlerThread(void *stateArg);
 static void caerOutputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 
-int caerOutputCommonGetServerFd(void *statePtr) {
-	outputCommonState state = statePtr;
+/**
+ * ============================================================================
+ * MAIN THREAD
+ * ============================================================================
+ * Handle Run and Reset operations on main thread. Data packets are copied into
+ * the transferRing for processing by the compressor thread.
+ * ============================================================================
+ */
+static void copyPacketsToTransferRing(outputCommonState state, size_t packetsListSize, va_list packetsList);
 
-	return (state->fileDescriptors->serverFd);
+void caerOutputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
+	outputCommonState state = moduleData->moduleState;
+
+	copyPacketsToTransferRing(state, argsNumber, args);
 }
 
-outputCommonFDs caerOutputCommonAllocateFdArray(size_t size) {
-	// Allocate memory for file descriptor array structure.
-	outputCommonFDs fileDescriptors = malloc(sizeof(*fileDescriptors) + (size * sizeof(int)));
-	if (fileDescriptors == NULL) {
-		return (NULL);
+void caerOutputCommonReset(caerModuleData moduleData, uint16_t resetCallSourceID) {
+	outputCommonState state = moduleData->moduleState;
+
+	if (resetCallSourceID == I16T(atomic_load_explicit(&state->sourceID, memory_order_relaxed))) {
+		// The timestamp reset call came in from the Source ID this output module
+		// is responsible for, so we ensure the timestamps are reset and that the
+		// special event packet goes out for sure.
+
+		// Send lone packet container with just TS_RESET.
+		// Allocate packet container just for this event.
+		caerEventPacketContainer tsResetContainer = caerEventPacketContainerAllocate(1);
+		if (tsResetContainer == NULL) {
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"Failed to allocate tsReset event packet container.");
+			return;
+		}
+
+		// Allocate special packet just for this event.
+		caerSpecialEventPacket tsResetPacket = caerSpecialEventPacketAllocate(1, I16T(resetCallSourceID),
+			I32T(state->lastTimestamp >> 31));
+		if (tsResetPacket == NULL) {
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"Failed to allocate tsReset special event packet.");
+			return;
+		}
+
+		// Create timestamp reset event.
+		caerSpecialEvent tsResetEvent = caerSpecialEventPacketGetEvent(tsResetPacket, 0);
+		caerSpecialEventSetTimestamp(tsResetEvent, INT32_MAX);
+		caerSpecialEventSetType(tsResetEvent, TIMESTAMP_RESET);
+		caerSpecialEventValidate(tsResetEvent, tsResetPacket);
+
+		// Assign special packet to packet container.
+		caerEventPacketContainerSetEventPacket(tsResetContainer, SPECIAL_EVENT, (caerEventPacketHeader) tsResetPacket);
+
+		while (!ringBufferPut(state->transferRing, tsResetContainer)) {
+			; // Ensure this goes into the ring-buffer.
+		}
+
+		// Reset timestamp checking.
+		state->lastTimestamp = 0;
 	}
-
-	// Initialize all values, FDs to -1.
-	fileDescriptors->fdsSize = size;
-
-	fileDescriptors->serverFd = -1;
-
-	for (size_t i = 0; i < size; i++) {
-		fileDescriptors->fds[i] = -1;
-	}
-
-	return (fileDescriptors);
 }
 
 /**
@@ -344,6 +369,150 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 	}
 }
 
+/**
+ * ============================================================================
+ * COMPRESSOR THREAD
+ * ============================================================================
+ * Handle data ordering, compression, and filling of final byte buffers, that
+ * will be sent out by the Output thread.
+ * ============================================================================
+ */
+static int compressorThread(void *stateArg);
+static bool newOutputBuffer(outputCommonState state);
+static void commitOutputBuffer(outputCommonState state);
+static void orderAndSendEventPackets(outputCommonState state, caerEventPacketContainer currPacketContainer);
+static int packetsFirstTimestampThenTypeCmp(const void *a, const void *b);
+static void sendEventPacket(outputCommonState state, caerEventPacketHeader packet);
+static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader packet, size_t packetSize);
+static size_t compressTimestampSerialize(outputCommonState state, caerEventPacketHeader packet);
+
+#ifdef ENABLE_INOUT_PNG_COMPRESSION
+	static void caerLibPNGWriteBuffer(png_structp png_ptr, png_bytep data, png_size_t length);
+	static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader packet);
+#endif
+
+static int compressorThread(void *stateArg) {
+	outputCommonState state = stateArg;
+
+	// Set thread name.
+	size_t threadNameLength = strlen(state->parentModule->moduleSubSystemString);
+	char threadName[threadNameLength + 1 + 12]; // +1 for NUL character.
+	strcpy(threadName, state->parentModule->moduleSubSystemString);
+	strcat(threadName, "[Compressor]");
+	thrd_set_name(threadName);
+
+	// If no data is available on the transfer ring-buffer, sleep for 500µs (0.5 ms)
+	// to avoid wasting resources in a busy loop.
+	struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 500000 };
+
+	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
+		// Handle configuration changes affecting buffer management.
+		if (atomic_load_explicit(&state->bufferUpdate, memory_order_relaxed)) {
+			atomic_store(&state->bufferUpdate, false);
+
+			state->bufferMaxInterval = U64T(sshsNodeGetInt(state->parentModule->moduleNode, "bufferMaxInterval"));
+			state->bufferMaxInterval *= 1000LLU; // Convert from microseconds to nanoseconds.
+
+			if (!newOutputBuffer(state)) {
+				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+					"Failed to allocate new output data buffer. Continue using old one.");
+			}
+		}
+
+		// Get the newest event packet container from the transfer ring-buffer.
+		caerEventPacketContainer currPacketContainer = ringBufferGet(state->transferRing);
+		if (currPacketContainer == NULL) {
+			// There is none, so we can't work on and commit this.
+			// We just sleep here a little and then try again, as we need the data!
+			thrd_sleep(&noDataSleep, NULL);
+			continue;
+		}
+
+		// Fill output data buffer with data from incoming packets.
+		// Respect time order as specified in AEDAT 3.X format: first event's main
+		// timestamp decides its ordering with regards to other packets. Smaller
+		// comes first. If equal, order by increasing type ID as a convenience,
+		// not strictly required by specification!
+		orderAndSendEventPackets(state, currPacketContainer);
+
+		// Free all remaining packet container memory.
+		caerEventPacketContainerFree(currPacketContainer);
+	}
+
+	// Handle shutdown, write out all content remaining in the transfer ring-buffer
+	// and write the packets out to the file descriptor.
+	caerEventPacketContainer packetContainer;
+	while ((packetContainer = ringBufferGet(state->transferRing)) != NULL) {
+		orderAndSendEventPackets(state, packetContainer);
+
+		// Free all remaining packet container memory.
+		caerEventPacketContainerFree(packetContainer);
+	}
+
+	// Make sure last (incomplete) buffer is sent out.
+	commitOutputBuffer(state);
+
+	return (thrd_success);
+}
+
+static bool newOutputBuffer(outputCommonState state) {
+	// First check if the size really changed.
+	size_t newBufferSize = (size_t) sshsNodeGetInt(state->parentModule->moduleNode, "bufferSize");
+
+	if (state->dataBuffer != NULL && state->dataBuffer->bufferSize == newBufferSize) {
+		// Yeah, we're already where we want to be!
+		return (true);
+	}
+
+	// Allocate new buffer.
+	simpleBuffer newBuffer = simpleBufferInit(newBufferSize);
+	if (newBuffer == NULL) {
+		return (false);
+	}
+
+	// Commit previous buffer content and then free the memory.
+	if (state->dataBuffer != NULL) {
+		commitOutputBuffer(state);
+
+		free(state->dataBuffer);
+	}
+
+	// Use new buffer.
+	state->dataBuffer = newBuffer;
+
+	return (true);
+}
+
+static void commitOutputBuffer(outputCommonState state) {
+	if (state->dataBuffer->bufferUsedSize != 0) {
+		writeBufferToOutputRing(state, state->dataBuffer);
+
+		state->dataBuffer->bufferUsedSize = 0;
+
+		// If message-based protocol, we fill in the now empty buffer with the
+		// appropriate header.
+		if (state->isNetworkMessageBased) {
+			sendNetworkHeader(state, NULL);
+		}
+	}
+
+	// Update last commit time.
+	portable_clock_gettime_monotonic(&state->bufferLastCommitTime);
+}
+
+static void orderAndSendEventPackets(outputCommonState state, caerEventPacketContainer currPacketContainer) {
+	// Sort container by first timestamp (required) and by type ID (convenience).
+	size_t currPacketContainerSize = (size_t) caerEventPacketContainerGetEventPacketsNumber(currPacketContainer);
+
+	qsort(currPacketContainer->eventPackets, currPacketContainerSize, sizeof(caerEventPacketHeader),
+		&packetsFirstTimestampThenTypeCmp);
+
+	for (size_t cpIdx = 0; cpIdx < currPacketContainerSize; cpIdx++) {
+		// Send the packets out to the file descriptor.
+		sendEventPacket(state, caerEventPacketContainerGetEventPacket(currPacketContainer, (int32_t) cpIdx));
+	}
+}
+
 static int packetsFirstTimestampThenTypeCmp(const void *a, const void *b) {
 	const caerEventPacketHeader *aa = a;
 	const caerEventPacketHeader *bb = b;
@@ -375,74 +544,215 @@ static int packetsFirstTimestampThenTypeCmp(const void *a, const void *b) {
 	}
 }
 
-static bool newOutputBuffer(outputCommonState state) {
-	// First check if the size really changed.
-	size_t newBufferSize = (size_t) sshsNodeGetInt(state->parentModule->moduleNode, "bufferSize");
+static void sendEventPacket(outputCommonState state, caerEventPacketHeader packet) {
+	// Calculate total size of packet, in bytes.
+	size_t packetSize = CAER_EVENT_PACKET_HEADER_SIZE
+		+ (size_t) (caerEventPacketHeaderGetEventNumber(packet) * caerEventPacketHeaderGetEventSize(packet));
 
-	if (state->dataBuffer != NULL && state->dataBuffer->bufferSize == newBufferSize) {
-		// Yeah, we're already where we want to be!
-		return (true);
+	// Statistics support.
+	state->statistics.packetsNumber++;
+	state->statistics.packetsTotalSize += packetSize;
+	state->statistics.packetsHeaderSize += CAER_EVENT_PACKET_HEADER_SIZE;
+	state->statistics.packetsDataSize += (size_t) (caerEventPacketHeaderGetEventNumber(packet)
+		* caerEventPacketHeaderGetEventSize(packet));
+
+	if (state->formatID != 0) {
+		packetSize = compressEventPacket(state, packet, packetSize);
 	}
 
-	// Allocate new buffer.
-	simpleBuffer newBuffer = simpleBufferInit(newBufferSize);
-	if (newBuffer == NULL) {
-		return (false);
+	// Statistics support (after compression).
+	state->statistics.dataWritten += packetSize;
+
+	// Send it out until none is left!
+	size_t packetIndex = 0;
+
+	while (packetSize > 0) {
+		// Calculate remaining space in current buffer.
+		size_t usableBufferSpace = state->dataBuffer->bufferSize - state->dataBuffer->bufferUsedSize;
+
+		// Let's see how much of it (or all of it!) we need.
+		if (packetSize < usableBufferSpace) {
+			usableBufferSpace = packetSize;
+		}
+
+		// Copy memory from packet to buffer.
+		memcpy(state->dataBuffer->buffer + state->dataBuffer->bufferUsedSize, ((uint8_t *) packet) + packetIndex,
+			usableBufferSpace);
+
+		// Update indexes.
+		state->dataBuffer->bufferUsedSize += usableBufferSpace;
+		packetIndex += usableBufferSpace;
+		packetSize -= usableBufferSpace;
+
+		if (state->dataBuffer->bufferUsedSize == state->dataBuffer->bufferSize) {
+			// Commit buffer once full.
+			commitOutputBuffer(state);
+		}
 	}
 
-	// Commit previous buffer content and then free the memory.
-	if (state->dataBuffer != NULL) {
+	// Each commit operation updates the last committed buffer time.
+	// The above code resulted in some commits, with the time being updated,
+	// or in no commits at all, with the time remaining as before.
+	// Here we check that the time difference between now and the last actual
+	// commit doesn't exceed the allowed maximum interval.
+	struct timespec currentTime;
+	portable_clock_gettime_monotonic(&currentTime);
+
+	uint64_t diffNanoTime = (uint64_t) (((int64_t) (currentTime.tv_sec - state->bufferLastCommitTime.tv_sec)
+		* 1000000000LL) + (int64_t) (currentTime.tv_nsec - state->bufferLastCommitTime.tv_nsec));
+
+	// DiffNanoTime is the difference in nanoseconds; we want to trigger after
+	// the user provided interval has elapsed (also in nanoseconds).
+	if (diffNanoTime >= state->bufferMaxInterval) {
 		commitOutputBuffer(state);
-
-		free(state->dataBuffer);
 	}
-
-	// Use new buffer.
-	state->dataBuffer = newBuffer;
-
-	return (true);
 }
 
-static inline void writeBufferToAll(outputCommonState state, const uint8_t *buffer, size_t bufferSize) {
-	for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
-		int fd = state->fileDescriptors->fds[i];
+/**
+ * Compress event packets.
+ * Compressed event packets have the highest bit of the type field
+ * set to '1' (type | 0x8000). Their eventCapacity field holds the
+ * new, true length of the data portion of the packet, in bytes.
+ * This takes advantage of the fact capacity always equals number
+ * in any input/output stream, and as such is redundant information.
+ *
+ * @param state common output state.
+ * @param packet the event packet to compress.
+ * @param packetSize the current event packet size (header + data).
+ *
+ * @return the event packet size (header + data) after compression.
+ *         Must be equal or smaller than the input packetSize.
+ */
+static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader packet, size_t packetSize) {
+	size_t compressedSize = packetSize;
 
-		if (fd >= 0) {
-			if (!writeUntilDone(fd, buffer, bufferSize)) {
-				// Write failed, most of the reasons for that to happen are
-				// not recoverable from, so we just disable this file descriptor.
-				// This also detects client-side close() for TCP server connections.
-				caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
-					"Disconnect or error on fd %d, closing and removing. Error: %d.", fd, errno);
+	// Data compression technique 1: serialize timestamps for event types that tend to repeat them a lot.
+	// Currently, this means polarity events.
+	if ((state->formatID & 0x01) && caerEventPacketHeaderGetEventType(packet) == POLARITY_EVENT) {
+		compressedSize = compressTimestampSerialize(state, packet);
+	}
 
-				close(fd);
-				state->fileDescriptors->fds[i] = -1;
+#ifdef ENABLE_INOUT_PNG_COMPRESSION
+	// Data compression technique 2: do PNG compression on frames, Grayscale and RGB(A).
+	if ((state->formatID & 0x02) && caerEventPacketHeaderGetEventType(packet) == FRAME_EVENT) {
+		compressedSize = compressFramePNG(state, packet);
+	}
+#endif
+
+	// If any compression was possible, we mark the packet as compressed
+	// and store its data size in eventCapacity.
+	if (compressedSize != packetSize) {
+		packet->eventType = htole16(le16toh(packet->eventType) | I16T(0x8000));
+		packet->eventCapacity = htole32(I32T(compressedSize) - CAER_EVENT_PACKET_HEADER_SIZE);
+	}
+
+	// Return size after compression.
+	return (compressedSize);
+}
+
+/**
+ * Search for runs of at least 3 events with the same timestamp, and convert them to a special
+ * sequence: leave first event unchanged, but mark its timestamp as special by setting the
+ * highest bit (bit 31) to one (it is forbidden for timestamps in memory to have that bit set for
+ * signed-integer-only language compatibility). Then, for the second event, change its timestamp
+ * to a 4-byte integer saying how many more events will follow afterwards with this same timestamp
+ * (this is used for decoding), so only their data portion will be given. Then follow with those
+ * event's data, back to back, with their timestamps removed.
+ * So let's assume there are 6 events with TS=1234. In memory this looks like this:
+ * E1(data,ts), E2(data,ts), E3(data,ts), E4(data,ts), E5(data,ts), E6(data,ts)
+ * After the timestamp serialization compression step:
+ * E1(data,ts|0x80000000), E2(data,4), E3(data), E4(data), E5(data), E5(data)
+ * This change is only in the data itself, not in the packet headers, so that we can still use the
+ * eventNumber and eventSize fields to calculate memory allocation when doing decompression.
+ * As such, to correctly interpret this data, the Format flags must be correctly set. All current
+ * file or network formats do specify those as mandatory in their headers, so we can rely on that.
+ * Also all event types where this kind of thing makes any sense do have the timestamp as their last
+ * data member in their struct, so we can use that information, stored in tsOffset header field,
+ * together with eventSize, to come up with a generic implementation applicable to all other event
+ * types that satisfy this condition of TS-as-last-member (so we can use that offset as event size).
+ * When this is enabled, it requires full iteration thorough the whole event packet, both at
+ * compression and at decompression time.
+ *
+ * @param state common output state.
+ * @param packet the packet to timestamp-compress.
+ * @param packetSize the current event packet size (header + data).
+ *
+ * @return the event packet size (header + data) after compression.
+ *         Must be equal or smaller than the input packetSize.
+ */
+static size_t compressTimestampSerialize(outputCommonState state, caerEventPacketHeader packet) {
+	UNUSED_ARGUMENT(state);
+
+	size_t currPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE; // Start here, no change to header.
+	int32_t eventSize = caerEventPacketHeaderGetEventSize(packet);
+	int32_t eventTSOffset = caerEventPacketHeaderGetEventTSOffset(packet);
+
+	int32_t lastTS = -1;
+	int32_t currTS = -1;
+	size_t tsRun = 0;
+	bool doMemMove = false; // Initially don't move memory, until we actually shrink the size.
+
+	for (int32_t caerIteratorCounter = 0; caerIteratorCounter <= caerEventPacketHeaderGetEventNumber(packet);
+		caerIteratorCounter++) {
+		// Iterate until one element past the end, to flush the last run. In that particular case,
+		// we don't get a new element or TS, as we'd be past the end of the array.
+		if (caerIteratorCounter < caerEventPacketHeaderGetEventNumber(packet)) {
+			void *caerIteratorElement = caerGenericEventGetEvent(packet, caerIteratorCounter);
+
+			currTS = caerGenericEventGetTimestamp(caerIteratorElement, packet);
+			if (currTS == lastTS) {
+				// Increase size of run of same TS events currently being seen.
+				tsRun++;
+				continue;
 			}
 		}
-	}
-}
 
-static void commitOutputBuffer(outputCommonState state) {
-	if (state->dataBuffer->bufferUsedSize != 0) {
-		writeBufferToAll(state, state->dataBuffer->buffer, state->dataBuffer->bufferUsedSize);
+		// TS are different, at this point look if the last run was long enough
+		// and if it makes sense to compress. It does starting with 3 events.
+		if (tsRun >= 3) {
+			// First event to remains there, we set its TS highest bit.
+			uint8_t *firstEvent = caerGenericEventGetEvent(packet, caerIteratorCounter - (int32_t) tsRun--);
+			caerGenericEventSetTimestamp(firstEvent, packet,
+				caerGenericEventGetTimestamp(firstEvent, packet) | I32T(0x80000000));
 
-		state->dataBuffer->bufferUsedSize = 0;
+			// Now use second event's timestamp for storing how many further events.
+			uint8_t *secondEvent = caerGenericEventGetEvent(packet, caerIteratorCounter - (int32_t) tsRun--);
+			caerGenericEventSetTimestamp(secondEvent, packet, I32T(tsRun)); // Is at least 1.
 
-		// If message-based protocol, we fill in the now empty buffer with the
-		// appropriate header.
-		if (state->isNetworkMessageBased) {
-			sendNetworkHeader(state, NULL);
+			// Finally move modified memory where it needs to go.
+			if (doMemMove) {
+				memmove(((uint8_t *) packet) + currPacketOffset, firstEvent, (size_t) eventSize * 2);
+			}
+			else {
+				doMemMove = true; // After first shrink always move memory.
+			}
+			currPacketOffset += (size_t) eventSize * 2;
+
+			// Now go through remaining events and move their data close together.
+			while (tsRun > 0) {
+				uint8_t *thirdEvent = caerGenericEventGetEvent(packet, caerIteratorCounter - (int32_t) tsRun--);
+				memmove(((uint8_t *) packet) + currPacketOffset, thirdEvent, (size_t) eventTSOffset);
+				currPacketOffset += (size_t) eventTSOffset;
+			}
 		}
+		else {
+			// Just copy data unchanged if no compression is possible.
+			if (doMemMove) {
+				uint8_t *startEvent = caerGenericEventGetEvent(packet, caerIteratorCounter - (int32_t) tsRun);
+				memmove(((uint8_t *) packet) + currPacketOffset, startEvent, (size_t) eventSize * tsRun);
+			}
+			currPacketOffset += (size_t) eventSize * tsRun;
+		}
+
+		// Reset values for next iteration.
+		lastTS = currTS;
+		tsRun = 1;
 	}
 
-	// Update last commit time.
-	portable_clock_gettime_monotonic(&state->bufferLastCommitTime);
+	return (currPacketOffset);
 }
 
 #ifdef ENABLE_INOUT_PNG_COMPRESSION
-
-static void caerLibPNGWriteBuffer(png_structp png_ptr, png_bytep data, png_size_t length);
-static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader packet);
 
 // Simple structure to store PNG image bytes.
 struct caer_libpng_buffer {
@@ -628,225 +938,16 @@ static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader pa
 #endif
 
 /**
- * Search for runs of at least 3 events with the same timestamp, and convert them to a special
- * sequence: leave first event unchanged, but mark its timestamp as special by setting the
- * highest bit (bit 31) to one (it is forbidden for timestamps in memory to have that bit set for
- * signed-integer-only language compatibility). Then, for the second event, change its timestamp
- * to a 4-byte integer saying how many more events will follow afterwards with this same timestamp
- * (this is used for decoding), so only their data portion will be given. Then follow with those
- * event's data, back to back, with their timestamps removed.
- * So let's assume there are 6 events with TS=1234. In memory this looks like this:
- * E1(data,ts), E2(data,ts), E3(data,ts), E4(data,ts), E5(data,ts), E6(data,ts)
- * After the timestamp serialization compression step:
- * E1(data,ts|0x80000000), E2(data,4), E3(data), E4(data), E5(data), E5(data)
- * This change is only in the data itself, not in the packet headers, so that we can still use the
- * eventNumber and eventSize fields to calculate memory allocation when doing decompression.
- * As such, to correctly interpret this data, the Format flags must be correctly set. All current
- * file or network formats do specify those as mandatory in their headers, so we can rely on that.
- * Also all event types where this kind of thing makes any sense do have the timestamp as their last
- * data member in their struct, so we can use that information, stored in tsOffset header field,
- * together with eventSize, to come up with a generic implementation applicable to all other event
- * types that satisfy this condition of TS-as-last-member (so we can use that offset as event size).
- * When this is enabled, it requires full iteration thorough the whole event packet, both at
- * compression and at decompression time.
- *
- * @param state common output state.
- * @param packet the packet to timestamp-compress.
- * @param packetSize the current event packet size (header + data).
- *
- * @return the event packet size (header + data) after compression.
- *         Must be equal or smaller than the input packetSize.
+ * ============================================================================
+ * OUTPUT THREAD
+ * ============================================================================
+ * Handle writing of data to output. Uses libuv/eventloop for network outputs,
+ * while simple FD+writeUntilDone() for normal files.
+ * ============================================================================
  */
-static size_t compressTimestampSerialize(outputCommonState state, caerEventPacketHeader packet) {
-	UNUSED_ARGUMENT(state);
-
-	size_t currPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE; // Start here, no change to header.
-	int32_t eventSize = caerEventPacketHeaderGetEventSize(packet);
-	int32_t eventTSOffset = caerEventPacketHeaderGetEventTSOffset(packet);
-
-	int32_t lastTS = -1;
-	int32_t currTS = -1;
-	size_t tsRun = 0;
-	bool doMemMove = false; // Initially don't move memory, until we actually shrink the size.
-
-	for (int32_t caerIteratorCounter = 0; caerIteratorCounter <= caerEventPacketHeaderGetEventNumber(packet);
-		caerIteratorCounter++) {
-		// Iterate until one element past the end, to flush the last run. In that particular case,
-		// we don't get a new element or TS, as we'd be past the end of the array.
-		if (caerIteratorCounter < caerEventPacketHeaderGetEventNumber(packet)) {
-			void *caerIteratorElement = caerGenericEventGetEvent(packet, caerIteratorCounter);
-
-			currTS = caerGenericEventGetTimestamp(caerIteratorElement, packet);
-			if (currTS == lastTS) {
-				// Increase size of run of same TS events currently being seen.
-				tsRun++;
-				continue;
-			}
-		}
-
-		// TS are different, at this point look if the last run was long enough
-		// and if it makes sense to compress. It does starting with 3 events.
-		if (tsRun >= 3) {
-			// First event to remains there, we set its TS highest bit.
-			uint8_t *firstEvent = caerGenericEventGetEvent(packet, caerIteratorCounter - (int32_t) tsRun--);
-			caerGenericEventSetTimestamp(firstEvent, packet,
-				caerGenericEventGetTimestamp(firstEvent, packet) | I32T(0x80000000));
-
-			// Now use second event's timestamp for storing how many further events.
-			uint8_t *secondEvent = caerGenericEventGetEvent(packet, caerIteratorCounter - (int32_t) tsRun--);
-			caerGenericEventSetTimestamp(secondEvent, packet, I32T(tsRun)); // Is at least 1.
-
-			// Finally move modified memory where it needs to go.
-			if (doMemMove) {
-				memmove(((uint8_t *) packet) + currPacketOffset, firstEvent, (size_t) eventSize * 2);
-			}
-			else {
-				doMemMove = true; // After first shrink always move memory.
-			}
-			currPacketOffset += (size_t) eventSize * 2;
-
-			// Now go through remaining events and move their data close together.
-			while (tsRun > 0) {
-				uint8_t *thirdEvent = caerGenericEventGetEvent(packet, caerIteratorCounter - (int32_t) tsRun--);
-				memmove(((uint8_t *) packet) + currPacketOffset, thirdEvent, (size_t) eventTSOffset);
-				currPacketOffset += (size_t) eventTSOffset;
-			}
-		}
-		else {
-			// Just copy data unchanged if no compression is possible.
-			if (doMemMove) {
-				uint8_t *startEvent = caerGenericEventGetEvent(packet, caerIteratorCounter - (int32_t) tsRun);
-				memmove(((uint8_t *) packet) + currPacketOffset, startEvent, (size_t) eventSize * tsRun);
-			}
-			currPacketOffset += (size_t) eventSize * tsRun;
-		}
-
-		// Reset values for next iteration.
-		lastTS = currTS;
-		tsRun = 1;
-	}
-
-	return (currPacketOffset);
-}
-
-/**
- * Compress event packets.
- * Compressed event packets have the highest bit of the type field
- * set to '1' (type | 0x8000). Their eventCapacity field holds the
- * new, true length of the data portion of the packet, in bytes.
- * This takes advantage of the fact capacity always equals number
- * in any input/output stream, and as such is redundant information.
- *
- * @param state common output state.
- * @param packet the event packet to compress.
- * @param packetSize the current event packet size (header + data).
- *
- * @return the event packet size (header + data) after compression.
- *         Must be equal or smaller than the input packetSize.
- */
-static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader packet, size_t packetSize) {
-	size_t compressedSize = packetSize;
-
-	// Data compression technique 1: serialize timestamps for event types that tend to repeat them a lot.
-	// Currently, this means polarity events.
-	if ((state->formatID & 0x01) && caerEventPacketHeaderGetEventType(packet) == POLARITY_EVENT) {
-		compressedSize = compressTimestampSerialize(state, packet);
-	}
-
-#ifdef ENABLE_INOUT_PNG_COMPRESSION
-	// Data compression technique 2: do PNG compression on frames, Grayscale and RGB(A).
-	if ((state->formatID & 0x02) && caerEventPacketHeaderGetEventType(packet) == FRAME_EVENT) {
-		compressedSize = compressFramePNG(state, packet);
-	}
-#endif
-
-	// If any compression was possible, we mark the packet as compressed
-	// and store its data size in eventCapacity.
-	if (compressedSize != packetSize) {
-		packet->eventType = htole16(le16toh(packet->eventType) | I16T(0x8000));
-		packet->eventCapacity = htole32(I32T(compressedSize) - CAER_EVENT_PACKET_HEADER_SIZE);
-	}
-
-	// Return size after compression.
-	return (compressedSize);
-}
-
-static void sendEventPacket(outputCommonState state, caerEventPacketHeader packet) {
-	// Calculate total size of packet, in bytes.
-	size_t packetSize = CAER_EVENT_PACKET_HEADER_SIZE
-		+ (size_t) (caerEventPacketHeaderGetEventNumber(packet) * caerEventPacketHeaderGetEventSize(packet));
-
-	// Statistics support.
-	state->statistics.packetsNumber++;
-	state->statistics.packetsTotalSize += packetSize;
-	state->statistics.packetsHeaderSize += CAER_EVENT_PACKET_HEADER_SIZE;
-	state->statistics.packetsDataSize += (size_t) (caerEventPacketHeaderGetEventNumber(packet)
-		* caerEventPacketHeaderGetEventSize(packet));
-
-	if (state->formatID != 0) {
-		packetSize = compressEventPacket(state, packet, packetSize);
-	}
-
-	// Statistics support (after compression).
-	state->statistics.dataWritten += packetSize;
-
-	// Send it out until none is left!
-	size_t packetIndex = 0;
-
-	while (packetSize > 0) {
-		// Calculate remaining space in current buffer.
-		size_t usableBufferSpace = state->dataBuffer->bufferSize - state->dataBuffer->bufferUsedSize;
-
-		// Let's see how much of it (or all of it!) we need.
-		if (packetSize < usableBufferSpace) {
-			usableBufferSpace = packetSize;
-		}
-
-		// Copy memory from packet to buffer.
-		memcpy(state->dataBuffer->buffer + state->dataBuffer->bufferUsedSize, ((uint8_t *) packet) + packetIndex,
-			usableBufferSpace);
-
-		// Update indexes.
-		state->dataBuffer->bufferUsedSize += usableBufferSpace;
-		packetIndex += usableBufferSpace;
-		packetSize -= usableBufferSpace;
-
-		if (state->dataBuffer->bufferUsedSize == state->dataBuffer->bufferSize) {
-			// Commit buffer once full.
-			commitOutputBuffer(state);
-		}
-	}
-
-	// Each commit operation updates the last committed buffer time.
-	// The above code resulted in some commits, with the time being updated,
-	// or in no commits at all, with the time remaining as before.
-	// Here we check that the time difference between now and the last actual
-	// commit doesn't exceed the allowed maximum interval.
-	struct timespec currentTime;
-	portable_clock_gettime_monotonic(&currentTime);
-
-	uint64_t diffNanoTime = (uint64_t) (((int64_t) (currentTime.tv_sec - state->bufferLastCommitTime.tv_sec)
-		* 1000000000LL) + (int64_t) (currentTime.tv_nsec - state->bufferLastCommitTime.tv_nsec));
-
-	// DiffNanoTime is the difference in nanoseconds; we want to trigger after
-	// the user provided interval has elapsed (also in nanoseconds).
-	if (diffNanoTime >= state->bufferMaxInterval) {
-		commitOutputBuffer(state);
-	}
-}
-
-static void orderAndSendEventPackets(outputCommonState state, caerEventPacketContainer currPacketContainer) {
-	// Sort container by first timestamp (required) and by type ID (convenience).
-	size_t currPacketContainerSize = (size_t) caerEventPacketContainerGetEventPacketsNumber(currPacketContainer);
-
-	qsort(currPacketContainer->eventPackets, currPacketContainerSize, sizeof(caerEventPacketHeader),
-		&packetsFirstTimestampThenTypeCmp);
-
-	for (size_t cpIdx = 0; cpIdx < currPacketContainerSize; cpIdx++) {
-		// Send the packets out to the file descriptor.
-		sendEventPacket(state, caerEventPacketContainerGetEventPacket(currPacketContainer, (int32_t) cpIdx));
-	}
-}
+static void handleNewServerConnections(outputCommonState state);
+static void sendFileHeader(outputCommonState state);
+static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD);
 
 static void handleNewServerConnections(outputCommonState state) {
 	// First let's see if any new connections are waiting on the listening
@@ -919,6 +1020,82 @@ static void handleNewServerConnections(outputCommonState state) {
 		"Rejected TCP client (fd %d), max connections reached.", acceptResult);
 
 	close(acceptResult);
+}
+
+static inline void writeBufferToAll(outputCommonState state, const uint8_t *buffer, size_t bufferSize) {
+	for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
+		int fd = state->fileDescriptors->fds[i];
+
+		if (fd >= 0) {
+			if (!writeUntilDone(fd, buffer, bufferSize)) {
+				// Write failed, most of the reasons for that to happen are
+				// not recoverable from, so we just disable this file descriptor.
+				// This also detects client-side close() for TCP server connections.
+				caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
+					"Disconnect or error on fd %d, closing and removing. Error: %d.", fd, errno);
+
+				close(fd);
+				state->fileDescriptors->fds[i] = -1;
+			}
+		}
+	}
+}
+
+static int outputThread(void *stateArg) {
+	outputCommonState state = stateArg;
+
+	// Set thread name.
+	size_t threadNameLength = strlen(state->parentModule->moduleSubSystemString);
+	char threadName[threadNameLength + 1 + 8]; // +1 for NUL character.
+	strcpy(threadName, state->parentModule->moduleSubSystemString);
+	strcat(threadName, "[Output]");
+	thrd_set_name(threadName);
+
+	bool headerSent = false;
+
+	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
+		// Wait for source to be defined.
+		int16_t sourceID = I16T(atomic_load_explicit(&state->sourceID, memory_order_relaxed));
+		if (sourceID == -1) {
+			// Delay by 1 ms if no data, to avoid a wasteful busy loop.
+			struct timespec delaySleep = { .tv_sec = 0, .tv_nsec = 1000000 };
+			thrd_sleep(&delaySleep, NULL);
+
+			continue;
+		}
+
+		// Send appropriate header.
+		if (state->isNetworkStream) {
+			sendNetworkHeader(state, NULL);
+		}
+		else {
+			sendFileHeader(state);
+		}
+
+		headerSent = true;
+		break;
+	}
+
+	// If no header sent, it means we exited (running=false) without ever getting any
+	// event packet with a source ID, so we don't have to process anything.
+	// But we make sure to empty the transfer ring-buffer, as something may have been
+	// put there in the meantime, so we ensure it's checked and freed. This because
+	// in caerOutputCommonExit() we expect the ring-buffer to always be empty!
+	if (!headerSent) {
+		caerEventPacketContainer packetContainer;
+		while ((packetContainer = ringBufferGet(state->transferRing)) != NULL) {
+			// Free all remaining packet container memory.
+			caerEventPacketContainerFree(packetContainer);
+		}
+
+		return (thrd_success);
+	}
+
+	// Handle new connections in server mode.
+	if (state->isNetworkStream && state->fileDescriptors->serverFd >= 0) {
+		handleNewServerConnections(state);
+	}
+
 }
 
 static void sendFileHeader(outputCommonState state) {
@@ -1006,112 +1183,6 @@ static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD) {
 			writeBufferToAll(state, (uint8_t *) &networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
 		}
 	}
-}
-
-static int outputHandlerThread(void *stateArg) {
-	outputCommonState state = stateArg;
-
-	// Set thread name.
-	thrd_set_name(state->parentModule->moduleSubSystemString);
-
-	bool headerSent = false;
-
-	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
-		// Wait for source to be defined.
-		int16_t sourceID = I16T(atomic_load_explicit(&state->sourceID, memory_order_relaxed));
-		if (sourceID == -1) {
-			// Delay by 1 ms if no data, to avoid a wasteful busy loop.
-			struct timespec delaySleep = { .tv_sec = 0, .tv_nsec = 1000000 };
-			thrd_sleep(&delaySleep, NULL);
-
-			continue;
-		}
-
-		// Send appropriate header.
-		if (state->isNetworkStream) {
-			sendNetworkHeader(state, NULL);
-		}
-		else {
-			sendFileHeader(state);
-		}
-
-		headerSent = true;
-		break;
-	}
-
-	// If no header sent, it means we exited (running=false) without ever getting any
-	// event packet with a source ID, so we don't have to process anything.
-	// But we make sure to empty the transfer ring-buffer, as something may have been
-	// put there in the meantime, so we ensure it's checked and freed. This because
-	// in caerOutputCommonExit() we expect the ring-buffer to always be empty!
-	if (!headerSent) {
-		caerEventPacketContainer packetContainer;
-		while ((packetContainer = ringBufferGet(state->transferRing)) != NULL) {
-			// Free all remaining packet container memory.
-			caerEventPacketContainerFree(packetContainer);
-		}
-
-		return (thrd_success);
-	}
-
-	// If no data is available on the transfer ring-buffer, sleep for 500µs (0.5 ms)
-	// to avoid wasting resources in a busy loop.
-	struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 500000 };
-
-	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
-		// Handle new connections in server mode.
-		if (state->isNetworkStream && state->fileDescriptors->serverFd >= 0) {
-			handleNewServerConnections(state);
-		}
-
-		// Handle configuration changes affecting buffer management.
-		if (atomic_load_explicit(&state->bufferUpdate, memory_order_relaxed)) {
-			atomic_store(&state->bufferUpdate, false);
-
-			state->bufferMaxInterval = U64T(sshsNodeGetInt(state->parentModule->moduleNode, "bufferMaxInterval"));
-			state->bufferMaxInterval *= 1000LLU; // Convert from microseconds to nanoseconds.
-
-			if (!newOutputBuffer(state)) {
-				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
-					"Failed to allocate new output data buffer. Continue using old one.");
-			}
-		}
-
-		// Fill output data buffer with data from incoming packets.
-		// Respect time order as specified in AEDAT 3.X format: first event's main
-		// timestamp decides its ordering with regards to other packets. Smaller
-		// comes first. If equal, order by increasing type ID as a convenience,
-		// not strictly required by specification!
-
-		// Get the newest event packet container from the transfer ring-buffer.
-		caerEventPacketContainer currPacketContainer = ringBufferGet(state->transferRing);
-		if (currPacketContainer == NULL) {
-			// There is none, so we can't work on and commit this.
-			// We just sleep here a little and then try again, as we need the data!
-			thrd_sleep(&noDataSleep, NULL);
-			continue;
-		}
-
-		orderAndSendEventPackets(state, currPacketContainer);
-
-		// Free all remaining packet container memory.
-		caerEventPacketContainerFree(currPacketContainer);
-	}
-
-	// Handle shutdown, write out all content remaining in the transfer ring-buffer
-	// and write the packets out to the file descriptor.
-	caerEventPacketContainer packetContainer;
-	while ((packetContainer = ringBufferGet(state->transferRing)) != NULL) {
-		orderAndSendEventPackets(state, packetContainer);
-
-		// Free all remaining packet container memory.
-		caerEventPacketContainerFree(packetContainer);
-	}
-
-	// Make sure last (incomplete) buffer is sent out.
-	commitOutputBuffer(state);
-
-	return (thrd_success);
 }
 
 bool caerOutputCommonInit(caerModuleData moduleData, outputCommonFDs fds, bool isNetworkStream,
@@ -1262,56 +1333,6 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 		state->statistics.packetsNumber, state->statistics.packetsTotalSize, state->statistics.packetsHeaderSize,
 		state->statistics.packetsDataSize, state->statistics.dataWritten,
 		(state->statistics.packetsTotalSize - state->statistics.dataWritten));
-}
-
-void caerOutputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
-	outputCommonState state = moduleData->moduleState;
-
-	copyPacketsToTransferRing(state, argsNumber, args);
-}
-
-void caerOutputCommonReset(caerModuleData moduleData, uint16_t resetCallSourceID) {
-	outputCommonState state = moduleData->moduleState;
-
-	if (resetCallSourceID == I16T(atomic_load_explicit(&state->sourceID, memory_order_relaxed))) {
-		// The timestamp reset call came in from the Source ID this output module
-		// is responsible for, so we ensure the timestamps are reset and that the
-		// special event packet goes out for sure.
-
-		// Send lone packet container with just TS_RESET.
-		// Allocate packet container just for this event.
-		caerEventPacketContainer tsResetContainer = caerEventPacketContainerAllocate(1);
-		if (tsResetContainer == NULL) {
-			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
-				"Failed to allocate tsReset event packet container.");
-			return;
-		}
-
-		// Allocate special packet just for this event.
-		caerSpecialEventPacket tsResetPacket = caerSpecialEventPacketAllocate(1, I16T(resetCallSourceID),
-			I32T(state->lastTimestamp >> 31));
-		if (tsResetPacket == NULL) {
-			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
-				"Failed to allocate tsReset special event packet.");
-			return;
-		}
-
-		// Create timestamp reset event.
-		caerSpecialEvent tsResetEvent = caerSpecialEventPacketGetEvent(tsResetPacket, 0);
-		caerSpecialEventSetTimestamp(tsResetEvent, INT32_MAX);
-		caerSpecialEventSetType(tsResetEvent, TIMESTAMP_RESET);
-		caerSpecialEventValidate(tsResetEvent, tsResetPacket);
-
-		// Assign special packet to packet container.
-		caerEventPacketContainerSetEventPacket(tsResetContainer, SPECIAL_EVENT, (caerEventPacketHeader) tsResetPacket);
-
-		while (!ringBufferPut(state->transferRing, tsResetContainer)) {
-			; // Ensure this goes into the ring-buffer.
-		}
-
-		// Reset timestamp checking.
-		state->lastTimestamp = 0;
-	}
 }
 
 static void caerOutputCommonConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,

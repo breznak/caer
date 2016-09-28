@@ -316,11 +316,11 @@ static inline void caerConfigSendError(uv_stream_t *client, const char *errorMsg
 		return;
 	}
 
-	response->dataBuf[0] = CAER_CONFIG_ERROR;
-	response->dataBuf[1] = SSHS_STRING;
-	setMsgLen(response->dataBuf, (uint16_t) (errorMsgLength + 1));
-	memcpy(response->dataBuf + 4, errorMsg, errorMsgLength);
-	response->dataBuf[4 + errorMsgLength] = '\0';
+	response->buf.base[0] = CAER_CONFIG_ERROR;
+	response->buf.base[1] = SSHS_STRING;
+	setMsgLen((uint8_t *) response->buf.base, (uint16_t) (errorMsgLength + 1));
+	memcpy(response->buf.base + 4, errorMsg, errorMsgLength);
+	response->buf.base[4 + errorMsgLength] = '\0';
 
 	int retVal = libuvWrite(client, response);
 	UV_RET_CHECK_CS(retVal, "libuvWrite", free(response); return);
@@ -338,10 +338,10 @@ static inline void caerConfigSendResponse(uv_stream_t *client, uint8_t action, u
 		return;
 	}
 
-	response->dataBuf[0] = action;
-	response->dataBuf[1] = type;
-	setMsgLen(response->dataBuf, (uint16_t) msgLength);
-	memcpy(response->dataBuf + 4, msg, msgLength);
+	response->buf.base[0] = (char) action;
+	response->buf.base[1] = (char) type;
+	setMsgLen((uint8_t *) response->buf.base, (uint16_t) msgLength);
+	memcpy(response->buf.base + 4, msg, msgLength);
 	// Msg must already be NUL terminated!
 
 	int retVal = libuvWrite(client, response);

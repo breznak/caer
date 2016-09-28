@@ -119,20 +119,51 @@ static inline bool simpleBufferFileRead(uv_loop_t *loop, uv_file file, int64_t f
 
 struct libuvWriteBufStruct {
 	uv_buf_t buf;
+	void *dataBuf;
 	void *data; // Allow arbitrary data to be attached to buffer. Must be on heap.
-	uint8_t dataBuf[];
 };
 
 typedef struct libuvWriteBufStruct *libuvWriteBuf;
 
 static inline libuvWriteBuf libuvWriteBufInit(size_t size) {
-	libuvWriteBuf writeBuf = calloc(1, sizeof(*writeBuf) + size);
+	uint8_t *dataBuf = malloc(size);
+	if (dataBuf == NULL) {
+		return (NULL);
+	}
+
+	libuvWriteBuf writeBuf = malloc(sizeof(*writeBuf));
+	if (writeBuf == NULL) {
+		free(dataBuf);
+		return (NULL);
+	}
+
+	writeBuf->buf.base = (char *) dataBuf;
+	writeBuf->buf.len = size;
+
+	writeBuf->dataBuf = dataBuf;
+
+	writeBuf->data = NULL;
+
+	return (writeBuf);
+}
+
+static inline libuvWriteBuf libuvWriteBufInitWithSimpleBuffer(simpleBuffer sBuffer) {
+	// Simple Buffer must be already allocated!
+	if (sBuffer == NULL) {
+		return (NULL);
+	}
+
+	libuvWriteBuf writeBuf = malloc(sizeof(*writeBuf));
 	if (writeBuf == NULL) {
 		return (NULL);
 	}
 
-	writeBuf->buf.base = (char *) writeBuf->dataBuf;
-	writeBuf->buf.len = size;
+	writeBuf->buf.base = (char *) sBuffer->buffer;
+	writeBuf->buf.len = sBuffer->bufferUsedSize;
+
+	writeBuf->dataBuf = sBuffer;
+
+	writeBuf->data = NULL;
 
 	return (writeBuf);
 }
@@ -160,6 +191,7 @@ static inline void libuvWriteFree(uv_write_t *writeRequest, int status) {
 	(void) (status); // UNUSED.
 
 	libuvWriteBuf buf = writeRequest->data;
+	free(buf->dataBuf);
 	free(buf->data);
 	free(buf);
 
