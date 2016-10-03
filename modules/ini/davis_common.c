@@ -689,7 +689,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 
 	// Packet settings (size (in events) and time interval (in µs)).
 	sshsNodePutIntIfAbsent(sysNode, "PacketContainerMaxPacketSize", 8192);
-	sshsNodePutIntIfAbsent(sysNode, "PacketContainerMaxInterval", 10000);
+	sshsNodePutIntIfAbsent(sysNode, "PacketContainerInterval", 10000);
 
 	// Ring-buffer setting (only changes value on module init/shutdown cycles).
 	sshsNodePutIntIfAbsent(sysNode, "DataExchangeBufferSize", 64);
@@ -2308,7 +2308,7 @@ static void systemConfigSend(sshsNode node, caerModuleData moduleData) {
 	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
 	CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_PACKET_SIZE, U32T(sshsNodeGetInt(node, "PacketContainerMaxPacketSize")));
 	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-	CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_INTERVAL, U32T(sshsNodeGetInt(node, "PacketContainerMaxInterval")));
+	CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_INTERVAL, U32T(sshsNodeGetInt(node, "PacketContainerInterval")));
 
 	// Changes only take effect on module start!
 	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_DATAEXCHANGE,
@@ -2326,7 +2326,7 @@ static void systemConfigListener(sshsNode node, void *userData, enum sshs_node_a
 			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
 			CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_PACKET_SIZE, U32T(changeValue.iint));
 		}
-		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "PacketContainerMaxInterval")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "PacketContainerInterval")) {
 			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
 			CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_INTERVAL, U32T(changeValue.iint));
 		}

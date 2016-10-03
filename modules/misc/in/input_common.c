@@ -2013,17 +2013,17 @@ bool isNetworkMessageBased) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferSize", 65536); // in bytes, size of data buffer
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "transferBufferSize", 128); // in packet groups
 
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "sizeSlice", 8192); // in events, size of slice to generate
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "timeSlice", 10000); // in µs, size of time slice to generate
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "timeDelay", 10000); // in µs, delay between consecutive slices
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "PacketContainerMaxPacketSize", 8192); // in events, size of slice to generate
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "PacketContainerInterval", 10000); // in µs, size of time slice to generate
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "PacketContainerDelay", 10000); // in µs, delay between consecutive slices
 
 	atomic_store(&state->validOnly, sshsNodeGetBool(moduleData->moduleNode, "validOnly"));
 	atomic_store(&state->keepPackets, sshsNodeGetBool(moduleData->moduleNode, "keepPackets"));
 	atomic_store(&state->pause, sshsNodeGetBool(moduleData->moduleNode, "pause"));
 
-	atomic_store(&state->packetContainer.sizeSlice, sshsNodeGetInt(moduleData->moduleNode, "sizeSlice"));
-	atomic_store(&state->packetContainer.timeSlice, sshsNodeGetInt(moduleData->moduleNode, "timeSlice"));
-	atomic_store(&state->packetContainer.timeDelay, sshsNodeGetInt(moduleData->moduleNode, "timeDelay"));
+	atomic_store(&state->packetContainer.sizeSlice, sshsNodeGetInt(moduleData->moduleNode, "PacketContainerMaxPacketSize"));
+	atomic_store(&state->packetContainer.timeSlice, sshsNodeGetInt(moduleData->moduleNode, "PacketContainerInterval"));
+	atomic_store(&state->packetContainer.timeDelay, sshsNodeGetInt(moduleData->moduleNode, "PacketContainerDelay"));
 
 	// Initialize transfer ring-buffers. transferBufferSize only changes here at init time!
 	state->transferRingPackets = ringBufferInit((size_t) sshsNodeGetInt(moduleData->moduleNode, "transferBufferSize"));
@@ -2233,13 +2233,13 @@ static void caerInputCommonConfigListener(sshsNode node, void *userData, enum ss
 			// Set buffer update flag.
 			atomic_store(&state->bufferUpdate, true);
 		}
-		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "sizeSlice")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "PacketContainerMaxPacketSize")) {
 			atomic_store(&state->packetContainer.sizeSlice, changeValue.iint);
 		}
-		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "timeSlice")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "PacketContainerInterval")) {
 			atomic_store(&state->packetContainer.timeSlice, changeValue.iint);
 		}
-		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "timeDelay")) {
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "PacketContainerDelay")) {
 			atomic_store(&state->packetContainer.timeDelay, changeValue.iint);
 		}
 	}
@@ -2286,15 +2286,15 @@ void caerInputVisualizerEventHandler(caerVisualizerPublicState state, ALLEGRO_EV
 	}
 	// SLOW DOWN.
 	else if (event.type == ALLEGRO_EVENT_KEY_DOWN && event.keyboard.keycode == ALLEGRO_KEY_S) {
-		int timeSlice = sshsNodeGetInt(state->eventSourceConfigNode, "timeSlice");
+		int timeSlice = sshsNodeGetInt(state->eventSourceConfigNode, "PacketContainerInterval");
 
-		sshsNodePutInt(state->eventSourceConfigNode, "timeSlice", timeSlice / 2);
+		sshsNodePutInt(state->eventSourceConfigNode, "PacketContainerInterval", timeSlice / 2);
 	}
 	// SPEED UP.
 	else if (event.type == ALLEGRO_EVENT_KEY_DOWN && event.keyboard.keycode == ALLEGRO_KEY_F) {
-		int timeSlice = sshsNodeGetInt(state->eventSourceConfigNode, "timeSlice");
+		int timeSlice = sshsNodeGetInt(state->eventSourceConfigNode, "PacketContainerInterval");
 
-		sshsNodePutInt(state->eventSourceConfigNode, "timeSlice", timeSlice * 2);
+		sshsNodePutInt(state->eventSourceConfigNode, "PacketContainerInterval", timeSlice * 2);
 	}
 }
 #endif
