@@ -95,6 +95,8 @@ struct output_common_statistics {
 struct output_common_state {
 	/// Control flag for output handling thread.
 	atomic_bool running;
+	/// The compression handling thread (separate as to not hold up processing).
+	thrd_t compressorThread;
 	/// The output handling thread (separate as to not hold up processing).
 	thrd_t outputThread;
 	/// Track source ID (cannot change!). One source per I/O module!
@@ -111,25 +113,29 @@ struct output_common_state {
 	/// For network-like outputs, we differentiate between stream and message
 	/// based protocols, like TCP and UDP. Matters for header/sequence number.
 	bool isNetworkMessageBased;
-	/// Keep track of the sequence number for message-based protocols.
-	int64_t networkSequenceNumber;
+	/// Keep the full network header around, so we can easily update and write it.
+	struct aedat3_network_header networkHeader;
 	/// Filter out invalidated events or not.
 	atomic_bool validOnly;
 	/// Force all incoming packets to be committed to the transfer ring-buffer.
 	/// This results in no loss of data, but may slow down processing considerably.
 	/// It may also block it altogether, if the output goes away for any reason.
 	atomic_bool keepPackets;
-	/// Transfer packets coming from a mainloop run to the output handling thread.
+	/// Transfer packets coming from a mainloop run to the compression handling thread.
 	/// We use EventPacketContainers as data structure for convenience, they do exactly
 	/// keep track of the data we do want to transfer and are part of libcaer.
-	RingBuffer transferRing;
+	RingBuffer compressorRing;
+	/// Transfer buffers to output handling thread.
+	RingBuffer outputRing;
 	/// Track last packet container's highest event timestamp that was sent out.
 	int64_t lastTimestamp;
-	/// Data buffer for writing to file descriptor (buffered I/O).
+	/// Data buffer for writing (buffered I/O).
 	simpleBuffer dataBuffer;
 	/// Maximum interval without sending data, in µs.
 	/// How long to wait if buffer not full before committing it anyway.
 	uint64_t bufferMaxInterval;
+	/// Data buffer wanted size.
+	size_t bufferSize;
 	/// Time of last buffer commit to file descriptor (send() call).
 	struct timespec bufferLastCommitTime;
 	/// Flag to signal update to buffer configuration asynchronously.
@@ -200,8 +206,8 @@ void caerOutputCommonReset(caerModuleData moduleData, uint16_t resetCallSourceID
 		// Assign special packet to packet container.
 		caerEventPacketContainerSetEventPacket(tsResetContainer, SPECIAL_EVENT, (caerEventPacketHeader) tsResetPacket);
 
-		while (!ringBufferPut(state->transferRing, tsResetContainer)) {
-			; // Ensure this goes into the ring-buffer.
+		while (!ringBufferPut(state->compressorRing, tsResetContainer)) {
+			; // Ensure this goes into the first ring-buffer.
 		}
 
 		// Reset timestamp checking.
@@ -355,7 +361,7 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 	// to successfully copy.
 	caerEventPacketContainerSetEventPacketsNumber(eventPackets, (int32_t) idx);
 
-	retry: if (!ringBufferPut(state->transferRing, eventPackets)) {
+	retry: if (!ringBufferPut(state->compressorRing, eventPackets)) {
 		if (atomic_load_explicit(&state->keepPackets, memory_order_relaxed)) {
 			// Retry forever if requested.
 			goto retry;
@@ -378,17 +384,20 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
  * ============================================================================
  */
 static int compressorThread(void *stateArg);
+static void generateNetworkHeader(outputCommonState state);
+static void writeNetworkHeader(outputCommonState state);
+static void writeFileHeader(outputCommonState state);
 static bool newOutputBuffer(outputCommonState state);
 static void commitOutputBuffer(outputCommonState state);
-static void orderAndSendEventPackets(outputCommonState state, caerEventPacketContainer currPacketContainer);
+static bool orderAndSendEventPackets(outputCommonState state, caerEventPacketContainer currPacketContainer);
 static int packetsFirstTimestampThenTypeCmp(const void *a, const void *b);
 static void sendEventPacket(outputCommonState state, caerEventPacketHeader packet);
 static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader packet, size_t packetSize);
 static size_t compressTimestampSerialize(outputCommonState state, caerEventPacketHeader packet);
 
 #ifdef ENABLE_INOUT_PNG_COMPRESSION
-	static void caerLibPNGWriteBuffer(png_structp png_ptr, png_bytep data, png_size_t length);
-	static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader packet);
+static void caerLibPNGWriteBuffer(png_structp png_ptr, png_bytep data, png_size_t length);
+static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader packet);
 #endif
 
 static int compressorThread(void *stateArg) {
@@ -401,6 +410,37 @@ static int compressorThread(void *stateArg) {
 	strcat(threadName, "[Compressor]");
 	thrd_set_name(threadName);
 
+	bool headerWrittenToBuffer = false;
+
+	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
+		// Wait for source to be defined.
+		int16_t sourceID = I16T(atomic_load(&state->sourceID));
+		if (sourceID == -1) {
+			// Delay by 1 ms if no data, to avoid a wasteful busy loop.
+			struct timespec delaySleep = { .tv_sec = 0, .tv_nsec = 1000000 };
+			thrd_sleep(&delaySleep, NULL);
+
+			continue;
+		}
+
+		// Write appropriate header to the first buffer.
+		if (state->isNetworkStream) {
+			writeNetworkHeader(state);
+		}
+		else {
+			writeFileHeader(state);
+		}
+
+		headerWrittenToBuffer = true;
+
+		break;
+	}
+
+	if (!headerWrittenToBuffer) {
+		// No header, nothing to do.
+		return (thrd_error);
+	}
+
 	// If no data is available on the transfer ring-buffer, sleep for 500µs (0.5 ms)
 	// to avoid wasting resources in a busy loop.
 	struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 500000 };
@@ -410,17 +450,14 @@ static int compressorThread(void *stateArg) {
 		if (atomic_load_explicit(&state->bufferUpdate, memory_order_relaxed)) {
 			atomic_store(&state->bufferUpdate, false);
 
+			state->bufferSize = (size_t) sshsNodeGetInt(state->parentModule->moduleNode, "bufferSize");
+
 			state->bufferMaxInterval = U64T(sshsNodeGetInt(state->parentModule->moduleNode, "bufferMaxInterval"));
 			state->bufferMaxInterval *= 1000LLU; // Convert from microseconds to nanoseconds.
-
-			if (!newOutputBuffer(state)) {
-				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
-					"Failed to allocate new output data buffer. Continue using old one.");
-			}
 		}
 
 		// Get the newest event packet container from the transfer ring-buffer.
-		caerEventPacketContainer currPacketContainer = ringBufferGet(state->transferRing);
+		caerEventPacketContainer currPacketContainer = ringBufferGet(state->compressorRing);
 		if (currPacketContainer == NULL) {
 			// There is none, so we can't work on and commit this.
 			// We just sleep here a little and then try again, as we need the data!
@@ -433,7 +470,9 @@ static int compressorThread(void *stateArg) {
 		// timestamp decides its ordering with regards to other packets. Smaller
 		// comes first. If equal, order by increasing type ID as a convenience,
 		// not strictly required by specification!
-		orderAndSendEventPackets(state, currPacketContainer);
+		if (!orderAndSendEventPackets(state, currPacketContainer)) {
+			break;
+		}
 
 		// Free all remaining packet container memory.
 		caerEventPacketContainerFree(currPacketContainer);
@@ -442,39 +481,98 @@ static int compressorThread(void *stateArg) {
 	// Handle shutdown, write out all content remaining in the transfer ring-buffer
 	// and write the packets out to the file descriptor.
 	caerEventPacketContainer packetContainer;
-	while ((packetContainer = ringBufferGet(state->transferRing)) != NULL) {
-		orderAndSendEventPackets(state, packetContainer);
+	while ((packetContainer = ringBufferGet(state->compressorRing)) != NULL) {
+		if (!orderAndSendEventPackets(state, packetContainer)) {
+			break;
+		}
 
 		// Free all remaining packet container memory.
 		caerEventPacketContainerFree(packetContainer);
 	}
 
-	// Make sure last (incomplete) buffer is sent out.
+	// Make sure last (maybe incomplete) buffer is sent out.
 	commitOutputBuffer(state);
 
 	return (thrd_success);
 }
 
-static bool newOutputBuffer(outputCommonState state) {
-	// First check if the size really changed.
-	size_t newBufferSize = (size_t) sshsNodeGetInt(state->parentModule->moduleNode, "bufferSize");
+static void generateNetworkHeader(outputCommonState state) {
+	// Generate AEDAT 3.1 header for network streams (20 bytes total).
+	state->networkHeader.magicNumber = htole64(AEDAT3_NETWORK_MAGIC_NUMBER);
+	state->networkHeader.sequenceNumber = htole64(0);
+	state->networkHeader.versionNumber = AEDAT3_NETWORK_VERSION;
+	state->networkHeader.formatNumber = state->formatID; // Send numeric format ID.
+	state->networkHeader.sourceID = htole16(I16T(atomic_load(&state->sourceID))); // Always one source per output module.
+}
 
-	if (state->dataBuffer != NULL && state->dataBuffer->bufferSize == newBufferSize) {
-		// Yeah, we're already where we want to be!
-		return (true);
+static void writeNetworkHeader(outputCommonState state) {
+	// Send AEDAT 3.1 header for network streams (20 bytes total).
+	generateNetworkHeader(state);
+
+	// Header at start of first buffer.
+	memcpy(state->dataBuffer->buffer, &state->networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
+	state->dataBuffer->bufferUsedSize = AEDAT3_NETWORK_HEADER_LENGTH;
+
+	if (state->isNetworkMessageBased) {
+		// Increase sequence number for successive headers, if this is a
+		// message-based network protocol (UDP for example).
+		state->networkHeader.sequenceNumber = htole64(le64toh(state->networkHeader.sequenceNumber) + 1);
+	}
+}
+
+static void writeFileHeader(outputCommonState state) {
+	// Write AEDAT 3.1 header.
+	writeBufferToAll(state, (const uint8_t *) "#!AER-DAT" AEDAT3_FILE_VERSION "\r\n", 11 + strlen(AEDAT3_FILE_VERSION));
+
+	// Write format header for all supported formats.
+	writeBufferToAll(state, (const uint8_t *) "#Format: ", 9);
+
+	if (state->formatID == 0x00) {
+		writeBufferToAll(state, (const uint8_t *) "RAW", 3);
+	}
+	else {
+		// Support the various formats and their mixing.
+		if (state->formatID == 0x01) {
+			writeBufferToAll(state, (const uint8_t *) "SerializedTS", 12);
+		}
+
+		if (state->formatID == 0x02) {
+			writeBufferToAll(state, (const uint8_t *) "PNGFrames", 9);
+		}
+
+		if (state->formatID == 0x03) {
+			// Serial and PNG together.
+			writeBufferToAll(state, (const uint8_t *) "SerializedTS,PNGFrames", 12 + 1 + 9);
+		}
 	}
 
+	writeBufferToAll(state, (const uint8_t *) "\r\n", 2);
+
+	char *sourceString = sshsNodeGetString(state->sourceInfoNode, "sourceString");
+	writeBufferToAll(state, (const uint8_t *) sourceString, strlen(sourceString));
+	free(sourceString);
+
+	time_t currentTimeEpoch = time(NULL);
+	tzset();
+	struct tm currentTime;
+	localtime_r(&currentTimeEpoch, &currentTime);
+
+	// Following time format uses exactly 44 characters (25 separators/characters,
+	// 4 year, 2 month, 2 day, 2 hours, 2 minutes, 2 seconds, 5 time-zone).
+	size_t currentTimeStringLength = 44;
+	char currentTimeString[currentTimeStringLength + 1]; // + 1 for terminating NUL byte.
+	strftime(currentTimeString, currentTimeStringLength + 1, "#Start-Time: %Y-%m-%d %H:%M:%S (TZ%z)\r\n", &currentTime);
+
+	writeBufferToAll(state, (const uint8_t *) currentTimeString, currentTimeStringLength);
+
+	writeBufferToAll(state, (const uint8_t *) "#!END-HEADER\r\n", 14);
+}
+
+static bool newOutputBuffer(outputCommonState state) {
 	// Allocate new buffer.
-	simpleBuffer newBuffer = simpleBufferInit(newBufferSize);
+	simpleBuffer newBuffer = simpleBufferInit(state->bufferSize);
 	if (newBuffer == NULL) {
 		return (false);
-	}
-
-	// Commit previous buffer content and then free the memory.
-	if (state->dataBuffer != NULL) {
-		commitOutputBuffer(state);
-
-		free(state->dataBuffer);
 	}
 
 	// Use new buffer.
@@ -485,9 +583,15 @@ static bool newOutputBuffer(outputCommonState state) {
 
 static void commitOutputBuffer(outputCommonState state) {
 	if (state->dataBuffer->bufferUsedSize != 0) {
-		writeBufferToOutputRing(state, state->dataBuffer);
+		while (!ringBufferPut(state->outputRing, state->dataBuffer)) {
+			;
+		}
 
-		state->dataBuffer->bufferUsedSize = 0;
+		state->dataBuffer = NULL;
+
+		if (!newOutputBuffer(state)) {
+			caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString, "Failed to allocate new buffer.");
+		}
 
 		// If message-based protocol, we fill in the now empty buffer with the
 		// appropriate header.
@@ -500,7 +604,7 @@ static void commitOutputBuffer(outputCommonState state) {
 	portable_clock_gettime_monotonic(&state->bufferLastCommitTime);
 }
 
-static void orderAndSendEventPackets(outputCommonState state, caerEventPacketContainer currPacketContainer) {
+static bool orderAndSendEventPackets(outputCommonState state, caerEventPacketContainer currPacketContainer) {
 	// Sort container by first timestamp (required) and by type ID (convenience).
 	size_t currPacketContainerSize = (size_t) caerEventPacketContainerGetEventPacketsNumber(currPacketContainer);
 
@@ -1098,93 +1202,6 @@ static int outputThread(void *stateArg) {
 
 }
 
-static void sendFileHeader(outputCommonState state) {
-	// Write AEDAT 3.1 header.
-	writeBufferToAll(state, (const uint8_t *) "#!AER-DAT" AEDAT3_FILE_VERSION "\r\n", 11 + strlen(AEDAT3_FILE_VERSION));
-
-	// Write format header for all supported formats.
-	writeBufferToAll(state, (const uint8_t *) "#Format: ", 9);
-
-	if (state->formatID == 0x00) {
-		writeBufferToAll(state, (const uint8_t *) "RAW", 3);
-	}
-	else {
-		// Support the various formats and their mixing.
-		if (state->formatID == 0x01) {
-			writeBufferToAll(state, (const uint8_t *) "SerializedTS", 12);
-		}
-
-		if (state->formatID == 0x02) {
-			writeBufferToAll(state, (const uint8_t *) "PNGFrames", 9);
-		}
-
-		if (state->formatID == 0x03) {
-			// Serial and PNG together.
-			writeBufferToAll(state, (const uint8_t *) "SerializedTS,PNGFrames", 12 + 1 + 9);
-		}
-	}
-
-	writeBufferToAll(state, (const uint8_t *) "\r\n", 2);
-
-	char *sourceString = sshsNodeGetString(state->sourceInfoNode, "sourceString");
-	writeBufferToAll(state, (const uint8_t *) sourceString, strlen(sourceString));
-	free(sourceString);
-
-	time_t currentTimeEpoch = time(NULL);
-	tzset();
-	struct tm currentTime;
-	localtime_r(&currentTimeEpoch, &currentTime);
-
-	// Following time format uses exactly 44 characters (25 separators/characters,
-	// 4 year, 2 month, 2 day, 2 hours, 2 minutes, 2 seconds, 5 time-zone).
-	size_t currentTimeStringLength = 44;
-	char currentTimeString[currentTimeStringLength + 1]; // + 1 for terminating NUL byte.
-	strftime(currentTimeString, currentTimeStringLength + 1, "#Start-Time: %Y-%m-%d %H:%M:%S (TZ%z)\r\n", &currentTime);
-
-	writeBufferToAll(state, (const uint8_t *) currentTimeString, currentTimeStringLength);
-
-	writeBufferToAll(state, (const uint8_t *) "#!END-HEADER\r\n", 14);
-}
-
-static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD) {
-	// Send AEDAT 3.1 header for network streams (20 bytes total).
-	struct aedat3_network_header networkHeader;
-
-	networkHeader.magicNumber = htole64(AEDAT3_NETWORK_MAGIC_NUMBER);
-	networkHeader.sequenceNumber = htole64(state->networkSequenceNumber);
-	networkHeader.versionNumber = AEDAT3_NETWORK_VERSION;
-	networkHeader.formatNumber = state->formatID; // Send numeric format ID.
-	networkHeader.sourceID = htole16(I16T(atomic_load_explicit(&state->sourceID, memory_order_relaxed))); // Always one source per output module.
-
-	// If message-based, we copy the header at the start of the buffer,
-	// because we want it in each message (and each buffer is a message!).
-	if (state->isNetworkMessageBased) {
-		memcpy(state->dataBuffer->buffer, &networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
-		state->dataBuffer->bufferUsedSize = AEDAT3_NETWORK_HEADER_LENGTH;
-
-		// Increase sequence number for successive headers, if this is a
-		// message-based network protocol (UDP for example).
-		state->networkSequenceNumber++;
-	}
-	else {
-		// Else, not message-based, so we just write it once at start directly.
-		// We support writing to all clients, or only to one specified client.
-		// This one-client mode is only used for server mode operation.
-		if (onlyOneClientFD != NULL && *onlyOneClientFD >= 0) {
-			if (!writeUntilDone(*onlyOneClientFD, (uint8_t *) &networkHeader, AEDAT3_NETWORK_HEADER_LENGTH)) {
-				caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
-					"Disconnect or error on fd %d, closing and removing. Error: %d.", *onlyOneClientFD, errno);
-
-				close(*onlyOneClientFD);
-				*onlyOneClientFD = -1;
-			}
-		}
-		else {
-			writeBufferToAll(state, (uint8_t *) &networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
-		}
-	}
-}
-
 bool caerOutputCommonInit(caerModuleData moduleData, outputCommonFDs fds, bool isNetworkStream,
 bool isNetworkMessageBased) {
 	outputCommonState state = moduleData->moduleState;
@@ -1234,28 +1251,40 @@ bool isNetworkMessageBased) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "keepPackets", true); // ensure all packets are kept
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferSize", 16384); // in bytes, size of data buffer
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferMaxInterval", 20000); // in µs, max. interval without sending data
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "transferBufferSize", 128); // in packet groups
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "ringBufferSize", 128); // in packet containers
 
 	atomic_store(&state->validOnly, sshsNodeGetBool(moduleData->moduleNode, "validOnly"));
 	atomic_store(&state->keepPackets, sshsNodeGetBool(moduleData->moduleNode, "keepPackets"));
+	state->bufferSize = (size_t) sshsNodeGetInt(moduleData->moduleNode, "bufferSize");
 	state->bufferMaxInterval = U64T(sshsNodeGetInt(moduleData->moduleNode, "bufferMaxInterval"));
 	state->bufferMaxInterval *= 1000LLU; // Convert from microseconds to nanoseconds.
 
 	// Format configuration (compression modes).
 	state->formatID = 0x00; // RAW format by default.
 
-	// Initialize transfer ring-buffer. transferBufferSize only changes here at init time!
-	state->transferRing = ringBufferInit((size_t) sshsNodeGetInt(moduleData->moduleNode, "transferBufferSize"));
-	if (state->transferRing == NULL) {
-		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to allocate transfer ring-buffer.");
+	// Initialize compressor ring-buffer. ringBufferSize only changes here at init time!
+	state->compressorRing = ringBufferInit((size_t) sshsNodeGetInt(moduleData->moduleNode, "ringBufferSize"));
+	if (state->compressorRing == NULL) {
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+			"Failed to allocate compressor ring-buffer.");
+		return (false);
+	}
+
+	// Initialize output ring-buffer. ringBufferSize only changes here at init time!
+	state->outputRing = ringBufferInit((size_t) sshsNodeGetInt(moduleData->moduleNode, "ringBufferSize"));
+	if (state->outputRing == NULL) {
+		ringBufferFree(state->compressorRing);
+
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to allocate output ring-buffer.");
 		return (false);
 	}
 
 	// Allocate data buffer. bufferSize is updated here.
 	if (!newOutputBuffer(state)) {
-		ringBufferFree(state->transferRing);
+		ringBufferFree(state->compressorRing);
+		ringBufferFree(state->outputRing);
 
-		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to allocate output data buffer.");
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to allocate data buffer.");
 		return (false);
 	}
 
@@ -1265,11 +1294,30 @@ bool isNetworkMessageBased) {
 	// Start output handling thread.
 	atomic_store(&state->running, true);
 
-	if (thrd_create(&state->outputThread, &outputHandlerThread, state) != thrd_success) {
-		ringBufferFree(state->transferRing);
+	if (thrd_create(&state->compressorThread, &compressorThread, state) != thrd_success) {
+		ringBufferFree(state->compressorRing);
+		ringBufferFree(state->outputRing);
 		free(state->dataBuffer);
 
-		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to start output handling thread.");
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to start compressor thread.");
+		return (false);
+	}
+
+	if (thrd_create(&state->outputThread, &outputThread, state) != thrd_success) {
+		// Stop compressor thread (started just above) and wait on it.
+		atomic_store(&state->running, false);
+
+		if ((errno = thrd_join(state->compressorThread, NULL)) != thrd_success) {
+			// This should never happen!
+			caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
+				"Failed to join compressor thread. Error: %d.", errno);
+		}
+
+		ringBufferFree(state->compressorRing);
+		ringBufferFree(state->outputRing);
+		free(state->dataBuffer);
+
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to start output thread.");
 		return (false);
 	}
 
@@ -1288,22 +1336,38 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 	// Stop output thread and wait on it.
 	atomic_store(&state->running, false);
 
+	if ((errno = thrd_join(state->compressorRing, NULL)) != thrd_success) {
+		// This should never happen!
+		caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
+			"Failed to join compressor thread. Error: %d.", errno);
+	}
+
 	if ((errno = thrd_join(state->outputThread, NULL)) != thrd_success) {
 		// This should never happen!
 		caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
-			"Failed to join output handling thread. Error: %d.", errno);
+			"Failed to join output thread. Error: %d.", errno);
 	}
 
-	// Now clean up the transfer ring-buffer and its contents.
+	// Now clean up the ring-buffers: they should be empty, so sanity check!
 	caerEventPacketContainer packetContainer;
-	while ((packetContainer = ringBufferGet(state->transferRing)) != NULL) {
+
+	while ((packetContainer = ringBufferGet(state->compressorRing)) != NULL) {
 		caerEventPacketContainerFree(packetContainer);
 
 		// This should never happen!
-		caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString, "Transfer ring-buffer was not empty!");
+		caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString, "Compressor ring-buffer was not empty!");
 	}
 
-	ringBufferFree(state->transferRing);
+	ringBufferFree(state->compressorRing);
+
+	while ((packetContainer = ringBufferGet(state->outputRing)) != NULL) {
+		caerEventPacketContainerFree(packetContainer);
+
+		// This should never happen!
+		caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString, "Output ring-buffer was not empty!");
+	}
+
+	ringBufferFree(state->outputRing);
 
 	// Close file descriptors.
 	for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
