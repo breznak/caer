@@ -168,6 +168,26 @@ static inline libuvWriteBuf libuvWriteBufInitWithSimpleBuffer(simpleBuffer sBuff
 	return (writeBuf);
 }
 
+static inline libuvWriteBuf libuvWriteBufInitWithAnyBuffer(uint8_t *buffer, size_t bufferSize) {
+	if (buffer == NULL || bufferSize == 0) {
+		return (NULL);
+	}
+
+	libuvWriteBuf writeBuf = malloc(sizeof(*writeBuf));
+	if (writeBuf == NULL) {
+		return (NULL);
+	}
+
+	writeBuf->buf.base = (char *) buffer;
+	writeBuf->buf.len = bufferSize;
+
+	writeBuf->dataBuf = buffer;
+
+	writeBuf->data = NULL;
+
+	return (writeBuf);
+}
+
 static inline void libuvCloseFree(uv_handle_t *handle) {
 	free(handle->data);
 	free(handle);

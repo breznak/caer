@@ -384,12 +384,8 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
  * ============================================================================
  */
 static int compressorThread(void *stateArg);
-static void generateNetworkHeader(outputCommonState state);
-static void writeNetworkHeader(outputCommonState state);
-static void writeFileHeader(outputCommonState state);
-static bool newOutputBuffer(outputCommonState state);
-static void commitOutputBuffer(outputCommonState state);
-static bool orderAndSendEventPackets(outputCommonState state, caerEventPacketContainer currPacketContainer);
+
+static void orderAndSendEventPackets(outputCommonState state, caerEventPacketContainer currPacketContainer);
 static int packetsFirstTimestampThenTypeCmp(const void *a, const void *b);
 static void sendEventPacket(outputCommonState state, caerEventPacketHeader packet);
 static size_t compressEventPacket(outputCommonState state, caerEventPacketHeader packet, size_t packetSize);
@@ -410,52 +406,11 @@ static int compressorThread(void *stateArg) {
 	strcat(threadName, "[Compressor]");
 	thrd_set_name(threadName);
 
-	bool headerWrittenToBuffer = false;
-
-	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
-		// Wait for source to be defined.
-		int16_t sourceID = I16T(atomic_load(&state->sourceID));
-		if (sourceID == -1) {
-			// Delay by 1 ms if no data, to avoid a wasteful busy loop.
-			struct timespec delaySleep = { .tv_sec = 0, .tv_nsec = 1000000 };
-			thrd_sleep(&delaySleep, NULL);
-
-			continue;
-		}
-
-		// Write appropriate header to the first buffer.
-		if (state->isNetworkStream) {
-			writeNetworkHeader(state);
-		}
-		else {
-			writeFileHeader(state);
-		}
-
-		headerWrittenToBuffer = true;
-
-		break;
-	}
-
-	if (!headerWrittenToBuffer) {
-		// No header, nothing to do.
-		return (thrd_error);
-	}
-
 	// If no data is available on the transfer ring-buffer, sleep for 500µs (0.5 ms)
 	// to avoid wasting resources in a busy loop.
 	struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 500000 };
 
 	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
-		// Handle configuration changes affecting buffer management.
-		if (atomic_load_explicit(&state->bufferUpdate, memory_order_relaxed)) {
-			atomic_store(&state->bufferUpdate, false);
-
-			state->bufferSize = (size_t) sshsNodeGetInt(state->parentModule->moduleNode, "bufferSize");
-
-			state->bufferMaxInterval = U64T(sshsNodeGetInt(state->parentModule->moduleNode, "bufferMaxInterval"));
-			state->bufferMaxInterval *= 1000LLU; // Convert from microseconds to nanoseconds.
-		}
-
 		// Get the newest event packet container from the transfer ring-buffer.
 		caerEventPacketContainer currPacketContainer = ringBufferGet(state->compressorRing);
 		if (currPacketContainer == NULL) {
@@ -465,146 +420,23 @@ static int compressorThread(void *stateArg) {
 			continue;
 		}
 
-		// Fill output data buffer with data from incoming packets.
 		// Respect time order as specified in AEDAT 3.X format: first event's main
 		// timestamp decides its ordering with regards to other packets. Smaller
 		// comes first. If equal, order by increasing type ID as a convenience,
 		// not strictly required by specification!
-		if (!orderAndSendEventPackets(state, currPacketContainer)) {
-			break;
-		}
-
-		// Free all remaining packet container memory.
-		caerEventPacketContainerFree(currPacketContainer);
+		orderAndSendEventPackets(state, currPacketContainer);
 	}
 
-	// Handle shutdown, write out all content remaining in the transfer ring-buffer
-	// and write the packets out to the file descriptor.
+	// Handle shutdown, write out all content remaining in the transfer ring-buffer.
 	caerEventPacketContainer packetContainer;
 	while ((packetContainer = ringBufferGet(state->compressorRing)) != NULL) {
-		if (!orderAndSendEventPackets(state, packetContainer)) {
-			break;
-		}
-
-		// Free all remaining packet container memory.
-		caerEventPacketContainerFree(packetContainer);
+		orderAndSendEventPackets(state, packetContainer);
 	}
-
-	// Make sure last (maybe incomplete) buffer is sent out.
-	commitOutputBuffer(state);
 
 	return (thrd_success);
 }
 
-static void generateNetworkHeader(outputCommonState state) {
-	// Generate AEDAT 3.1 header for network streams (20 bytes total).
-	state->networkHeader.magicNumber = htole64(AEDAT3_NETWORK_MAGIC_NUMBER);
-	state->networkHeader.sequenceNumber = htole64(0);
-	state->networkHeader.versionNumber = AEDAT3_NETWORK_VERSION;
-	state->networkHeader.formatNumber = state->formatID; // Send numeric format ID.
-	state->networkHeader.sourceID = htole16(I16T(atomic_load(&state->sourceID))); // Always one source per output module.
-}
-
-static void writeNetworkHeader(outputCommonState state) {
-	// Send AEDAT 3.1 header for network streams (20 bytes total).
-	generateNetworkHeader(state);
-
-	// Header at start of first buffer.
-	memcpy(state->dataBuffer->buffer, &state->networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
-	state->dataBuffer->bufferUsedSize = AEDAT3_NETWORK_HEADER_LENGTH;
-
-	if (state->isNetworkMessageBased) {
-		// Increase sequence number for successive headers, if this is a
-		// message-based network protocol (UDP for example).
-		state->networkHeader.sequenceNumber = htole64(le64toh(state->networkHeader.sequenceNumber) + 1);
-	}
-}
-
-static void writeFileHeader(outputCommonState state) {
-	// Write AEDAT 3.1 header.
-	writeBufferToAll(state, (const uint8_t *) "#!AER-DAT" AEDAT3_FILE_VERSION "\r\n", 11 + strlen(AEDAT3_FILE_VERSION));
-
-	// Write format header for all supported formats.
-	writeBufferToAll(state, (const uint8_t *) "#Format: ", 9);
-
-	if (state->formatID == 0x00) {
-		writeBufferToAll(state, (const uint8_t *) "RAW", 3);
-	}
-	else {
-		// Support the various formats and their mixing.
-		if (state->formatID == 0x01) {
-			writeBufferToAll(state, (const uint8_t *) "SerializedTS", 12);
-		}
-
-		if (state->formatID == 0x02) {
-			writeBufferToAll(state, (const uint8_t *) "PNGFrames", 9);
-		}
-
-		if (state->formatID == 0x03) {
-			// Serial and PNG together.
-			writeBufferToAll(state, (const uint8_t *) "SerializedTS,PNGFrames", 12 + 1 + 9);
-		}
-	}
-
-	writeBufferToAll(state, (const uint8_t *) "\r\n", 2);
-
-	char *sourceString = sshsNodeGetString(state->sourceInfoNode, "sourceString");
-	writeBufferToAll(state, (const uint8_t *) sourceString, strlen(sourceString));
-	free(sourceString);
-
-	time_t currentTimeEpoch = time(NULL);
-	tzset();
-	struct tm currentTime;
-	localtime_r(&currentTimeEpoch, &currentTime);
-
-	// Following time format uses exactly 44 characters (25 separators/characters,
-	// 4 year, 2 month, 2 day, 2 hours, 2 minutes, 2 seconds, 5 time-zone).
-	size_t currentTimeStringLength = 44;
-	char currentTimeString[currentTimeStringLength + 1]; // + 1 for terminating NUL byte.
-	strftime(currentTimeString, currentTimeStringLength + 1, "#Start-Time: %Y-%m-%d %H:%M:%S (TZ%z)\r\n", &currentTime);
-
-	writeBufferToAll(state, (const uint8_t *) currentTimeString, currentTimeStringLength);
-
-	writeBufferToAll(state, (const uint8_t *) "#!END-HEADER\r\n", 14);
-}
-
-static bool newOutputBuffer(outputCommonState state) {
-	// Allocate new buffer.
-	simpleBuffer newBuffer = simpleBufferInit(state->bufferSize);
-	if (newBuffer == NULL) {
-		return (false);
-	}
-
-	// Use new buffer.
-	state->dataBuffer = newBuffer;
-
-	return (true);
-}
-
-static void commitOutputBuffer(outputCommonState state) {
-	if (state->dataBuffer->bufferUsedSize != 0) {
-		while (!ringBufferPut(state->outputRing, state->dataBuffer)) {
-			;
-		}
-
-		state->dataBuffer = NULL;
-
-		if (!newOutputBuffer(state)) {
-			caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString, "Failed to allocate new buffer.");
-		}
-
-		// If message-based protocol, we fill in the now empty buffer with the
-		// appropriate header.
-		if (state->isNetworkMessageBased) {
-			sendNetworkHeader(state, NULL);
-		}
-	}
-
-	// Update last commit time.
-	portable_clock_gettime_monotonic(&state->bufferLastCommitTime);
-}
-
-static bool orderAndSendEventPackets(outputCommonState state, caerEventPacketContainer currPacketContainer) {
+static void orderAndSendEventPackets(outputCommonState state, caerEventPacketContainer currPacketContainer) {
 	// Sort container by first timestamp (required) and by type ID (convenience).
 	size_t currPacketContainerSize = (size_t) caerEventPacketContainerGetEventPacketsNumber(currPacketContainer);
 
@@ -615,6 +447,10 @@ static bool orderAndSendEventPackets(outputCommonState state, caerEventPacketCon
 		// Send the packets out to the file descriptor.
 		sendEventPacket(state, caerEventPacketContainerGetEventPacket(currPacketContainer, (int32_t) cpIdx));
 	}
+
+	// Free packet container. The individual packets have already been either
+	// freed on error, or have been transferred out.
+	free(currPacketContainer);
 }
 
 static int packetsFirstTimestampThenTypeCmp(const void *a, const void *b) {
@@ -667,48 +503,19 @@ static void sendEventPacket(outputCommonState state, caerEventPacketHeader packe
 	// Statistics support (after compression).
 	state->statistics.dataWritten += packetSize;
 
-	// Send it out until none is left!
-	size_t packetIndex = 0;
-
-	while (packetSize > 0) {
-		// Calculate remaining space in current buffer.
-		size_t usableBufferSpace = state->dataBuffer->bufferSize - state->dataBuffer->bufferUsedSize;
-
-		// Let's see how much of it (or all of it!) we need.
-		if (packetSize < usableBufferSpace) {
-			usableBufferSpace = packetSize;
-		}
-
-		// Copy memory from packet to buffer.
-		memcpy(state->dataBuffer->buffer + state->dataBuffer->bufferUsedSize, ((uint8_t *) packet) + packetIndex,
-			usableBufferSpace);
-
-		// Update indexes.
-		state->dataBuffer->bufferUsedSize += usableBufferSpace;
-		packetIndex += usableBufferSpace;
-		packetSize -= usableBufferSpace;
-
-		if (state->dataBuffer->bufferUsedSize == state->dataBuffer->bufferSize) {
-			// Commit buffer once full.
-			commitOutputBuffer(state);
-		}
+	// Send compressed packet out to output handling thread.
+	// Already format it as a libuv buffer.
+	libuvWriteBuf packetBuffer = libuvWriteBufInitWithAnyBuffer((uint8_t *) packet, packetSize);
+	if (packetBuffer == NULL) {
+		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+			"Failed to allocate memory for libuv packet buffer.");
+		free(packet);
+		return;
 	}
 
-	// Each commit operation updates the last committed buffer time.
-	// The above code resulted in some commits, with the time being updated,
-	// or in no commits at all, with the time remaining as before.
-	// Here we check that the time difference between now and the last actual
-	// commit doesn't exceed the allowed maximum interval.
-	struct timespec currentTime;
-	portable_clock_gettime_monotonic(&currentTime);
-
-	uint64_t diffNanoTime = (uint64_t) (((int64_t) (currentTime.tv_sec - state->bufferLastCommitTime.tv_sec)
-		* 1000000000LL) + (int64_t) (currentTime.tv_nsec - state->bufferLastCommitTime.tv_nsec));
-
-	// DiffNanoTime is the difference in nanoseconds; we want to trigger after
-	// the user provided interval has elapsed (also in nanoseconds).
-	if (diffNanoTime >= state->bufferMaxInterval) {
-		commitOutputBuffer(state);
+	// Put packet buffer onto output ring-buffer. Retry until successful.
+	while (!ringBufferPut(state->outputRing, packetBuffer)) {
+		;
 	}
 }
 
@@ -1053,6 +860,82 @@ static void handleNewServerConnections(outputCommonState state);
 static void sendFileHeader(outputCommonState state);
 static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD);
 
+static void generateNetworkHeader(outputCommonState state);
+static void writeNetworkHeader(outputCommonState state);
+static void writeFileHeader(outputCommonState state);
+
+static void generateNetworkHeader(outputCommonState state) {
+	// Generate AEDAT 3.1 header for network streams (20 bytes total).
+	state->networkHeader.magicNumber = htole64(AEDAT3_NETWORK_MAGIC_NUMBER);
+	state->networkHeader.sequenceNumber = htole64(0);
+	state->networkHeader.versionNumber = AEDAT3_NETWORK_VERSION;
+	state->networkHeader.formatNumber = state->formatID; // Send numeric format ID.
+	state->networkHeader.sourceID = htole16(I16T(atomic_load(&state->sourceID))); // Always one source per output module.
+}
+
+static void writeNetworkHeader(outputCommonState state) {
+	// Send AEDAT 3.1 header for network streams (20 bytes total).
+	generateNetworkHeader(state);
+
+	// Header at start of first buffer.
+	memcpy(state->dataBuffer->buffer, &state->networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
+	state->dataBuffer->bufferUsedSize = AEDAT3_NETWORK_HEADER_LENGTH;
+
+	if (state->isNetworkMessageBased) {
+		// Increase sequence number for successive headers, if this is a
+		// message-based network protocol (UDP for example).
+		state->networkHeader.sequenceNumber = htole64(le64toh(state->networkHeader.sequenceNumber) + 1);
+	}
+}
+
+static void writeFileHeader(outputCommonState state) {
+	// Write AEDAT 3.1 header.
+	writeBufferToAll(state, (const uint8_t *) "#!AER-DAT" AEDAT3_FILE_VERSION "\r\n", 11 + strlen(AEDAT3_FILE_VERSION));
+
+	// Write format header for all supported formats.
+	writeBufferToAll(state, (const uint8_t *) "#Format: ", 9);
+
+	if (state->formatID == 0x00) {
+		writeBufferToAll(state, (const uint8_t *) "RAW", 3);
+	}
+	else {
+		// Support the various formats and their mixing.
+		if (state->formatID == 0x01) {
+			writeBufferToAll(state, (const uint8_t *) "SerializedTS", 12);
+		}
+
+		if (state->formatID == 0x02) {
+			writeBufferToAll(state, (const uint8_t *) "PNGFrames", 9);
+		}
+
+		if (state->formatID == 0x03) {
+			// Serial and PNG together.
+			writeBufferToAll(state, (const uint8_t *) "SerializedTS,PNGFrames", 12 + 1 + 9);
+		}
+	}
+
+	writeBufferToAll(state, (const uint8_t *) "\r\n", 2);
+
+	char *sourceString = sshsNodeGetString(state->sourceInfoNode, "sourceString");
+	writeBufferToAll(state, (const uint8_t *) sourceString, strlen(sourceString));
+	free(sourceString);
+
+	time_t currentTimeEpoch = time(NULL);
+	tzset();
+	struct tm currentTime;
+	localtime_r(&currentTimeEpoch, &currentTime);
+
+	// Following time format uses exactly 44 characters (25 separators/characters,
+	// 4 year, 2 month, 2 day, 2 hours, 2 minutes, 2 seconds, 5 time-zone).
+	size_t currentTimeStringLength = 44;
+	char currentTimeString[currentTimeStringLength + 1]; // + 1 for terminating NUL byte.
+	strftime(currentTimeString, currentTimeStringLength + 1, "#Start-Time: %Y-%m-%d %H:%M:%S (TZ%z)\r\n", &currentTime);
+
+	writeBufferToAll(state, (const uint8_t *) currentTimeString, currentTimeStringLength);
+
+	writeBufferToAll(state, (const uint8_t *) "#!END-HEADER\r\n", 14);
+}
+
 static void handleNewServerConnections(outputCommonState state) {
 	// First let's see if any new connections are waiting on the listening
 	// socket to be accepted. This returns right away (non-blocking).
@@ -1186,6 +1069,16 @@ static int outputThread(void *stateArg) {
 	// put there in the meantime, so we ensure it's checked and freed. This because
 	// in caerOutputCommonExit() we expect the ring-buffer to always be empty!
 	if (!headerSent) {
+		// Handle configuration changes affecting buffer management.
+		if (atomic_load_explicit(&state->bufferUpdate, memory_order_relaxed)) {
+			atomic_store(&state->bufferUpdate, false);
+
+			state->bufferSize = (size_t) sshsNodeGetInt(state->parentModule->moduleNode, "bufferSize");
+
+			state->bufferMaxInterval = U64T(sshsNodeGetInt(state->parentModule->moduleNode, "bufferMaxInterval"));
+			state->bufferMaxInterval *= 1000LLU; // Convert from microseconds to nanoseconds.
+		}
+
 		caerEventPacketContainer packetContainer;
 		while ((packetContainer = ringBufferGet(state->transferRing)) != NULL) {
 			// Free all remaining packet container memory.
