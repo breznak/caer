@@ -856,9 +856,6 @@ static void generateNetworkHeader(outputCommonState state) {
 }
 
 static void writeNetworkHeader(outputCommonState state) {
-	// Send AEDAT 3.1 header for network streams (20 bytes total).
-	generateNetworkHeader(state);
-
 	// Header at start of first buffer.
 	memcpy(state->dataBuffer->buffer, &state->networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
 	state->dataBuffer->bufferUsedSize = AEDAT3_NETWORK_HEADER_LENGTH;
@@ -943,7 +940,7 @@ static int outputThread(void *stateArg) {
 
 		// Send appropriate header.
 		if (state->isNetworkStream) {
-			writeNetworkHeader(state);
+			generateNetworkHeader(state);
 		}
 		else {
 			writeFileHeader(state);

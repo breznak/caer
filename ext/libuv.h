@@ -119,73 +119,111 @@ static inline bool simpleBufferFileRead(uv_loop_t *loop, uv_file file, int64_t f
 
 struct libuvWriteBufStruct {
 	uv_buf_t buf;
-	void *dataBuf;
-	void *data; // Allow arbitrary data to be attached to buffer. Must be on heap.
+	void *freeBuf;
 };
 
 typedef struct libuvWriteBufStruct *libuvWriteBuf;
 
-static inline libuvWriteBuf libuvWriteBufInit(size_t size) {
-	uint8_t *dataBuf = malloc(size);
-	if (dataBuf == NULL) {
+struct libuvWriteMultiBufStruct {
+	void *data; // Allow arbitrary data to be attached to buffers for callback. Must be on heap for free().
+	size_t buffersSize;
+	struct libuvWriteBufStruct buffers[];
+};
+
+typedef struct libuvWriteMultiBufStruct *libuvWriteMultiBuf;
+
+static inline libuvWriteMultiBuf libuvWriteBufAlloc(size_t number) {
+	libuvWriteMultiBuf writeBufs = calloc(1,
+		sizeof(struct libuvWriteMultiBufStruct) + (number * sizeof(struct libuvWriteBufStruct)));
+	if (writeBufs == NULL) {
 		return (NULL);
 	}
 
-	libuvWriteBuf writeBuf = malloc(sizeof(*writeBuf));
-	if (writeBuf == NULL) {
-		free(dataBuf);
-		return (NULL);
-	}
+	writeBufs->buffersSize = number;
 
-	writeBuf->buf.base = (char *) dataBuf;
-	writeBuf->buf.len = size;
-
-	writeBuf->dataBuf = dataBuf;
-
-	writeBuf->data = NULL;
-
-	return (writeBuf);
+	return (writeBufs);
 }
 
-static inline libuvWriteBuf libuvWriteBufInitWithSimpleBuffer(simpleBuffer sBuffer) {
-	// Simple Buffer must be already allocated!
-	if (sBuffer == NULL) {
-		return (NULL);
-	}
-
-	libuvWriteBuf writeBuf = malloc(sizeof(*writeBuf));
-	if (writeBuf == NULL) {
-		return (NULL);
-	}
-
-	writeBuf->buf.base = (char *) sBuffer->buffer;
-	writeBuf->buf.len = sBuffer->bufferUsedSize;
-
-	writeBuf->dataBuf = sBuffer;
-
-	writeBuf->data = NULL;
-
-	return (writeBuf);
-}
-
-static inline libuvWriteBuf libuvWriteBufInitWithAnyBuffer(uint8_t *buffer, size_t bufferSize) {
-	if (buffer == NULL || bufferSize == 0) {
-		return (NULL);
-	}
-
-	libuvWriteBuf writeBuf = malloc(sizeof(*writeBuf));
-	if (writeBuf == NULL) {
-		return (NULL);
-	}
-
+static inline void libuvWriteBufInternalInit(libuvWriteBuf writeBuf, void *buffer, size_t bufferSize,
+	void *bufferToFree) {
 	writeBuf->buf.base = (char *) buffer;
 	writeBuf->buf.len = bufferSize;
 
-	writeBuf->dataBuf = buffer;
+	if (bufferToFree == NULL) {
+		writeBuf->freeBuf = buffer;
+	}
+	else {
+		writeBuf->freeBuf = bufferToFree;
+	}
+}
 
-	writeBuf->data = NULL;
+static inline void libuvWriteBufInit(libuvWriteBuf writeBuf, size_t size) {
+	if (size == 0) {
+		return;
+	}
 
-	return (writeBuf);
+	uint8_t *dataBuf = malloc(size);
+	if (dataBuf == NULL) {
+		return;
+	}
+
+	libuvWriteBufInternalInit(writeBuf, dataBuf, size, NULL);
+}
+
+static inline void libuvWriteBufInitWithSimpleBuffer(libuvWriteBuf writeBuf, simpleBuffer sBuffer) {
+	if (sBuffer == NULL) {
+		return;
+	}
+
+	libuvWriteBufInternalInit(writeBuf, sBuffer->buffer, sBuffer->bufferUsedSize, sBuffer);
+}
+
+static inline void libuvWriteBufInitWithAnyBuffer(libuvWriteBuf writeBuf, void *buffer, size_t bufferSize) {
+	if (buffer == NULL || bufferSize == 0) {
+		return;
+	}
+
+	libuvWriteBufInternalInit(writeBuf, buffer, bufferSize, NULL);
+}
+
+static inline void libuvWriteFree(uv_write_t *writeRequest, int status) {
+	(void) (status); // UNUSED.
+
+	libuvWriteMultiBuf buffers = writeRequest->data;
+
+	for (size_t i = 0; i < buffers->buffersSize; i++) {
+		free(buffers->buffers[i].freeBuf);
+	}
+
+	free(buffers->data);
+	free(buffers);
+
+	free(writeRequest);
+}
+
+// buffer has to be dynamically allocated (on heap). On success, will get free'd
+// automatically. On failure, buffer won't be touched.
+static inline int libuvWrite(uv_stream_t *dest, libuvWriteMultiBuf buffers) {
+	uv_write_t *writeRequest = calloc(1, sizeof(*writeRequest));
+	if (writeRequest == NULL) {
+		return (UV_ENOMEM);
+	}
+
+	writeRequest->data = buffers;
+
+	uv_buf_t uvBuffers[buffers->buffersSize];
+
+	for (size_t i = 0; i < buffers->buffersSize; i++) {
+		uvBuffers[i].base = buffers->buffers[i].buf.base;
+		uvBuffers[i].len = buffers->buffers[i].buf.len;
+	}
+
+	int retVal = uv_write(writeRequest, dest, uvBuffers, (unsigned int) buffers->buffersSize, &libuvWriteFree);
+	if (retVal < 0) {
+		free(writeRequest);
+	}
+
+	return (retVal);
 }
 
 static inline void libuvCloseFree(uv_handle_t *handle) {
@@ -205,35 +243,6 @@ static inline int libuvCloseLoopHandles(uv_loop_t *loop) {
 	uv_walk(loop, &libuvCloseLoopWalk, NULL);
 
 	return (uv_run(loop, UV_RUN_DEFAULT));
-}
-
-static inline void libuvWriteFree(uv_write_t *writeRequest, int status) {
-	(void) (status); // UNUSED.
-
-	libuvWriteBuf buf = writeRequest->data;
-	free(buf->dataBuf);
-	free(buf->data);
-	free(buf);
-
-	free(writeRequest);
-}
-
-// buffer has to be dynamically allocated (on heap). On success, will get free'd
-// automatically. On failure, buffer won't be touched.
-static inline int libuvWrite(uv_stream_t *dest, libuvWriteBuf buffer) {
-	uv_write_t *writeRequest = calloc(1, sizeof(*writeRequest));
-	if (writeRequest == NULL) {
-		return (UV_ENOMEM);
-	}
-
-	writeRequest->data = buffer;
-
-	int retVal = uv_write(writeRequest, dest, &buffer->buf, 1, &libuvWriteFree);
-	if (retVal < 0) {
-		free(writeRequest);
-	}
-
-	return (retVal);
 }
 
 #endif /* EXT_LIBUV_H_ */

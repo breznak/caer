@@ -310,20 +310,30 @@ static inline void caerConfigSendError(uv_stream_t *client, const char *errorMsg
 	size_t errorMsgLength = strlen(errorMsg);
 	size_t responseLength = 4 + errorMsgLength + 1; // +1 for terminating NUL byte.
 
-	libuvWriteBuf response = libuvWriteBufInit(responseLength);
-	if (response == NULL) {
+	libuvWriteMultiBuf buffers = libuvWriteBufAlloc(1);
+	if (buffers == NULL) {
 		caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client error response.");
 		return;
 	}
 
-	response->buf.base[0] = CAER_CONFIG_ERROR;
-	response->buf.base[1] = SSHS_STRING;
-	setMsgLen((uint8_t *) response->buf.base, (uint16_t) (errorMsgLength + 1));
-	memcpy(response->buf.base + 4, errorMsg, errorMsgLength);
-	response->buf.base[4 + errorMsgLength] = '\0';
+	libuvWriteBufInit(&buffers->buffers[0], responseLength);
 
-	int retVal = libuvWrite(client, response);
-	UV_RET_CHECK_CS(retVal, "libuvWrite", free(response); return);
+	uint8_t *response = (uint8_t *) buffers->buffers[0].buf.base;
+	if (response == NULL) {
+		free(buffers);
+
+		caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client error response.");
+		return;
+	}
+
+	response[0] = CAER_CONFIG_ERROR;
+	response[1] = SSHS_STRING;
+	setMsgLen(response, (uint16_t) (errorMsgLength + 1));
+	memcpy(response + 4, errorMsg, errorMsgLength);
+	response[4 + errorMsgLength] = '\0';
+
+	int retVal = libuvWrite(client, buffers);
+	UV_RET_CHECK_CS(retVal, "libuvWrite", free(response); free(buffers); return);
 
 	caerLog(CAER_LOG_DEBUG, "Config Server", "Sent back error message '%s' to client.", errorMsg);
 }
@@ -332,20 +342,30 @@ static inline void caerConfigSendResponse(uv_stream_t *client, uint8_t action, u
 	size_t msgLength) {
 	size_t responseLength = 4 + msgLength;
 
-	libuvWriteBuf response = libuvWriteBufInit(responseLength);
-	if (response == NULL) {
+	libuvWriteMultiBuf buffers = libuvWriteBufAlloc(1);
+	if (buffers == NULL) {
 		caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client response.");
 		return;
 	}
 
-	response->buf.base[0] = (char) action;
-	response->buf.base[1] = (char) type;
-	setMsgLen((uint8_t *) response->buf.base, (uint16_t) msgLength);
-	memcpy(response->buf.base + 4, msg, msgLength);
+	libuvWriteBufInit(&buffers->buffers[0], responseLength);
+
+	uint8_t *response = (uint8_t *) buffers->buffers[0].buf.base;
+	if (response == NULL) {
+		free(buffers);
+
+		caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client response.");
+		return;
+	}
+
+	response[0] = action;
+	response[1] = type;
+	setMsgLen(response, (uint16_t) msgLength);
+	memcpy(response + 4, msg, msgLength);
 	// Msg must already be NUL terminated!
 
-	int retVal = libuvWrite(client, response);
-	UV_RET_CHECK_CS(retVal, "libuvWrite", free(response); return);
+	int retVal = libuvWrite(client, buffers);
+	UV_RET_CHECK_CS(retVal, "libuvWrite", free(response); free(buffers); return);
 
 	caerLog(CAER_LOG_DEBUG, "Config Server",
 		"Sent back message to client: action=%" PRIu8 ", type=%" PRIu8 ", msgLength=%zu.", action, type, msgLength);
