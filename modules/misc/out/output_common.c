@@ -491,13 +491,16 @@ static void sendEventPacket(outputCommonState state, caerEventPacketHeader packe
 
 	// Send compressed packet out to output handling thread.
 	// Already format it as a libuv buffer.
-	libuvWriteBuf packetBuffer = libuvWriteBufInitWithAnyBuffer((uint8_t *) packet, packetSize);
+	libuvWriteBuf packetBuffer = malloc(sizeof(*packetBuffer));
 	if (packetBuffer == NULL) {
+		free(packet);
+
 		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
 			"Failed to allocate memory for libuv packet buffer.");
-		free(packet);
 		return;
 	}
+
+	libuvWriteBufInitWithAnyBuffer(packetBuffer, packet, packetSize);
 
 	// Put packet buffer onto output ring-buffer. Retry until successful.
 	while (!ringBufferPut(state->outputRing, packetBuffer)) {
@@ -842,11 +845,11 @@ static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader pa
  * while simple FD+writeUntilDone() for normal files.
  * ============================================================================
  */
-static void generateNetworkHeader(outputCommonState state);
-static void writeNetworkHeader(outputCommonState state);
+static void initializeNetworkHeader(outputCommonState state);
+static void writeNetworkHeader(outputCommonState state, libuvWriteBuf buf);
 static void writeFileHeader(outputCommonState state);
 
-static void generateNetworkHeader(outputCommonState state) {
+static void initializeNetworkHeader(outputCommonState state) {
 	// Generate AEDAT 3.1 header for network streams (20 bytes total).
 	state->networkHeader.magicNumber = htole64(AEDAT3_NETWORK_MAGIC_NUMBER);
 	state->networkHeader.sequenceNumber = htole64(0);
@@ -855,12 +858,16 @@ static void generateNetworkHeader(outputCommonState state) {
 	state->networkHeader.sourceID = htole16(I16T(atomic_load(&state->sourceID))); // Always one source per output module.
 }
 
-static void writeNetworkHeader(outputCommonState state) {
-	// Header at start of first buffer.
-	memcpy(state->dataBuffer->buffer, &state->networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
-	state->dataBuffer->bufferUsedSize = AEDAT3_NETWORK_HEADER_LENGTH;
+static void writeNetworkHeader(outputCommonState state, libuvWriteBuf buf) {
+	// Create memory chunk for network header to be sent via libuv.
+	// libuv takes care of freeing memory. This is also needed for UDP
+	// to have different sequence numbers in flight.
+	libuvWriteBufInit(buf, AEDAT3_NETWORK_HEADER_LENGTH);
 
-	if (state->isNetworkMessageBased) {
+	// Copy in current header.
+	memcpy(buf->buf.base, &state->networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
+
+	if (state->networkIO->isUDP) {
 		// Increase sequence number for successive headers, if this is a
 		// message-based network protocol (UDP for example).
 		state->networkHeader.sequenceNumber = htole64(le64toh(state->networkHeader.sequenceNumber) + 1);
@@ -869,34 +876,35 @@ static void writeNetworkHeader(outputCommonState state) {
 
 static void writeFileHeader(outputCommonState state) {
 	// Write AEDAT 3.1 header.
-	writeBufferToAll(state, (const uint8_t *) "#!AER-DAT" AEDAT3_FILE_VERSION "\r\n", 11 + strlen(AEDAT3_FILE_VERSION));
+	writeUntilDone(state->fileIO, (const uint8_t *) "#!AER-DAT" AEDAT3_FILE_VERSION "\r\n",
+		11 + strlen(AEDAT3_FILE_VERSION));
 
 	// Write format header for all supported formats.
-	writeBufferToAll(state, (const uint8_t *) "#Format: ", 9);
+	writeUntilDone(state->fileIO, (const uint8_t *) "#Format: ", 9);
 
 	if (state->formatID == 0x00) {
-		writeBufferToAll(state, (const uint8_t *) "RAW", 3);
+		writeUntilDone(state->fileIO, (const uint8_t *) "RAW", 3);
 	}
 	else {
 		// Support the various formats and their mixing.
 		if (state->formatID == 0x01) {
-			writeBufferToAll(state, (const uint8_t *) "SerializedTS", 12);
+			writeUntilDone(state->fileIO, (const uint8_t *) "SerializedTS", 12);
 		}
 
 		if (state->formatID == 0x02) {
-			writeBufferToAll(state, (const uint8_t *) "PNGFrames", 9);
+			writeUntilDone(state->fileIO, (const uint8_t *) "PNGFrames", 9);
 		}
 
 		if (state->formatID == 0x03) {
 			// Serial and PNG together.
-			writeBufferToAll(state, (const uint8_t *) "SerializedTS,PNGFrames", 12 + 1 + 9);
+			writeUntilDone(state->fileIO, (const uint8_t *) "SerializedTS,PNGFrames", 12 + 1 + 9);
 		}
 	}
 
-	writeBufferToAll(state, (const uint8_t *) "\r\n", 2);
+	writeUntilDone(state->fileIO, (const uint8_t *) "\r\n", 2);
 
 	char *sourceString = sshsNodeGetString(state->sourceInfoNode, "sourceString");
-	writeBufferToAll(state, (const uint8_t *) sourceString, strlen(sourceString));
+	writeUntilDone(state->fileIO, (const uint8_t *) sourceString, strlen(sourceString));
 	free(sourceString);
 
 	time_t currentTimeEpoch = time(NULL);
@@ -910,9 +918,9 @@ static void writeFileHeader(outputCommonState state) {
 	char currentTimeString[currentTimeStringLength + 1]; // + 1 for terminating NUL byte.
 	strftime(currentTimeString, currentTimeStringLength + 1, "#Start-Time: %Y-%m-%d %H:%M:%S (TZ%z)\r\n", &currentTime);
 
-	writeBufferToAll(state, (const uint8_t *) currentTimeString, currentTimeStringLength);
+	writeUntilDone(state->fileIO, (const uint8_t *) currentTimeString, currentTimeStringLength);
 
-	writeBufferToAll(state, (const uint8_t *) "#!END-HEADER\r\n", 14);
+	writeUntilDone(state->fileIO, (const uint8_t *) "#!END-HEADER\r\n", 14);
 }
 
 static int outputThread(void *stateArg) {
@@ -940,7 +948,7 @@ static int outputThread(void *stateArg) {
 
 		// Send appropriate header.
 		if (state->isNetworkStream) {
-			generateNetworkHeader(state);
+			initializeNetworkHeader(state);
 		}
 		else {
 			writeFileHeader(state);
@@ -956,30 +964,17 @@ static int outputThread(void *stateArg) {
 	// put there in the meantime, so we ensure it's checked and freed. This because
 	// in caerOutputCommonExit() we expect the ring-buffer to always be empty!
 	if (!headerSent) {
-		// Handle configuration changes affecting buffer management.
-		if (atomic_load_explicit(&state->bufferUpdate, memory_order_relaxed)) {
-			atomic_store(&state->bufferUpdate, false);
-
-			state->bufferSize = (size_t) sshsNodeGetInt(state->parentModule->moduleNode, "bufferSize");
-
-			state->bufferMaxInterval = U64T(sshsNodeGetInt(state->parentModule->moduleNode, "bufferMaxInterval"));
-			state->bufferMaxInterval *= 1000LLU; // Convert from microseconds to nanoseconds.
-		}
-
-		caerEventPacketContainer packetContainer;
-		while ((packetContainer = ringBufferGet(state->transferRing)) != NULL) {
-			// Free all remaining packet container memory.
-			caerEventPacketContainerFree(packetContainer);
+		libuvWriteBuf packetBuffer;
+		while ((packetBuffer = ringBufferGet(state->outputRing)) != NULL) {
+			free(packetBuffer);
 		}
 
 		return (thrd_success);
 	}
 
-	// Handle new connections in server mode.
-	if (state->isNetworkStream && state->fileDescriptors->serverFd >= 0) {
-		handleNewServerConnections(state);
-	}
+	// TODO: implement libuv network handling/file writing.
 
+	return (thrd_success);
 }
 
 bool caerOutputCommonInit(caerModuleData moduleData, int fileDescriptor, outputCommonNetIO streams) {

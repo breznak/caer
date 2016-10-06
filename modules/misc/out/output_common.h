@@ -7,13 +7,13 @@
 extern size_t CAER_OUTPUT_COMMON_STATE_STRUCT_SIZE;
 
 struct output_common_netio {
-	/// For network-like outputs, we differentiate between stream and message
-	/// based protocols, like TCP and UDP. Matters for header/sequence number.
-	bool isMessageBased;
+	bool isTCP;
+	bool isUDP;
+	bool isPipe;
 	bool isServer;
-	uv_stream_t server;
+	uv_stream_t *server;
 	size_t clientsSize;
-	uv_stream_t clients[];
+	uv_stream_t *clients[];
 };
 
 typedef struct output_common_netio *outputCommonNetIO;

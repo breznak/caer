@@ -155,20 +155,8 @@ static bool caerOutputFileInit(caerModuleData moduleData) {
 		filePath);
 	free(filePath);
 
-	outputCommonFDs fileDescriptors = caerOutputCommonAllocateFdArray(1);
-	if (fileDescriptors == NULL) {
+	if (!caerOutputCommonInit(moduleData, fileFd, NULL)) {
 		close(fileFd);
-
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"Unable to allocate memory for file descriptors.");
-		return (false);
-	}
-
-	fileDescriptors->fds[0] = fileFd;
-
-	if (!caerOutputCommonInit(moduleData, fileDescriptors, false, false)) {
-		close(fileFd);
-		free(fileDescriptors);
 
 		return (false);
 	}

@@ -35,77 +35,28 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	sshsNodePutShortIfAbsent(moduleData->moduleNode, "backlogSize", 5);
 	sshsNodePutShortIfAbsent(moduleData->moduleNode, "concurrentConnections", 10);
 
-	// Open a TCP server socket for others to connect to.
-	int serverSockFd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (serverSockFd < 0) {
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create TCP server socket. Error: %d.",
-		errno);
-		return (false);
-	}
+	int retVal;
 
-	// Make socket address reusable right away.
-	// TODO: evutil_make_listen_socket_reuseable(serverSockFd);
-
-	// Set server socket, on which accept() is called, to non-blocking mode.
-	// TODO: if (evutil_make_socket_nonblocking(serverSockFd)) {
-	//	close(serverSockFd);
-
-	//	caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
-	//		"Could not set TCP server socket to non-blocking mode.");
-	//	return (false);
-	// }
-
-	struct sockaddr_in tcpServer;
-	memset(&tcpServer, 0, sizeof(struct sockaddr_in));
-
-	tcpServer.sin_family = AF_INET;
-	tcpServer.sin_port = htons(U16T(sshsNodeGetInt(moduleData->moduleNode, "portNumber")));
+	// Generate address.
+	struct sockaddr_in configServerAddress;
 
 	char *ipAddress = sshsNodeGetString(moduleData->moduleNode, "ipAddress");
-	if (inet_pton(AF_INET, ipAddress, &tcpServer.sin_addr) == 0) {
-		close(serverSockFd);
-
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"No valid server IP address found. '%s' is invalid!", ipAddress);
-
-		free(ipAddress);
-		return (false);
-	}
+	retVal = uv_ip4_addr(ipAddress, sshsNodeGetInt(moduleData->moduleNode, "portNumber"), &configServerAddress);
+	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_ip4_addr", free(ipAddress));
 	free(ipAddress);
 
-	// Bind socket to above address.
-	if (bind(serverSockFd, (struct sockaddr *) &tcpServer, sizeof(struct sockaddr_in)) < 0) {
-		close(serverSockFd);
-
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not bind TCP server socket. Error: %d.",
-		errno);
-		return (false);
+	size_t numClients = (size_t) sshsNodeGetShort(moduleData->moduleNode, "concurrentConnections");
+	outputCommonNetIO streams = malloc(sizeof(*streams) + (numClients * sizeof(uv_stream_t *)));
+	if (streams == NULL) {
+		// TODO: error.
 	}
 
-	// Listen to new connections on the socket.
-	if (listen(serverSockFd, sshsNodeGetShort(moduleData->moduleNode, "backlogSize")) < 0) {
-		close(serverSockFd);
+	streams->clientsSize = numClients;
+	streams->isServer = true;
+	streams->isMessageBased = false;
 
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"Could not listen on TCP server socket. Error: %d.", errno);
-		return (false);
-	}
-
-	outputCommonFDs fileDescriptors = caerOutputCommonAllocateFdArray(
-		(size_t) sshsNodeGetShort(moduleData->moduleNode, "concurrentConnections"));
-	if (fileDescriptors == NULL) {
-		close(serverSockFd);
-
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"Unable to allocate memory for file descriptors.");
-		return (false);
-	}
-
-	fileDescriptors->serverFd = serverSockFd;
-
-	if (!caerOutputCommonInit(moduleData, fileDescriptors, true, false)) {
-		close(serverSockFd);
-		free(fileDescriptors);
+	if (!caerOutputCommonInit(moduleData, -1, streams)) {
+		free(streams);
 
 		return (false);
 	}
