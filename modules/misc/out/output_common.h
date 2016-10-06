@@ -7,6 +7,10 @@
 extern size_t CAER_OUTPUT_COMMON_STATE_STRUCT_SIZE;
 
 struct output_common_netio {
+	/// For network-like outputs, we differentiate between stream and message
+	/// based protocols, like TCP and UDP. Matters for header/sequence number.
+	bool isMessageBased;
+	bool isServer;
 	uv_stream_t server;
 	size_t clientsSize;
 	uv_stream_t clients[];
@@ -14,9 +18,7 @@ struct output_common_netio {
 
 typedef struct output_common_netio *outputCommonNetIO;
 
-outputCommonNetIO caerOutputCommonAllocateFdArray(size_t size);
-int caerOutputCommonGetServerFd(void *statePtr);
-bool caerOutputCommonInit(caerModuleData moduleData, outputCommonNetIO fds, bool isNetworkStream, bool isNetworkMessageBased);
+bool caerOutputCommonInit(caerModuleData moduleData, int fileDescriptor, outputCommonNetIO streams);
 void caerOutputCommonExit(caerModuleData moduleData);
 void caerOutputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 void caerOutputCommonReset(caerModuleData moduleData, uint16_t resetCallSourceID);

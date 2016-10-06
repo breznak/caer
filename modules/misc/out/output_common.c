@@ -104,17 +104,14 @@ struct output_common_state {
 	/// Source information node for that particular source ID.
 	/// Must be set by mainloop, external threads cannot get it directly!
 	sshsNode sourceInfoNode;
-	/// The libuv stream descriptors for network writing and server mode.
-	outputCommonNetIO networkIO;
 	/// The file descriptor for file writing.
 	int fileIO;
 	/// Network-like stream or file-like stream. Matters for header format.
 	bool isNetworkStream;
-	/// For network-like outputs, we differentiate between stream and message
-	/// based protocols, like TCP and UDP. Matters for header/sequence number.
-	bool isNetworkMessageBased;
 	/// Keep the full network header around, so we can easily update and write it.
 	struct aedat3_network_header networkHeader;
+	/// The libuv stream descriptors for network writing and server mode.
+	outputCommonNetIO networkIO;
 	/// Filter out invalidated events or not.
 	atomic_bool validOnly;
 	/// Force all incoming packets to be committed to the transfer ring-buffer.
@@ -129,17 +126,6 @@ struct output_common_state {
 	RingBuffer outputRing;
 	/// Track last packet container's highest event timestamp that was sent out.
 	int64_t lastTimestamp;
-	/// Data buffer for writing (buffered I/O).
-	simpleBuffer dataBuffer;
-	/// Maximum interval without sending data, in µs.
-	/// How long to wait if buffer not full before committing it anyway.
-	uint64_t bufferMaxInterval;
-	/// Data buffer wanted size.
-	size_t bufferSize;
-	/// Time of last buffer commit to file descriptor (send() call).
-	struct timespec bufferLastCommitTime;
-	/// Flag to signal update to buffer configuration asynchronously.
-	atomic_bool bufferUpdate;
 	/// Support different formats, providing data compression.
 	int8_t formatID;
 	/// Output module statistics collection.
@@ -856,10 +842,6 @@ static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader pa
  * while simple FD+writeUntilDone() for normal files.
  * ============================================================================
  */
-static void handleNewServerConnections(outputCommonState state);
-static void sendFileHeader(outputCommonState state);
-static void sendNetworkHeader(outputCommonState state, int *onlyOneClientFD);
-
 static void generateNetworkHeader(outputCommonState state);
 static void writeNetworkHeader(outputCommonState state);
 static void writeFileHeader(outputCommonState state);
@@ -936,98 +918,6 @@ static void writeFileHeader(outputCommonState state) {
 	writeBufferToAll(state, (const uint8_t *) "#!END-HEADER\r\n", 14);
 }
 
-static void handleNewServerConnections(outputCommonState state) {
-	// First let's see if any new connections are waiting on the listening
-	// socket to be accepted. This returns right away (non-blocking).
-	socklen_t clientAddrLength = sizeof(struct sockaddr_in);
-	struct sockaddr_in clientAddr;
-	memset(&clientAddr, 0, clientAddrLength);
-
-	int acceptResult = accept(state->fileDescriptors->serverFd, (struct sockaddr *) &clientAddr, &clientAddrLength);
-	if (acceptResult < 0) {
-		if (errno != EAGAIN && errno != EWOULDBLOCK) {
-			// Only log real failure. EAGAIN/EWOULDBLOCK just means no
-			// connections are present for non-blocking accept() right now.
-			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
-				"TCP server accept() failed. Error: %d.", errno);
-		}
-
-		return;
-	}
-
-	// New connection present!
-	// Put it in the list of FDs and send header, if there is space left, or close.
-	for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
-		if (state->fileDescriptors->fds[i] == -1) {
-			caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
-				"Accepted new TCP connection from client (fd %d).", acceptResult);
-
-			// Commit current buffer, so that for the new clients, it's empty, and they
-			// don't get packets and data that are possibly cut in the middle.
-			commitOutputBuffer(state);
-
-			// Empty place in FD list, add this one.
-			state->fileDescriptors->fds[i] = acceptResult;
-
-			// Successfully connected, send header to client.
-			sendNetworkHeader(state, &state->fileDescriptors->fds[i]);
-
-			// Add client IP to list. This is a comma separated string.
-			char *connectedClientsStr = sshsNodeGetString(state->parentModule->moduleNode, "connectedClients");
-
-			size_t newConnectedClientStrLength = strlen(connectedClientsStr) + 1 + INET_ADDRSTRLEN + 1;
-			char *newConnectedClientsStr = realloc(connectedClientsStr, newConnectedClientStrLength);
-			if (newConnectedClientsStr == NULL) {
-				free(connectedClientsStr);
-
-				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
-					"Failed to update connectedClients information.");
-				return;
-			}
-
-			const char *clientAddrStr = inet_ntop(AF_INET, &clientAddr.sin_addr, (char[INET_ADDRSTRLEN] ) { 0x00 },
-				INET_ADDRSTRLEN);
-
-			if (!caerStrEquals(newConnectedClientsStr, "")) {
-				// Only prepend comma if the string wasn't empty before.
-				strncat(newConnectedClientsStr, ",", 1);
-			}
-			strncat(newConnectedClientsStr, clientAddrStr, INET_ADDRSTRLEN);
-
-			sshsNodePutString(state->parentModule->moduleNode, "connectedClients", newConnectedClientsStr);
-
-			free(newConnectedClientsStr);
-
-			return;
-		}
-	}
-
-	// No space for new connection, just close it (client will exit).
-	caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString,
-		"Rejected TCP client (fd %d), max connections reached.", acceptResult);
-
-	close(acceptResult);
-}
-
-static inline void writeBufferToAll(outputCommonState state, const uint8_t *buffer, size_t bufferSize) {
-	for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
-		int fd = state->fileDescriptors->fds[i];
-
-		if (fd >= 0) {
-			if (!writeUntilDone(fd, buffer, bufferSize)) {
-				// Write failed, most of the reasons for that to happen are
-				// not recoverable from, so we just disable this file descriptor.
-				// This also detects client-side close() for TCP server connections.
-				caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
-					"Disconnect or error on fd %d, closing and removing. Error: %d.", fd, errno);
-
-				close(fd);
-				state->fileDescriptors->fds[i] = -1;
-			}
-		}
-	}
-}
-
 static int outputThread(void *stateArg) {
 	outputCommonState state = stateArg;
 
@@ -1053,10 +943,10 @@ static int outputThread(void *stateArg) {
 
 		// Send appropriate header.
 		if (state->isNetworkStream) {
-			sendNetworkHeader(state, NULL);
+			writeNetworkHeader(state);
 		}
 		else {
-			sendFileHeader(state);
+			writeFileHeader(state);
 		}
 
 		headerSent = true;
@@ -1095,44 +985,23 @@ static int outputThread(void *stateArg) {
 
 }
 
-bool caerOutputCommonInit(caerModuleData moduleData, outputCommonFDs fds, bool isNetworkStream,
-bool isNetworkMessageBased) {
+bool caerOutputCommonInit(caerModuleData moduleData, int fileDescriptor, outputCommonNetIO streams) {
 	outputCommonState state = moduleData->moduleState;
 
 	state->parentModule = moduleData;
 
-	// Check for invalid file descriptors.
-	if (fds == NULL) {
-		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Invalid file descriptor array.");
+	// Check for invalid input combinations.
+	if ((fileDescriptor < 0 && streams == NULL) || (fileDescriptor != -1 && streams != NULL)) {
 		return (false);
 	}
-
-	if (fds->fdsSize == 0) {
-		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Empty file descriptor array.");
-		return (false);
-	}
-
-	if (fds->serverFd < -1) {
-		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Invalid server file descriptor.");
-		return (false);
-	}
-
-	for (size_t i = 0; i < fds->fdsSize; i++) {
-		// Allow values of -1 to signal "not in use" slot.
-		if (fds->fds[i] < -1) {
-			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Invalid file descriptor.");
-			return (false);
-		}
-	}
-
-	state->fileDescriptors = fds;
 
 	// Store network/file, message-based or not information.
-	state->isNetworkStream = isNetworkStream;
-	state->isNetworkMessageBased = isNetworkMessageBased;
+	state->isNetworkStream = (streams != NULL);
+	state->fileIO = fileDescriptor;
+	state->networkIO = streams;
 
 	// If in server mode, add SSHS attribute to track connected client IPs.
-	if (state->fileDescriptors->serverFd >= 0) {
+	if (state->isNetworkStream && state->networkIO->isServer) {
 		sshsNodePutString(state->parentModule->moduleNode, "connectedClients", "");
 	}
 
@@ -1142,21 +1011,17 @@ bool isNetworkMessageBased) {
 	// Handle configuration.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "validOnly", false); // only send valid events
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "keepPackets", true); // ensure all packets are kept
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferSize", 16384); // in bytes, size of data buffer
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "bufferMaxInterval", 20000); // in µs, max. interval without sending data
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "ringBufferSize", 128); // in packet containers
 
 	atomic_store(&state->validOnly, sshsNodeGetBool(moduleData->moduleNode, "validOnly"));
 	atomic_store(&state->keepPackets, sshsNodeGetBool(moduleData->moduleNode, "keepPackets"));
-	state->bufferSize = (size_t) sshsNodeGetInt(moduleData->moduleNode, "bufferSize");
-	state->bufferMaxInterval = U64T(sshsNodeGetInt(moduleData->moduleNode, "bufferMaxInterval"));
-	state->bufferMaxInterval *= 1000LLU; // Convert from microseconds to nanoseconds.
+	int ringSize = sshsNodeGetInt(moduleData->moduleNode, "ringBufferSize");
 
 	// Format configuration (compression modes).
 	state->formatID = 0x00; // RAW format by default.
 
 	// Initialize compressor ring-buffer. ringBufferSize only changes here at init time!
-	state->compressorRing = ringBufferInit((size_t) sshsNodeGetInt(moduleData->moduleNode, "ringBufferSize"));
+	state->compressorRing = ringBufferInit((size_t) ringSize);
 	if (state->compressorRing == NULL) {
 		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
 			"Failed to allocate compressor ring-buffer.");
@@ -1164,7 +1029,7 @@ bool isNetworkMessageBased) {
 	}
 
 	// Initialize output ring-buffer. ringBufferSize only changes here at init time!
-	state->outputRing = ringBufferInit((size_t) sshsNodeGetInt(moduleData->moduleNode, "ringBufferSize"));
+	state->outputRing = ringBufferInit((size_t) ringSize);
 	if (state->outputRing == NULL) {
 		ringBufferFree(state->compressorRing);
 
@@ -1172,25 +1037,12 @@ bool isNetworkMessageBased) {
 		return (false);
 	}
 
-	// Allocate data buffer. bufferSize is updated here.
-	if (!newOutputBuffer(state)) {
-		ringBufferFree(state->compressorRing);
-		ringBufferFree(state->outputRing);
-
-		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to allocate data buffer.");
-		return (false);
-	}
-
-	// Initialize to current time.
-	portable_clock_gettime_monotonic(&state->bufferLastCommitTime);
-
 	// Start output handling thread.
 	atomic_store(&state->running, true);
 
 	if (thrd_create(&state->compressorThread, &compressorThread, state) != thrd_success) {
 		ringBufferFree(state->compressorRing);
 		ringBufferFree(state->outputRing);
-		free(state->dataBuffer);
 
 		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to start compressor thread.");
 		return (false);
@@ -1208,7 +1060,6 @@ bool isNetworkMessageBased) {
 
 		ringBufferFree(state->compressorRing);
 		ringBufferFree(state->outputRing);
-		free(state->dataBuffer);
 
 		caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to start output thread.");
 		return (false);
@@ -1229,7 +1080,7 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 	// Stop output thread and wait on it.
 	atomic_store(&state->running, false);
 
-	if ((errno = thrd_join(state->compressorRing, NULL)) != thrd_success) {
+	if ((errno = thrd_join(state->compressorThread, NULL)) != thrd_success) {
 		// This should never happen!
 		caerLog(CAER_LOG_CRITICAL, state->parentModule->moduleSubSystemString,
 			"Failed to join compressor thread. Error: %d.", errno);
@@ -1263,25 +1114,18 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 	ringBufferFree(state->outputRing);
 
 	// Close file descriptors.
-	for (size_t i = 0; i < state->fileDescriptors->fdsSize; i++) {
-		int fd = state->fileDescriptors->fds[i];
-
-		if (fd >= 0) {
-			close(fd);
+	if (state->isNetworkStream) {
+		if (state->networkIO->isServer) {
+			// Server shut down, no more clients.
+			sshsNodePutString(state->parentModule->moduleNode, "connectedClients", "");
 		}
 	}
-
-	if (state->fileDescriptors->serverFd >= 0) {
-		close(state->fileDescriptors->serverFd);
-
-		// Server shut down, no more clients.
-		sshsNodePutString(state->parentModule->moduleNode, "connectedClients", "");
+	else {
+		close(state->fileIO);
 	}
 
 	// Free allocated memory.
-	free(state->fileDescriptors);
-
-	free(state->dataBuffer);
+	free(state->networkIO);
 
 	// Print final statistics results.
 	caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
@@ -1307,14 +1151,6 @@ static void caerOutputCommonConfigListener(sshsNode node, void *userData, enum s
 		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "keepPackets")) {
 			// Set keep packets flag to given value.
 			atomic_store(&state->keepPackets, changeValue.boolean);
-		}
-		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "bufferSize")) {
-			// Set buffer update flag.
-			atomic_store(&state->bufferUpdate, true);
-		}
-		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "bufferMaxInterval")) {
-			// Set buffer update flag.
-			atomic_store(&state->bufferUpdate, true);
 		}
 	}
 }
