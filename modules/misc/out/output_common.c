@@ -1211,6 +1211,11 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 		}
 
 		// Free allocated memory.
+		for (size_t i = 0; i < state->networkIO->clientsSize; i++) {
+			free(state->networkIO->clients[i]);
+		}
+		free(state->networkIO->server);
+		free(state->networkIO->address);
 		free(state->networkIO);
 	}
 	else {
