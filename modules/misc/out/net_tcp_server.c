@@ -70,7 +70,7 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	uv_tcp_init(&streams->loop, (uv_tcp_t *) streams->server);
 	streams->server->data = streams;
 
-	uv_tcp_bind((uv_tcp_t *) streams->server, (struct sockaddr *) &serverAddress, 0);
+	uv_tcp_bind((uv_tcp_t *) streams->server, streams->address, 0);
 
 	uv_listen(streams->server, sshsNodeGetShort(moduleData->moduleNode, "backlogSize"),
 		&caerOutputCommonOnServerConnection);

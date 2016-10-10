@@ -67,7 +67,7 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 	streams->clients[0]->data = streams;
 
 	uv_connect_t *connectRequest = malloc(sizeof(uv_connect_t));
-	uv_tcp_connect(connectRequest, (uv_tcp_t *) streams->clients[0], (struct sockaddr *) &serverAddress,
+	uv_tcp_connect(connectRequest, (uv_tcp_t *) streams->clients[0], streams->address,
 		&caerOutputCommonOnClientConnection);
 
 	// Start.

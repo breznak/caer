@@ -846,10 +846,12 @@ static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader pa
 static int outputThread(void *stateArg);
 static void libuvRingBufferGet(uv_idle_t *handle);
 static void libuvAsyncShutdown(uv_async_t *handle);
-static void writePacket(libuvWriteBuf packetBuffer);
+static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer);
 static void initializeNetworkHeader(outputCommonState state);
 static void writeNetworkHeader(outputCommonState state, libuvWriteBuf buf);
 static void writeFileHeader(outputCommonState state);
+void caerOutputCommonOnServerConnection(uv_stream_t *server, int status);
+void caerOutputCommonOnClientConnection(uv_connect_t *connectionRequest, int status);
 
 static int outputThread(void *stateArg) {
 	outputCommonState state = stateArg;
@@ -953,7 +955,7 @@ static int outputThread(void *stateArg) {
 
 		libuvWriteBuf packetBuffer;
 		while ((packetBuffer = ringBufferGet(state->outputRing)) != NULL) {
-			writePacket(packetBuffer);
+			writePacket(state, packetBuffer);
 		}
 
 		uv_run(&state->networkIO->loop, UV_RUN_DEFAULT);
@@ -970,7 +972,7 @@ static void libuvRingBufferGet(uv_idle_t *handle) {
 	size_t count = 0;
 	libuvWriteBuf packetBuffer;
 	while (count < 10 && (packetBuffer = ringBufferGet(state->outputRing)) != NULL) {
-		writePacket(packetBuffer);
+		writePacket(state, packetBuffer);
 		count++;
 	}
 }
@@ -981,7 +983,7 @@ static void libuvAsyncShutdown(uv_async_t *handle) {
 	uv_stop(&state->networkIO->loop);
 }
 
-static void writePacket(libuvWriteBuf packetBuffer) {
+static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
 	// TODO: write packets to network.
 }
 
@@ -1061,11 +1063,11 @@ static void writeFileHeader(outputCommonState state) {
 }
 
 void caerOutputCommonOnServerConnection(uv_stream_t *server, int status) {
-
+	outputCommonNetIO streams = server->data;
 }
 
 void caerOutputCommonOnClientConnection(uv_connect_t *connectionRequest, int status) {
-
+	outputCommonNetIO streams = connectionRequest->handle->data;
 }
 
 bool caerOutputCommonInit(caerModuleData moduleData, int fileDescriptor, outputCommonNetIO streams) {
