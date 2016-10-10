@@ -1064,12 +1064,62 @@ static void writeFileHeader(outputCommonState state) {
 void caerOutputCommonOnServerConnection(uv_stream_t *server, int status) {
 	outputCommonNetIO streams = server->data;
 
+	UV_RET_CHECK(status, __func__, "Connection", return);
+
+	uv_stream_t *client = NULL;
+
+	if (streams->isTCP) {
+		client = malloc(sizeof(uv_tcp_t));
+	}
+	else {
+		client = malloc(sizeof(uv_pipe_t));
+	}
+
+	if (client == NULL) {
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to allocate memory for new client.");
+		return;
+	}
+
+	int retVal;
+
+	if (streams->isTCP) {
+		retVal = uv_tcp_init(server->loop, (uv_tcp_t *) client);
+		UV_RET_CHECK(retVal, __func__, "uv_tcp_init", free(client));
+	}
+	else {
+		retVal = uv_pipe_init(server->loop, (uv_pipe_t *) client, false);
+		UV_RET_CHECK(retVal, __func__, "uv_pipe_init", free(client));
+	}
+
+	retVal = uv_accept(server, client);
+	UV_RET_CHECK(retVal, __func__, "uv_accept", uv_close((uv_handle_t * ) client, &libuvCloseFree));
+
+	// Find place for new connection. If all exhausted, we've reached maximum
+	// number of clients and just kill the connection.
+	for (size_t i = 0; i < streams->clientsSize; i++) {
+		if (streams->clients[i] == NULL) {
+			// TCP/PIPE: send out initial header. Only those two can call this function!
+			libuvWriteMultiBuf buffers = libuvWriteBufAlloc(1);
+
+			writeNetworkHeader(streams, &buffers->buffers[0]);
+
+			libuvWrite(client, buffers);
+
+			// Ready now for more data, so set client field for writePacket().
+			streams->clients[i] = client;
+
+			return;
+		}
+	}
+
+	// Kill connection if maximum number reached.
+	uv_close((uv_handle_t *) client, &libuvCloseFree);
 }
 
 void caerOutputCommonOnClientConnection(uv_connect_t *connectionRequest, int status) {
 	outputCommonNetIO streams = connectionRequest->handle->data;
 
-	// TODO: check status.
+	UV_RET_CHECK(status, __func__, "Connection", free(connectionRequest); return);
 
 	// TCP/PIPE: send out initial header. Only those two can call this function!
 	libuvWriteMultiBuf buffers = libuvWriteBufAlloc(1);
