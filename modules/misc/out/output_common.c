@@ -845,9 +845,147 @@ static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader pa
  * while simple FD+writeUntilDone() for normal files.
  * ============================================================================
  */
+static int outputThread(void *stateArg);
+static void libuvRingBufferGet(uv_idle_t *handle);
+static void libuvAsyncShutdown(uv_async_t *handle);
+static void writePacket(libuvWriteBuf packetBuffer);
 static void initializeNetworkHeader(outputCommonState state);
 static void writeNetworkHeader(outputCommonState state, libuvWriteBuf buf);
 static void writeFileHeader(outputCommonState state);
+
+static int outputThread(void *stateArg) {
+	outputCommonState state = stateArg;
+
+	// Set thread name.
+	size_t threadNameLength = strlen(state->parentModule->moduleSubSystemString);
+	char threadName[threadNameLength + 1 + 8]; // +1 for NUL character.
+	strcpy(threadName, state->parentModule->moduleSubSystemString);
+	strcat(threadName, "[Output]");
+	thrd_set_name(threadName);
+
+	bool headerSent = false;
+
+	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
+		// Wait for source to be defined.
+		int16_t sourceID = I16T(atomic_load_explicit(&state->sourceID, memory_order_relaxed));
+		if (sourceID == -1) {
+			// Delay by 1 ms if no data, to avoid a wasteful busy loop.
+			struct timespec delaySleep = { .tv_sec = 0, .tv_nsec = 1000000 };
+			thrd_sleep(&delaySleep, NULL);
+
+			continue;
+		}
+
+		// Send appropriate header.
+		if (state->isNetworkStream) {
+			initializeNetworkHeader(state);
+		}
+		else {
+			writeFileHeader(state);
+		}
+
+		headerSent = true;
+		break;
+	}
+
+	// If no header sent, it means we exited (running=false) without ever getting any
+	// event packet with a source ID, so we don't have to process anything.
+	// But we make sure to empty the transfer ring-buffer, as something may have been
+	// put there in the meantime, so we ensure it's checked and freed. This because
+	// in caerOutputCommonExit() we expect the ring-buffer to always be empty!
+	if (!headerSent) {
+		libuvWriteBuf packetBuffer;
+		while ((packetBuffer = ringBufferGet(state->outputRing)) != NULL) {
+			free(packetBuffer->freeBuf);
+			free(packetBuffer);
+		}
+
+		return (thrd_success);
+	}
+
+	// If destination is a file, just loop and write to it. Else start a libuv event loop.
+	if (!state->isNetworkStream) {
+		// If no data is available on the transfer ring-buffer, sleep for 500µs (0.5 ms)
+		// to avoid wasting resources in a busy loop.
+		struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 500000 };
+
+		while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
+			libuvWriteBuf packetBuffer = ringBufferGet(state->outputRing);
+			if (packetBuffer == NULL) {
+				// There is none, so we can't work on and commit this.
+				// We just sleep here a little and then try again, as we need the data!
+				thrd_sleep(&noDataSleep, NULL);
+				continue;
+			}
+
+			// Write buffer to file descriptor.
+			writeUntilDone(state->fileIO, (uint8_t *) packetBuffer->buf.base, packetBuffer->buf.len);
+			free(packetBuffer->freeBuf);
+			free(packetBuffer);
+		}
+
+		// Write all remaining buffers to file.
+		libuvWriteBuf packetBuffer;
+		while ((packetBuffer = ringBufferGet(state->outputRing)) != NULL) {
+			writeUntilDone(state->fileIO, (uint8_t *) packetBuffer->buf.base, packetBuffer->buf.len);
+			free(packetBuffer->freeBuf);
+			free(packetBuffer);
+		}
+	}
+	else {
+		// libuv network IO (state->networkIO != NULL).
+		// First add support for asynchronous shutdown (from caerOutputCommonExit()).
+		uv_async_init(&state->networkIO->loop, &state->networkIO->shutdown, &libuvAsyncShutdown);
+		state->networkIO->shutdown.data = state;
+
+		// Use idle handles to check for new data on every loop run.
+		uv_idle_init(&state->networkIO->loop, &state->networkIO->ringBufferGet);
+		state->networkIO->ringBufferGet.data = state;
+
+		uv_idle_start(&state->networkIO->ringBufferGet, &libuvRingBufferGet);
+
+		// Start libuv event loop.
+		uv_run(&state->networkIO->loop, UV_RUN_DEFAULT);
+
+		// Shutdown, write remaining buffers to network.
+		// First we stop the idle handles checking for new data, then we manually
+		// schedule writes for the remaining data, and then run the loop again,
+		// which will terminate as soon as all writes are completed.
+		uv_idle_stop(&state->networkIO->ringBufferGet);
+
+		libuvWriteBuf packetBuffer;
+		while ((packetBuffer = ringBufferGet(state->outputRing)) != NULL) {
+			writePacket(packetBuffer);
+		}
+
+		uv_run(&state->networkIO->loop, UV_RUN_DEFAULT);
+	}
+
+	return (thrd_success);
+}
+
+static void libuvRingBufferGet(uv_idle_t *handle) {
+	outputCommonState state = handle->data;
+
+	// Write all packets that are currently available out in order,
+	// but never more than 10 at a time.
+	size_t count = 0;
+	libuvWriteBuf packetBuffer;
+	while (count < 10 && (packetBuffer = ringBufferGet(state->outputRing)) != NULL) {
+		writePacket(packetBuffer);
+		count++;
+	}
+}
+
+static void libuvAsyncShutdown(uv_async_t *handle) {
+	outputCommonState state = handle->data;
+
+	uv_stop(&state->networkIO->loop);
+}
+
+static void writePacket(libuvWriteBuf packetBuffer) {
+	// TODO: write packets to network.
+}
 
 static void initializeNetworkHeader(outputCommonState state) {
 	// Generate AEDAT 3.1 header for network streams (20 bytes total).
@@ -921,60 +1059,6 @@ static void writeFileHeader(outputCommonState state) {
 	writeUntilDone(state->fileIO, (const uint8_t *) currentTimeString, currentTimeStringLength);
 
 	writeUntilDone(state->fileIO, (const uint8_t *) "#!END-HEADER\r\n", 14);
-}
-
-static int outputThread(void *stateArg) {
-	outputCommonState state = stateArg;
-
-	// Set thread name.
-	size_t threadNameLength = strlen(state->parentModule->moduleSubSystemString);
-	char threadName[threadNameLength + 1 + 8]; // +1 for NUL character.
-	strcpy(threadName, state->parentModule->moduleSubSystemString);
-	strcat(threadName, "[Output]");
-	thrd_set_name(threadName);
-
-	bool headerSent = false;
-
-	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
-		// Wait for source to be defined.
-		int16_t sourceID = I16T(atomic_load_explicit(&state->sourceID, memory_order_relaxed));
-		if (sourceID == -1) {
-			// Delay by 1 ms if no data, to avoid a wasteful busy loop.
-			struct timespec delaySleep = { .tv_sec = 0, .tv_nsec = 1000000 };
-			thrd_sleep(&delaySleep, NULL);
-
-			continue;
-		}
-
-		// Send appropriate header.
-		if (state->isNetworkStream) {
-			initializeNetworkHeader(state);
-		}
-		else {
-			writeFileHeader(state);
-		}
-
-		headerSent = true;
-		break;
-	}
-
-	// If no header sent, it means we exited (running=false) without ever getting any
-	// event packet with a source ID, so we don't have to process anything.
-	// But we make sure to empty the transfer ring-buffer, as something may have been
-	// put there in the meantime, so we ensure it's checked and freed. This because
-	// in caerOutputCommonExit() we expect the ring-buffer to always be empty!
-	if (!headerSent) {
-		libuvWriteBuf packetBuffer;
-		while ((packetBuffer = ringBufferGet(state->outputRing)) != NULL) {
-			free(packetBuffer);
-		}
-
-		return (thrd_success);
-	}
-
-	// TODO: implement libuv network handling/file writing.
-
-	return (thrd_success);
 }
 
 bool caerOutputCommonInit(caerModuleData moduleData, int fileDescriptor, outputCommonNetIO streams) {
@@ -1071,6 +1155,7 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 
 	// Stop output thread and wait on it.
 	atomic_store(&state->running, false);
+	uv_async_send(&state->networkIO->shutdown);
 
 	if ((errno = thrd_join(state->compressorThread, NULL)) != thrd_success) {
 		// This should never happen!
@@ -1105,19 +1190,24 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 
 	ringBufferFree(state->outputRing);
 
-	// Close file descriptors.
+	// Cleanup IO resources.
 	if (state->isNetworkStream) {
+		// Cleanup all remaining handles and run until all callbacks are done.
+		libuvCloseLoopHandles(&state->networkIO->loop);
+		uv_loop_close(&state->networkIO->loop);
+
 		if (state->networkIO->isServer) {
 			// Server shut down, no more clients.
 			sshsNodePutString(state->parentModule->moduleNode, "connectedClients", "");
 		}
+
+		// Free allocated memory.
+		free(state->networkIO);
 	}
 	else {
+		// Close file descriptor.
 		close(state->fileIO);
 	}
-
-	// Free allocated memory.
-	free(state->networkIO);
 
 	// Print final statistics results.
 	caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,

@@ -2,11 +2,6 @@
 #include "base/mainloop.h"
 #include "base/module.h"
 #include "output_common.h"
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include "ext/nets.h"
-#include <uv.h>
 
 static bool caerOutputNetTCPServerInit(caerModuleData moduleData);
 

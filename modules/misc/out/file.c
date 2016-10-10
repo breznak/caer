@@ -3,9 +3,6 @@
 #include "base/module.h"
 #include "output_common.h"
 #include "ext/portable_misc.h"
-#include <sys/types.h>
-#include <pwd.h>
-#include <fcntl.h>
 #include <time.h>
 
 static bool caerOutputFileInit(caerModuleData moduleData);
@@ -31,68 +28,47 @@ static char *getFullFilePath(const char *subSystemString, const char *directory,
 
 // Remember to free strings returned by this.
 static char *getUserHomeDirectory(const char *subSystemString) {
-	char *homeDir = NULL;
+	size_t homeDirLength = PATH_MAX;
 
-	// First check the environment for $HOME.
-	char *homeVar = getenv("HOME");
-
-	if (homeVar != NULL) {
-		homeDir = strdup(homeVar);
-	}
-
-	// Else try to get it from the user data storage.
+	// Allocate memory for home directory path.
+	char *homeDir = malloc(homeDirLength);
 	if (homeDir == NULL) {
-		struct passwd userPasswd;
-		struct passwd *userPasswdPtr;
-		char userPasswdBuf[2048];
-
-		if (getpwuid_r(getuid(), &userPasswd, userPasswdBuf, sizeof(userPasswdBuf), &userPasswdPtr) == 0) {
-			homeDir = strdup(userPasswd.pw_dir);
-		}
-	}
-
-	if (homeDir == NULL) {
-		// Else just return /tmp as a place to write to.
-		homeDir = strdup("/tmp");
-	}
-
-	// Check if anything worked.
-	if (homeDir == NULL) {
-		caerLog(CAER_LOG_CRITICAL, subSystemString, "Unable to find user home directory path.");
+		caerLog(CAER_LOG_ERROR, subSystemString, "Failed to allocate memory for home directory string.");
 		return (NULL);
 	}
 
-	char *realHomeDir = portable_realpath(homeDir);
-	if (realHomeDir == NULL) {
-		caerLog(CAER_LOG_CRITICAL, subSystemString, "Could not get real path for home directory '%s'.", homeDir);
-		free(homeDir);
+	// Discover home directory path, use libuv for cross-platform support.
+	int retVal = uv_os_homedir(homeDir, &homeDirLength);
+	UV_RET_CHECK(retVal, subSystemString, "uv_os_homedir", return (NULL));
 
-		return (NULL);
-	}
-
-	free(homeDir);
-
-	return (realHomeDir);
+	return (homeDir);
 }
 
 static char *getFullFilePath(const char *subSystemString, const char *directory, const char *prefix) {
 	// First get time suffix string.
 	time_t currentTimeEpoch = time(NULL);
 
+#if defined(OS_WINDOWS)
+	// localtime() is thread-safe on Windows (and there is no localtime_r() at all).
+	struct tm *currentTime = localtime(&currentTimeEpoch);
+#else
 	// From localtime_r() man-page: "According to POSIX.1-2004, localtime()
 	// is required to behave as though tzset(3) was called, while
 	// localtime_r() does not have this requirement."
 	// So we make sure to call it here, to be portable.
 	tzset();
 
-	struct tm currentTime;
-	localtime_r(&currentTimeEpoch, &currentTime);
+	struct tm currentTimeStruct;
+	struct tm *currentTime = &currentTimeStruct;
+
+	localtime_r(&currentTimeEpoch, currentTime);
+#endif
 
 	// Following time format uses exactly 19 characters (5 separators,
 	// 4 year, 2 month, 2 day, 2 hours, 2 minutes, 2 seconds).
 	size_t currentTimeStringLength = 19;
 	char currentTimeString[currentTimeStringLength + 1]; // + 1 for terminating NUL byte.
-	strftime(currentTimeString, currentTimeStringLength + 1, "%Y_%m_%d_%H_%M_%S", &currentTime);
+	strftime(currentTimeString, currentTimeStringLength + 1, "%Y_%m_%d_%H_%M_%S", currentTime);
 
 	if (caerStrEquals(prefix, "")) {
 		// If the prefix is the empty string, use a minimal one.

@@ -11,9 +11,12 @@ struct output_common_netio {
 	bool isUDP;
 	bool isPipe;
 	bool isServer;
-	uv_stream_t *server;
+	uv_loop_t loop;
+	uv_async_t shutdown;
+	uv_idle_t ringBufferGet;
+	uv_stream_t server;
 	size_t clientsSize;
-	uv_stream_t *clients[];
+	uv_stream_t clients[];
 };
 
 typedef struct output_common_netio *outputCommonNetIO;
