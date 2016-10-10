@@ -68,7 +68,7 @@
 
 #include "output_common.h"
 #include "base/mainloop.h"
-#include "ext/portable_time.h"
+#include "ext/portable_misc.h"
 #include "ext/ringbuffer/ringbuffer.h"
 #include "ext/buffers.h"
 #include "ext/nets.h"
@@ -1205,6 +1205,9 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 		free(state->networkIO);
 	}
 	else {
+		// Ensure all data written to disk.
+		portable_fsync(state->fileIO);
+
 		// Close file descriptor.
 		close(state->fileIO);
 	}
