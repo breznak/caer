@@ -41,6 +41,7 @@ static bool caerOutputUnixSocketInit(caerModuleData moduleData) {
 	streams->isUDP = false;
 	streams->isPipe = true;
 	streams->clientsSize = numClients;
+	streams->clients[0] = NULL;
 	streams->server = NULL;
 
 	// Remember address.
@@ -49,14 +50,13 @@ static bool caerOutputUnixSocketInit(caerModuleData moduleData) {
 	// Initialize loop and network handles.
 	uv_loop_init(&streams->loop);
 
-	streams->clients[0] = malloc(sizeof(uv_pipe_t));
+	uv_pipe_t *pipe = malloc(sizeof(uv_pipe_t));
 
-	uv_pipe_init(&streams->loop, (uv_pipe_t *) streams->clients[0], false);
-	streams->clients[0]->data = streams;
+	uv_pipe_init(&streams->loop, pipe, false);
+	pipe->data = streams;
 
 	uv_connect_t *connectRequest = malloc(sizeof(uv_connect_t));
-	uv_pipe_connect(connectRequest, (uv_pipe_t *) streams->clients[0], streams->address,
-		&caerOutputCommonOnClientConnection);
+	uv_pipe_connect(connectRequest, pipe, streams->address, &caerOutputCommonOnClientConnection);
 
 	// Start.
 	if (!caerOutputCommonInit(moduleData, -1, streams)) {

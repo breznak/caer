@@ -52,6 +52,7 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	streams->isUDP = true;
 	streams->isPipe = false;
 	streams->clientsSize = numClients;
+	streams->clients[0] = NULL;
 	streams->server = NULL;
 
 	// Remember address.
@@ -61,10 +62,14 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	// Initialize loop and network handles.
 	uv_loop_init(&streams->loop);
 
-	streams->clients[0] = malloc(sizeof(uv_udp_t));
+	uv_udp_t *udp = malloc(sizeof(uv_udp_t));
 
-	uv_udp_init(&streams->loop, (uv_udp_t *) streams->clients[0]);
-	streams->clients[0]->data = streams;
+	uv_udp_init(&streams->loop, udp);
+	udp->data = streams;
+
+	// Assign here instead of caerOutputCommonOnClientConnection(), since that doesn't
+	// exist for UDP connections in libuv.
+	streams->clients[0] = (uv_stream_t *) udp;
 
 	// Start.
 	if (!caerOutputCommonInit(moduleData, -1, streams)) {

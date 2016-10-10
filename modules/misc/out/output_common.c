@@ -848,7 +848,7 @@ static void libuvRingBufferGet(uv_idle_t *handle);
 static void libuvAsyncShutdown(uv_async_t *handle);
 static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer);
 static void initializeNetworkHeader(outputCommonState state);
-static void writeNetworkHeader(outputCommonState state, libuvWriteBuf buf);
+static void writeNetworkHeader(outputCommonNetIO streams, libuvWriteBuf buf);
 static void writeFileHeader(outputCommonState state);
 void caerOutputCommonOnServerConnection(uv_stream_t *server, int status);
 void caerOutputCommonOnClientConnection(uv_connect_t *connectionRequest, int status);
@@ -996,20 +996,19 @@ static void initializeNetworkHeader(outputCommonState state) {
 	state->networkIO->networkHeader.sourceID = htole16(I16T(atomic_load(&state->sourceID))); // Always one source per output module.
 }
 
-static void writeNetworkHeader(outputCommonState state, libuvWriteBuf buf) {
+static void writeNetworkHeader(outputCommonNetIO streams, libuvWriteBuf buf) {
 	// Create memory chunk for network header to be sent via libuv.
 	// libuv takes care of freeing memory. This is also needed for UDP
 	// to have different sequence numbers in flight.
 	libuvWriteBufInit(buf, AEDAT3_NETWORK_HEADER_LENGTH);
 
 	// Copy in current header.
-	memcpy(buf->buf.base, &state->networkIO->networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
+	memcpy(buf->buf.base, &streams->networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
 
-	if (state->networkIO->isUDP) {
+	if (streams->isUDP) {
 		// Increase sequence number for successive headers, if this is a
 		// message-based network protocol (UDP for example).
-		state->networkIO->networkHeader.sequenceNumber = htole64(
-			le64toh(state->networkIO->networkHeader.sequenceNumber) + 1);
+		streams->networkHeader.sequenceNumber = htole64(le64toh(streams->networkHeader.sequenceNumber) + 1);
 	}
 }
 
@@ -1064,10 +1063,25 @@ static void writeFileHeader(outputCommonState state) {
 
 void caerOutputCommonOnServerConnection(uv_stream_t *server, int status) {
 	outputCommonNetIO streams = server->data;
+
 }
 
 void caerOutputCommonOnClientConnection(uv_connect_t *connectionRequest, int status) {
 	outputCommonNetIO streams = connectionRequest->handle->data;
+
+	// TODO: check status.
+
+	// TCP/PIPE: send out initial header. Only those two can call this function!
+	libuvWriteMultiBuf buffers = libuvWriteBufAlloc(1);
+
+	writeNetworkHeader(streams, &buffers->buffers[0]);
+
+	libuvWrite(connectionRequest->handle, buffers);
+
+	// Ready now for more data, so set client field for writePacket().
+	streams->clients[0] = connectionRequest->handle;
+
+	free(connectionRequest);
 }
 
 bool caerOutputCommonInit(caerModuleData moduleData, int fileDescriptor, outputCommonNetIO streams) {

@@ -52,6 +52,7 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 	streams->isUDP = false;
 	streams->isPipe = false;
 	streams->clientsSize = numClients;
+	streams->clients[0] = NULL;
 	streams->server = NULL;
 
 	// Remember address.
@@ -61,14 +62,13 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 	// Initialize loop and network handles.
 	uv_loop_init(&streams->loop);
 
-	streams->clients[0] = malloc(sizeof(uv_tcp_t));
+	uv_tcp_t *tcp = malloc(sizeof(uv_tcp_t));
 
-	uv_tcp_init(&streams->loop, (uv_tcp_t *) streams->clients[0]);
-	streams->clients[0]->data = streams;
+	uv_tcp_init(&streams->loop, tcp);
+	tcp->data = streams;
 
 	uv_connect_t *connectRequest = malloc(sizeof(uv_connect_t));
-	uv_tcp_connect(connectRequest, (uv_tcp_t *) streams->clients[0], streams->address,
-		&caerOutputCommonOnClientConnection);
+	uv_tcp_connect(connectRequest, tcp, streams->address, &caerOutputCommonOnClientConnection);
 
 	// Start.
 	if (!caerOutputCommonInit(moduleData, -1, streams)) {
