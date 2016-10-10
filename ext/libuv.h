@@ -144,6 +144,15 @@ static inline libuvWriteMultiBuf libuvWriteBufAlloc(size_t number) {
 	return (writeBufs);
 }
 
+static inline void libuvWriteBufFree(libuvWriteMultiBuf buffers) {
+	for (size_t i = 0; i < buffers->buffersSize; i++) {
+		free(buffers->buffers[i].freeBuf);
+	}
+
+	free(buffers->data);
+	free(buffers);
+}
+
 static inline void libuvWriteBufInternalInit(libuvWriteBuf writeBuf, void *buffer, size_t bufferSize,
 	void *bufferToFree) {
 	writeBuf->buf.base = (char *) buffer;
@@ -189,14 +198,7 @@ static inline void libuvWriteBufInitWithAnyBuffer(libuvWriteBuf writeBuf, void *
 static inline void libuvWriteFree(uv_write_t *writeRequest, int status) {
 	(void) (status); // UNUSED.
 
-	libuvWriteMultiBuf buffers = writeRequest->data;
-
-	for (size_t i = 0; i < buffers->buffersSize; i++) {
-		free(buffers->buffers[i].freeBuf);
-	}
-
-	free(buffers->data);
-	free(buffers);
+	libuvWriteBufFree(writeRequest->data);
 
 	free(writeRequest);
 }
