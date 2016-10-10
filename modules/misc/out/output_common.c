@@ -108,8 +108,6 @@ struct output_common_state {
 	int fileIO;
 	/// Network-like stream or file-like stream. Matters for header format.
 	bool isNetworkStream;
-	/// Keep the full network header around, so we can easily update and write it.
-	struct aedat3_network_header networkHeader;
 	/// The libuv stream descriptors for network writing and server mode.
 	outputCommonNetIO networkIO;
 	/// Filter out invalidated events or not.
@@ -989,11 +987,11 @@ static void writePacket(libuvWriteBuf packetBuffer) {
 
 static void initializeNetworkHeader(outputCommonState state) {
 	// Generate AEDAT 3.1 header for network streams (20 bytes total).
-	state->networkHeader.magicNumber = htole64(AEDAT3_NETWORK_MAGIC_NUMBER);
-	state->networkHeader.sequenceNumber = htole64(0);
-	state->networkHeader.versionNumber = AEDAT3_NETWORK_VERSION;
-	state->networkHeader.formatNumber = state->formatID; // Send numeric format ID.
-	state->networkHeader.sourceID = htole16(I16T(atomic_load(&state->sourceID))); // Always one source per output module.
+	state->networkIO->networkHeader.magicNumber = htole64(AEDAT3_NETWORK_MAGIC_NUMBER);
+	state->networkIO->networkHeader.sequenceNumber = htole64(0);
+	state->networkIO->networkHeader.versionNumber = AEDAT3_NETWORK_VERSION;
+	state->networkIO->networkHeader.formatNumber = state->formatID; // Send numeric format ID.
+	state->networkIO->networkHeader.sourceID = htole16(I16T(atomic_load(&state->sourceID))); // Always one source per output module.
 }
 
 static void writeNetworkHeader(outputCommonState state, libuvWriteBuf buf) {
@@ -1003,12 +1001,13 @@ static void writeNetworkHeader(outputCommonState state, libuvWriteBuf buf) {
 	libuvWriteBufInit(buf, AEDAT3_NETWORK_HEADER_LENGTH);
 
 	// Copy in current header.
-	memcpy(buf->buf.base, &state->networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
+	memcpy(buf->buf.base, &state->networkIO->networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
 
 	if (state->networkIO->isUDP) {
 		// Increase sequence number for successive headers, if this is a
 		// message-based network protocol (UDP for example).
-		state->networkHeader.sequenceNumber = htole64(le64toh(state->networkHeader.sequenceNumber) + 1);
+		state->networkIO->networkHeader.sequenceNumber = htole64(
+			le64toh(state->networkIO->networkHeader.sequenceNumber) + 1);
 	}
 }
 
@@ -1059,6 +1058,14 @@ static void writeFileHeader(outputCommonState state) {
 	writeUntilDone(state->fileIO, (const uint8_t *) currentTimeString, currentTimeStringLength);
 
 	writeUntilDone(state->fileIO, (const uint8_t *) "#!END-HEADER\r\n", 14);
+}
+
+void caerOutputCommonOnServerConnection(uv_stream_t *server, int status) {
+
+}
+
+void caerOutputCommonOnClientConnection(uv_connect_t *connectionRequest, int status) {
+
 }
 
 bool caerOutputCommonInit(caerModuleData moduleData, int fileDescriptor, outputCommonNetIO streams) {

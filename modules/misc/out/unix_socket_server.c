@@ -2,15 +2,12 @@
 #include "base/mainloop.h"
 #include "base/module.h"
 #include "output_common.h"
-#include <sys/socket.h>
-#include <sys/un.h>
 
 static bool caerOutputUnixSocketServerInit(caerModuleData moduleData);
-void caerOutputUnixSocketServerExit(caerModuleData moduleData);
 
 static struct caer_module_functions caerOutputUnixSocketServerFunctions = { .moduleInit =
 	&caerOutputUnixSocketServerInit, .moduleRun = &caerOutputCommonRun, .moduleConfig = NULL, .moduleExit =
-	&caerOutputUnixSocketServerExit, .moduleReset = &caerOutputCommonReset };
+	&caerOutputCommonExit, .moduleReset = &caerOutputCommonReset };
 
 void caerOutputUnixSocketServer(uint16_t moduleID, size_t outputTypesNumber, ...) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "UnixSocketServerOutput", CAER_MODULE_OUTPUT);
@@ -32,80 +29,46 @@ static bool caerOutputUnixSocketServerInit(caerModuleData moduleData) {
 	sshsNodePutShortIfAbsent(moduleData->moduleNode, "backlogSize", 5);
 	sshsNodePutShortIfAbsent(moduleData->moduleNode, "concurrentConnections", 10);
 
-	// Open a Unix local socket on a known path, to be accessed by other processes (server-like mode).
-	int serverSockFd = socket(AF_UNIX, SOCK_STREAM, 0);
-	if (serverSockFd < 0) {
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create local Unix socket. Error: %d.",
-		errno);
+	// Allocate memory.
+	size_t numClients = (size_t) sshsNodeGetShort(moduleData->moduleNode, "concurrentConnections");
+	outputCommonNetIO streams = malloc(sizeof(*streams) + (numClients * sizeof(uv_stream_t *)));
+	if (streams == NULL) {
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for streams structure.");
 		return (false);
 	}
 
-	struct sockaddr_un unixSocketAddr;
-	memset(&unixSocketAddr, 0, sizeof(struct sockaddr_un));
-
-	unixSocketAddr.sun_family = AF_UNIX;
-
-	char *socketPath = sshsNodeGetString(moduleData->moduleNode, "socketPath");
-	strncpy(unixSocketAddr.sun_path, socketPath, sizeof(unixSocketAddr.sun_path) - 1);
-	unixSocketAddr.sun_path[sizeof(unixSocketAddr.sun_path) - 1] = '\0'; // Ensure NUL terminated string.
-	free(socketPath);
-
-	// Bind socket to above address.
-	if (bind(serverSockFd, (struct sockaddr *) &unixSocketAddr, sizeof(struct sockaddr_un)) < 0) {
-		close(serverSockFd);
-
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not bind local Unix socket. Error: %d.",
-		errno);
-		return (false);
+	// Initialize common info.
+	streams->isServer = true;
+	streams->isTCP = false;
+	streams->isUDP = false;
+	streams->isPipe = true;
+	streams->clientsSize = numClients;
+	for (size_t i = 0; i < streams->clientsSize; i++) {
+		streams->clients[i] = NULL;
 	}
 
-	// Listen to new connections on the socket.
-	if (listen(serverSockFd, sshsNodeGetShort(moduleData->moduleNode, "backlogSize")) < 0) {
-		close(serverSockFd);
+	// Remember address.
+	streams->address = sshsNodeGetString(moduleData->moduleNode, "socketPath");
 
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"Could not listen on local Unix socket. Error: %d.", errno);
-		return (false);
-	}
+	// Initialize loop and network handles.
+	uv_loop_init(&streams->loop);
 
-	outputCommonFDs fileDescriptors = caerOutputCommonAllocateFdArray(
-		(size_t) sshsNodeGetShort(moduleData->moduleNode, "concurrentConnections"));
-	if (fileDescriptors == NULL) {
-		close(serverSockFd);
+	streams->server = malloc(sizeof(uv_pipe_t));
 
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"Unable to allocate memory for file descriptors.");
-		return (false);
-	}
+	uv_pipe_init(&streams->loop, (uv_pipe_t *) streams->server, false);
+	streams->server->data = streams;
 
-	fileDescriptors->serverFd = serverSockFd;
+	uv_pipe_bind((uv_pipe_t *) streams->server, streams->address);
 
-	if (!caerOutputCommonInit(moduleData, fileDescriptors, true, false)) {
-		close(serverSockFd);
-		free(fileDescriptors);
+	uv_listen(streams->server, sshsNodeGetShort(moduleData->moduleNode, "backlogSize"),
+		&caerOutputCommonOnServerConnection);
+
+	// Start.
+	if (!caerOutputCommonInit(moduleData, -1, streams)) {
+		free(streams);
 
 		return (false);
 	}
-
-	caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Local Unix socket ready at '%s'.",
-		unixSocketAddr.sun_path);
 
 	return (true);
-}
-
-void caerOutputUnixSocketServerExit(caerModuleData moduleData) {
-	// Get socket path before its closed by commonExit().
-	int serverFd = caerOutputCommonGetServerFd(moduleData->moduleState);
-
-	socklen_t unixSocketAddrLength = sizeof(struct sockaddr_un);
-	struct sockaddr_un unixSocketAddr;
-	memset(&unixSocketAddr, 0, unixSocketAddrLength);
-
-	getsockname(serverFd, (struct sockaddr *) &unixSocketAddr, &unixSocketAddrLength);
-
-	// Do common cleanup, close all file descriptors, server included.
-	caerOutputCommonExit(moduleData);
-
-	// Remove socket file after use. All else has already been cleaned up.
-	unlink(unixSocketAddr.sun_path);
 }

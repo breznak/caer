@@ -2,9 +2,6 @@
 #include "base/mainloop.h"
 #include "base/module.h"
 #include "output_common.h"
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
 
 static bool caerOutputNetUDPInit(caerModuleData moduleData);
 
@@ -31,62 +28,50 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "ipAddress", "127.0.0.1");
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "portNumber", 8888);
 
-	// Open a UDP socket to the remote client, to which we'll send data packets.
-	int sockFd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-	if (sockFd < 0) {
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create UDP socket. Error: %d.", errno);
-		return (false);
-	}
+	int retVal;
 
-	struct sockaddr_in udpClient;
-	memset(&udpClient, 0, sizeof(struct sockaddr_in));
-
-	udpClient.sin_family = AF_INET;
-	udpClient.sin_port = htons(U16T(sshsNodeGetInt(moduleData->moduleNode, "portNumber")));
+	// Generate address.
+	struct sockaddr_in serverAddress;
 
 	char *ipAddress = sshsNodeGetString(moduleData->moduleNode, "ipAddress");
-	if (inet_pton(AF_INET, ipAddress, &udpClient.sin_addr) == 0) {
-		close(sockFd);
-
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "No valid IP address found. '%s' is invalid!",
-			ipAddress);
-
-		free(ipAddress);
-		return (false);
-	}
+	retVal = uv_ip4_addr(ipAddress, sshsNodeGetInt(moduleData->moduleNode, "portNumber"), &serverAddress);
+	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_ip4_addr", free(ipAddress));
 	free(ipAddress);
 
-	if (connect(sockFd, (struct sockaddr *) &udpClient, sizeof(struct sockaddr_in)) != 0) {
-		close(sockFd);
-
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"Could not connect to remote UDP server %s:%" PRIu16 ". Error: %d.",
-			inet_ntop(AF_INET, &udpClient.sin_addr, (char[INET_ADDRSTRLEN] ) { 0x00 }, INET_ADDRSTRLEN),
-			ntohs(udpClient.sin_port), errno);
+	// Allocate memory.
+	size_t numClients = 1;
+	outputCommonNetIO streams = malloc(sizeof(*streams) + (numClients * sizeof(uv_stream_t *)));
+	if (streams == NULL) {
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for streams structure.");
 		return (false);
 	}
 
-	outputCommonFDs fileDescriptors = caerOutputCommonAllocateFdArray(1);
-	if (fileDescriptors == NULL) {
-		close(sockFd);
+	// Initialize common info.
+	streams->isServer = false;
+	streams->isTCP = false;
+	streams->isUDP = true;
+	streams->isPipe = false;
+	streams->clientsSize = numClients;
+	streams->server = NULL;
 
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"Unable to allocate memory for file descriptors.");
+	// Remember address.
+	streams->address = malloc(sizeof(struct sockaddr_in));
+	memcpy(streams->address, &serverAddress, sizeof(struct sockaddr_in));
+
+	// Initialize loop and network handles.
+	uv_loop_init(&streams->loop);
+
+	streams->clients[0] = malloc(sizeof(uv_udp_t));
+
+	uv_udp_init(&streams->loop, (uv_udp_t *) streams->clients[0]);
+	streams->clients[0]->data = streams;
+
+	// Start.
+	if (!caerOutputCommonInit(moduleData, -1, streams)) {
+		free(streams);
+
 		return (false);
 	}
-
-	fileDescriptors->fds[0] = sockFd;
-
-	if (!caerOutputCommonInit(moduleData, fileDescriptors, true, true)) {
-		close(sockFd);
-		free(fileDescriptors);
-
-		return (false);
-	}
-
-	caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "UDP socket connected to %s:%" PRIu16 ".",
-		inet_ntop(AF_INET, &udpClient.sin_addr, (char[INET_ADDRSTRLEN] ) { 0x00 }, INET_ADDRSTRLEN),
-		ntohs(udpClient.sin_port));
 
 	return (true);
 }

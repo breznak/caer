@@ -2,8 +2,6 @@
 #include "base/mainloop.h"
 #include "base/module.h"
 #include "output_common.h"
-#include <sys/socket.h>
-#include <sys/un.h>
 
 static bool caerOutputUnixSocketInit(caerModuleData moduleData);
 
@@ -29,53 +27,43 @@ static bool caerOutputUnixSocketInit(caerModuleData moduleData) {
 	// and add their listeners.
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "socketPath", "/tmp/caer.sock");
 
-	// Open an existing Unix local socket at a known path, where we'll write to.
-	int sockFd = socket(AF_UNIX, SOCK_STREAM, 0);
-	if (sockFd < 0) {
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "Could not create local Unix socket. Error: %d.",
-		errno);
+	// Allocate memory.
+	size_t numClients = 1;
+	outputCommonNetIO streams = malloc(sizeof(*streams) + (numClients * sizeof(uv_stream_t *)));
+	if (streams == NULL) {
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for streams structure.");
 		return (false);
 	}
 
-	struct sockaddr_un unixSocketAddr;
-	memset(&unixSocketAddr, 0, sizeof(struct sockaddr_un));
+	// Initialize common info.
+	streams->isServer = false;
+	streams->isTCP = false;
+	streams->isUDP = false;
+	streams->isPipe = true;
+	streams->clientsSize = numClients;
+	streams->server = NULL;
 
-	unixSocketAddr.sun_family = AF_UNIX;
+	// Remember address.
+	streams->address = sshsNodeGetString(moduleData->moduleNode, "socketPath");
 
-	char *socketPath = sshsNodeGetString(moduleData->moduleNode, "socketPath");
-	strncpy(unixSocketAddr.sun_path, socketPath, sizeof(unixSocketAddr.sun_path) - 1);
-	unixSocketAddr.sun_path[sizeof(unixSocketAddr.sun_path) - 1] = '\0'; // Ensure NUL terminated string.
-	free(socketPath);
+	// Initialize loop and network handles.
+	uv_loop_init(&streams->loop);
 
-	// Connect socket to above address.
-	if (connect(sockFd, (struct sockaddr *) &unixSocketAddr, sizeof(struct sockaddr_un)) < 0) {
-		close(sockFd);
+	streams->clients[0] = malloc(sizeof(uv_pipe_t));
 
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"Could not connect to local Unix socket. Error: %d.", errno);
-		return (false);
-	}
+	uv_pipe_init(&streams->loop, (uv_pipe_t *) streams->clients[0], false);
+	streams->clients[0]->data = streams;
 
-	outputCommonFDs fileDescriptors = caerOutputCommonAllocateFdArray(1);
-	if (fileDescriptors == NULL) {
-		close(sockFd);
+	uv_connect_t *connectRequest = malloc(sizeof(uv_connect_t));
+	uv_pipe_connect(connectRequest, (uv_pipe_t *) streams->clients[0], streams->address,
+		&caerOutputCommonOnClientConnection);
 
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"Unable to allocate memory for file descriptors.");
-		return (false);
-	}
-
-	fileDescriptors->fds[0] = sockFd;
-
-	if (!caerOutputCommonInit(moduleData, fileDescriptors, true, false)) {
-		close(sockFd);
-		free(fileDescriptors);
+	// Start.
+	if (!caerOutputCommonInit(moduleData, -1, streams)) {
+		free(streams);
 
 		return (false);
 	}
-
-	caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Local Unix socket ready at '%s'.",
-		unixSocketAddr.sun_path);
 
 	return (true);
 }
