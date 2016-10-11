@@ -983,7 +983,53 @@ static void libuvAsyncShutdown(uv_async_t *handle) {
 }
 
 static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
-	// TODO: write packets to network.
+	// If no active clients exist, don't write anything.
+	if (state->networkIO->activeClients == 0) {
+		free(packetBuffer->freeBuf);
+		free(packetBuffer);
+		return;
+	}
+
+	// Write packets to network. TCP/Pipe have their header already written in the
+	// Connection callbacks. Also, the size of the written data doesn't matter, as
+	// they are stream transports, and the network stack will take care of things
+	// like buffering and packet sizes.
+	// Only UDP needs special treatment here to write the proper header and split
+	// the packets up into manageable sizes (<=64K), together with keeping track
+	// of the sequence number.
+	if (state->networkIO->isUDP) {
+
+	}
+	else {
+		// TCP/Pipe outputs.
+		// Prepare buffers, increase reference count.
+		libuvWriteMultiBuf buffers = libuvWriteBufAlloc(1);
+		if (buffers == NULL) {
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+				"Failed to allocate memory for buffers.");
+
+			free(packetBuffer->freeBuf);
+			free(packetBuffer);
+			return;
+		}
+
+		buffers->refCount = state->networkIO->activeClients;
+
+		buffers->buffers[0] = *packetBuffer;
+		free(packetBuffer);
+
+		// Write to each client, but use common reference-counted buffer.
+		for (size_t i = 0; i < state->networkIO->clientsSize; i++) {
+			uv_stream_t *client = state->networkIO->clients[i];
+
+			if (client == NULL) {
+				continue;
+			}
+
+			int retVal = libuvWrite(client, buffers);
+			UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "libuvWrite", libuvWriteBufFree(buffers));
+		}
+	}
 }
 
 static void initializeNetworkHeader(outputCommonState state) {
