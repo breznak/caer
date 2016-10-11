@@ -998,7 +998,11 @@ static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
 	// the packets up into manageable sizes (<=64K), together with keeping track
 	// of the sequence number.
 	if (state->networkIO->isUDP) {
+		size_t packetSize = packetBuffer->buf.len;
 
+		while (packetSize > 0) {
+
+		}
 	}
 	else {
 		// TCP/Pipe outputs.
@@ -1197,7 +1201,7 @@ bool caerOutputCommonInit(caerModuleData moduleData, int fileDescriptor, outputC
 	state->networkIO = streams;
 
 	// If in server mode, add SSHS attribute to track connected client IPs.
-	if (state->isNetworkStream && state->networkIO->isServer) {
+	if (state->isNetworkStream && state->networkIO->server != NULL) {
 		sshsNodePutString(state->parentModule->moduleNode, "connectedClients", "");
 	}
 
@@ -1316,7 +1320,7 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 		libuvCloseLoopHandles(&state->networkIO->loop);
 		uv_loop_close(&state->networkIO->loop);
 
-		if (state->networkIO->isServer) {
+		if (state->networkIO->server != NULL) {
 			// Server shut down, no more clients.
 			sshsNodePutString(state->parentModule->moduleNode, "connectedClients", "");
 		}

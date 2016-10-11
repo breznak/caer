@@ -36,7 +36,6 @@ static bool caerOutputUnixSocketInit(caerModuleData moduleData) {
 	}
 
 	// Initialize common info.
-	streams->isServer = false;
 	streams->isTCP = false;
 	streams->isUDP = false;
 	streams->isPipe = true;

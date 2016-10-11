@@ -47,7 +47,6 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	}
 
 	// Initialize common info.
-	streams->isServer = false;
 	streams->isTCP = false;
 	streams->isUDP = true;
 	streams->isPipe = false;

@@ -15,7 +15,6 @@ struct output_common_netio {
 	bool isTCP;
 	bool isUDP;
 	bool isPipe;
-	bool isServer;
 	void *address;
 	uv_loop_t loop;
 	uv_async_t shutdown;
