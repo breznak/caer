@@ -819,8 +819,7 @@ static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader pa
 		currPacketOffset += frameEventHeaderSize;
 
 		// Store size of PNG image block as 4 byte integer.
-		int32_t outSizeInt = htole32(I32T(outSize));
-		memcpy(((uint8_t *) packet) + currPacketOffset, &outSizeInt, sizeof(int32_t));
+		*((int32_t *) (((uint8_t *) packet) + currPacketOffset)) = htole32(I32T(outSize));
 		currPacketOffset += sizeof(int32_t);
 
 		memcpy(((uint8_t *) packet) + currPacketOffset, outBuffer, outSize);
@@ -1131,6 +1130,7 @@ void caerOutputCommonOnClientConnection(uv_connect_t *connectionRequest, int sta
 
 	// Ready now for more data, so set client field for writePacket().
 	streams->clients[0] = connectionRequest->handle;
+	streams->activeClients++;
 
 	free(connectionRequest);
 }
