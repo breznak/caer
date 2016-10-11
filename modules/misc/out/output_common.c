@@ -847,7 +847,7 @@ static void libuvRingBufferGet(uv_idle_t *handle);
 static void libuvAsyncShutdown(uv_async_t *handle);
 static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer);
 static void initializeNetworkHeader(outputCommonState state);
-static void writeNetworkHeader(outputCommonNetIO streams, libuvWriteBuf buf);
+static void writeNetworkHeader(outputCommonNetIO streams, libuvWriteBuf buf, bool startOfUDPPacket);
 static void writeFileHeader(outputCommonState state);
 void caerOutputCommonOnServerConnection(uv_stream_t *server, int status);
 void caerOutputCommonOnClientConnection(uv_connect_t *connectionRequest, int status);
@@ -999,9 +999,53 @@ static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
 	// of the sequence number.
 	if (state->networkIO->isUDP) {
 		size_t packetSize = packetBuffer->buf.len;
+		size_t packetIndex = 0;
+		bool firstChunk = true;
 
+		// Split packets up into chunks for UDP. Send each chunk with its own
+		// header and increasing sequence number. The very first packet of a chunk is
+		// identifiable by having a negative sequence number (highest bit set to one).
 		while (packetSize > 0) {
+			libuvWriteMultiBuf buffers = libuvWriteBufAlloc(2); // One for network header, one for data.
+			if (buffers == NULL) {
+				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+					"Failed to allocate memory for buffers.");
 
+				goto freePacketBuffer;
+			}
+
+			// Write header into first buffer.
+			writeNetworkHeader(state->networkIO, &buffers->buffers[0], firstChunk);
+			firstChunk = false;
+
+			// Write data into second buffer.
+			size_t sendSize = (packetSize > MAX_OUTPUT_UDP_SIZE) ? (MAX_OUTPUT_UDP_SIZE) : (packetSize);
+
+			libuvWriteBufInit(&buffers->buffers[1], sendSize);
+			if (buffers->buffers[1].buf.base == NULL) {
+				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+					"Failed to allocate memory for data buffer.");
+
+				libuvWriteBufFree(buffers);
+				goto freePacketBuffer;
+			}
+
+			memcpy(buffers->buffers[1].buf.base, packetBuffer->buf.base + packetIndex, sendSize);
+
+			// For UDP we only support client mode to ONE outside address.
+			int retVal = libuvWriteUDP((uv_udp_t *) state->networkIO->clients[0], state->networkIO->address, buffers);
+			UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "libuvWriteUDP",
+				libuvWriteBufFree(buffers); goto freePacketBuffer);
+
+			// Update loop indexes.
+			packetSize -= sendSize;
+			packetIndex += sendSize;
+		}
+
+		// Free all packet memory.
+		freePacketBuffer: {
+			free(packetBuffer->freeBuf);
+			free(packetBuffer);
 		}
 	}
 	else {
@@ -1045,19 +1089,31 @@ static void initializeNetworkHeader(outputCommonState state) {
 	state->networkIO->networkHeader.sourceID = htole16(I16T(atomic_load(&state->sourceID))); // Always one source per output module.
 }
 
-static void writeNetworkHeader(outputCommonNetIO streams, libuvWriteBuf buf) {
+static void writeNetworkHeader(outputCommonNetIO streams, libuvWriteBuf buf, bool startOfUDPPacket) {
 	// Create memory chunk for network header to be sent via libuv.
 	// libuv takes care of freeing memory. This is also needed for UDP
 	// to have different sequence numbers in flight.
 	libuvWriteBufInit(buf, AEDAT3_NETWORK_HEADER_LENGTH);
 
+	if (streams->isUDP && startOfUDPPacket) {
+		// Set highest bit of sequence number to one.
+		streams->networkHeader.sequenceNumber = htole64(
+			I64T(le64toh(streams->networkHeader.sequenceNumber) | I64T(0x8000000000000000LL)));
+	}
+
 	// Copy in current header.
 	memcpy(buf->buf.base, &streams->networkHeader, AEDAT3_NETWORK_HEADER_LENGTH);
 
 	if (streams->isUDP) {
+		if (startOfUDPPacket) {
+			// Unset highest bit of sequence number (back to zero).
+			streams->networkHeader.sequenceNumber = htole64(
+				I64T(le64toh(streams->networkHeader.sequenceNumber) & I64T(0x7FFFFFFFFFFFFFFFLL)));
+		}
+
 		// Increase sequence number for successive headers, if this is a
 		// message-based network protocol (UDP for example).
-		streams->networkHeader.sequenceNumber = htole64(le64toh(streams->networkHeader.sequenceNumber) + 1);
+		streams->networkHeader.sequenceNumber = htole64(I64T(le64toh(streams->networkHeader.sequenceNumber) + 1));
 	}
 }
 
@@ -1150,7 +1206,7 @@ void caerOutputCommonOnServerConnection(uv_stream_t *server, int status) {
 			// TCP/PIPE: send out initial header. Only those two can call this function!
 			libuvWriteMultiBuf buffers = libuvWriteBufAlloc(1);
 
-			writeNetworkHeader(streams, &buffers->buffers[0]);
+			writeNetworkHeader(streams, &buffers->buffers[0], false);
 
 			libuvWrite(client, buffers);
 
@@ -1174,7 +1230,7 @@ void caerOutputCommonOnClientConnection(uv_connect_t *connectionRequest, int sta
 	// TCP/PIPE: send out initial header. Only those two can call this function!
 	libuvWriteMultiBuf buffers = libuvWriteBufAlloc(1);
 
-	writeNetworkHeader(streams, &buffers->buffers[0]);
+	writeNetworkHeader(streams, &buffers->buffers[0], false);
 
 	libuvWrite(connectionRequest->handle, buffers);
 

@@ -147,6 +147,10 @@ static inline libuvWriteMultiBuf libuvWriteBufAlloc(size_t number) {
 }
 
 static inline void libuvWriteBufFree(libuvWriteMultiBuf buffers) {
+	if (buffers == NULL) {
+		return;
+	}
+
 	// If reference count is one (this is the only reference), we free the
 	// memory, else we just decrease the reference count. Since this is called
 	// within one thread's event loop, no locking is needed.
@@ -232,6 +236,39 @@ static inline int libuvWrite(uv_stream_t *dest, libuvWriteMultiBuf buffers) {
 	int retVal = uv_write(writeRequest, dest, uvBuffers, (unsigned int) buffers->buffersSize, &libuvWriteFree);
 	if (retVal < 0) {
 		free(writeRequest);
+	}
+
+	return (retVal);
+}
+
+static inline void libuvWriteFreeUDP(uv_udp_send_t *sendRequest, int status) {
+	(void) (status); // UNUSED.
+
+	libuvWriteBufFree(sendRequest->data);
+
+	free(sendRequest);
+}
+
+// buffer has to be dynamically allocated (on heap). On success, will get free'd
+// automatically. On failure, buffer won't be touched.
+static inline int libuvWriteUDP(uv_udp_t *dest, const struct sockaddr *destAddress, libuvWriteMultiBuf buffers) {
+	uv_udp_send_t *sendRequest = calloc(1, sizeof(*sendRequest));
+	if (sendRequest == NULL) {
+		return (UV_ENOMEM);
+	}
+
+	sendRequest->data = buffers;
+
+	uv_buf_t uvBuffers[buffers->buffersSize];
+
+	for (size_t i = 0; i < buffers->buffersSize; i++) {
+		uvBuffers[i] = buffers->buffers[i].buf;
+	}
+
+	int retVal = uv_udp_send(sendRequest, dest, uvBuffers, (unsigned int) buffers->buffersSize, destAddress,
+		&libuvWriteFreeUDP);
+	if (retVal < 0) {
+		free(sendRequest);
 	}
 
 	return (retVal);
