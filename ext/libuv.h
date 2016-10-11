@@ -226,8 +226,7 @@ static inline int libuvWrite(uv_stream_t *dest, libuvWriteMultiBuf buffers) {
 	uv_buf_t uvBuffers[buffers->buffersSize];
 
 	for (size_t i = 0; i < buffers->buffersSize; i++) {
-		uvBuffers[i].base = buffers->buffers[i].buf.base;
-		uvBuffers[i].len = buffers->buffers[i].buf.len;
+		uvBuffers[i] = buffers->buffers[i].buf;
 	}
 
 	int retVal = uv_write(writeRequest, dest, uvBuffers, (unsigned int) buffers->buffersSize, &libuvWriteFree);
