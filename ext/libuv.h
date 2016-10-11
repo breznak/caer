@@ -126,6 +126,7 @@ typedef struct libuvWriteBufStruct *libuvWriteBuf;
 
 struct libuvWriteMultiBufStruct {
 	void *data; // Allow arbitrary data to be attached to buffers for callback. Must be on heap for free().
+	size_t refCount; // Reference count this to allow efficient multiple destination writes.
 	size_t buffersSize;
 	struct libuvWriteBufStruct buffers[];
 };
@@ -139,18 +140,27 @@ static inline libuvWriteMultiBuf libuvWriteBufAlloc(size_t number) {
 		return (NULL);
 	}
 
+	writeBufs->refCount = 1; // Start at one. There must be at least one reference.
 	writeBufs->buffersSize = number;
 
 	return (writeBufs);
 }
 
 static inline void libuvWriteBufFree(libuvWriteMultiBuf buffers) {
-	for (size_t i = 0; i < buffers->buffersSize; i++) {
-		free(buffers->buffers[i].freeBuf);
-	}
+	// If reference count is one (this is the only reference), we free the
+	// memory, else we just decrease the reference count. Since this is called
+	// within one thread's event loop, no locking is needed.
+	if (buffers->refCount == 1) {
+		for (size_t i = 0; i < buffers->buffersSize; i++) {
+			free(buffers->buffers[i].freeBuf);
+		}
 
-	free(buffers->data);
-	free(buffers);
+		free(buffers->data);
+		free(buffers);
+	}
+	else {
+		buffers->refCount--;
+	}
 }
 
 static inline void libuvWriteBufInternalInit(libuvWriteBuf writeBuf, void *buffer, size_t bufferSize,
