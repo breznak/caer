@@ -1084,15 +1084,15 @@ void caerOutputCommonOnServerConnection(uv_stream_t *server, int status) {
 
 	if (streams->isTCP) {
 		retVal = uv_tcp_init(server->loop, (uv_tcp_t *) client);
-		UV_RET_CHECK(retVal, __func__, "uv_tcp_init", free(client));
+		UV_RET_CHECK(retVal, __func__, "uv_tcp_init", free(client); return);
 	}
 	else {
 		retVal = uv_pipe_init(server->loop, (uv_pipe_t *) client, false);
-		UV_RET_CHECK(retVal, __func__, "uv_pipe_init", free(client));
+		UV_RET_CHECK(retVal, __func__, "uv_pipe_init", free(client); return);
 	}
 
 	retVal = uv_accept(server, client);
-	UV_RET_CHECK(retVal, __func__, "uv_accept", uv_close((uv_handle_t * ) client, &libuvCloseFree));
+	UV_RET_CHECK(retVal, __func__, "uv_accept", goto killConn);
 
 	// Find place for new connection. If all exhausted, we've reached maximum
 	// number of clients and just kill the connection.
@@ -1113,7 +1113,7 @@ void caerOutputCommonOnServerConnection(uv_stream_t *server, int status) {
 	}
 
 	// Kill connection if maximum number reached.
-	uv_close((uv_handle_t *) client, &libuvCloseFree);
+	killConn: uv_close((uv_handle_t *) client, &libuvCloseFree);
 }
 
 void caerOutputCommonOnClientConnection(uv_connect_t *connectionRequest, int status) {
