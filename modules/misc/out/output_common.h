@@ -4,6 +4,9 @@
 #include "base/module.h"
 #include "modules/misc/inout_common.h"
 
+#define MAX_OUTPUT_RINGBUFFER_GET 10
+#define MAX_OUTPUT_UDP_SIZE (1472 - AEDAT3_NETWORK_HEADER_LENGTH)
+
 extern size_t CAER_OUTPUT_COMMON_STATE_STRUCT_SIZE;
 
 struct output_common_netio {
@@ -18,6 +21,7 @@ struct output_common_netio {
 	uv_async_t shutdown;
 	uv_idle_t ringBufferGet;
 	uv_stream_t *server;
+	size_t activeClients;
 	size_t clientsSize;
 	uv_stream_t *clients[];
 };

@@ -53,6 +53,7 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	streams->isTCP = true;
 	streams->isUDP = false;
 	streams->isPipe = false;
+	streams->activeClients = 0;
 	streams->clientsSize = numClients;
 	for (size_t i = 0; i < streams->clientsSize; i++) {
 		streams->clients[i] = NULL;

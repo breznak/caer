@@ -51,6 +51,7 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 	streams->isTCP = true;
 	streams->isUDP = false;
 	streams->isPipe = false;
+	streams->activeClients = 0;
 	streams->clientsSize = numClients;
 	streams->clients[0] = NULL;
 	streams->server = NULL;

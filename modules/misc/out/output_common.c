@@ -971,7 +971,7 @@ static void libuvRingBufferGet(uv_idle_t *handle) {
 	// but never more than 10 at a time.
 	size_t count = 0;
 	libuvWriteBuf packetBuffer;
-	while (count < 10 && (packetBuffer = ringBufferGet(state->outputRing)) != NULL) {
+	while (count < MAX_OUTPUT_RINGBUFFER_GET && (packetBuffer = ringBufferGet(state->outputRing)) != NULL) {
 		writePacket(state, packetBuffer);
 		count++;
 	}
@@ -1107,6 +1107,7 @@ void caerOutputCommonOnServerConnection(uv_stream_t *server, int status) {
 
 			// Ready now for more data, so set client field for writePacket().
 			streams->clients[i] = client;
+			streams->activeClients++;
 
 			return;
 		}

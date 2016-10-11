@@ -51,6 +51,7 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	streams->isTCP = false;
 	streams->isUDP = true;
 	streams->isPipe = false;
+	streams->activeClients = 0;
 	streams->clientsSize = numClients;
 	streams->clients[0] = NULL;
 	streams->server = NULL;
@@ -70,6 +71,7 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	// Assign here instead of caerOutputCommonOnClientConnection(), since that doesn't
 	// exist for UDP connections in libuv.
 	streams->clients[0] = (uv_stream_t *) udp;
+	streams->activeClients = 1;
 
 	// Start.
 	if (!caerOutputCommonInit(moduleData, -1, streams)) {

@@ -42,6 +42,7 @@ static bool caerOutputUnixSocketServerInit(caerModuleData moduleData) {
 	streams->isTCP = false;
 	streams->isUDP = false;
 	streams->isPipe = true;
+	streams->activeClients = 0;
 	streams->clientsSize = numClients;
 	for (size_t i = 0; i < streams->clientsSize; i++) {
 		streams->clients[i] = NULL;
