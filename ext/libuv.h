@@ -127,6 +127,7 @@ typedef struct libuvWriteBufStruct *libuvWriteBuf;
 struct libuvWriteMultiBufStruct {
 	void *data; // Allow arbitrary data to be attached to buffers for callback. Must be on heap for free().
 	size_t refCount; // Reference count this to allow efficient multiple destination writes.
+	void (*statusCheck)(uv_handle_t *handle, int status);
 	size_t buffersSize;
 	struct libuvWriteBufStruct buffers[];
 };
@@ -210,9 +211,13 @@ static inline void libuvWriteBufInitWithAnyBuffer(libuvWriteBuf writeBuf, void *
 }
 
 static inline void libuvWriteFree(uv_write_t *writeRequest, int status) {
-	(void) (status); // UNUSED.
+	libuvWriteMultiBuf buffers = writeRequest->data;
 
-	libuvWriteBufFree(writeRequest->data);
+	if (buffers != NULL && buffers->statusCheck != NULL) {
+		(*buffers->statusCheck)((uv_handle_t *) writeRequest->handle, status);
+	}
+
+	libuvWriteBufFree(buffers);
 
 	free(writeRequest);
 }
@@ -242,9 +247,13 @@ static inline int libuvWrite(uv_stream_t *dest, libuvWriteMultiBuf buffers) {
 }
 
 static inline void libuvWriteFreeUDP(uv_udp_send_t *sendRequest, int status) {
-	(void) (status); // UNUSED.
+	libuvWriteMultiBuf buffers = sendRequest->data;
 
-	libuvWriteBufFree(sendRequest->data);
+	if (buffers != NULL && buffers->statusCheck != NULL) {
+		(*buffers->statusCheck)((uv_handle_t *) sendRequest->handle, status);
+	}
+
+	libuvWriteBufFree(buffers);
 
 	free(sendRequest);
 }
