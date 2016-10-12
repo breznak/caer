@@ -845,6 +845,7 @@ static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader pa
 static int outputThread(void *stateArg);
 static void libuvRingBufferGet(uv_idle_t *handle);
 static void libuvAsyncShutdown(uv_async_t *handle);
+static void libuvWriteStatusCheck(uv_handle_t *handle, int status);
 static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer);
 static void initializeNetworkHeader(outputCommonState state);
 static bool writeNetworkHeader(outputCommonNetIO streams, libuvWriteBuf buf, bool startOfUDPPacket);
@@ -1006,6 +1007,10 @@ static void libuvAsyncShutdown(uv_async_t *handle) {
 	uv_stop(&state->networkIO->loop);
 }
 
+static void libuvWriteStatusCheck(uv_handle_t *handle, int status) {
+
+}
+
 static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
 	// If no active clients exist, don't write anything.
 	if (state->networkIO->activeClients == 0) {
@@ -1038,6 +1043,8 @@ static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
 
 				goto freePacketBufferUDP;
 			}
+
+			buffers->statusCheck = &libuvWriteStatusCheck;
 
 			// Write header into first buffer.
 			if (!writeNetworkHeader(state->networkIO, &buffers->buffers[0], firstChunk)) {
@@ -1091,6 +1098,8 @@ static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
 			free(packetBuffer);
 			return;
 		}
+
+		buffers->statusCheck = &libuvWriteStatusCheck;
 
 		buffers->refCount = state->networkIO->activeClients;
 
@@ -1266,6 +1275,8 @@ void caerOutputCommonOnServerConnection(uv_stream_t *server, int status) {
 				goto killConnection;
 			}
 
+			buffers->statusCheck = &libuvWriteStatusCheck;
+
 			if (!writeNetworkHeader(streams, &buffers->buffers[0], false)) {
 				caerLog(CAER_LOG_ERROR, __func__, "Failed to write network header.");
 
@@ -1302,6 +1313,8 @@ void caerOutputCommonOnClientConnection(uv_connect_t *connectionRequest, int sta
 
 		goto cleanupRequest;
 	}
+
+	buffers->statusCheck = &libuvWriteStatusCheck;
 
 	if (!writeNetworkHeader(streams, &buffers->buffers[0], false)) {
 		caerLog(CAER_LOG_ERROR, __func__, "Failed to write network header.");
