@@ -26,7 +26,7 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	// First, always create all needed setting nodes, set their default values
 	// and add their listeners.
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "ipAddress", "127.0.0.1");
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "portNumber", 8888);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "portNumber", 7777);
 
 	int retVal;
 
@@ -35,7 +35,7 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 
 	char *ipAddress = sshsNodeGetString(moduleData->moduleNode, "ipAddress");
 	retVal = uv_ip4_addr(ipAddress, sshsNodeGetInt(moduleData->moduleNode, "portNumber"), &serverAddress);
-	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_ip4_addr", free(ipAddress));
+	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_ip4_addr", free(ipAddress); return (false));
 	free(ipAddress);
 
 	// Allocate memory.
@@ -43,6 +43,23 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	outputCommonNetIO streams = malloc(sizeof(*streams) + (numClients * sizeof(uv_stream_t *)));
 	if (streams == NULL) {
 		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for streams structure.");
+		return (false);
+	}
+
+	streams->address = malloc(sizeof(struct sockaddr_in));
+	if (streams->address == NULL) {
+		free(streams);
+
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for network address.");
+		return (false);
+	}
+
+	uv_udp_t *udp = malloc(sizeof(uv_udp_t));
+	if (udp == NULL) {
+		free(streams->address);
+		free(streams);
+
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for network structure.");
 		return (false);
 	}
 
@@ -56,15 +73,8 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	streams->server = NULL;
 
 	// Remember address.
-	streams->address = malloc(sizeof(struct sockaddr_in));
 	memcpy(streams->address, &serverAddress, sizeof(struct sockaddr_in));
 
-	// Initialize loop and network handles.
-	uv_loop_init(&streams->loop);
-
-	uv_udp_t *udp = malloc(sizeof(uv_udp_t));
-
-	uv_udp_init(&streams->loop, udp);
 	udp->data = streams;
 
 	// Assign here instead of caerOutputCommonOnClientConnection(), since that doesn't
@@ -72,8 +82,20 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	streams->clients[0] = (uv_stream_t *) udp;
 	streams->activeClients = 1;
 
+	// Initialize loop and network handles.
+	retVal = uv_loop_init(&streams->loop);
+	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_loop_init",
+		free(udp); free(streams->address); free(streams));
+
+	retVal = uv_udp_init(&streams->loop, udp);
+	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_udp_init",
+		uv_loop_close(&streams->loop); free(udp); free(streams->address); free(streams));
+
 	// Start.
 	if (!caerOutputCommonInit(moduleData, -1, streams)) {
+		libuvCloseLoopHandles(&streams->loop);
+		uv_loop_close(&streams->loop);
+		free(streams->address);
 		free(streams);
 
 		return (false);

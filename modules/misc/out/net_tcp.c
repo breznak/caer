@@ -35,7 +35,7 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 
 	char *ipAddress = sshsNodeGetString(moduleData->moduleNode, "ipAddress");
 	retVal = uv_ip4_addr(ipAddress, sshsNodeGetInt(moduleData->moduleNode, "portNumber"), &serverAddress);
-	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_ip4_addr", free(ipAddress));
+	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_ip4_addr", free(ipAddress); return (false));
 	free(ipAddress);
 
 	// Allocate memory.
@@ -43,6 +43,33 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 	outputCommonNetIO streams = malloc(sizeof(*streams) + (numClients * sizeof(uv_stream_t *)));
 	if (streams == NULL) {
 		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for streams structure.");
+		return (false);
+	}
+
+	streams->address = malloc(sizeof(struct sockaddr_in));
+	if (streams->address == NULL) {
+		free(streams);
+
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for network address.");
+		return (false);
+	}
+
+	uv_tcp_t *tcp = malloc(sizeof(uv_tcp_t));
+	if (tcp == NULL) {
+		free(streams->address);
+		free(streams);
+
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for network structure.");
+		return (false);
+	}
+
+	uv_connect_t *connectRequest = malloc(sizeof(uv_connect_t));
+	if (connectRequest == NULL) {
+		free(tcp);
+		free(streams->address);
+		free(streams);
+
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for network connection.");
 		return (false);
 	}
 
@@ -56,22 +83,28 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 	streams->server = NULL;
 
 	// Remember address.
-	streams->address = malloc(sizeof(struct sockaddr_in));
 	memcpy(streams->address, &serverAddress, sizeof(struct sockaddr_in));
 
-	// Initialize loop and network handles.
-	uv_loop_init(&streams->loop);
-
-	uv_tcp_t *tcp = malloc(sizeof(uv_tcp_t));
-
-	uv_tcp_init(&streams->loop, tcp);
 	tcp->data = streams;
 
-	uv_connect_t *connectRequest = malloc(sizeof(uv_connect_t));
-	uv_tcp_connect(connectRequest, tcp, streams->address, &caerOutputCommonOnClientConnection);
+	// Initialize loop and network handles.
+	retVal = uv_loop_init(&streams->loop);
+	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_loop_init",
+		free(connectRequest); free(tcp); free(streams->address); free(streams));
+
+	retVal = uv_tcp_init(&streams->loop, tcp);
+	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_tcp_init",
+		uv_loop_close(&streams->loop); free(connectRequest); free(tcp); free(streams->address); free(streams));
+
+	retVal = uv_tcp_connect(connectRequest, tcp, streams->address, &caerOutputCommonOnClientConnection);
+	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_tcp_connect",
+		libuvCloseLoopHandles(&streams->loop); uv_loop_close(&streams->loop); free(connectRequest); free(streams->address); free(streams));
 
 	// Start.
 	if (!caerOutputCommonInit(moduleData, -1, streams)) {
+		libuvCloseLoopHandles(&streams->loop);
+		uv_loop_close(&streams->loop);
+		free(streams->address);
 		free(streams);
 
 		return (false);

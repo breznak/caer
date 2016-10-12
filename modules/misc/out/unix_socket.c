@@ -35,6 +35,23 @@ static bool caerOutputUnixSocketInit(caerModuleData moduleData) {
 		return (false);
 	}
 
+	uv_pipe_t *pipe = malloc(sizeof(uv_pipe_t));
+	if (pipe == NULL) {
+		free(streams);
+
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for network structure.");
+		return (false);
+	}
+
+	uv_connect_t *connectRequest = malloc(sizeof(uv_connect_t));
+	if (connectRequest == NULL) {
+		free(pipe);
+		free(streams);
+
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for network connection.");
+		return (false);
+	}
+
 	// Initialize common info.
 	streams->isTCP = false;
 	streams->isUDP = false;
@@ -47,19 +64,25 @@ static bool caerOutputUnixSocketInit(caerModuleData moduleData) {
 	// Remember address.
 	streams->address = sshsNodeGetString(moduleData->moduleNode, "socketPath");
 
-	// Initialize loop and network handles.
-	uv_loop_init(&streams->loop);
-
-	uv_pipe_t *pipe = malloc(sizeof(uv_pipe_t));
-
-	uv_pipe_init(&streams->loop, pipe, false);
 	pipe->data = streams;
 
-	uv_connect_t *connectRequest = malloc(sizeof(uv_connect_t));
+	// Initialize loop and network handles.
+	int retVal = uv_loop_init(&streams->loop);
+	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_loop_init",
+		free(connectRequest); free(pipe); free(streams->address); free(streams));
+
+	retVal = uv_pipe_init(&streams->loop, pipe, false);
+	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_pipe_init",
+		uv_loop_close(&streams->loop); free(connectRequest); free(pipe); free(streams->address); free(streams));
+
 	uv_pipe_connect(connectRequest, pipe, streams->address, &caerOutputCommonOnClientConnection);
+	// No return value to check here.
 
 	// Start.
 	if (!caerOutputCommonInit(moduleData, -1, streams)) {
+		libuvCloseLoopHandles(&streams->loop);
+		uv_loop_close(&streams->loop);
+		free(streams->address);
 		free(streams);
 
 		return (false);
