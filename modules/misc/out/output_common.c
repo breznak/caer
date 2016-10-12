@@ -1008,7 +1008,26 @@ static void libuvAsyncShutdown(uv_async_t *handle) {
 }
 
 static void libuvWriteStatusCheck(uv_handle_t *handle, int status) {
+	if (status < 0) {
+		// Write failed!
+		caerLog(CAER_LOG_ERROR, __func__, "Write failed with error %d (%s). Closing connection.", status,
+			uv_err_name(status));
 
+		// Remove connection from list of active clients.
+		outputCommonNetIO streams = handle->data;
+
+		streams->activeClients--;
+
+		for (size_t i = 0; i < streams->clientsSize; i++) {
+			if ((uv_handle_t *) streams->clients[i] == handle) {
+				streams->clients[i] = NULL;
+				break;
+			}
+		}
+
+		// Close connection and free its memory.
+		uv_close(handle, &libuvCloseFree);
+	}
 }
 
 static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
@@ -1271,6 +1290,9 @@ void caerOutputCommonOnServerConnection(uv_stream_t *server, int status) {
 		retVal = uv_pipe_init(server->loop, (uv_pipe_t *) client, false);
 		UV_RET_CHECK(retVal, __func__, "uv_pipe_init", free(client); return);
 	}
+
+	// All clients need to remember the main streams structure.
+	client->data = streams;
 
 	retVal = uv_accept(server, client);
 	UV_RET_CHECK(retVal, __func__, "uv_accept", goto killConnection);
