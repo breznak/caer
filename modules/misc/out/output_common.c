@@ -936,15 +936,10 @@ static int outputThread(void *stateArg) {
 	}
 	else {
 		// libuv network IO (state->networkIO != NULL).
-		// First add support for asynchronous shutdown (from caerOutputCommonExit()).
-		int retVal = uv_async_init(&state->networkIO->loop, &state->networkIO->shutdown, &libuvAsyncShutdown);
-		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_async_init", goto loopCleanup);
-		state->networkIO->shutdown.data = state;
-
 		// Use idle handles to check for new data on every loop run.
-		retVal = uv_idle_init(&state->networkIO->loop, &state->networkIO->ringBufferGet);
-		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_idle_init", goto loopCleanup);
 		state->networkIO->ringBufferGet.data = state;
+		int retVal = uv_idle_init(&state->networkIO->loop, &state->networkIO->ringBufferGet);
+		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_idle_init", return (thrd_error));
 
 		retVal = uv_idle_start(&state->networkIO->ringBufferGet, &libuvRingBufferGet);
 		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_idle_start", goto loopCleanup);
@@ -968,18 +963,11 @@ static int outputThread(void *stateArg) {
 		retVal = uv_run(&state->networkIO->loop, UV_RUN_DEFAULT);
 		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_run(shutdown)", goto loopCleanup);
 
-		// Cleanup event loop and memory.
 		loopCleanup: {
-			bool errorCleanup = (retVal < 0);
+			// Cleanup idle handle. Others are cleaned up in caerOutputCommonExit().
+			uv_close((uv_handle_t *) &state->networkIO->ringBufferGet, NULL);
 
-			// Cleanup all remaining handles and run until all callbacks are done.
-			retVal = libuvCloseLoopHandles(&state->networkIO->loop);
-			UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "libuvCloseLoopHandles",);
-
-			retVal = uv_loop_close(&state->networkIO->loop);
-			UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_loop_close",);
-
-			if (errorCleanup) {
+			if (retVal < 0) {
 				return (thrd_error);
 			}
 		}
@@ -1421,10 +1409,21 @@ bool caerOutputCommonInit(caerModuleData moduleData, int fileDescriptor, outputC
 		return (false);
 	}
 
+	// If network, add support for asynchronous shutdown (from caerOutputCommonExit()).
+	if (state->isNetworkStream) {
+		state->networkIO->shutdown.data = state;
+		int retVal = uv_async_init(&state->networkIO->loop, &state->networkIO->shutdown, &libuvAsyncShutdown);
+		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_async_init",
+			ringBufferFree(state->compressorRing); ringBufferFree(state->outputRing));
+	}
+
 	// Start output handling thread.
 	atomic_store(&state->running, true);
 
 	if (thrd_create(&state->compressorThread, &compressorThread, state) != thrd_success) {
+		if (state->isNetworkStream) {
+			uv_close((uv_handle_t *) &state->networkIO->shutdown, NULL);
+		}
 		ringBufferFree(state->compressorRing);
 		ringBufferFree(state->outputRing);
 
@@ -1442,6 +1441,9 @@ bool caerOutputCommonInit(caerModuleData moduleData, int fileDescriptor, outputC
 				"Failed to join compressor thread. Error: %d.", errno);
 		}
 
+		if (state->isNetworkStream) {
+			uv_close((uv_handle_t *) &state->networkIO->shutdown, NULL);
+		}
 		ringBufferFree(state->compressorRing);
 		ringBufferFree(state->outputRing);
 
@@ -1507,10 +1509,20 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 			sshsNodePutString(state->parentModule->moduleNode, "connectedClients", "");
 		}
 
+		uv_close((uv_handle_t *) &state->networkIO->shutdown, NULL);
+
+		// Cleanup all remaining handles and run until all callbacks are done.
+		int retVal = libuvCloseLoopHandles(&state->networkIO->loop);
+		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "libuvCloseLoopHandles",);
+
+		retVal = uv_loop_close(&state->networkIO->loop);
+		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_loop_close",);
+
 		// Free allocated memory.
 		for (size_t i = 0; i < state->networkIO->clientsSize; i++) {
 			free(state->networkIO->clients[i]);
 		}
+
 		free(state->networkIO->server);
 		free(state->networkIO->address);
 		free(state->networkIO);
