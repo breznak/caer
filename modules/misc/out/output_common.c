@@ -1028,6 +1028,12 @@ static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
 	// the packets up into manageable sizes (<=64K), together with keeping track
 	// of the sequence number.
 	if (state->networkIO->isUDP) {
+		// UDP output.
+		// If too much data waiting to be sent, just skip current packet.
+		if (((uv_udp_t *) state->networkIO->clients[0])->send_queue_size > MAX_OUTPUT_QUEUED_SIZE) {
+			goto freePacketBufferUDP;
+		}
+
 		size_t packetSize = packetBuffer->buf.len;
 		size_t packetIndex = 0;
 		bool firstChunk = true;
@@ -1112,6 +1118,12 @@ static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
 
 			if (client == NULL) {
 				continue;
+			}
+
+			// If too much data waiting to be sent, just skip current packet.
+			if (client->write_queue_size > MAX_OUTPUT_QUEUED_SIZE) {
+				libuvWriteBufFree(buffers);
+				return;
 			}
 
 			int retVal = libuvWrite(client, buffers);
