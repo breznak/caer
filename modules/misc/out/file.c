@@ -3,6 +3,7 @@
 #include "base/module.h"
 #include "output_common.h"
 #include "ext/portable_misc.h"
+#include <fcntl.h>
 #include <time.h>
 
 static bool caerOutputFileInit(caerModuleData moduleData);
