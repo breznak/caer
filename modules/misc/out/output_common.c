@@ -847,7 +847,7 @@ static void libuvRingBufferGet(uv_idle_t *handle);
 static void libuvAsyncShutdown(uv_async_t *handle);
 static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer);
 static void initializeNetworkHeader(outputCommonState state);
-static void writeNetworkHeader(outputCommonNetIO streams, libuvWriteBuf buf, bool startOfUDPPacket);
+static bool writeNetworkHeader(outputCommonNetIO streams, libuvWriteBuf buf, bool startOfUDPPacket);
 static void writeFileHeader(outputCommonState state);
 void caerOutputCommonOnServerConnection(uv_stream_t *server, int status);
 void caerOutputCommonOnClientConnection(uv_connect_t *connectionRequest, int status);
@@ -919,6 +919,7 @@ static int outputThread(void *stateArg) {
 
 			// Write buffer to file descriptor.
 			writeUntilDone(state->fileIO, (uint8_t *) packetBuffer->buf.base, packetBuffer->buf.len);
+
 			free(packetBuffer->freeBuf);
 			free(packetBuffer);
 		}
@@ -927,6 +928,7 @@ static int outputThread(void *stateArg) {
 		libuvWriteBuf packetBuffer;
 		while ((packetBuffer = ringBufferGet(state->outputRing)) != NULL) {
 			writeUntilDone(state->fileIO, (uint8_t *) packetBuffer->buf.base, packetBuffer->buf.len);
+
 			free(packetBuffer->freeBuf);
 			free(packetBuffer);
 		}
@@ -934,30 +936,52 @@ static int outputThread(void *stateArg) {
 	else {
 		// libuv network IO (state->networkIO != NULL).
 		// First add support for asynchronous shutdown (from caerOutputCommonExit()).
-		uv_async_init(&state->networkIO->loop, &state->networkIO->shutdown, &libuvAsyncShutdown);
+		int retVal = uv_async_init(&state->networkIO->loop, &state->networkIO->shutdown, &libuvAsyncShutdown);
+		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_async_init", goto loopCleanup);
 		state->networkIO->shutdown.data = state;
 
 		// Use idle handles to check for new data on every loop run.
-		uv_idle_init(&state->networkIO->loop, &state->networkIO->ringBufferGet);
+		retVal = uv_idle_init(&state->networkIO->loop, &state->networkIO->ringBufferGet);
+		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_idle_init", goto loopCleanup);
 		state->networkIO->ringBufferGet.data = state;
 
-		uv_idle_start(&state->networkIO->ringBufferGet, &libuvRingBufferGet);
+		retVal = uv_idle_start(&state->networkIO->ringBufferGet, &libuvRingBufferGet);
+		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_idle_start", goto loopCleanup);
 
 		// Start libuv event loop.
-		uv_run(&state->networkIO->loop, UV_RUN_DEFAULT);
+		retVal = uv_run(&state->networkIO->loop, UV_RUN_DEFAULT);
+		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_run(main)", goto loopCleanup);
 
 		// Shutdown, write remaining buffers to network.
 		// First we stop the idle handles checking for new data, then we manually
 		// schedule writes for the remaining data, and then run the loop again,
 		// which will terminate as soon as all writes are completed.
-		uv_idle_stop(&state->networkIO->ringBufferGet);
+		retVal = uv_idle_stop(&state->networkIO->ringBufferGet);
+		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_idle_stop", goto loopCleanup);
 
 		libuvWriteBuf packetBuffer;
 		while ((packetBuffer = ringBufferGet(state->outputRing)) != NULL) {
 			writePacket(state, packetBuffer);
 		}
 
-		uv_run(&state->networkIO->loop, UV_RUN_DEFAULT);
+		retVal = uv_run(&state->networkIO->loop, UV_RUN_DEFAULT);
+		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_run(shutdown)", goto loopCleanup);
+
+		// Cleanup event loop and memory.
+		loopCleanup: {
+			bool errorCleanup = (retVal < 0);
+
+			// Cleanup all remaining handles and run until all callbacks are done.
+			retVal = libuvCloseLoopHandles(&state->networkIO->loop);
+			UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "libuvCloseLoopHandles",);
+
+			retVal = uv_loop_close(&state->networkIO->loop);
+			UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_loop_close",);
+
+			if (errorCleanup) {
+				return (thrd_error);
+			}
+		}
 	}
 
 	return (thrd_success);
@@ -987,6 +1011,7 @@ static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
 	if (state->networkIO->activeClients == 0) {
 		free(packetBuffer->freeBuf);
 		free(packetBuffer);
+
 		return;
 	}
 
@@ -1009,13 +1034,19 @@ static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
 			libuvWriteMultiBuf buffers = libuvWriteBufAlloc(2); // One for network header, one for data.
 			if (buffers == NULL) {
 				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
-					"Failed to allocate memory for buffers.");
+					"Failed to allocate memory for network buffers.");
 
-				goto freePacketBuffer;
+				goto freePacketBufferUDP;
 			}
 
 			// Write header into first buffer.
-			writeNetworkHeader(state->networkIO, &buffers->buffers[0], firstChunk);
+			if (!writeNetworkHeader(state->networkIO, &buffers->buffers[0], firstChunk)) {
+				caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Failed to write network header.");
+
+				libuvWriteBufFree(buffers);
+				goto freePacketBufferUDP;
+			}
+
 			firstChunk = false;
 
 			// Write data into second buffer.
@@ -1027,7 +1058,7 @@ static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
 					"Failed to allocate memory for data buffer.");
 
 				libuvWriteBufFree(buffers);
-				goto freePacketBuffer;
+				goto freePacketBufferUDP;
 			}
 
 			memcpy(buffers->buffers[1].buf.base, packetBuffer->buf.base + packetIndex, sendSize);
@@ -1035,7 +1066,7 @@ static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
 			// For UDP we only support client mode to ONE outside address.
 			int retVal = libuvWriteUDP((uv_udp_t *) state->networkIO->clients[0], state->networkIO->address, buffers);
 			UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "libuvWriteUDP",
-				libuvWriteBufFree(buffers); goto freePacketBuffer);
+				libuvWriteBufFree(buffers); goto freePacketBufferUDP);
 
 			// Update loop indexes.
 			packetSize -= sendSize;
@@ -1043,7 +1074,7 @@ static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
 		}
 
 		// Free all packet memory.
-		freePacketBuffer: {
+		freePacketBufferUDP: {
 			free(packetBuffer->freeBuf);
 			free(packetBuffer);
 		}
@@ -1054,7 +1085,7 @@ static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
 		libuvWriteMultiBuf buffers = libuvWriteBufAlloc(1);
 		if (buffers == NULL) {
 			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
-				"Failed to allocate memory for buffers.");
+				"Failed to allocate memory for network buffers.");
 
 			free(packetBuffer->freeBuf);
 			free(packetBuffer);
@@ -1089,11 +1120,14 @@ static void initializeNetworkHeader(outputCommonState state) {
 	state->networkIO->networkHeader.sourceID = htole16(I16T(atomic_load(&state->sourceID))); // Always one source per output module.
 }
 
-static void writeNetworkHeader(outputCommonNetIO streams, libuvWriteBuf buf, bool startOfUDPPacket) {
+static bool writeNetworkHeader(outputCommonNetIO streams, libuvWriteBuf buf, bool startOfUDPPacket) {
 	// Create memory chunk for network header to be sent via libuv.
 	// libuv takes care of freeing memory. This is also needed for UDP
 	// to have different sequence numbers in flight.
 	libuvWriteBufInit(buf, AEDAT3_NETWORK_HEADER_LENGTH);
+	if (buf->buf.base == NULL) {
+		return (false);
+	}
 
 	if (streams->isUDP && startOfUDPPacket) {
 		// Set highest bit of sequence number to one.
@@ -1115,6 +1149,8 @@ static void writeNetworkHeader(outputCommonNetIO streams, libuvWriteBuf buf, boo
 		// message-based network protocol (UDP for example).
 		streams->networkHeader.sequenceNumber = htole64(I64T(le64toh(streams->networkHeader.sequenceNumber) + 1));
 	}
+
+	return (true);
 }
 
 static void writeFileHeader(outputCommonState state) {
@@ -1150,8 +1186,26 @@ static void writeFileHeader(outputCommonState state) {
 	writeUntilDone(state->fileIO, (const uint8_t *) sourceString, strlen(sourceString));
 	free(sourceString);
 
+	// First prepend the time.
 	time_t currentTimeEpoch = time(NULL);
+
+#if defined(OS_WINDOWS)
+	// localtime() is thread-safe on Windows (and there is no localtime_r() at all).
+	struct tm *currentTime = localtime(&currentTimeEpoch);
+
+	// Windows doesn't support %z (numerical timezone), so no TZ info here.
+	// Following time format uses exactly 34 characters (20 separators/characters,
+	// 4 year, 2 month, 2 day, 2 hours, 2 minutes, 2 seconds).
+	size_t currentTimeStringLength = 34;
+	char currentTimeString[currentTimeStringLength + 1];// + 1 for terminating NUL byte.
+	strftime(currentTimeString, currentTimeStringLength + 1, "#Start-Time: %Y-%m-%d %H:%M:%S\r\n", currentTime);
+#else
+	// From localtime_r() man-page: "According to POSIX.1-2004, localtime()
+	// is required to behave as though tzset(3) was called, while
+	// localtime_r() does not have this requirement."
+	// So we make sure to call it here, to be portable.
 	tzset();
+
 	struct tm currentTime;
 	localtime_r(&currentTimeEpoch, &currentTime);
 
@@ -1160,6 +1214,7 @@ static void writeFileHeader(outputCommonState state) {
 	size_t currentTimeStringLength = 44;
 	char currentTimeString[currentTimeStringLength + 1]; // + 1 for terminating NUL byte.
 	strftime(currentTimeString, currentTimeStringLength + 1, "#Start-Time: %Y-%m-%d %H:%M:%S (TZ%z)\r\n", &currentTime);
+#endif
 
 	writeUntilDone(state->fileIO, (const uint8_t *) currentTimeString, currentTimeStringLength);
 
@@ -1197,7 +1252,7 @@ void caerOutputCommonOnServerConnection(uv_stream_t *server, int status) {
 	}
 
 	retVal = uv_accept(server, client);
-	UV_RET_CHECK(retVal, __func__, "uv_accept", goto killConn);
+	UV_RET_CHECK(retVal, __func__, "uv_accept", goto killConnection);
 
 	// Find place for new connection. If all exhausted, we've reached maximum
 	// number of clients and just kill the connection.
@@ -1205,10 +1260,21 @@ void caerOutputCommonOnServerConnection(uv_stream_t *server, int status) {
 		if (streams->clients[i] == NULL) {
 			// TCP/PIPE: send out initial header. Only those two can call this function!
 			libuvWriteMultiBuf buffers = libuvWriteBufAlloc(1);
+			if (buffers == NULL) {
+				caerLog(CAER_LOG_ERROR, __func__, "Failed to allocate memory for network header buffers.");
 
-			writeNetworkHeader(streams, &buffers->buffers[0], false);
+				goto killConnection;
+			}
 
-			libuvWrite(client, buffers);
+			if (!writeNetworkHeader(streams, &buffers->buffers[0], false)) {
+				caerLog(CAER_LOG_ERROR, __func__, "Failed to write network header.");
+
+				libuvWriteBufFree(buffers);
+				goto killConnection;
+			}
+
+			retVal = libuvWrite(client, buffers);
+			UV_RET_CHECK(retVal, __func__, "libuvWrite", libuvWriteBufFree(buffers); goto killConnection);
 
 			// Ready now for more data, so set client field for writePacket().
 			streams->clients[i] = client;
@@ -1219,26 +1285,41 @@ void caerOutputCommonOnServerConnection(uv_stream_t *server, int status) {
 	}
 
 	// Kill connection if maximum number reached.
-	killConn: uv_close((uv_handle_t *) client, &libuvCloseFree);
+	killConnection: {
+		uv_close((uv_handle_t *) client, &libuvCloseFree);
+	}
 }
 
 void caerOutputCommonOnClientConnection(uv_connect_t *connectionRequest, int status) {
 	outputCommonNetIO streams = connectionRequest->handle->data;
 
-	UV_RET_CHECK(status, __func__, "Connection", free(connectionRequest); return);
+	UV_RET_CHECK(status, __func__, "Connection", goto cleanupRequest);
 
 	// TCP/PIPE: send out initial header. Only those two can call this function!
 	libuvWriteMultiBuf buffers = libuvWriteBufAlloc(1);
+	if (buffers == NULL) {
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to allocate memory for network header buffers.");
 
-	writeNetworkHeader(streams, &buffers->buffers[0], false);
+		goto cleanupRequest;
+	}
 
-	libuvWrite(connectionRequest->handle, buffers);
+	if (!writeNetworkHeader(streams, &buffers->buffers[0], false)) {
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to write network header.");
+
+		libuvWriteBufFree(buffers);
+		goto cleanupRequest;
+	}
+
+	int retVal = libuvWrite(connectionRequest->handle, buffers);
+	UV_RET_CHECK(retVal, __func__, "libuvWrite", libuvWriteBufFree(buffers); goto cleanupRequest);
 
 	// Ready now for more data, so set client field for writePacket().
 	streams->clients[0] = connectionRequest->handle;
 	streams->activeClients++;
 
-	free(connectionRequest);
+	cleanupRequest: {
+		free(connectionRequest);
+	}
 }
 
 bool caerOutputCommonInit(caerModuleData moduleData, int fileDescriptor, outputCommonNetIO streams) {
@@ -1372,10 +1453,6 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 
 	// Cleanup IO resources.
 	if (state->isNetworkStream) {
-		// Cleanup all remaining handles and run until all callbacks are done.
-		libuvCloseLoopHandles(&state->networkIO->loop);
-		uv_loop_close(&state->networkIO->loop);
-
 		if (state->networkIO->server != NULL) {
 			// Server shut down, no more clients.
 			sshsNodePutString(state->parentModule->moduleNode, "connectedClients", "");
