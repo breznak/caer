@@ -1463,7 +1463,9 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 
 	// Stop output thread and wait on it.
 	atomic_store(&state->running, false);
-	uv_async_send(&state->networkIO->shutdown);
+	if (state->isNetworkStream) {
+		uv_async_send(&state->networkIO->shutdown);
+	}
 
 	if ((errno = thrd_join(state->compressorThread, NULL)) != thrd_success) {
 		// This should never happen!
