@@ -936,41 +936,9 @@ static int outputThread(void *stateArg) {
 	}
 	else {
 		// libuv network IO (state->networkIO != NULL).
-		// Use idle handles to check for new data on every loop run.
-		state->networkIO->ringBufferGet.data = state;
-		int retVal = uv_idle_init(&state->networkIO->loop, &state->networkIO->ringBufferGet);
-		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_idle_init", return (thrd_error));
-
-		retVal = uv_idle_start(&state->networkIO->ringBufferGet, &libuvRingBufferGet);
-		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_idle_start", goto loopCleanup);
-
 		// Start libuv event loop.
-		retVal = uv_run(&state->networkIO->loop, UV_RUN_DEFAULT);
-		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_run(main)", goto loopCleanup);
-
-		// Shutdown, write remaining buffers to network.
-		// First we stop the idle handles checking for new data, then we manually
-		// schedule writes for the remaining data, and then run the loop again,
-		// which will terminate as soon as all writes are completed.
-		retVal = uv_idle_stop(&state->networkIO->ringBufferGet);
-		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_idle_stop", goto loopCleanup);
-
-		libuvWriteBuf packetBuffer;
-		while ((packetBuffer = ringBufferGet(state->outputRing)) != NULL) {
-			writePacket(state, packetBuffer);
-		}
-
-		retVal = uv_run(&state->networkIO->loop, UV_RUN_DEFAULT);
-		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_run(shutdown)", goto loopCleanup);
-
-		loopCleanup: {
-			// Cleanup idle handle. Others are cleaned up in caerOutputCommonExit().
-			uv_close((uv_handle_t *) &state->networkIO->ringBufferGet, NULL);
-
-			if (retVal < 0) {
-				return (thrd_error);
-			}
-		}
+		int retVal = uv_run(&state->networkIO->loop, UV_RUN_DEFAULT);
+		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_run", return (thrd_error));
 	}
 
 	return (thrd_success);
@@ -991,6 +959,19 @@ static void libuvRingBufferGet(uv_idle_t *handle) {
 
 static void libuvAsyncShutdown(uv_async_t *handle) {
 	outputCommonState state = handle->data;
+
+	// Shutdown, write remaining buffers to network.
+	// First we stop and close the idle handles checking for new data,
+	// then we manually schedule writes for the remaining data.
+	int retVal = uv_idle_stop(&state->networkIO->ringBufferGet);
+	UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_idle_stop",);
+
+	uv_close((uv_handle_t *) &state->networkIO->ringBufferGet, NULL);
+
+	libuvWriteBuf packetBuffer;
+	while ((packetBuffer = ringBufferGet(state->outputRing)) != NULL) {
+		writePacket(state, packetBuffer);
+	}
 
 	uv_stop(&state->networkIO->loop);
 }
@@ -1409,12 +1390,23 @@ bool caerOutputCommonInit(caerModuleData moduleData, int fileDescriptor, outputC
 		return (false);
 	}
 
-	// If network, add support for asynchronous shutdown (from caerOutputCommonExit()).
+	// If network output, initialize common libuv components.
 	if (state->isNetworkStream) {
+		// Add support for asynchronous shutdown (from caerOutputCommonExit()).
 		state->networkIO->shutdown.data = state;
 		int retVal = uv_async_init(&state->networkIO->loop, &state->networkIO->shutdown, &libuvAsyncShutdown);
 		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_async_init",
-			ringBufferFree(state->compressorRing); ringBufferFree(state->outputRing));
+			ringBufferFree(state->compressorRing); ringBufferFree(state->outputRing); return (false));
+
+		// Use idle handles to check for new data on every loop run.
+		state->networkIO->ringBufferGet.data = state;
+		retVal = uv_idle_init(&state->networkIO->loop, &state->networkIO->ringBufferGet);
+		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_idle_init",
+			uv_close((uv_handle_t *) &state->networkIO->shutdown, NULL); ringBufferFree(state->compressorRing); ringBufferFree(state->outputRing); return (false));
+
+		retVal = uv_idle_start(&state->networkIO->ringBufferGet, &libuvRingBufferGet);
+		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_idle_start",
+			uv_close((uv_handle_t *) &state->networkIO->ringBufferGet, NULL); uv_close((uv_handle_t *) &state->networkIO->shutdown, NULL); ringBufferFree(state->compressorRing); ringBufferFree(state->outputRing); return (false));
 	}
 
 	// Start output handling thread.
@@ -1422,6 +1414,8 @@ bool caerOutputCommonInit(caerModuleData moduleData, int fileDescriptor, outputC
 
 	if (thrd_create(&state->compressorThread, &compressorThread, state) != thrd_success) {
 		if (state->isNetworkStream) {
+			uv_idle_stop(&state->networkIO->ringBufferGet);
+			uv_close((uv_handle_t *) &state->networkIO->ringBufferGet, NULL);
 			uv_close((uv_handle_t *) &state->networkIO->shutdown, NULL);
 		}
 		ringBufferFree(state->compressorRing);
@@ -1442,6 +1436,8 @@ bool caerOutputCommonInit(caerModuleData moduleData, int fileDescriptor, outputC
 		}
 
 		if (state->isNetworkStream) {
+			uv_idle_stop(&state->networkIO->ringBufferGet);
+			uv_close((uv_handle_t *) &state->networkIO->ringBufferGet, NULL);
 			uv_close((uv_handle_t *) &state->networkIO->shutdown, NULL);
 		}
 		ringBufferFree(state->compressorRing);
