@@ -845,6 +845,7 @@ static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader pa
 static int outputThread(void *stateArg);
 static void libuvRingBufferGet(uv_idle_t *handle);
 static void libuvAsyncShutdown(uv_async_t *handle);
+static void libuvClientShutdown(uv_shutdown_t *clientShutdown, int status);
 static void libuvWriteStatusCheck(uv_handle_t *handle, int status);
 static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer);
 static void initializeNetworkHeader(outputCommonState state);
@@ -939,6 +940,12 @@ static int outputThread(void *stateArg) {
 		// Start libuv event loop.
 		int retVal = uv_run(&state->networkIO->loop, UV_RUN_DEFAULT);
 		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_run", return (thrd_error));
+
+		// Log if anything is still alive. Async shutdown should have closed everything!
+		if (retVal > 0) {
+			caerLog(CAER_LOG_WARNING, state->parentModule->moduleSubSystemString,
+				"uv_run() exited with still active handles.");
+		}
 	}
 
 	return (thrd_success);
@@ -973,7 +980,50 @@ static void libuvAsyncShutdown(uv_async_t *handle) {
 		writePacket(state, packetBuffer);
 	}
 
-	uv_stop(&state->networkIO->loop);
+	// Then we tell all network outputs to shutdown, which will then close them once done.
+	for (size_t i = 0; i < state->networkIO->clientsSize; i++) {
+		uv_stream_t *client = state->networkIO->clients[i];
+
+		if (client == NULL) {
+			continue;
+		}
+
+		if (state->networkIO->isUDP) {
+			// UDP has no shutdown, just close.
+			uv_close((uv_handle_t *) client, &libuvCloseFree);
+			continue;
+		}
+
+		uv_shutdown_t *clientShutdown = calloc(1, sizeof(*clientShutdown));
+		if (clientShutdown == NULL) {
+			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
+				"Failed to allocate memory for client shutdown.");
+
+			// Hard close.
+			uv_close((uv_handle_t *) client, &libuvCloseFree);
+			continue;
+		}
+
+		retVal = uv_shutdown(clientShutdown, client, &libuvClientShutdown);
+		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_shutdown",
+			free(clientShutdown); uv_close((uv_handle_t *) client, &libuvCloseFree));
+	}
+
+	// Shutdown server (if it exists).
+	if (state->networkIO->server != NULL) {
+		uv_close((uv_handle_t *) state->networkIO->server, &libuvCloseFree);
+	}
+
+	// Close shutdown itself.
+	uv_close((uv_handle_t *) &state->networkIO->shutdown, NULL);
+}
+
+static void libuvClientShutdown(uv_shutdown_t *clientShutdown, int status) {
+	uv_close((uv_handle_t *) clientShutdown->handle, &libuvCloseFree);
+
+	free(clientShutdown);
+
+	UV_RET_CHECK(status, __func__, "AfterShutdown",);
 }
 
 static void libuvWriteStatusCheck(uv_handle_t *handle, int status) {
@@ -985,17 +1035,17 @@ static void libuvWriteStatusCheck(uv_handle_t *handle, int status) {
 		// Remove connection from list of active clients.
 		outputCommonNetIO streams = handle->data;
 
-		streams->activeClients--;
-
 		for (size_t i = 0; i < streams->clientsSize; i++) {
 			if ((uv_handle_t *) streams->clients[i] == handle) {
 				streams->clients[i] = NULL;
+				streams->activeClients--;
+
+				// Close connection and free its memory.
+				uv_close(handle, &libuvCloseFree);
+
 				break;
 			}
 		}
-
-		// Close connection and free its memory.
-		uv_close(handle, &libuvCloseFree);
 	}
 }
 
@@ -1504,8 +1554,6 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 			// Server shut down, no more clients.
 			sshsNodePutString(state->parentModule->moduleNode, "connectedClients", "");
 		}
-
-		uv_close((uv_handle_t *) &state->networkIO->shutdown, NULL);
 
 		// Cleanup all remaining handles and run until all callbacks are done.
 		int retVal = libuvCloseLoopHandles(&state->networkIO->loop);
