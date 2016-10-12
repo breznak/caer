@@ -851,8 +851,6 @@ static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer);
 static void initializeNetworkHeader(outputCommonState state);
 static bool writeNetworkHeader(outputCommonNetIO streams, libuvWriteBuf buf, bool startOfUDPPacket);
 static void writeFileHeader(outputCommonState state);
-void caerOutputCommonOnServerConnection(uv_stream_t *server, int status);
-void caerOutputCommonOnClientConnection(uv_connect_t *connectionRequest, int status);
 
 static int outputThread(void *stateArg) {
 	outputCommonState state = stateArg;
