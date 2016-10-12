@@ -26,7 +26,7 @@ static bool caerOutputNetUDPInit(caerModuleData moduleData) {
 	// First, always create all needed setting nodes, set their default values
 	// and add their listeners.
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "ipAddress", "127.0.0.1");
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "portNumber", 7777);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "portNumber", 6666);
 
 	int retVal;
 

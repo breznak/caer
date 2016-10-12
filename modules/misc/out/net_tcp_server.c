@@ -37,7 +37,7 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 
 	char *ipAddress = sshsNodeGetString(moduleData->moduleNode, "ipAddress");
 	retVal = uv_ip4_addr(ipAddress, sshsNodeGetInt(moduleData->moduleNode, "portNumber"), &serverAddress);
-	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_ip4_addr", free(ipAddress));
+	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_ip4_addr", free(ipAddress); return (false));
 	free(ipAddress);
 
 	// Allocate memory.
@@ -45,6 +45,23 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	outputCommonNetIO streams = malloc(sizeof(*streams) + (numClients * sizeof(uv_stream_t *)));
 	if (streams == NULL) {
 		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for streams structure.");
+		return (false);
+	}
+
+	streams->address = malloc(sizeof(struct sockaddr_in));
+	if (streams->address == NULL) {
+		free(streams);
+
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for network address.");
+		return (false);
+	}
+
+	streams->server = malloc(sizeof(uv_tcp_t));
+	if (streams->server == NULL) {
+		free(streams->address);
+		free(streams);
+
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for network server.");
 		return (false);
 	}
 
@@ -59,24 +76,33 @@ static bool caerOutputNetTCPServerInit(caerModuleData moduleData) {
 	}
 
 	// Remember address.
-	streams->address = malloc(sizeof(struct sockaddr_in));
 	memcpy(streams->address, &serverAddress, sizeof(struct sockaddr_in));
 
-	// Initialize loop and network handles.
-	uv_loop_init(&streams->loop);
-
-	streams->server = malloc(sizeof(uv_tcp_t));
-
-	uv_tcp_init(&streams->loop, (uv_tcp_t *) streams->server);
 	streams->server->data = streams;
 
-	uv_tcp_bind((uv_tcp_t *) streams->server, streams->address, 0);
+	// Initialize loop and network handles.
+	retVal = uv_loop_init(&streams->loop);
+	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_loop_init",
+		free(streams->server); free(streams->address); free(streams));
 
-	uv_listen(streams->server, sshsNodeGetShort(moduleData->moduleNode, "backlogSize"),
+	retVal = uv_tcp_init(&streams->loop, (uv_tcp_t *) streams->server);
+	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_tcp_init",
+		uv_loop_close(&streams->loop); free(streams->server); free(streams->address); free(streams));
+
+	retVal = uv_tcp_bind((uv_tcp_t *) streams->server, streams->address, 0);
+	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_tcp_bind",
+		libuvCloseLoopHandles(&streams->loop); uv_loop_close(&streams->loop); free(streams->address); free(streams));
+
+	retVal = uv_listen(streams->server, sshsNodeGetShort(moduleData->moduleNode, "backlogSize"),
 		&caerOutputCommonOnServerConnection);
+	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_listen",
+		libuvCloseLoopHandles(&streams->loop); uv_loop_close(&streams->loop); free(streams->address); free(streams));
 
 	// Start.
 	if (!caerOutputCommonInit(moduleData, -1, streams)) {
+		libuvCloseLoopHandles(&streams->loop);
+		uv_loop_close(&streams->loop);
+		free(streams->address);
 		free(streams);
 
 		return (false);
