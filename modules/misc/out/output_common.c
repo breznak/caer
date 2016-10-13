@@ -99,6 +99,10 @@ struct output_common_state {
 	thrd_t compressorThread;
 	/// The output handling thread (separate as to not hold up processing).
 	thrd_t outputThread;
+	/// Detect unrecoverable failure of output thread. Used so that the compressor
+	/// thread can break out of trying to send data to the output thread, if that
+	/// one is incapable of accepting it.
+	atomic_bool outputThreadFailure;
 	/// Track source ID (cannot change!). One source per I/O module!
 	atomic_int_fast16_t sourceID;
 	/// Source information node for that particular source ID.
@@ -347,6 +351,10 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 
 	retry: if (!ringBufferPut(state->compressorRing, eventPackets)) {
 		if (atomic_load_explicit(&state->keepPackets, memory_order_relaxed)) {
+			// Delay by 10 µs if no change, to avoid a wasteful busy loop.
+			struct timespec retrySleep = { .tv_sec = 0, .tv_nsec = 10000 };
+			thrd_sleep(&retrySleep, NULL);
+
 			// Retry forever if requested.
 			goto retry;
 		}
@@ -355,7 +363,6 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 
 		caerLog(CAER_LOG_INFO, state->parentModule->moduleSubSystemString,
 			"Failed to put packet's array copy on transfer ring-buffer: full.");
-		return;
 	}
 }
 
@@ -502,7 +509,15 @@ static void sendEventPacket(outputCommonState state, caerEventPacketHeader packe
 
 	// Put packet buffer onto output ring-buffer. Retry until successful.
 	while (!ringBufferPut(state->outputRing, packetBuffer)) {
-		;
+		// If the output thread failed, we'd forever block here, if it can't accept
+		// any more data. So we detect that condition and discard remaining packets.
+		if (atomic_load_explicit(&state->outputThreadFailure, memory_order_relaxed)) {
+			break;
+		}
+
+		// Delay by 10 µs if no change, to avoid a wasteful busy loop.
+		struct timespec retrySleep = { .tv_sec = 0, .tv_nsec = 10000 };
+		thrd_sleep(&retrySleep, NULL);
 	}
 }
 
@@ -852,6 +867,23 @@ static void initializeNetworkHeader(outputCommonState state);
 static bool writeNetworkHeader(outputCommonNetIO streams, libuvWriteBuf buf, bool startOfUDPPacket);
 static void writeFileHeader(outputCommonState state);
 
+static inline _Noreturn void errorExit(outputCommonState state, libuvWriteBuf packetBuffer) {
+	// Free currently held memory.
+	if (packetBuffer != NULL) {
+		free(packetBuffer->freeBuf);
+		free(packetBuffer);
+	}
+
+	// Signal failure to compressor thread.
+	atomic_store(&state->outputThreadFailure, true);
+
+	// Ensure parent also shuts down on unrecoverable failures, taking the
+	// compressor thread with it.
+	sshsNodePutBool(state->parentModule->moduleNode, "running", false);
+
+	thrd_exit(thrd_error);
+}
+
 static int outputThread(void *stateArg) {
 	outputCommonState state = stateArg;
 
@@ -903,7 +935,20 @@ static int outputThread(void *stateArg) {
 	}
 
 	// If destination is a file, just loop and write to it. Else start a libuv event loop.
-	if (!state->isNetworkStream) {
+	if (state->isNetworkStream) {
+		// libuv network IO (state->networkIO != NULL).
+		// Start libuv event loop.
+		int retVal = uv_run(&state->networkIO->loop, UV_RUN_DEFAULT);
+		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_run", errorExit(state, NULL));
+
+		// Treat anything being still alive as an error too. Async shutdown should have closed everything!
+		if (retVal > 0) {
+			caerLog(CAER_LOG_WARNING, state->parentModule->moduleSubSystemString,
+				"uv_run() exited with still active handles.");
+			errorExit(state, NULL);
+		}
+	}
+	else {
 		// If no data is available on the transfer ring-buffer, sleep for 500µs (0.5 ms)
 		// to avoid wasting resources in a busy loop.
 		struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 500000 };
@@ -918,7 +963,9 @@ static int outputThread(void *stateArg) {
 			}
 
 			// Write buffer to file descriptor.
-			writeUntilDone(state->fileIO, (uint8_t *) packetBuffer->buf.base, packetBuffer->buf.len);
+			if (!writeUntilDone(state->fileIO, (uint8_t *) packetBuffer->buf.base, packetBuffer->buf.len)) {
+				errorExit(state, packetBuffer);
+			}
 
 			free(packetBuffer->freeBuf);
 			free(packetBuffer);
@@ -927,22 +974,12 @@ static int outputThread(void *stateArg) {
 		// Write all remaining buffers to file.
 		libuvWriteBuf packetBuffer;
 		while ((packetBuffer = ringBufferGet(state->outputRing)) != NULL) {
-			writeUntilDone(state->fileIO, (uint8_t *) packetBuffer->buf.base, packetBuffer->buf.len);
+			if (!writeUntilDone(state->fileIO, (uint8_t *) packetBuffer->buf.base, packetBuffer->buf.len)) {
+				errorExit(state, packetBuffer);
+			}
 
 			free(packetBuffer->freeBuf);
 			free(packetBuffer);
-		}
-	}
-	else {
-		// libuv network IO (state->networkIO != NULL).
-		// Start libuv event loop.
-		int retVal = uv_run(&state->networkIO->loop, UV_RUN_DEFAULT);
-		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_run", return (thrd_error));
-
-		// Log if anything is still alive. Async shutdown should have closed everything!
-		if (retVal > 0) {
-			caerLog(CAER_LOG_WARNING, state->parentModule->moduleSubSystemString,
-				"uv_run() exited with still active handles.");
 		}
 	}
 
@@ -963,6 +1000,7 @@ static void libuvRingBufferGet(uv_idle_t *handle) {
 }
 
 static void libuvAsyncShutdown(uv_async_t *handle) {
+	// This is only ever called in response to caerOutputCommonExit().
 	outputCommonState state = handle->data;
 
 	// Shutdown, write remaining buffers to network.
@@ -973,9 +1011,15 @@ static void libuvAsyncShutdown(uv_async_t *handle) {
 
 	uv_close((uv_handle_t *) &state->networkIO->ringBufferGet, NULL);
 
+	// Then we empty the ring-buffer and write out all data.
 	libuvWriteBuf packetBuffer;
 	while ((packetBuffer = ringBufferGet(state->outputRing)) != NULL) {
 		writePacket(state, packetBuffer);
+	}
+
+	// Shutdown server (if it exists).
+	if (state->networkIO->server != NULL) {
+		uv_close((uv_handle_t *) state->networkIO->server, &libuvCloseFree);
 	}
 
 	// Then we tell all network outputs to shutdown, which will then close them once done.
@@ -1005,11 +1049,6 @@ static void libuvAsyncShutdown(uv_async_t *handle) {
 		retVal = uv_shutdown(clientShutdown, client, &libuvClientShutdown);
 		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_shutdown",
 			free(clientShutdown); uv_close((uv_handle_t *) client, &libuvCloseFree));
-	}
-
-	// Shutdown server (if it exists).
-	if (state->networkIO->server != NULL) {
-		uv_close((uv_handle_t *) state->networkIO->server, &libuvCloseFree);
 	}
 
 	// Close shutdown itself.
@@ -1411,7 +1450,7 @@ bool caerOutputCommonInit(caerModuleData moduleData, int fileDescriptor, outputC
 
 	// Handle configuration.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "validOnly", false); // only send valid events
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "keepPackets", true); // ensure all packets are kept
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "keepPackets", false); // ensure all packets are kept
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "ringBufferSize", 128); // in packet containers
 
 	atomic_store(&state->validOnly, sshsNodeGetBool(moduleData->moduleNode, "validOnly"));
