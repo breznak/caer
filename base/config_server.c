@@ -147,12 +147,13 @@ static void configServerRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf
 			caerLog(CAER_LOG_ERROR, CONFIG_SERVER_NAME, "Failed to allocate memory for client shutdown.");
 
 			// Hard close.
-			uv_close((uv_handle_t *) client, &libuvCloseFree);
+			uv_close((uv_handle_t *) client, &libuvCloseFreeData);
 			return;
 		}
 
 		retVal = uv_shutdown(clientShutdown, client, &configServerShutdown);
-		UV_RET_CHECK_CS(retVal, "uv_shutdown", free(clientShutdown); uv_close((uv_handle_t *) client, &libuvCloseFree));
+		UV_RET_CHECK_CS(retVal, "uv_shutdown",
+			free(clientShutdown); uv_close((uv_handle_t *) client, &libuvCloseFreeData));
 	}
 
 	// sizeRead == 0: EAGAIN, do nothing.
@@ -196,7 +197,7 @@ static void configServerRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf
 }
 
 static void configServerShutdown(uv_shutdown_t *clientShutdown, int status) {
-	uv_close((uv_handle_t *) clientShutdown->handle, &libuvCloseFree);
+	uv_close((uv_handle_t *) clientShutdown->handle, &libuvCloseFreeData);
 
 	free(clientShutdown);
 

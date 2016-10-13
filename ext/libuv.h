@@ -284,8 +284,12 @@ static inline int libuvWriteUDP(uv_udp_t *dest, const struct sockaddr *destAddre
 }
 
 static inline void libuvCloseFree(uv_handle_t *handle) {
-	free(handle->data);
 	free(handle);
+}
+
+static inline void libuvCloseFreeData(uv_handle_t *handle) {
+	free(handle->data);
+	libuvCloseFree(handle);
 }
 
 static inline void libuvCloseLoopWalk(uv_handle_t *handle, void *arg) {
