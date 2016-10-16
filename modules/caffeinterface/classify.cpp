@@ -8,9 +8,9 @@ using namespace caffe;
 // NOLINT(build/namespaces)
 using std::string;
 
-void MyClass::file_set(char * i, double *b, double thr, bool printoutputs,
+void MyCaffe::file_set(char * i, double *b, double thr, bool printoutputs,
 		caerFrameEvent *single_frame, bool showactivations) {
-	MyClass::file_i = i;
+	MyCaffe::file_i = i;
 
 	if (file_i != NULL) {
 
@@ -21,7 +21,7 @@ void MyClass::file_set(char * i, double *b, double thr, bool printoutputs,
 		img2 = img2 * 0.00390625; // normalize 0,255 to 1
 
 		CHECK(!img.empty()) << "Unable to decode image " << file_i;
-		std::vector<Prediction> predictions = MyClass::Classify(img2, 5,
+		std::vector<Prediction> predictions = MyCaffe::Classify(img2, 5,
 				single_frame, showactivations);
 
 		/* Print the top N predictions. */
@@ -40,11 +40,7 @@ void MyClass::file_set(char * i, double *b, double thr, bool printoutputs,
 	}
 }
 
-char * MyClass::file_get() {
-	return file_i;
-}
-
-void MyClass::init_network() {
+void MyCaffe::init_network() {
 
 	//::google::InitGoogleLogging(0);
 	string model_file = NET_MODEL
@@ -55,13 +51,13 @@ void MyClass::init_network() {
 	;
 	string label_file = NET_VAL
 	;
-	MyClass::Classifier(model_file, trained_file, mean_file, label_file);
+	MyCaffe::Classifier(model_file, trained_file, mean_file, label_file);
 
 	return;
 
 }
 
-void MyClass::Classifier(const string& model_file, const string& trained_file,
+void MyCaffe::Classifier(const string& model_file, const string& trained_file,
 		const string& mean_file, const string& label_file) {
 #ifdef CPU_ONLY
 	Caffe::set_mode(Caffe::CPU);
@@ -117,7 +113,7 @@ static std::vector<int> Argmax(const std::vector<float>& v, int N) {
 }
 
 /* Return the top N predictions. */
-std::vector<Prediction> MyClass::Classify(const cv::Mat& img, int N,
+std::vector<Prediction> MyCaffe::Classify(const cv::Mat& img, int N,
 		caerFrameEvent *single_frame, bool showactivations) {
 	std::vector<float> output = Predict(img, single_frame, showactivations);
 
@@ -133,7 +129,7 @@ std::vector<Prediction> MyClass::Classify(const cv::Mat& img, int N,
 }
 
 /* Load the mean file in binaryproto format. */
-void MyClass::SetMean(const string& mean_file) {
+void MyCaffe::SetMean(const string& mean_file) {
 	BlobProto blob_proto;
 	ReadProtoFromBinaryFileOrDie(mean_file.c_str(), &blob_proto);
 
@@ -168,7 +164,7 @@ void MyClass::SetMean(const string& mean_file) {
 
 }
 
-std::vector<float> MyClass::Predict(const cv::Mat& img,
+std::vector<float> MyCaffe::Predict(const cv::Mat& img,
 		caerFrameEvent *single_frame, bool showactivations) {
 
 	Blob<float>* input_layer = net_->input_blobs()[0];
@@ -342,7 +338,7 @@ std::vector<float> MyClass::Predict(const cv::Mat& img,
  * don't need to rely on cudaMemcpy2D. The last preprocessing
  * operation will write the separate channels directly to the input
  * layer. */
-void MyClass::WrapInputLayer(std::vector<cv::Mat>* input_channels) {
+void MyCaffe::WrapInputLayer(std::vector<cv::Mat>* input_channels) {
 	Blob<float>* input_layer = net_->input_blobs()[0];
 
 	int width = input_layer->width();
@@ -355,7 +351,7 @@ void MyClass::WrapInputLayer(std::vector<cv::Mat>* input_channels) {
 	}
 }
 
-void MyClass::Preprocess(const cv::Mat& img,
+void MyCaffe::Preprocess(const cv::Mat& img,
 		std::vector<cv::Mat>* input_channels) {
 	/* Convert the input image to the input image format of the network. */
 

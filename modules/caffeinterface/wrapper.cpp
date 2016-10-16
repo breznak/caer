@@ -6,24 +6,21 @@
 
 extern "C" {
 
-MyClass* newMyClass() {
-	return new MyClass();
+MyCaffe* newMyCaffe() {
+	return new MyCaffe();
 }
 
-void MyClass_file_set(MyClass* v, char * i, double *b, double thr, bool printoutputs, caerFrameEvent *single_frame,
-	bool showactivations) {
+void MyCaffe_file_set(MyCaffe* v, char * i, double *b, double thr,
+		bool printoutputs, caerFrameEvent *single_frame,
+		bool showactivations) {
 	v->file_set(i, b, thr, printoutputs, single_frame, showactivations);
 }
 
-char * MyClass_file_get(MyClass* v) {
-	return v->file_get();
-}
-
-void MyClass_init_network(MyClass *v) {
+void MyCaffe_init_network(MyCaffe *v) {
 	return v->init_network();
 }
 
-void deleteMyClass(MyClass* v) {
+void deleteMyCaffe(MyCaffe* v) {
 	delete v;
 }
 

@@ -12,7 +12,7 @@ struct caffewrapper_state {
 	double detThreshold;
 	bool doPrintOutputs;
 	bool doShowActivations;
-	struct MyClass* cpp_class; //pointer to cpp_class_object
+	struct MyCaffe* cpp_class; //pointer to cpp_class_object
 };
 
 typedef struct caffewrapper_state *caffewrapperState;
@@ -57,15 +57,15 @@ static bool caerCaffeWrapperInit(caerModuleData moduleData) {
 			"doShowActivations");
 
 	//Initializing caffe network..
-	state->cpp_class = newMyClass();
-	MyClass_init_network(state->cpp_class);
+	state->cpp_class = newMyCaffe();
+	MyCaffe_init_network(state->cpp_class);
 
 	return (true);
 }
 
 static void caerCaffeWrapperExit(caerModuleData moduleData) {
 	caffewrapperState state = moduleData->moduleState;
-	deleteMyClass(state->cpp_class); //free memory block
+	deleteMyCaffe(state->cpp_class); //free memory block
 }
 
 static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber,
@@ -89,7 +89,7 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber,
 	int32_t frame_x = 200;
 	int32_t frame_y = 200;
 
-	// set source info for this module
+	// set source info for this module if not yet defined
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode,
 			"sourceInfo/");
 	if (!sshsNodeAttributeExists(sourceInfoNode, "visualizerSizeX", SHORT)) {
@@ -107,7 +107,7 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber,
 				frame_y, 1, *networkActivity); // to do remove hard coded size
 		for (int i = 0; i < max_img_qty; ++i) {
 			if (file_string[i] != NULL) {
-				MyClass_file_set(state->cpp_class, file_string[i],
+				MyCaffe_file_set(state->cpp_class, file_string[i],
 						&classificationResults[i], state->detThreshold,
 						state->doPrintOutputs, &single_frame,
 						state->doShowActivations);
