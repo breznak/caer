@@ -279,6 +279,10 @@ std::vector<float> MyCaffe::Predict(const cv::Mat& img,
 				int size_x_single_image = floor(
 						tmp_frame->lengthX / layersVector[layer_num].size());
 
+				if(size_x_single_image <= 0){
+					caerLog(CAER_LOG_ERROR, __func__, "Please check your: CAFFEVISUALIZERSIZE constant. Display size too small. Not displaying activations.");
+					goto error_in_plotting;
+				}
 				cv::Size sizeI(size_x_single_image, size_y_single_image);
 				cv::Mat1f rescaled; //rescaled image
 
@@ -317,6 +321,7 @@ std::vector<float> MyCaffe::Predict(const cv::Mat& img,
 		*single_frame = tmp_frame;
 	}//if show activations
 	else{
+		error_in_plotting:
 		single_frame = NULL;
 	}
 

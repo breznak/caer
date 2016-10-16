@@ -29,7 +29,7 @@ static struct caer_module_functions caerCaffeWrapperFunctions = { .moduleInit =
 
 const char * caerCaffeWrapper(uint16_t moduleID, char ** file_string,
 		double *classificationResults, int max_img_qty,
-		caerFrameEventPacket *networkActivity) {
+		caerFrameEventPacket *networkActivity, int sizeDisplay) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID,
 			"caerCaffeWrapper", PROCESSOR);
 	if (moduleData == NULL) {
@@ -37,8 +37,8 @@ const char * caerCaffeWrapper(uint16_t moduleID, char ** file_string,
 	}
 
 	caerModuleSM(&caerCaffeWrapperFunctions, moduleData,
-			sizeof(struct caffewrapper_state), 4, file_string,
-			classificationResults, max_img_qty, networkActivity);
+			sizeof(struct caffewrapper_state), 5, file_string,
+			classificationResults, max_img_qty, networkActivity, sizeDisplay);
 
 	return (NULL);
 }
@@ -76,6 +76,7 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber,
 	double *classificationResults = va_arg(args, double*);
 	int max_img_qty = va_arg(args, int);
 	caerFrameEventPacket *networkActivity = va_arg(args, caerFrameEventPacket*);
+	int sizeDisplay = va_arg(args, int);
 
 	//update module state
 	state->detThreshold = sshsNodeGetDouble(moduleData->moduleNode,
@@ -86,8 +87,8 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber,
 			"doShowActivations");
 
 	//allocate single frame
-	int32_t frame_x = 200;
-	int32_t frame_y = 200;
+	int32_t frame_x = sizeDisplay;
+	int32_t frame_y = sizeDisplay;
 
 	// set source info for this module if not yet defined
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode,
