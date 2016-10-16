@@ -28,7 +28,7 @@ class MyClass {
 private:
 	char * file_i;
 	void SetMean(const string& mean_file);
-	std::vector<float> Predict(const cv::Mat& img, caerFrameEvent single_frame, bool showactivations);
+	std::vector<float> Predict(const cv::Mat& img, caerFrameEvent *single_frame, bool showactivations);
 	void WrapInputLayer(std::vector<cv::Mat>* input_channels);
 	void Preprocess(const cv::Mat& img, std::vector<cv::Mat>* input_channels);
 	shared_ptr<Net<float> > net_;
@@ -40,9 +40,9 @@ public:
 
 	void Classifier(const string& model_file, const string& trained_file, const string& mean_file,
 		const string& label_file);
-	std::vector<Prediction> Classify(const cv::Mat& img, int N, caerFrameEvent single_frame, bool showactivations);
+	std::vector<Prediction> Classify(const cv::Mat& img, int N, caerFrameEvent *single_frame, bool showactivations);
 	void caller();
-	void file_set(char * i, double *b, double thr, bool printoutputs, caerFrameEvent single_frame,
+	void file_set(char * i, double *b, double thr, bool printoutputs, caerFrameEvent *single_frame,
 		bool showactivations);
 	int hello_caffe();
 	char * file_get();

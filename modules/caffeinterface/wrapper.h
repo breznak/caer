@@ -14,7 +14,7 @@ typedef struct MyClass MyClass;
 
 MyClass* newMyClass();
 
-void MyClass_file_set(MyClass* v, char * i, double *b, double thr, bool printoutputs, caerFrameEvent single_frame,
+void MyClass_file_set(MyClass* v, char * i, double *b, double thr, bool printoutputs, caerFrameEvent *single_frame,
 	bool showactivations);
 
 char * MyClass_file_get(MyClass* v);
