@@ -5,12 +5,24 @@
 #include <inttypes.h>
 #include <string.h>
 #include "ext/libuv.h"
+#include "ext/uthash/utarray.h"
 #include "modules/misc/inout_common.h"
 
 #include <libcaer/events/common.h>
 
 #include <signal.h>
 #include <stdatomic.h>
+
+struct udp_packet {
+	caerEventPacketHeader content;
+	int64_t startSequenceNumber;
+	int64_t endSequenceNumber;
+	size_t intermediateSequenceNumbersLength;
+	bool intermediateSequenceNumbers[];
+};
+
+static void analyzeUDPPacket(UT_array *incompleteUDPPackets, int64_t sequenceNumber, uint8_t *data, size_t dataLength);
+static void printPacketInfo(caerEventPacketHeader header);
 
 static atomic_bool globalShutdown = ATOMIC_VAR_INIT(false);
 
@@ -101,6 +113,11 @@ int main(int argc, char *argv[]) {
 		return (EXIT_FAILURE);
 	}
 
+	// Use a UT array to keep track of all currently open packets.
+	UT_array *incompleteUDPPackets;
+
+	utarray_new(incompleteUDPPackets, &ut_ptr_icd);
+
 	while (!atomic_load_explicit(&globalShutdown, memory_order_relaxed)) {
 		ssize_t result = recv(listenUDPSocket, dataBuffer, dataBufferLength, 0);
 		if (result <= 0) {
@@ -113,6 +130,22 @@ int main(int argc, char *argv[]) {
 
 		printf("Result of recv() call: %zd\n", result);
 
+		// UDP is more complex than TCP and Pipes. It is not a stream, nor in order, nor reliable.
+		// So we do split AEDAT packets up into small messages to send over UDP, because some packets
+		// are simply too big (Frames) to fit one message, and even then, 64K messages are almost
+		// guaranteed to be lost in transit.
+		// Each packet's first message has the highest-bit of the sequence number set to 1, all
+		// subsequent messages related to that packet have it set to 0. The sequence number is
+		// continuous, increased by one on each successive message.
+		// So, an example reader could work this way:
+		// - wait for first UDP message with a sequence number with highest bit set to 1
+		// - possible new packet: store current content and sequence number, wait on new messages
+		//   with the appropriate sequence numbers (highest bit 0) to complete it
+		// - if you get another "Start-of-Packet" message, also do the above
+		// - continue accumulating and completing packets, with completely rebuilt packets being
+		//   sent for processing in-order, with some timeout (sequence-number or time based) to
+		//   invalidate incomplete packets and avoid waiting forever
+
 		// Decode network header.
 		struct aedat3_network_header networkHeader = caerParseNetworkHeader(dataBuffer);
 
@@ -122,42 +155,62 @@ int main(int argc, char *argv[]) {
 		printf("Format number: %" PRIi8 "\n", networkHeader.formatNumber);
 		printf("Source ID: %" PRIi16 "\n", networkHeader.sourceID);
 
-		// Decode successfully received data.
-		caerEventPacketHeader header = (caerEventPacketHeader) dataBuffer + 20;
-
-		int16_t eventType = caerEventPacketHeaderGetEventType(header);
-		int16_t eventSource = caerEventPacketHeaderGetEventSource(header);
-		int32_t eventSize = caerEventPacketHeaderGetEventSize(header);
-		int32_t eventTSOffset = caerEventPacketHeaderGetEventTSOffset(header);
-		int32_t eventTSOverflow = caerEventPacketHeaderGetEventTSOverflow(header);
-		int32_t eventCapacity = caerEventPacketHeaderGetEventCapacity(header);
-		int32_t eventNumber = caerEventPacketHeaderGetEventNumber(header);
-		int32_t eventValid = caerEventPacketHeaderGetEventValid(header);
-
-		printf(
-			"type = %" PRIi16 ", source = %" PRIi16 ", size = %" PRIi32 ", tsOffset = %" PRIi32 ", tsOverflow = %" PRIi32 ", capacity = %" PRIi32 ", number = %" PRIi32 ", valid = %" PRIi32 ".\n",
-			eventType, eventSource, eventSize, eventTSOffset, eventTSOverflow, eventCapacity, eventNumber, eventValid);
-
-		if (eventValid > 0) {
-			void *firstEvent = caerGenericEventGetEvent(header, 0);
-			void *lastEvent = caerGenericEventGetEvent(header, eventValid - 1);
-
-			int32_t firstTS = caerGenericEventGetTimestamp(firstEvent, header);
-			int32_t lastTS = caerGenericEventGetTimestamp(lastEvent, header);
-
-			int32_t tsDifference = lastTS - firstTS;
-
-			printf("Time difference in packet: %" PRIi32 " (first = %" PRIi32 ", last = %" PRIi32 ").\n", tsDifference,
-				firstTS, lastTS);
-		}
-
-		printf("\n\n");
+		analyzeUDPPacket(incompleteUDPPackets, networkHeader.sequenceNumber, dataBuffer + AEDAT3_NETWORK_HEADER_LENGTH,
+			(size_t) result - AEDAT3_NETWORK_HEADER_LENGTH);
 	}
 
 	// Close connection.
 	close(listenUDPSocket);
 
+	// Free all incomplete packets.
+	struct udp_packet *pkt = NULL;
+	while ((pkt = (struct udp_packet *) utarray_next(incompleteUDPPackets, pkt)) != NULL) {
+		free(pkt);
+	}
+
+	utarray_free(incompleteUDPPackets);
+
 	free(dataBuffer);
 
 	return (EXIT_SUCCESS);
+}
+
+static void analyzeUDPPacket(UT_array *incompleteUDPPackets, int64_t sequenceNumber, uint8_t *data, size_t dataLength) {
+	// Check if this is part of any incomplete packet we're still building.
+	struct udp_packet *pkt = NULL;
+	while ((pkt = (struct udp_packet *) utarray_next(incompleteUDPPackets, pkt)) != NULL) {
+
+	}
+
+}
+
+static void printPacketInfo(caerEventPacketHeader header) {
+	// Decode successfully received data.
+	int16_t eventType = caerEventPacketHeaderGetEventType(header);
+	int16_t eventSource = caerEventPacketHeaderGetEventSource(header);
+	int32_t eventSize = caerEventPacketHeaderGetEventSize(header);
+	int32_t eventTSOffset = caerEventPacketHeaderGetEventTSOffset(header);
+	int32_t eventTSOverflow = caerEventPacketHeaderGetEventTSOverflow(header);
+	int32_t eventCapacity = caerEventPacketHeaderGetEventCapacity(header);
+	int32_t eventNumber = caerEventPacketHeaderGetEventNumber(header);
+	int32_t eventValid = caerEventPacketHeaderGetEventValid(header);
+
+	printf(
+		"type = %" PRIi16 ", source = %" PRIi16 ", size = %" PRIi32 ", tsOffset = %" PRIi32 ", tsOverflow = %" PRIi32 ", capacity = %" PRIi32 ", number = %" PRIi32 ", valid = %" PRIi32 ".\n",
+		eventType, eventSource, eventSize, eventTSOffset, eventTSOverflow, eventCapacity, eventNumber, eventValid);
+
+	if (eventValid > 0) {
+		void *firstEvent = caerGenericEventGetEvent(header, 0);
+		void *lastEvent = caerGenericEventGetEvent(header, eventValid - 1);
+
+		int32_t firstTS = caerGenericEventGetTimestamp(firstEvent, header);
+		int32_t lastTS = caerGenericEventGetTimestamp(lastEvent, header);
+
+		int32_t tsDifference = lastTS - firstTS;
+
+		printf("Time difference in packet: %" PRIi32 " (first = %" PRIi32 ", last = %" PRIi32 ").\n", tsDifference,
+			firstTS, lastTS);
+	}
+
+	printf("\n\n");
 }
