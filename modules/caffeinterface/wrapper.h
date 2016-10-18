@@ -10,23 +10,18 @@
 extern "C" {
 #endif
 
-typedef struct MyClass MyClass;
+typedef struct MyCaffe MyCaffe;
 
-MyClass* newMyClass();
+MyCaffe* newMyCaffe();
 
-void MyClass_file_set(MyClass* v, char * i, double *b, double thr, bool printoutputs, caerFrameEvent single_frame,
+void MyCaffe_file_set(MyCaffe* v, char * i, double *b, double thr, bool printoutputs, caerFrameEvent *single_frame,
 	bool showactivations);
 
-char * MyClass_file_get(MyClass* v);
+char * MyCaffe_file_get(MyCaffe* v);
 
-void MyClass_init_network(MyClass *v);
+void MyCaffe_init_network(MyCaffe *v);
 
-//void MyClass_Classifier(MyClass *v);
-
-void deleteMyClass(MyClass* v);
-
-const char * caerCaffeWrapper(uint16_t moduleID, char ** file_string, double *classificationResults, int max_img_qty,
-	caerFrameEventPacket *networkActivity);
+void deleteMyCaffe(MyCaffe* v);
 
 #ifdef __cplusplus
 }

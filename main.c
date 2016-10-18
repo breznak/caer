@@ -70,10 +70,11 @@
 #ifdef ENABLE_IMAGEGENERATOR
 #include "modules/imagegenerator/imagegenerator.h"
 #define MAX_IMG_QTY 8
-#define CLASSIFYSIZE 36
+#define CLASSIFYSIZE 28
 #define DISPLAYIMGSIZE 256
 #endif
 #ifdef ENABLE_CAFFEINTERFACE
+#define CAFFEVISUALIZERSIZE 1024
 #include "modules/caffeinterface/wrapper.h"
 #endif
 #ifdef ENABLE_IMAGESTREAMERBEEPER
@@ -279,7 +280,7 @@ static bool mainloop_1(void) {
 	caerFrameEventPacket networkActivity = NULL;
 
 	if(*file_strings_classify != NULL) {
-		caerCaffeWrapper(21, file_strings_classify, classification_results, (int) MAX_IMG_QTY, &networkActivity);
+		caerCaffeWrapper(21, file_strings_classify, classification_results, (int) MAX_IMG_QTY, &networkActivity, CAFFEVISUALIZERSIZE);
 	}
 #endif
 #endif
