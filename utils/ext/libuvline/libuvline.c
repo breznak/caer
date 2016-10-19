@@ -188,6 +188,9 @@ static void libuvTTYRead(uv_stream_t *tty, ssize_t sizeRead, const uv_buf_t *buf
 			ttyData->shellContent[0] = '\0';
 			ttyData->shellContentIndex = 0;
 
+			// Reset history position to end.
+			ttyData->historyCurrentElem = NULL;
+
 			// Manual change to string, reset auto-completion.
 			libuvTTYAutoCompleteClearCompletions(ttyData->autoComplete);
 		}
@@ -291,6 +294,10 @@ static void libuvTTYHistoryPrint(libuvTTY tty, bool up) {
 
 	if (tty->historyCurrentElem != NULL) {
 		fprintf(stdout, "%s%s", tty->shellPrompt, *tty->historyCurrentElem);
+
+		size_t historyCurrentElemLength = strlen(*tty->historyCurrentElem);
+		memcpy(tty->shellContent, *tty->historyCurrentElem, historyCurrentElemLength);
+		tty->shellContentIndex = historyCurrentElemLength;
 	}
 }
 
