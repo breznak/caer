@@ -9,6 +9,8 @@
 #include "modules/misc/inout_common.h"
 
 #include <libcaer/events/common.h>
+#include <libcaer/events/polarity.h>
+#include <libcaer/events/frame.h>
 
 #include <signal.h>
 #include <stdatomic.h>
@@ -166,6 +168,35 @@ int main(int argc, char *argv[]) {
 
 			printf("Time difference in packet: %" PRIi32 " (first = %" PRIi32 ", last = %" PRIi32 ").\n", tsDifference,
 				firstTS, lastTS);
+
+			// Additional example for Polarity and Frame events.
+			if (eventType == POLARITY_EVENT) {
+				caerPolarityEventPacket polarityPacket = (caerPolarityEventPacket) header;
+
+				// Only get first event as example.
+				caerPolarityEvent polarityEvent = caerPolarityEventPacketGetEvent(polarityPacket, 0);
+
+				uint16_t xAddr = caerPolarityEventGetX(polarityEvent);
+				uint16_t yAddr = caerPolarityEventGetY(polarityEvent);
+				bool polarity = caerPolarityEventGetPolarity(polarityEvent);
+
+				printf("First polarity event data - X Address: %" PRIu16 ", Y Address %" PRIu16 ", Polarity: %d.\n",
+					xAddr, yAddr, polarity);
+			}
+			else if (eventType == FRAME_EVENT) {
+				caerFrameEventPacket framePacket = (caerFrameEventPacket) header;
+
+				// Only get first event as example.
+				caerFrameEvent frameEvent = caerFrameEventPacketGetEvent(framePacket, 0);
+
+				int32_t frameSizeX = caerFrameEventGetLengthX(frameEvent);
+				int32_t frameSizeY = caerFrameEventGetLengthY(frameEvent);
+				uint16_t *framePixels = caerFrameEventGetPixelArrayUnsafe(frameEvent);
+
+				printf(
+					"First frame event data - X Size: %" PRIi32 ", Y Size: %" PRIi32 ", Pixel 0 Value: %" PRIu16 ".\n",
+					frameSizeX, frameSizeY, framePixels[0]);
+			}
 		}
 
 		printf("\n\n");
