@@ -997,6 +997,13 @@ static void libuvRingBufferGet(uv_idle_t *handle) {
 		writePacket(state, packetBuffer);
 		count++;
 	}
+
+	// If nothing, avoid busy loop within libuv event loop by sleeping a little.
+	if (count == 0) {
+		// Sleep for 250 µs (0.25 ms).
+		struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 250000 };
+		thrd_sleep(&noDataSleep, NULL);
+	}
 }
 
 static void libuvAsyncShutdown(uv_async_t *handle) {
