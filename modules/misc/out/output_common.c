@@ -351,8 +351,8 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 
 	retry: if (!ringBufferPut(state->compressorRing, eventPackets)) {
 		if (atomic_load_explicit(&state->keepPackets, memory_order_relaxed)) {
-			// Delay by 10 µs if no change, to avoid a wasteful busy loop.
-			struct timespec retrySleep = { .tv_sec = 0, .tv_nsec = 10000 };
+			// Delay by 500 µs if no change, to avoid a wasteful busy loop.
+			struct timespec retrySleep = { .tv_sec = 0, .tv_nsec = 500000 };
 			thrd_sleep(&retrySleep, NULL);
 
 			// Retry forever if requested.
@@ -397,9 +397,9 @@ static int compressorThread(void *stateArg) {
 	strcat(threadName, "[Compressor]");
 	thrd_set_name(threadName);
 
-	// If no data is available on the transfer ring-buffer, sleep for 500µs (0.5 ms)
+	// If no data is available on the transfer ring-buffer, sleep for 1 ms.
 	// to avoid wasting resources in a busy loop.
-	struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 500000 };
+	struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 1000000 };
 
 	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
 		// Get the newest event packet container from the transfer ring-buffer.
@@ -515,8 +515,8 @@ static void sendEventPacket(outputCommonState state, caerEventPacketHeader packe
 			break;
 		}
 
-		// Delay by 10 µs if no change, to avoid a wasteful busy loop.
-		struct timespec retrySleep = { .tv_sec = 0, .tv_nsec = 10000 };
+		// Delay by 500 µs if no change, to avoid a wasteful busy loop.
+		struct timespec retrySleep = { .tv_sec = 0, .tv_nsec = 500000 };
 		thrd_sleep(&retrySleep, NULL);
 	}
 }
@@ -949,9 +949,9 @@ static int outputThread(void *stateArg) {
 		}
 	}
 	else {
-		// If no data is available on the transfer ring-buffer, sleep for 500µs (0.5 ms)
+		// If no data is available on the transfer ring-buffer, sleep for 1 ms.
 		// to avoid wasting resources in a busy loop.
-		struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 500000 };
+		struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 1000000 };
 
 		while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
 			libuvWriteBuf packetBuffer = ringBufferGet(state->outputRing);
@@ -1000,8 +1000,8 @@ static void libuvRingBufferGet(uv_idle_t *handle) {
 
 	// If nothing, avoid busy loop within libuv event loop by sleeping a little.
 	if (count == 0) {
-		// Sleep for 250 µs (0.25 ms).
-		struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 250000 };
+		// Sleep for 1 ms.
+		struct timespec noDataSleep = { .tv_sec = 0, .tv_nsec = 1000000 };
 		thrd_sleep(&noDataSleep, NULL);
 	}
 }
