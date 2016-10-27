@@ -9,6 +9,10 @@
 #include "base/config_server.h"
 #include "utils/ext/libuvline/libuvline.h"
 
+#ifdef __APPLE__
+    #include <sys/syslimits.h>
+#endif
+
 static void handleInputLine(const char *buf, size_t bufLength);
 static void handleCommandCompletion(const char *buf, size_t bufLength, libuvTTYCompletions autoComplete);
 
