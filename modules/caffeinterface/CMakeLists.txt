@@ -6,13 +6,13 @@ IF (NOT ENABLE_CAFFEINTERFACE)
 	ENDIF()
 ENDIF()
 
-IF(NOT Caffe_DIRECTORY)
-	MESSAGE(FATAL_ERROR "Caffe installation directory is not defined")
-ELSE()
-	MESSAGE(STATUS "Caffe installation directory is " ${Caffe_DIRECTORY})
-ENDIF()
-
 IF (ENABLE_CAFFEINTERFACE)
+	IF (NOT Caffe_DIRECTORY)
+		MESSAGE(FATAL_ERROR "Caffe installation directory is not defined")
+	ELSE()
+		MESSAGE(STATUS "Caffe installation directory is " ${Caffe_DIRECTORY})
+	ENDIF()
+
 	SET(CAER_COMPILE_DEFINITIONS ${CAER_COMPILE_DEFINITIONS} -DENABLE_CAFFEINTERFACE=1)
 
 	IF (CPU_ONLY)
