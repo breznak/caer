@@ -70,7 +70,7 @@
 #ifdef ENABLE_IMAGEGENERATOR
 #include "modules/imagegenerator/imagegenerator.h"
 #define MAX_IMG_QTY 8
-#define CLASSIFYSIZE 28
+#define CLASSIFYSIZE 36 
 #define DISPLAYIMGSIZE 256
 #endif
 #ifdef ENABLE_CAFFEINTERFACE
