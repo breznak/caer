@@ -95,10 +95,10 @@ IF (ENABLE_CAFFEINTERFACE)
 
 	SET(CAFFEIF_LIBDIRS ${CAFFEIF_LIBDIRS} ${Caffe_DIRECTORY}/build/lib)
 	SET(CAFFEIF_INCDIRS ${CAFFEIF_INCDIRS} ${Caffe_DIRECTORY}/include)
-	SET(CAFFEIF_C_LIBS ${CAFFEIF_C_LIBS} "-lglog -lboost_system -lprotobuf")
+	SET(CAFFEIF_C_LIBS ${CAFFEIF_C_LIBS} "-lglog -lboost_system -lprotobuf -lcaffe")
 	SET(CAFFEIF_C_SRC_FILES ${CAFFEIF_C_SRC_FILES} modules/caffeinterface/caffewrapper_module.c)
 
-	SET(CAFFEIF_CXX_LIBS ${CAFFEIF_CXX_LIBS} ${CAFFEIF_C_LIBS})
+	SET(CAFFEIF_CXX_LIBS ${CAFFEIF_CXX_LIBS} ${CAFFEIF_C_LIBS} "-lglog -lboost_system -lprotobuf -lcaffe")
 	SET(CAFFEIF_CXX_SRC_FILES ${CAFFEIF_CXX_SRC_FILES} modules/caffeinterface/classify.cpp modules/caffeinterface/wrapper.cpp)
 
 	# Propagate to parent scope.
