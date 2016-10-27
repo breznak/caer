@@ -91,7 +91,7 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber,
 	// set source info for this module if not yet defined
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode,
 			"sourceInfo/");
-	if (!sshsNodeAttributeExists(sourceInfoNode, "visualizerSizeX", SHORT)) {
+	if (!sshsNodeAttributeExists(sourceInfoNode, "visualizerSizeX", SSHS_SHORT)) {
 		sshsNodePutShort(sourceInfoNode, "visualizerSizeX", frame_x);
 		sshsNodePutShort(sourceInfoNode, "visualizerSizeY", frame_y);
 	}
