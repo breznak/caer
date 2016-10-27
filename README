@@ -42,8 +42,7 @@ Optional modules:
  -DENABLE_POSEESTIMATION=1 - enable camera pose estimation, this requires OpenCV 3.1.0 with extra modules from https://github.com/Itseez/opencv_contrib -
  -DENABLE_CAFFEINTERFACE=1 - Caffe interface to cAER, deep learning framework - https://github.com/BVLC/caffe - 
 
-		If needed, copy the file modules/caffeinterface/cmake_extra_modules/FindCaffe.cmake to the CMake Modules folder. 
-		A custom location can be specified for the caffe library using Caffe_DIR 
+		A custom location can be specified for the caffe library using Caffe_DIRECTORY 
 
 		This module depends on the imagegenerator module  (ie. it requires -DENABLE_IMAGEGENERATOR=1)
 		It also requires Caffe installed as well as Boost/OpenCV/Protobuffer (same as Caffe).
@@ -52,7 +51,7 @@ Optional modules:
 		This module can be configured by editing the file: 
 			"module/caffeinterface/settings.h"
 		-DCAFFE_CPU_ONLY=1 - to use the Caffe framework with CPU only (ie. no GPU)
-		-DCaffe_DIR=<caffe dir>  - to define custom caffe installation folder 
+		-DCaffe_DIRECTORY=<caffe dir>  - to define custom caffe installation folder 
 
  -DENABLE_IMAGESTREAMERBEEPER=1 - this module produces beeps based on classification results 
 
