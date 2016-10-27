@@ -2,9 +2,6 @@
 #define INPUT_OUTPUT_COMMON_H_
 
 #include "main.h"
-#include <stdatomic.h>
-#include <unistd.h>
-#include "ext/libuv.h"
 
 #define AEDAT3_NETWORK_HEADER_LENGTH 20
 #define AEDAT3_NETWORK_MAGIC_NUMBER 0x1D378BC90B9A6658

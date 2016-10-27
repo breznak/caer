@@ -79,6 +79,7 @@
 #include <png.h>
 #endif
 
+#include <stdatomic.h>
 #include <libcaer/events/common.h>
 #include <libcaer/events/packetContainer.h>
 #include <libcaer/events/frame.h>

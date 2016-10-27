@@ -3,6 +3,7 @@
 
 #include "base/module.h"
 #include "modules/misc/inout_common.h"
+#include "ext/libuv.h"
 
 #define MAX_OUTPUT_RINGBUFFER_GET 10
 #define MAX_OUTPUT_UDP_SIZE (1472 - AEDAT3_NETWORK_HEADER_LENGTH) // MTU 1500 - 20 IP header - 8 UDP header
