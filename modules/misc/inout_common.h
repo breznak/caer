@@ -8,6 +8,8 @@
 #define AEDAT3_NETWORK_VERSION 0x01
 #define AEDAT3_FILE_VERSION "3.1"
 
+#define MAX_OUTPUT_UDP_SIZE (1472 - AEDAT3_NETWORK_HEADER_LENGTH) // MTU 1500 - 20 IP header - 8 UDP header
+
 PACKED_STRUCT(struct aedat3_network_header {
 	int64_t magicNumber;
 	int64_t sequenceNumber;
