@@ -96,6 +96,10 @@ static bool caerOutputNetTCPInit(caerModuleData moduleData) {
 	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_tcp_init",
 		uv_loop_close(&streams->loop); free(connectRequest); free(tcp); free(streams->address); free(streams));
 
+	retVal = uv_tcp_nodelay(tcp, true);
+	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_tcp_nodelay",
+		libuvCloseLoopHandles(&streams->loop); uv_loop_close(&streams->loop); free(connectRequest); free(streams->address); free(streams));
+
 	retVal = uv_tcp_connect(connectRequest, tcp, streams->address, &caerOutputCommonOnClientConnection);
 	UV_RET_CHECK(retVal, moduleData->moduleSubSystemString, "uv_tcp_connect",
 		libuvCloseLoopHandles(&streams->loop); uv_loop_close(&streams->loop); free(connectRequest); free(streams->address); free(streams));
