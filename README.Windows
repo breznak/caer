@@ -23,6 +23,7 @@ dependencies as described in detail in libcaer's 'README.Windows'.
  c) Switch to the source directory: cd mxml-2.10/
  d) Copy the patch needed to compile it under MinGW and apply it: patch -p1 < mxml-mingw-compile.patch
     You can find the patch in the cAER source checkout, inside the ext/ directory.
+    If the 'patch' utility isn't installed yet, do so now: pacman -S patch
  e) Configure: CFLAGS="-D__USE_MINGW_ANSI_STDIO=1" ./configure --prefix=/mingw64/
  f) Make: make
  g) Install: make install
