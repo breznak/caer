@@ -10,8 +10,12 @@ IF (NOT DAVISFX3)
 	SET(DAVISFX3 0 CACHE BOOL "Enable support for DAVIS FX3 devices (new chips)")
 ENDIF()
 
-IF (NOT DVS128 AND NOT DAVISFX2 AND NOT DAVISFX3 AND NOT ENABLE_FILE_INPUT AND NOT ENABLE_NETWORK_INPUT)
-	MESSAGE(SEND_ERROR "Please specify one of the following options to select a supported device: DVS128, DAVISFX2, DAVISFX3."
+IF (NOT DYNAPSEFX2)
+	SET(DYNAPSEFX2 0 CACHE BOOL "Enable support for DYNAPSE (neuromorphic processor)")
+ENDIF()
+
+IF (NOT DYNAPSEFX2 AND NOT DVS128 AND NOT DAVISFX2 AND NOT DAVISFX3 AND NOT ENABLE_FILE_INPUT AND NOT ENABLE_NETWORK_INPUT)
+	MESSAGE(SEND_ERROR "Please specify one of the following options to select a supported device: DVS128, DAVISFX2, DAVISFX3, or DYNAPSE."
 		" Or select an external input source: ENABLE_FILE_INPUT, ENABLE_NETWORK_INPUT.")
 	RETURN()
 ENDIF()
@@ -38,6 +42,14 @@ IF (DAVISFX3)
 	SET(CAER_DAVISFX3_FILES modules/ini/davis_common.c modules/ini/davis_fx3.c)
 
 	SET(CAER_C_SRC_FILES ${CAER_C_SRC_FILES} ${CAER_DAVISFX3_FILES})
+ENDIF()
+
+IF (DYNAPSEFX2)
+	SET(CAER_COMPILE_DEFINITIONS ${CAER_COMPILE_DEFINITIONS} -DDYNAPSEFX2=1)
+
+	SET(CAER_DYNAPSEFX2_FILES modules/ini/dynapse_common.c modules/ini/dynapse_fx2.c)
+
+	SET(CAER_C_SRC_FILES ${CAER_C_SRC_FILES} ${CAER_DYNAPSEFX2_FILES})
 ENDIF()
 
 # Propagate change to parent scope only once.
