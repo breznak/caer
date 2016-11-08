@@ -6,6 +6,7 @@
 #include <string.h>
 #include "ext/libuv.h"
 #include "ext/uthash/utarray.h"
+#include "ext/uthash/utlist.h"
 #include "modules/misc/inout_common.h"
 
 #include <libcaer/events/common.h>
@@ -21,7 +22,15 @@ struct udp_packet {
 	bool intermediateSequenceNumbers[];
 };
 
-static void analyzeUDPPacket(UT_array *incompleteUDPPackets, int64_t sequenceNumber, uint8_t *data, size_t dataLength);
+struct udp_message {
+	struct udp_message *next;
+	int64_t sequenceNumber;
+	size_t messageLength;
+	uint8_t message[];
+};
+
+static void analyzeUDPMessage(UT_array *incompleteUDPPackets, struct udp_message *unassignedUDPMessages,
+	int64_t sequenceNumber, uint8_t *data, size_t dataLength);
 static void printPacketInfo(caerEventPacketHeader header);
 
 static atomic_bool globalShutdown = ATOMIC_VAR_INIT(false);
@@ -114,9 +123,11 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Use a UT array to keep track of all currently open packets.
-	UT_array *incompleteUDPPackets;
+	UT_array *incompleteUDPPackets = NULL;
 
 	utarray_new(incompleteUDPPackets, &ut_ptr_icd);
+
+	struct udp_message *unassignedUDPMessages = NULL;
 
 	while (!atomic_load_explicit(&globalShutdown, memory_order_relaxed)) {
 		ssize_t result = recv(listenUDPSocket, dataBuffer, dataBufferLength, 0);
@@ -155,12 +166,18 @@ int main(int argc, char *argv[]) {
 		printf("Format number: %" PRIi8 "\n", networkHeader.formatNumber);
 		printf("Source ID: %" PRIi16 "\n", networkHeader.sourceID);
 
-		analyzeUDPPacket(incompleteUDPPackets, networkHeader.sequenceNumber, dataBuffer + AEDAT3_NETWORK_HEADER_LENGTH,
-			(size_t) result - AEDAT3_NETWORK_HEADER_LENGTH);
+		analyzeUDPMessage(incompleteUDPPackets, unassignedUDPMessages, networkHeader.sequenceNumber,
+			dataBuffer + AEDAT3_NETWORK_HEADER_LENGTH, (size_t) result - AEDAT3_NETWORK_HEADER_LENGTH);
 	}
 
 	// Close connection.
 	close(listenUDPSocket);
+
+	struct udp_message *msg = NULL;
+	LL_FOREACH(unassignedUDPMessages, msg)
+	{
+		free(msg);
+	}
 
 	// Free all incomplete packets.
 	struct udp_packet *pkt = NULL;
@@ -175,13 +192,31 @@ int main(int argc, char *argv[]) {
 	return (EXIT_SUCCESS);
 }
 
-static void analyzeUDPPacket(UT_array *incompleteUDPPackets, int64_t sequenceNumber, uint8_t *data, size_t dataLength) {
+static void analyzeUDPMessage(UT_array *incompleteUDPPackets, struct udp_message *unassignedUDPMessages,
+	int64_t sequenceNumber, uint8_t *data, size_t dataLength) {
+	// Is this a start message or an intermediate/end one?
+	bool startMessage = (sequenceNumber & 0x8000000000000000LL);
+
+	// First check if this is a start message. If yes, we allocate a new packet for it and
+	// put it at the right place. Also detect duplicate start messages here.
+	if (startMessage) {
+		struct udp_packet *newPacket = malloc(sizeof(*newPacket));
+		if (newPacket == NULL) {
+			return;
+		}
+
+		newPacket->startSequenceNumber = sequenceNumber & 0x7FFFFFFFFFFFFFFFLL;
+
+	}
+
 	// Check if this is part of any incomplete packet we're still building.
 	struct udp_packet *pkt = NULL;
 	while ((pkt = (struct udp_packet *) utarray_next(incompleteUDPPackets, pkt)) != NULL) {
 
-	}
+		if (sequenceNumber > pkt->startSequenceNumber && sequenceNumber <= pkt->endSequenceNumber) {
 
+		}
+	}
 }
 
 static void printPacketInfo(caerEventPacketHeader header) {
