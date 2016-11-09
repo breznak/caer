@@ -4,6 +4,7 @@
 #include "main.h"
 #include "base/mainloop.h"
 #include "base/module.h"
+#include <limits.h>
 
 #include <libcaer/devices/dynapse.h>
 
