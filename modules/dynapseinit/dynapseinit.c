@@ -30,7 +30,7 @@ static struct caer_module_functions caerDynapseInitFunctions = { .moduleInit =
 	&caerDynapseInitReset };
 
 void caerDynapseInit(uint16_t moduleID, caerSpikeEventPacket spike) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "DIFilter", CAER_MODULE_PROCESSOR);
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "DynapseInit", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}
