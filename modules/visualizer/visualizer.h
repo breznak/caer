@@ -4,7 +4,6 @@
 #include "main.h"
 #include "base/module.h"
 #include <libcaer/events/packetContainer.h>
-#include <libcaer/events/spike.h>				/* where to put this? */
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_font.h>
 

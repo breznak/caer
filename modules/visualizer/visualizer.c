@@ -12,6 +12,7 @@
 #include <libcaer/events/frame.h>
 #include <libcaer/events/imu6.h>
 #include <libcaer/events/point2d.h>
+#include <libcaer/events/spike.h>
 #include <allegro5/allegro_primitives.h>
 #include <allegro5/allegro_ttf.h>
 
@@ -861,19 +862,16 @@ bool caerVisualizerRendererSpikeEvents(caerVisualizerPublicState state, caerEven
 
 	caerEventPacketHeader spikeEventPacketHeader  = caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
 
-	caerSpikeEventPacket spike = (caerSpikeEventPacket) spikeEventPacketHeader;
-
 	if (spikeEventPacketHeader == NULL || caerEventPacketHeaderGetEventValid(spikeEventPacketHeader) == 0) {
 		return (false);
 	}
 
 	// Render all valid spikes.
-	CAER_SPIKE_ITERATOR_ALL_START( spike )
-		//caerSpikeEventGetNeuronID(caerSpikeIteratorElement
-			al_put_pixel(caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement),
-					caerSpikeEventGetChipID(caerSpikeIteratorElement), al_map_rgb(0, 255, 0));
-		//
-	CAER_SPIKE_ITERATOR_ALL_END
+	CAER_SPIKE_ITERATOR_VALID_START((caerSpikeEventPacket) spikeEventPacketHeader)
+		// caerSpikeEventGetNeuronID(caerSpikeIteratorElement
+		al_put_pixel(caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement),
+			caerSpikeEventGetChipID(caerSpikeIteratorElement), al_map_rgb(0, 255, 0));
+	CAER_SPIKE_ITERATOR_VALID_END
 
 	return (true);
 }
