@@ -1,0 +1,53 @@
+caer
+====
+
+AER event-based framework, written in C, targeting embedded systems.
+
+REQUIREMENTS:
+
+Linux, MacOS X or Windows (for Windows build instructions see README.Windows)
+
+cmake >= 2.6
+gcc >= 4.9 or clang >= 3.6
+libcaer >= 2.0.0
+mini-xml (mxml) >= 2.7
+libuv >= 1.7.5
+Optional: tcmalloc >= 2.2 (faster memory allocation)
+Optional: allegro5 >= 5.0.11 (visualizer module)
+
+INSTALLATION:
+
+0) rename main_dynapse.c in main.c
+
+$ mv main_dynapse.c main.c
+
+1) configure: 
+
+$ cmake . 
+
+One of the following options is required to select a device:
+ -DDYNAPSEFX2=1         - set dynapsefx2 (for FX2 platform models)
+
+Optional input/output modules:
+ -DENABLE_FILE_INPUT=1
+ -DENABLE_NETWORK_INPUT=1
+ -DENABLE_FILE_OUTPUT=1
+ -DENABLE_NETWORK_OUTPUT=1
+
+Optional modules:
+ -DENABLE_STATISTICS=1  	- enable events statistics
+ -DENABLE_VISUALIZER=1		- enable module visualize 
+ -DENABLE_DYNAPSEINIT=1 	- enable a module which shows how to access to spikes from the device
+
+2) build:
+
+$ make
+
+3) install:
+
+$ make install
+
+USAGE:
+
+$ caer-bin (see docs/ for more info on how to use cAER)
+$ caer-ctl (run-time settings control program, optional)
