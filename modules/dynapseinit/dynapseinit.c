@@ -62,22 +62,21 @@ static void caerDynapseInitRun(caerModuleData moduleData, size_t argsNumber, va_
 
     // Only process packets with content.
     if (spike == NULL) {
-        caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "NO SPIKES\n");
+        caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "\nNO SPIKES\n");
         return;
     }
 
 	DIFilterState state = moduleData->moduleState;
 
-    // Iterate over events and filter out ones that are not supported by other
-    // events within a certain region in the specified timeframe.
-    CAER_SPIKE_ITERATOR_VALID_START(spike)
+    // Iterate over events print them
+	CAER_SPIKE_ITERATOR_ALL_START(spike)
 
         uint64_t ts = caerSpikeEventGetTimestamp(caerSpikeIteratorElement);
         uint64_t neuronId = caerSpikeEventGetNeuronID(caerSpikeIteratorElement);
         uint64_t sourcecoreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement); // which core is from
         uint64_t coreId = caerSpikeEventGetChipID(caerSpikeIteratorElement);// destination core (used as chip id)
 
-        printf("SPIKE: ts %d , neuronID: %d , sourcecoreID: %d, ascoreID: %d\n",ts, neuronId, sourcecoreId, coreId);
+        printf("\nSPIKE: ts %d , neuronID: %d , sourcecoreID: %d, ascoreID: %d\n",ts, neuronId, sourcecoreId, coreId);
     CAER_SPIKE_ITERATOR_ALL_END
     
     

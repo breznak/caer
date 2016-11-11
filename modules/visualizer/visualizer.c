@@ -851,6 +851,34 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 	caerVisualizerUpdate(moduleData->moduleState, container);
 }
 
+bool caerVisualizerRendererSpikeEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear) {
+	UNUSED_ARGUMENT(state);
+
+	// Clear bitmap to black to erase old events.
+	if (doClear) {
+		al_clear_to_color(al_map_rgb(0, 0, 0));
+	}
+
+	caerEventPacketHeader spikeEventPacketHeader  = caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
+
+	caerSpikeEventPacket spike = (caerSpikeEventPacket) spikeEventPacketHeader;
+
+	if (spikeEventPacketHeader == NULL || caerEventPacketHeaderGetEventValid(spikeEventPacketHeader) == 0) {
+		return (false);
+	}
+
+	// Render all valid spikes.
+	CAER_SPIKE_ITERATOR_ALL_START( spike )
+		//caerSpikeEventGetNeuronID(caerSpikeIteratorElement
+			al_put_pixel(caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement),
+					caerSpikeEventGetChipID(caerSpikeIteratorElement), al_map_rgb(0, 255, 0));
+		//
+	CAER_SPIKE_ITERATOR_ALL_END
+
+	return (true);
+}
+
+
 bool caerVisualizerRendererPolarityEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear) {
 	UNUSED_ARGUMENT(state);
 

@@ -4,6 +4,7 @@
 #include "main.h"
 #include "base/module.h"
 #include <libcaer/events/packetContainer.h>
+#include <libcaer/events/spike.h>				/* where to put this? */
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_font.h>
 
@@ -38,6 +39,7 @@ bool caerVisualizerRendererPolarityEvents(caerVisualizerPublicState state, caerE
 bool caerVisualizerRendererFrameEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
 bool caerVisualizerRendererIMU6Events(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
 bool caerVisualizerRendererPoint2DEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
+bool caerVisualizerRendererSpikeEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
 
 void caerVisualizerMulti(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer,
 	caerVisualizerEventHandler eventHandler, caerEventPacketContainer container);

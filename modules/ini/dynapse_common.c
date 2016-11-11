@@ -48,6 +48,22 @@ static void moduleShutdownNotify(void *p) {
 	sshsNodePutBool(moduleNode, "running", false);
 }
 
+static void chipConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
+	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
+	UNUSED_ARGUMENT(node);
+
+	caerModuleData moduleData = userData;
+	struct caer_dynapse_info devInfo = caerDynapseInfoGet(moduleData->moduleState);
+
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+		if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "MonNeu0")) {
+			//caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP, DDYNAPS_CONFIG_CHIP_DIGITALMUX0,
+		//		U32T(changeValue.ibyte));
+		}
+
+	}
+}
+
 static void systemConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
 	UNUSED_ARGUMENT(node);
@@ -1174,7 +1190,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 
 
 		// sram content
-	    caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Send default sram content from file ...\n");
+	    /*caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Send default sram content from file ...\n");
 	    fp = fopen("modules/ini/sram_null.txt", "r");
 	    if (fp == NULL)
 	        exit(EXIT_FAILURE);
@@ -1188,10 +1204,10 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	    }
 	    caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Done.\n");
 
-	    fclose(fp);
+	    fclose(fp);*/
 
 
-	    caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Send default cam content from file ...\n");
+	   /* caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Send default cam content from file ...\n");
 	    fp = fopen("modules/ini/cam_null.txt", "r");
 	    if (fp == NULL)
 	        exit(EXIT_FAILURE);
@@ -1205,11 +1221,11 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	    }
 	    caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Done.\n");
 
-	    fclose(fp);
+	    fclose(fp);*/
 
 		// Clear SRAM
 		uint32_t bits = 0;
-		/*	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Clearing SRAM ...\n");
+			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Clearing SRAM ...\n");
 			for (uint8_t chip = 4; chip < 5; chip++) {
 				caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Device number  %d...\n", chip);
 				// chip number
@@ -1230,9 +1246,9 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 				}
 			}
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString," Done.\n");
-		 	*/
+
 		// Clear CAM
-			/*	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Clearing CAM ...\n");
+				caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Clearing CAM ...\n");
 				for (uint8_t chip = 4; chip < 5; chip++) {
 					caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Device number  %d...\n", chip);
 					// chip number
@@ -1256,7 +1272,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 				}
 				caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString," Done.\n");
 
-			 	 */
+
 
     // close config
     caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_RUN, false);
@@ -1318,12 +1334,10 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	    }
 	    caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Done.\n");
 
-
+	    // free file related strings
 	    fclose(fp);
 	    if (line)
 	        free(line);
-	    //exit(EXIT_SUCCESS);
-
 
 		/*output one neuron per core, neuron id 0 chip 4*/
 		caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
@@ -1349,8 +1363,10 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 							DYNAPSE_CONFIG_CHIP_CONTENT, 977240176);
 
 		// Start data acquisition.
+		//bool ret = caerDeviceDataStart(moduleData->moduleState, &mainloopDataNotifyIncrease, &mainloopDataNotifyDecrease,
+		//	caerMainloopGetReference(), &moduleShutdownNotify, moduleData->moduleNode);
 		bool ret = caerDeviceDataStart(moduleData->moduleState, &mainloopDataNotifyIncrease, &mainloopDataNotifyDecrease,
-			caerMainloopGetReference(), &moduleShutdownNotify, moduleData->moduleNode);
+					caerMainloopGetReference(), &moduleShutdownNotify, moduleData->moduleNode);
 
 		if (!ret) {
 			// Failed to start data acquisition, close device and exit.
@@ -1362,7 +1378,10 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 		// Device related configuration has its own sub-node.
 		sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(dynapse_info.chipID, true));
 
-		sshsNode sysNode = sshsGetRelativeNode(moduleData->moduleNode, "system/");
+		sshsNode chipNode = sshsGetRelativeNode(deviceConfigNode, "chip/");
+		sshsNodeAddAttributeListener(chipNode, moduleData, &chipConfigListener);
+
+		sshsNode sysNode = sshsGetRelativeNode(deviceConfigNode, "system/");
 		sshsNodeAddAttributeListener(sysNode, moduleData, &systemConfigListener);
 
 		sshsNode usbNode = sshsGetRelativeNode(deviceConfigNode, "usb/");

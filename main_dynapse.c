@@ -7,7 +7,7 @@
  *  Compile & run:
  *  $ cd caer/
  *  $ rm -rf CMakeFiles CMakeCache.txt
- *  $ CC=clang-3.7 cmake [-DJAER_COMPAT_FORMAT=1 -DENABLE_VISUALIZER=1 -DENABLE_NET_STREAM=1] cmake -DDYNAPSEFX2=1 -DENABLE_DYNAPSEINIT=1 -DENABLE_STATISTICS=1 .
+ *  $ cmake -DDYNAPSEFX2=1 -DENABLE_DYNAPSEINIT=1 -DENABLE_STATISTICS=1 -DENABLE_VISUALIZER=1 .
  *  $ make
  *  $ ./caer-bin
  */
@@ -20,9 +20,9 @@
 #include "base/misc.h"
 
 // Devices support.
-//#ifdef DYNAPSEFX2
-#include "modules/ini/dynapse_fx2.h"
-//#endif
+#ifdef DYNAPSEFX2
+	#include "modules/ini/dynapse_fx2.h"
+#endif
 
 // Input/Output support.
 #ifdef ENABLE_FILE_INPUT
@@ -44,6 +44,9 @@
 #include "modules/misc/out/unix_socket.h"
 #endif
 
+#ifdef ENABLE_VISUALIZER
+#include "modules/visualizer/visualizer.h"
+#endif
 // Common filters support.
 
 static bool mainloop_1(void);
@@ -53,6 +56,7 @@ static bool mainloop_1(void) {
 	// to maintain time-coherence between the different events.
 	caerEventPacketContainer container = NULL;
 	caerSpikeEventPacket spike = NULL;
+	caerSpecialEventPacket special = NULL;
 
 #ifdef ENABLE_VISUALIZER
 	caerVisualizerEventHandler visualizerEventHandler = NULL;
@@ -63,8 +67,10 @@ static bool mainloop_1(void) {
 
 #ifdef DYNAPSEFX2
 	container = caerInputDYNAPSEFX2(1);
-	// Typed EventPackets contain events of a certain type.
-	spike = (caerSpikeEventPacket) caerEventPacketContainerGetEventPacket(container, SPIKE_EVENT);
+
+	// We search for them by type here, because input modules may not have all or any of them.
+	spike = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
+	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
 #endif
 
 #ifdef ENABLE_FILE_INPUT
@@ -78,15 +84,14 @@ static bool mainloop_1(void) {
 	visualizerEventHandler = &caerInputVisualizerEventHandler;
 #endif
 
-	// Typed EventPackets contain events of a certain type.
 	// We search for them by type here, because input modules may not have all or any of them.
-	spike = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
-
+	spike = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
+	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
 #endif
 
-    // initialize dynapse board with biases, sram and cam content
+    // check dynapse output
 #ifdef ENABLE_DYNAPSEINIT
-    caerDynapseInit(2, spike);
+    	caerDynapseInit(2, spike);
 #endif
 
 	// Filters can also extract information from event packets: for example
@@ -98,16 +103,17 @@ static bool mainloop_1(void) {
 
 	// A simple visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
-	caerVisualizer(60, "Polarity", &caerVisualizerRendererPolarityEvents, visualizerEventHandler, (caerEventPacketHeader) polarity);
-	caerVisualizer(61, "Frame", &caerVisualizerRendererFrameEvents, visualizerEventHandler, (caerEventPacketHeader) frame);
-	caerVisualizer(62, "IMU6", &caerVisualizerRendererIMU6Events, visualizerEventHandler, (caerEventPacketHeader) imu);
+	caerVisualizer(64, "Spike", &caerVisualizerRendererSpikeEvents, visualizerEventHandler, (caerEventPacketHeader) spike);
+	//caerVisualizer(60, "Polarity", &caerVisualizerRendererPolarityEvents, visualizerEventHandler, (caerEventPacketHeader) polarity);
+	//caerVisualizer(61, "Frame", &caerVisualizerRendererFrameEvents, visualizerEventHandler, (caerEventPacketHeader) frame);
+	//caerVisualizer(62, "IMU6", &caerVisualizerRendererIMU6Events, visualizerEventHandler, (caerEventPacketHeader) imu);
 
 	//caerVisualizerMulti(68, "PolarityAndFrame", &caerVisualizerMultiRendererPolarityAndFrameEvents, visualizerEventHandler, container);
 #endif
 
 #ifdef ENABLE_FILE_OUTPUT
 	// Enable output to file (AEDAT 3.X format).
-	caerOutputFile(7, 4, polarity, frame, imu, special);
+	caerOutputFile(7, 2, spike, special);
 #endif
 
 #ifdef ENABLE_NETWORK_OUTPUT
@@ -115,10 +121,10 @@ static bool mainloop_1(void) {
 	// External clients connect to cAER, and we send them the data.
 	// WARNING: slow clients can dramatically slow this and the whole
 	// processing pipeline down!
-	caerOutputNetTCPServer(8, 4, polarity, frame, imu, special);
+	caerOutputNetTCPServer(8, 2, spike, special);
 
 	// And also send them via UDP. This is fast, as it doesn't care what is on the other side.
-	caerOutputNetUDP(9, 4, polarity, frame, imu, special);
+	caerOutputNetUDP(9, 2, spike, special);
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.
