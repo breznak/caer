@@ -74,9 +74,9 @@ static void caerDynapseInitRun(caerModuleData moduleData, size_t argsNumber, va_
         uint64_t ts = caerSpikeEventGetTimestamp(caerSpikeIteratorElement);
         uint64_t neuronId = caerSpikeEventGetNeuronID(caerSpikeIteratorElement);
         uint64_t sourcecoreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement); // which core is from
-        uint64_t coreId = caerSpikeEventGetChipID(caerSpikeIteratorElement);// destination core (used as chip id)
+        uint64_t chipId = caerSpikeEventGetChipID(caerSpikeIteratorElement);// destination core (used as chip id)
 
-        printf("\nSPIKE: ts %d , neuronID: %d , sourcecoreID: %d, ascoreID: %d\n",ts, neuronId, sourcecoreId, coreId);
+        //printf("\nSPIKE: ts %d , neuronID: %d , sourcecoreID: %d, chipId: %d\n",ts, neuronId, sourcecoreId, chipId);
     CAER_SPIKE_ITERATOR_ALL_END
     
     

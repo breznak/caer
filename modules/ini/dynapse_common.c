@@ -1114,6 +1114,12 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	sshsNodePutShort(sourceInfoNode, "deviceID", dynapse_info.deviceID);
 	sshsNodePutShort(sourceInfoNode, "chipID", dynapse_info.chipID);
 
+
+	// Put source information for generic visualization, to be used to display and debug filter information.
+	sshsNodePutShort(sourceInfoNode, "dataSizeX", 64);
+	sshsNodePutShort(sourceInfoNode, "dataSizeY", 64);
+
+
 // Generate source string for output modules.
 	size_t sourceStringLength = (size_t) snprintf(NULL, 0,
 			"#Source %" PRIu16 ": %s\r\n", moduleData->moduleID,
@@ -1155,7 +1161,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 			true);
 	// chip id is CONFCHIPID
 	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
-			4);
+			DYNAPSE_CONFIG_DYNAPSE_U2);
 	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MUX,
 			DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE, true);
 
@@ -1207,7 +1213,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	    fclose(fp);*/
 
 
-	   /* caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Send default cam content from file ...\n");
+	   /*caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Send default cam content from file ...\n");
 	    fp = fopen("modules/ini/cam_null.txt", "r");
 	    if (fp == NULL)
 	        exit(EXIT_FAILURE);
@@ -1233,15 +1239,36 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 								DYNAPSE_CONFIG_CHIP_ID, chip);
 
 				// all cores
-				for (uint8_t core = 0; core < 4; core++) {
+				for (uint8_t core = 0; core < DYNAPSE_CONFIG_NUMCORES; core++) {
 					// all rows
-					for (uint16_t row = 0; row < 1024; row++) {
-							bits = row << 5 | core << 15 | 1 << 17 | 1 << 4;
+					for (uint16_t row_neuronid = 0; row_neuronid < 256; row_neuronid++) {
+						for (uint16_t row_sram = 0; row_sram < 4; row_sram++) {
+							// use first sram for monitoring
+							if(row_sram == 0){
+								uint8_t sourcechipid = chip;	// same as chip id
+								if(chip == DYNAPSE_CONFIG_DYNAPSE_U2){
+									uint8_t sign = DYNAPSE_CONFIG_SRAM_DIRECTION_NEG; // -1
+									uint8_t distance = 1;
+									uint8_t sourcecoreid = core;
+									bits = row_neuronid << 7 | row_sram << 5 | core << 15 |
+											1 << 17 | 1 << 4 | sourcechipid << 18 | sign << 27 | distance << 25 | sourcecoreid << 28;	// init content wich chip id and correct destinations for monitoring
+									//caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,"SRAM BITS %d\n", bits);
+									//00 1 01 0 00 0100 1 00 0000000000 10000
+								}else{
+									bits = row_neuronid << 5 | core << 15 | 1 << 17 | 1 << 4 ; // init content to zero
+								}
+
+							}else{
+								bits = row_neuronid << 5 | core << 15 | 1 << 17 | 1 << 4 ; // init content to zero
+							}
+
+							//11 1 00 11111111 10000
+
 							// finally send configuration via USB
-							caerDeviceConfigSet(moduleData->moduleState,
-									DYNAPSE_CONFIG_CHIP,
-									DYNAPSE_CONFIG_CHIP_CONTENT, bits);
-							caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString,"SRAM BITS %d\n", bits);
+							caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+														DYNAPSE_CONFIG_CHIP_CONTENT, bits);
+
+						}
 					}
 				}
 			}
@@ -1256,7 +1283,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 									DYNAPSE_CONFIG_CHIP_ID, chip);
 
 					// all cores
-					for (uint8_t core = 0; core < 4; core++) {
+					for (uint8_t core = 0; core < DYNAPSE_CONFIG_NUMCORES; core++) {
 						// all rows
 						for (uint16_t row = 0; row < 1024; row++) {
 							for (uint16_t columns = 0; columns < 16; columns++) {
@@ -1304,7 +1331,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 
     caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_AER, DYNAPSE_CONFIG_AER_RUN, true);
 
-    caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, 4);
+    caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
 
     // force chip to be enable even if aer is off
     caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MUX, DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE, true);
@@ -1314,7 +1341,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 
 		// always work on code id 4
 		caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
-								DYNAPSE_CONFIG_CHIP_ID, 4);
+								DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
 
 		createLowPowerConfiguration(moduleData, &dynapse_info);
 		//sendDefaultConfiguration(moduleData, &dynapse_info);
@@ -1339,7 +1366,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	    if (line)
 	        free(line);
 
-		/*output one neuron per core, neuron id 0 chip 4*/
+		/*output one neuron per core, neuron id 0 chip DYNAPSE_CONFIG_DYNAPSE_U2*/
 		caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
 						DYNAPSE_CONFIG_CHIP_CONTENT, 2048);
 		caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
