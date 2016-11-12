@@ -1,10 +1,10 @@
 #include "dynapse_common.h"
 
 static uint32_t convertBias(const char *biasName, const char* lowhi,
-		const char*cl, const char*sex, uint8_t enal, uint8_t fineValue,
+		const char*cl, const char*sex, uint8_t enal, uint16_t fineValue,
 		uint8_t coarseValue, uint8_t special);
-static uint32_t generateCoarseFineBiasParent(sshsNode biasNode,
-		const char *biasName);
+static uint32_t generateCoarseFineBiasParent(sshsNode biasNode, const char *biasName);
+static uint32_t generateCoarseFineBias(sshsNode biasNode);
 static void systemConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 static void usbConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
@@ -119,7 +119,7 @@ static void usbConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 }
 
 static void createCoarseFineBiasSetting(sshsNode biasNode, const char *biasName,
-		uint8_t coarseValue, uint8_t fineValue, const char *hlbias,
+		uint8_t coarseValue, uint16_t fineValue, const char *hlbias,
 		const char *currentLevel, const char *sex, bool enabled) {
 	// Add trailing slash to node name (required!).
 	size_t biasNameLength = strlen(biasName);
@@ -132,7 +132,7 @@ static void createCoarseFineBiasSetting(sshsNode biasNode, const char *biasName,
 	sshsNode biasConfigNode = sshsGetRelativeNode(biasNode, biasNameFull);
 
 	// Add bias settings.
-	sshsNodePutShortIfAbsent(biasConfigNode, "coarseValue", I8T(coarseValue));
+	sshsNodePutByteIfAbsent(biasConfigNode, "coarseValue", I8T(coarseValue));
 	sshsNodePutShortIfAbsent(biasConfigNode, "fineValue", I16T(fineValue));
 	sshsNodePutStringIfAbsent(biasConfigNode, "BiasLowHi", hlbias);
 	sshsNodePutStringIfAbsent(biasConfigNode, "currentLevel", currentLevel);
@@ -157,9 +157,13 @@ static void biasConfigListener(sshsNode node, void *userData,
 	if (event == SSHS_ATTRIBUTE_MODIFIED) {
 		const char *nodeName = sshsNodeGetName(node);
 
-		if (caerStrEquals(nodeName, "C0_IF_BUF_P")) {
+		uint32_t value = generateCoarseFineBiasParent(node, nodeName);
 
-		}
+		// finally send configuration via USB
+		caerDeviceConfigSet(moduleData->moduleState,
+				DYNAPSE_CONFIG_CHIP,
+				DYNAPSE_CONFIG_CHIP_CONTENT, value);
+
 	}
 
 }
@@ -393,7 +397,8 @@ createLowPowerConfiguration(caerModuleData moduleData,
 
 static void createDefaultConfiguration(caerModuleData moduleData,
 		struct caer_dynapse_info *devInfo) {
-// Device related configuration has its own sub-node.
+
+	// Device related configuration has its own sub-node.
 	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode,
 			chipIDToName(devInfo->chipID, true));
 
@@ -619,12 +624,15 @@ static void createDefaultConfiguration(caerModuleData moduleData,
 }
 
 static uint32_t convertBias(const char *biasName, const char* lowhi,
-		const char*cl, const char*sex, uint8_t enal, uint8_t fineValue,
+		const char*cl, const char*sex, uint8_t enal, uint16_t fineValue,
 		uint8_t coarseValue, uint8_t special) {
 
 	int32_t confbits;
 	int32_t addr = 0;
 	int32_t inbits = 0;
+
+	if(strlen(biasName) < 2)
+		return(0);
 
 	/*start names*/
 	if (caerStrEquals(biasName, "C0_PULSE_PWLK_P")) {
@@ -967,7 +975,7 @@ static uint32_t convertBias(const char *biasName, const char* lowhi,
 		cls = 0;
 	}
 
-	caerLog(CAER_LOG_DEBUG, "BIAS CONFIGURE ", " biasName %s --> ADDR %d\n",
+	caerLog(CAER_LOG_CRITICAL, "BIAS CONFIGURE ", " biasName %s --> ADDR %d\n",
 			biasName, addr);
 
 	/*end names*/
@@ -982,11 +990,11 @@ static uint32_t convertBias(const char *biasName, const char* lowhi,
 				| fineValue << 4 | confbits;
 	}
 
-	caerLog(CAER_LOG_DEBUG, "BIAS CONFIGURE ", "coarseFineBias.fineValue %d , "
+	caerLog(CAER_LOG_CRITICAL, "BIAS CONFIGURE ", "coarseFineBias.fineValue %d , "
 			"coarseFineBias.currentLevel %d, "
 			"coarseFineBias.coarseValue %d ,  "
-			"coarseFineBias.special %d --> ADDR %d\n", fineValue, cls,
-			coarseValue, special, addr);
+			"coarseFineBias.special %d --> INBITS %d\n", fineValue, cls,
+			coarseValue, special, inbits);
 
 	return inbits;
 
@@ -1001,7 +1009,7 @@ static void biasConfigSend(sshsNode node, caerModuleData moduleData,
 	uint32_t value;
 	size_t biasNodesLength = 0;
 	sshsNode *biasNodes = sshsNodeGetChildren(node, &biasNodesLength);
-	const char *nodeName = sshsNodeGetName(node);
+	char *nodeName = sshsNodeGetName(node);
 	caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString,
 			"BIAS LENGHT ... %d NAME %s\n", biasNodesLength, nodeName);
 
@@ -1016,39 +1024,14 @@ static void biasConfigSend(sshsNode node, caerModuleData moduleData,
 		// send configuration, one bias per time
 		if (biasNodes != NULL) {
 			for (size_t i = 0; i < biasNodesLength; i++) {
-				//sshsNodeRemoveAttributeListener(biasNodes[i], moduleData, &biasConfigListener);
-				const char *nodeName = sshsNodeGetName(biasNodes[i]);
+				nodeName = sshsNodeGetName(biasNodes[i]);
 
-				//value = generateCoarseFineBiasParent(biasNodes[i], nodeName);
-				bool enal = sshsNodeGetBool(biasNodes[i], "enabled");
-				bool special = sshsNodeGetBool(biasNodes[i], "special");
-				uint8_t coarseValue = sshsNodeGetShort(biasNodes[i],
-						"coarseValue");
-				uint8_t fineValue = sshsNodeGetShort(biasNodes[i], "fineValue");
-				const char * lowhi = sshsNodeGetString(biasNodes[i],
-						"BiasLowHi");
-				const char * cl = sshsNodeGetString(biasNodes[i],
-						"currentLevel");
-				const char * sex = sshsNodeGetString(biasNodes[i], "sex");
-
-				// generates bits values
-				uint32_t bits = convertBias(nodeName, lowhi, cl, sex, enal,
-						fineValue, coarseValue, special);
-
-				caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString,
-						"Bias lenght ... %d name %s enabled %d special %d coarseValue %d bits %d\n",
-						biasNodesLength, nodeName, enal, special, coarseValue,
-						bits);
+				value = generateCoarseFineBiasParent(biasNodes[i], nodeName);
 
 				// finally send configuration via USB
 				caerDeviceConfigSet(moduleData->moduleState,
 						DYNAPSE_CONFIG_CHIP,
-						DYNAPSE_CONFIG_CHIP_CONTENT, bits);
-
-				//free strings
-				free(lowhi);
-				free(cl);
-				free(sex);
+						DYNAPSE_CONFIG_CHIP_CONTENT, value);
 
 			}
 			free(biasNodes);
@@ -1056,6 +1039,46 @@ static void biasConfigSend(sshsNode node, caerModuleData moduleData,
 
 	}
 
+}
+
+static uint32_t generateCoarseFineBiasParent(sshsNode biasNode, const char * biasName) {
+	// Add trailing slash to node name (required!).
+	size_t biasNameLength = strlen(biasName);
+	char biasNameFull[biasNameLength + 2];
+	memcpy(biasNameFull, biasName, biasNameLength);
+	biasNameFull[biasNameLength] = '/';
+	biasNameFull[biasNameLength + 1] = '\0';
+
+	// Get bias configuration node.
+	sshsNode biasConfigNode = sshsGetRelativeNode(biasNode, biasNameFull);
+
+	return (generateCoarseFineBias(biasNode));
+}
+
+static uint32_t generateCoarseFineBias(sshsNode biasNode) {
+
+	char *biasName = sshsNodeGetName(biasNode);
+
+	bool enal = sshsNodeGetBool(biasNode, "enabled");
+	bool special = sshsNodeGetBool(biasNode, "special");
+	uint8_t coarseValue = sshsNodeGetByte(biasNode,"coarseValue");
+	uint16_t fineValue = sshsNodeGetShort(biasNode, "fineValue");
+	char * lowhi = sshsNodeGetString(biasNode,
+			"BiasLowHi");
+	char * cl = sshsNodeGetString(biasNode,
+			"currentLevel");
+	char * sex = sshsNodeGetString(biasNode, "sex");
+
+	printf("%s --- BIAS: %d enabled %d special %d coarseValue %d fineValue",
+			biasName, enal, special, coarseValue, fineValue);
+
+
+	// generates bits values
+	uint32_t bits = convertBias(biasName, lowhi, cl, sex, enal,
+			fineValue, coarseValue, special);
+
+
+	return (bits);
 }
 
 static void sendDefaultConfiguration(caerModuleData moduleData,
@@ -1167,9 +1190,8 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 
 
 	// Create default settings and send them to the device.
-		//createDefaultConfiguration(moduleData, &dynapse_info);
-		createLowPowerConfiguration(moduleData, &dynapse_info);
-		//sendDefaultConfiguration(moduleData, &dynapse_info); // inactive
+		createDefaultConfiguration(moduleData, &dynapse_info);
+		//sendDefaultConfiguration(moduleData, &dynapse_info); // low power
 
 		//send file biases
 	    FILE * fp;
@@ -1346,6 +1368,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 		createLowPowerConfiguration(moduleData, &dynapse_info);
 		//sendDefaultConfiguration(moduleData, &dynapse_info);
 
+
 		// send low power biases
 	    caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Send default low power biases from file ...\n");
 	    fp = fopen("modules/ini/dynapse_lp.txt", "r");
@@ -1390,8 +1413,6 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 							DYNAPSE_CONFIG_CHIP_CONTENT, 977240176);
 
 		// Start data acquisition.
-		//bool ret = caerDeviceDataStart(moduleData->moduleState, &mainloopDataNotifyIncrease, &mainloopDataNotifyDecrease,
-		//	caerMainloopGetReference(), &moduleShutdownNotify, moduleData->moduleNode);
 		bool ret = caerDeviceDataStart(moduleData->moduleState, &mainloopDataNotifyIncrease, &mainloopDataNotifyDecrease,
 					caerMainloopGetReference(), &moduleShutdownNotify, moduleData->moduleNode);
 
@@ -1425,7 +1446,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 				sshsNodeAddAttributeListener(biasNodes[i], moduleData, &biasConfigListener);
 			}
 
-			free(biasNodes);
+			//free(biasNodes);
 		}
 
 		return (true);

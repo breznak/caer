@@ -874,10 +874,9 @@ bool caerVisualizerRendererSpikeEvents(caerVisualizerPublicState state, caerEven
 			uint64_t neuronId = caerSpikeEventGetNeuronID(caerSpikeIteratorElement);
 			uint64_t coreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);// destination core (used as chip id)
 
-			/*from 1d to 2d*/
-			uint32_t addr = coreId << 8 |  neuronId;
-			uint32_t rowid = addr / 32;
-			uint32_t colid = addr % 32;
+			uint32_t addr = coreId << 8 | neuronId;
+			uint32_t rowid = addr % 32;
+			uint32_t colid = addr / 32;
 
 			al_put_pixel(32, 32, al_map_rgb(255, 0, 0));
 
