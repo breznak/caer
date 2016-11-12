@@ -631,8 +631,8 @@ static uint32_t convertBias(const char *biasName, const char* lowhi,
 	int32_t addr = 0;
 	int32_t inbits = 0;
 
-	if(strlen(biasName) < 2)
-		return(0);
+	//if(strlen(biasName) < 2)
+	//	return(0);
 
 	/*start names*/
 	if (caerStrEquals(biasName, "C0_PULSE_PWLK_P")) {
@@ -969,32 +969,84 @@ static uint32_t convertBias(const char *biasName, const char* lowhi,
 	} else {
 		ssx = 0;
 	}
-	if (caerStrEquals(sex, "Normal")) {
+	if (caerStrEquals(cl, "Normal")) {
 		cls = 1;
 	} else {
 		cls = 0;
 	}
 
-	caerLog(CAER_LOG_CRITICAL, "BIAS CONFIGURE ", " biasName %s --> ADDR %d\n",
-			biasName, addr);
+	caerLog(CAER_LOG_CRITICAL, "BIAS CONFIGURE ", " biasName %s --> ADDR %d coarseValue %d\n",
+			biasName, addr, coarseValue);
 
 	/*end names*/
+	if(enal){
+		confbits = lws << 3 | cls << 2 | ssx << 1 | 1;
+	}else{
+		confbits = lws << 3 | cls << 2 | ssx << 1 ;
+	}
 
-	confbits = lws << 3 | cls << 2 | ssx << 1 | enal;
+	printf("\nconfbits lohi %d\n", lws << 3);
+	printf("confbits cascode %d\n", cls << 2);
+	printf("confbits sex %d\n", ssx << 1);
+	printf("confbits en %d\n", (uint8_t) enal);
+
+	//printf("BEF coarseValue %d\n", coarseValue);
+	uint8_t coarseRev = 0 ;
+	printf("BEF coarseValue %d\n", coarseValue);
+
+	/*reverse*/
+	uint8_t tmp_c = coarseValue;
+
+	if(coarseValue == 0)
+		coarseValue = 7;
+	else if(coarseValue == 1)
+		coarseValue = 6;
+	else if(coarseValue == 2)
+		coarseValue = 5;
+	else if(coarseValue == 3)
+		coarseValue = 3;
+	else if(coarseValue == 4)
+		coarseValue = 2;
+	else if(coarseValue == 5)
+		coarseValue = 4;
+	else if(coarseValue == 6)
+		coarseValue = 1;
+	else if(coarseValue == 7)
+		coarseValue = 0;
+
+	if(coarseValue == 0)
+		coarseRev = 0;
+	else if(coarseValue == 1)
+		coarseRev = 4;
+	else if(coarseValue == 2)
+		coarseRev = 2;
+	else if(coarseValue == 3)
+		coarseRev = 6;
+	else if(coarseValue == 4)
+		coarseRev = 4;
+	else if(coarseValue == 5)
+		coarseRev = 5;
+	else if(coarseValue == 6)
+		coarseRev = 3;
+	else if(coarseValue == 7)
+		coarseRev = 7;
+	/*sum(1 << (2 - i) for i in range(3) if 2 >> i & 1)*/
+
+	printf("AFT coarseRev %d confbits %d\n", coarseRev, confbits);
 
 	// snn and ssp
 	if (addr == 51 || addr == 52 || addr == 115 || addr == 116) {
 		inbits = addr << 18 | 1 << 16 | 63 << 10 | fineValue << 4 | confbits;
 	} else {
-		inbits = addr << 18 | 1 << 16 | special << 15 | coarseValue << 12
+		inbits = addr << 18 | 1 << 16 | special << 15 | coarseRev << 12
 				| fineValue << 4 | confbits;
 	}
 
-	caerLog(CAER_LOG_CRITICAL, "BIAS CONFIGURE ", "coarseFineBias.fineValue %d , "
+	caerLog(CAER_LOG_WARNING, "BIAS CONFIGURE END", "coarseFineBias.fineValue %d , "
 			"coarseFineBias.currentLevel %d, "
-			"coarseFineBias.coarseValue %d ,  "
+			"coarseFineBias.coarseRev %d ,  "
 			"coarseFineBias.special %d --> INBITS %d\n", fineValue, cls,
-			coarseValue, special, inbits);
+			coarseRev, special, inbits);
 
 	return inbits;
 
@@ -1003,8 +1055,6 @@ static uint32_t convertBias(const char *biasName, const char* lowhi,
 static void biasConfigSend(sshsNode node, caerModuleData moduleData,
 		struct caer_dynapse_info *devInfo) {
 
-	//  10100010111000000001101
-	//1110100011111110000001101
 	// get the number of childrens biases
 	uint32_t value;
 	size_t biasNodesLength = 0;
@@ -1191,7 +1241,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 
 	// Create default settings and send them to the device.
 		createDefaultConfiguration(moduleData, &dynapse_info);
-		//sendDefaultConfiguration(moduleData, &dynapse_info); // low power
+		sendDefaultConfiguration(moduleData, &dynapse_info); // low power
 
 		//send file biases
 	    FILE * fp;
@@ -1201,7 +1251,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 
 		// send silent  biases
 	    caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Send default biases from file ...\n");
-	    fp = fopen("modules/ini/dynapse_null.txt", "r");
+	    /*fp = fopen("modules/ini/dynapse_null.txt", "r");
 	    if (fp == NULL)
 	        exit(EXIT_FAILURE);
 
@@ -1214,7 +1264,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	    }
 	    caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,"Done.\n");
 
-	    fclose(fp);
+	    fclose(fp);*/
 
 
 		// sram content
@@ -1263,8 +1313,8 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 				// all cores
 				for (uint8_t core = 0; core < DYNAPSE_CONFIG_NUMCORES; core++) {
 					// all rows
-					for (uint16_t row_neuronid = 0; row_neuronid < 256; row_neuronid++) {
-						for (uint16_t row_sram = 0; row_sram < 4; row_sram++) {
+					for (uint32_t row_neuronid = 0; row_neuronid < 256; row_neuronid++) {
+						for (uint8_t row_sram = 0; row_sram < 4; row_sram++) {
 							// use first sram for monitoring
 							if(row_sram == 0){
 								uint8_t sourcechipid = chip;	// same as chip id
@@ -1307,8 +1357,8 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 					// all cores
 					for (uint8_t core = 0; core < DYNAPSE_CONFIG_NUMCORES; core++) {
 						// all rows
-						for (uint16_t row = 0; row < 1024; row++) {
-							for (uint16_t columns = 0; columns < 16; columns++) {
+						for (uint32_t row = 0; row < 1024; row++) {
+							for (uint32_t columns = 0; columns < 16; columns++) {
 								bits =  row << 5 | core << 15 | 1 << 17;
 								// finally send configuration via USB
 								caerDeviceConfigSet(moduleData->moduleState,
@@ -1387,7 +1437,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	    // free file related strings
 	    fclose(fp);
 	    if (line)
-	        free(line);
+	       free(line);
 
 		/*output one neuron per core, neuron id 0 chip DYNAPSE_CONFIG_DYNAPSE_U2*/
 		caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
