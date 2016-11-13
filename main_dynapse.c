@@ -21,7 +21,7 @@
 
 // Devices support.
 #ifdef DYNAPSEFX2
-	#include "modules/ini/dynapse_fx2.h"
+#include "modules/ini/dynapse_fx2.h"
 #endif
 
 // Input/Output support.
@@ -52,6 +52,7 @@
 static bool mainloop_1(void);
 
 static bool mainloop_1(void) {
+
 	// An eventPacketContainer bundles event packets of different types together,
 	// to maintain time-coherence between the different events.
 	caerEventPacketContainer container = NULL;
@@ -89,9 +90,9 @@ static bool mainloop_1(void) {
 	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
 #endif
 
-    // check dynapse output
+	// check dynapse output
 #ifdef ENABLE_DYNAPSEINIT
-    	caerDynapseInit(2, spike);
+	caerDynapseInit(2, spike);
 #endif
 
 	// Filters can also extract information from event packets: for example
@@ -99,7 +100,6 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_STATISTICS
 	caerStatistics(3, (caerEventPacketHeader) spike, 1000);
 #endif
-
 
 	// A simple visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
@@ -130,9 +130,108 @@ static bool mainloop_1(void) {
 	return (true); // If false is returned, processing of this loop stops.
 }
 
+/* input string managment */
+char* getTagValue(char* a_tag_list, char* a_tag) {
+	/* 'strtok' modifies the string. */
+	char* tag_list_copy = malloc(strlen(a_tag_list) + 1);
+	char* result = 0;
+	char* s;
+
+	strcpy(tag_list_copy, a_tag_list);
+
+	s = strtok(tag_list_copy, "&");
+	while (s) {
+		char* equals_sign = strchr(s, '=');
+		if (equals_sign) {
+			*equals_sign = 0;
+			if (0 == strcmp(s, a_tag)) {
+				equals_sign++;
+				result = malloc(strlen(equals_sign) + 1);
+				strcpy(result, equals_sign);
+			}
+		}
+		s = strtok(0, " ");
+	}
+	free(tag_list_copy);
+
+	return result;
+}
+/* input string end*/
+
 int main(int argc, char **argv) {
 	// Set thread name.
 	thrd_set_name("Main");
+
+	/* decide what to initialize */
+	/*bool skipuserpref = false;
+	bool sram = true; // by default write the sram
+	bool cam = true;  // by default write the cam
+
+	if (argc == 3) {
+		if (strlen(argv[1]) > 8 || strlen(argv[2]) > 8) {
+			caerLog(CAER_LOG_ERROR, "Input arguments: ",
+					"arguments to long, please select the right arguments.\n");
+			caerLog(CAER_LOG_ERROR, "Input arguments: ",
+					"Please specify sram=0 or 1 cam=0 or 1.  \n");
+			caerLog(CAER_LOG_ERROR, "Input arguments: ",
+					" 0 -> do not configure \n");
+			caerLog(CAER_LOG_ERROR, "Input arguments: ",
+					" 1 -> configure default content \n");
+			return (EXIT_FAILURE);
+		}
+		char tag_list[20];
+		strcat(tag_list, argv[1]);
+		strcat(tag_list, "&");
+		strcat(tag_list, argv[2]);
+
+		char* sramconfig = getTagValue(argv[1], "sram");
+		char* camconfig = getTagValue(argv[2], "cam");
+
+		if(caerStrEquals(sramconfig,"1")){
+			caerLog( CAER_LOG_ERROR,  "Input arguments: ", "The sram is ONE\n", sramconfig);
+		 }else if(caerStrEquals(sramconfig,"0")){
+			 caerLog( CAER_LOG_ERROR,  "Input arguments: ", "The sram is ZERO\n", sramconfig);
+			 sram = false;
+		 }else{
+			 caerLog( CAER_LOG_ERROR, "Input arguments: ", "Sram option %s is invalid. Please select 1 or 0.\n", sramconfig);
+			 return(EXIT_FAILURE);
+		 }
+
+		if(caerStrEquals(camconfig,"1")){
+			caerLog( CAER_LOG_ERROR,  "Input arguments: ", "The sram is ONE\n", sramconfig);
+		 }else if(caerStrEquals(camconfig,"0")){
+			 caerLog( CAER_LOG_ERROR,  "Input arguments: ", "The sram is ZERO\n", sramconfig);
+			 cam = false;
+		 }else{
+			 caerLog( CAER_LOG_ERROR, "Input arguments: ", "Sram option %s is invalid. Please select 1 or 0.\n", sramconfig);
+			 return(EXIT_FAILURE);
+		 }
+
+	} else if (argc == 1) {
+		caerLog(CAER_LOG_WARNING, "Input arguments: ", "none given.\n");
+		caerLog(CAER_LOG_WARNING, "Input arguments: ",
+				"Please specify sram=0 or 1 cam=0 or 1.  \n");
+		caerLog(CAER_LOG_WARNING, "Input arguments: ",
+				" 0 -> do not configure \n");
+		caerLog(CAER_LOG_WARNING, "Input arguments: ",
+				" 1 -> configure default content \n");
+		caerLog(CAER_LOG_WARNING, "Initialization: ",
+				"Proceeding with default configuration (ie: sram=1, cam=1).\n");
+	} else if (argc <= 2) {
+		caerLog(CAER_LOG_ERROR, "Input arguments: ",
+				"Need exactly two input arguments.\n");
+		return (EXIT_FAILURE);
+	} else if (argc > 3) {
+		caerLog(CAER_LOG_ERROR, "Input arguments: ",
+				"Too many arguments supplied.\n");
+		return (EXIT_FAILURE);
+	} else {
+		caerLog(CAER_LOG_WARNING, "Input arguments: ",
+				"One argument expected.\n");
+		caerLog(CAER_LOG_WARNING, "Initialization: ",
+				"Proceeding with default configuration.\n");
+		skipuserpref = true;
+	}*/
 
 	// Initialize config storage from file, support command-line overrides.
 	// If no init from file needed, pass NULL.
