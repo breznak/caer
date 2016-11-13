@@ -826,6 +826,7 @@ static uint32_t convertBias(const char *biasName, const char* lowhi,
 	/*reverse*/
 	uint8_t tmp_c = coarseValue;
 
+	/*same as: sum(1 << (2 - i) for i in range(3) if 2 >> i & 1)*/
 	if (coarseValue == 0)
 		coarseValue = 0;
 	else if (coarseValue == 1)
@@ -844,62 +845,6 @@ static uint32_t convertBias(const char *biasName, const char* lowhi,
 		coarseValue = 7;
 
 	coarseRev = coarseValue;
-	/*sum(1 << (2 - i) for i in range(3) if 2 >> i & 1)*/
-	/*
-	 *
-	 *
-	 *
-
-	 if (coarseValue == 0)
-	 coarseValue = 7;
-	 else if (coarseValue == 1)
-	 coarseValue = 6;
-	 else if (coarseValue == 2)
-	 coarseValue = 5;
-	 else if (coarseValue == 3)
-	 coarseValue = 3;
-	 else if (coarseValue == 4)
-	 coarseValue = 2;
-	 else if (coarseValue == 5)
-	 coarseValue = 4;
-	 else if (coarseValue == 6)
-	 coarseValue = 1;
-	 else if (coarseValue == 7)
-	 coarseValue = 0;
-
-	 if (coarseValue == 0)
-	 coarseRev = 0;
-	 else if (coarseValue == 1)
-	 coarseRev = 4;
-	 else if (coarseValue == 2)
-	 coarseRev = 2;
-	 else if (coarseValue == 3)
-	 coarseRev = 6;
-	 else if (coarseValue == 4)
-	 coarseRev = 1;
-	 else if (coarseValue == 5)
-	 coarseRev = 5;
-	 else if (coarseValue == 6)
-	 coarseRev = 3;
-	 else if (coarseValue == 7)
-	 coarseRev = 7;
-
-	 if (coarseRev == 0)
-	 coarseRev = 7;
-	 else if (coarseRev == 1)
-	 coarseRev = 6;
-	 else if (coarseRev == 2)
-	 coarseRev = 5;
-	 else if (coarseRev == 3)
-	 coarseRev = 3;
-	 else if (coarseRev == 4)
-	 coarseRev = 2;
-	 else if (coarseRev == 5)
-	 coarseRev = 4;
-	 else if (coarseRev == 6)
-	 coarseRev = 1;
-	 else if (coarseRev == 7)
-	 coarseRev = 0;*/
 
 	// snn and ssp
 	if (addr == DYNAPSE_CONFIG_BIAS_U_SSP || addr == DYNAPSE_CONFIG_BIAS_U_SSN
@@ -1734,30 +1679,11 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MUX,
 			DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE, true);
 
-// now load low power biases
-
-	// always work on code id 4
+	// for now work on core id DYNAPSE_CONFIG_DYNAPSE_U2
 	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
 			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
 
-	// send low power biases
-	/*caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
-	 "Send default low power biases from file ...\n");
-	 fp = fopen("modules/ini/dynapse_lp.txt", "r");
-	 if (fp == NULL)
-	 exit(EXIT_FAILURE);
-	 while ((read = getline(&line, &len, fp)) != -1) {
-	 uint32_t val = atoi(line);
-	 caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
-	 DYNAPSE_CONFIG_CHIP_CONTENT, val);
-	 }
-	 caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Done.\n");
-
-	 // free file related strings
-	 fclose(fp);
-	 if (line)
-	 free(line);*/
-
+	// now set default low power biases
 	// core 0
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_BUF_P", 3, 0,
 			"HighBias", "Normal", "PBias", true);
@@ -2244,13 +2170,8 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "U_SSN", 0, 15,
 			"HighBias", "Normal", "PBias", true);
 
-	//createLowPowerConfigurationInv(moduleData, &dynapse_info);
-	//sendDefaultConfiguration(moduleData, &dynapse_info);
-
-	//createLowPowerConfiguration(moduleData, &dynapse_info);
-	//sendDefaultConfiguration(moduleData, &dynapse_info);
-
-	/*output one neuron per core, neuron id 0 chip DYNAPSE_CONFIG_DYNAPSE_U2*/
+	/* output one neuron per core, neuron id 0 chip DYNAPSE_CONFIG_DYNAPSE_U2*/
+	/* need to make a libcaer function for this */
 	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
 			DYNAPSE_CONFIG_CHIP_CONTENT, 2048);
 	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
