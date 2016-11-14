@@ -874,9 +874,45 @@ bool caerVisualizerRendererSpikeEvents(caerVisualizerPublicState state, caerEven
 			uint64_t neuronId = caerSpikeEventGetNeuronID(caerSpikeIteratorElement);
 			uint64_t coreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);// destination core (used as chip id)
 
-			uint32_t addr = coreId << 8 | neuronId;
-			uint32_t rowid = addr % 32;
-			uint32_t colid = addr / 32;
+			/*printf("\n\n");
+			printf("neuronId %d\n", neuronId);*/
+			uint32_t rowid;
+			uint32_t colid;
+
+			//for each row
+			for(size_t i=0; i<16; i++){
+				//check if the index parameter is in the row
+				if(neuronId < (16 * i) + 16 && neuronId >= 16 * i){
+					//return x, y
+					rowid = neuronId - 16 * i;
+					break;
+				}
+			}
+
+			//for each row
+			for(size_t i=0; i<16; i++){
+				//check if the index parameter is in the row
+				if(neuronId < (16 * i) + 16 && neuronId >= 16 * i){
+					colid = i;
+					break;
+				}
+			}
+
+
+			if(coreId == 0){
+				rowid = rowid*2;
+				colid = colid*2;
+			}else if(coreId == 1){
+				colid = colid*2;
+			}else if(coreId == 2){
+				rowid = rowid*2;
+			}else if(coreId == 3){
+				;
+			}
+
+			/*printf("rowid %d\n", rowid);
+			printf("colid %d\n", colid);
+			printf("\n\n");*/
 
 			al_put_pixel(32, 32, al_map_rgb(255, 0, 0));
 
