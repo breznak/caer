@@ -609,6 +609,70 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		}
 	}
 
+#ifdef DYNAPSEFX2
+#define DYNAPSE_CONFIG_NEUROW 16
+#define DYNAPSE_CONFIG_NEUCOL 16
+#define DYNAPSE_CONFIG_DYNAPSE_U2 4
+
+	if ( displayEvent.type == ALLEGRO_EVENT_MOUSE_BUTTON_UP){
+		//mouseup(&event.mouse);
+		uint32_t posx, posy;
+		posx = displayEvent.mouse.x;
+		posy = displayEvent.mouse.y;
+
+		float currentZoomFactor = sshsNodeGetFloat(state->parentModule->moduleNode, "zoomFactor");
+
+		uint8_t coreid = 0;
+		if(posx > (int)  DYNAPSE_CONFIG_NEUROW*currentZoomFactor && 
+				posy >(int)  DYNAPSE_CONFIG_NEUCOL*currentZoomFactor){
+			coreid = 3;
+		}else if(posx < (int)  DYNAPSE_CONFIG_NEUROW*currentZoomFactor  &&  
+				posy >(int)  DYNAPSE_CONFIG_NEUCOL*currentZoomFactor){
+			coreid = 2;
+		}else if(posx > (int) DYNAPSE_CONFIG_NEUROW*currentZoomFactor  &&  
+				posy < (int) DYNAPSE_CONFIG_NEUCOL*currentZoomFactor){
+			coreid = 1;
+		}else if(posx < (int) DYNAPSE_CONFIG_NEUROW*currentZoomFactor  && 
+			 posy < (int)  DYNAPSE_CONFIG_NEUCOL*currentZoomFactor){
+			coreid = 0;
+		}
+
+		//which chip is it?
+		uint16_t chipid = DYNAPSE_CONFIG_DYNAPSE_U2;
+
+		if(chipid == DYNAPSE_CONFIG_DYNAPSE_U2){
+			uint32_t indexLin = (int) posy/currentZoomFactor * (int) DYNAPSE_CONFIG_NEUCOL/currentZoomFactor + posx/currentZoomFactor;
+			//if does not yet exists and put
+			if(coreid == 0){
+				sshsNodePutIntIfAbsent(state->parentModule->moduleNode, "Chip0_MonitorNeuCore0", indexLin);
+				sshsNodePutInt(state->parentModule->moduleNode, "Chip0_MonitorNeuCore0", indexLin);
+			}else if(coreid == 1){
+				sshsNodePutIntIfAbsent(state->parentModule->moduleNode, "Chip0_MonitorNeuCore1", indexLin);
+				sshsNodePutInt(state->parentModule->moduleNode, "Chip0_MonitorNeuCore1", indexLin);
+			}else if(coreid == 2){
+				sshsNodePutIntIfAbsent(state->parentModule->moduleNode, "Chip0_MonitorNeuCore2", indexLin);
+				sshsNodePutInt(state->parentModule->moduleNode, "Chip0_MonitorNeuCore2", indexLin);
+			}else if(coreid == 3){
+				sshsNodePutIntIfAbsent(state->parentModule->moduleNode, "Chip0_MonitorNeuCore3", indexLin);
+				sshsNodePutInt(state->parentModule->moduleNode, "Chip0_MonitorNeuCore3", indexLin);
+			}
+
+			caerLog(CAER_LOG_NOTICE, "Visualizer", "Monitoring neuron indexLin %d core %d\n", indexLin, coreid);
+
+		}
+
+
+		//dynapseConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, coreid, indexLin);  // core 0 neuron 0
+		//dynapseConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, coreid, indexLin);  //  core 1 neuron 5
+		//dynapseConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, coreid, indexLin); // core 2 neuron 10
+		//dynapseConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, coreid, indexLin); // core 3 neuron 20
+
+
+
+	}
+#endif
+
+
 	if (!al_is_event_queue_empty(state->displayEventQueue)) {
 		// Handle all events before rendering, to avoid
 		// having them backed up too much.
@@ -876,8 +940,8 @@ bool caerVisualizerRendererSpikeEvents(caerVisualizerPublicState state, caerEven
 
 			/*printf("\n\n");
 			printf("neuronId %d\n", neuronId);*/
-			uint32_t rowid;
-			uint32_t colid;
+			uint32_t rowid = 0;
+			uint32_t colid = 0;
 
 			//for each row
 			for(size_t i=0; i<16; i++){
@@ -900,23 +964,27 @@ bool caerVisualizerRendererSpikeEvents(caerVisualizerPublicState state, caerEven
 
 
 			if(coreId == 0){
-				rowid = rowid*2;
-				colid = colid*2;
+				rowid = rowid+16;
+				colid = colid+16;
+				al_put_pixel(rowid, colid, al_map_rgb(0, 255, 0));
 			}else if(coreId == 1){
-				colid = colid*2;
+				colid = colid+16;
+				al_put_pixel(rowid, colid, al_map_rgb(255, 0, 0));
 			}else if(coreId == 2){
-				rowid = rowid*2;
+				rowid = rowid+16;
+				al_put_pixel(rowid, colid, al_map_rgb(0, 0, 255));
 			}else if(coreId == 3){
-				;
+				al_put_pixel(rowid, colid, al_map_rgb(120, 120, 120));
 			}
 
-			/*printf("rowid %d\n", rowid);
-			printf("colid %d\n", colid);
-			printf("\n\n");*/
-
+			if((rowid == 0 && colid == 0 )|| (rowid == 16 && colid == 16)){
+				printf("rowid %d\n", rowid);
+				printf("colid %d\n", colid);
+				printf("\n\n");
+			}
+		
 			al_put_pixel(32, 32, al_map_rgb(255, 0, 0));
 
-			al_put_pixel(rowid, colid, al_map_rgb(0, 255, 0));
 
 	CAER_SPIKE_ITERATOR_ALL_END
 

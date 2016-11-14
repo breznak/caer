@@ -822,7 +822,6 @@ static uint32_t convertBias(const char *biasName, const char* lowhi,
 
 	uint8_t coarseRev = 0;
 	/*reverse*/
-	uint8_t tmp_c = coarseValue;
 
 	/*same as: sum(1 << (2 - i) for i in range(3) if 2 >> i & 1)*/
 	if (coarseValue == 0)
