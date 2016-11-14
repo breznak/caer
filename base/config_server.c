@@ -9,16 +9,6 @@
 #define CONFIG_SERVER_NAME "Config Server"
 #define UV_RET_CHECK_CS(RET_VAL, FUNC_NAME, CLEANUP_ACTIONS) UV_RET_CHECK(RET_VAL, CONFIG_SERVER_NAME, FUNC_NAME, CLEANUP_ACTIONS)
 
-// Control message format: 1 byte ACTION, 1 byte TYPE, 2 bytes EXTRA_LEN,
-// 2 bytes NODE_LEN, 2 bytes KEY_LEN, 2 bytes VALUE_LEN, then up to 4086
-// bytes split between EXTRA, NODE, KEY, VALUE (with 4 bytes for NUL).
-// Basically: (EXTRA_LEN + NODE_LEN + KEY_LEN + VALUE_LEN) <= 4086.
-// EXTRA, NODE, KEY, VALUE have to be NUL terminated, and their length
-// must include the NUL termination byte.
-// This results in a maximum message size of 4096 bytes (4KB).
-#define CONFIG_SERVER_BUFFER_SIZE 4096
-#define CONFIG_HEADER_LENGTH 10
-
 static struct {
 	atomic_bool running;
 	uv_async_t asyncShutdown;
@@ -96,7 +86,7 @@ static void configServerAlloc(uv_handle_t *client, size_t suggestedSize, uv_buf_
 	// We use one buffer per connection, with a fixed maximum size, and
 	// re-use it until we have read a full message.
 	if (client->data == NULL) {
-		client->data = simpleBufferInit(CONFIG_SERVER_BUFFER_SIZE);
+		client->data = simpleBufferInit(CAER_CONFIG_SERVER_BUFFER_SIZE);
 
 		if (client->data == NULL) {
 			// Allocation failure!
@@ -167,7 +157,7 @@ static void configServerRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf
 
 		// If we have enough data, we start parsing the lengths.
 		// The main header is 10 bytes.
-		if (dataBuf->bufferUsedSize >= CONFIG_HEADER_LENGTH) {
+		if (dataBuf->bufferUsedSize >= CAER_CONFIG_SERVER_HEADER_SIZE) {
 			// Decode length header fields (all in little-endian).
 			uint16_t extraLength = le16toh(*(uint16_t * )(dataBuf->buffer + 2));
 			uint16_t nodeLength = le16toh(*(uint16_t * )(dataBuf->buffer + 4));
@@ -177,17 +167,18 @@ static void configServerRead(uv_stream_t *client, ssize_t sizeRead, const uv_buf
 			// Total length to get for command.
 			size_t readLength = (size_t) (extraLength + nodeLength + keyLength + valueLength);
 
-			if (dataBuf->bufferUsedSize >= (CONFIG_HEADER_LENGTH + readLength)) {
+			if (dataBuf->bufferUsedSize >= (CAER_CONFIG_SERVER_HEADER_SIZE + readLength)) {
 				// Decode remaining header fields.
 				uint8_t action = dataBuf->buffer[0];
 				uint8_t type = dataBuf->buffer[1];
 
 				// Now we have everything. The header fields are already
 				// fully decoded: handle request (and send back data eventually).
-				caerConfigServerHandleRequest(client, action, type, dataBuf->buffer + CONFIG_HEADER_LENGTH, extraLength,
-					dataBuf->buffer + CONFIG_HEADER_LENGTH + extraLength, nodeLength,
-					dataBuf->buffer + CONFIG_HEADER_LENGTH + extraLength + nodeLength, keyLength,
-					dataBuf->buffer + CONFIG_HEADER_LENGTH + extraLength + nodeLength + keyLength, valueLength);
+				caerConfigServerHandleRequest(client, action, type, dataBuf->buffer + CAER_CONFIG_SERVER_HEADER_SIZE,
+					extraLength, dataBuf->buffer + CAER_CONFIG_SERVER_HEADER_SIZE + extraLength, nodeLength,
+					dataBuf->buffer + CAER_CONFIG_SERVER_HEADER_SIZE + extraLength + nodeLength, keyLength,
+					dataBuf->buffer + CAER_CONFIG_SERVER_HEADER_SIZE + extraLength + nodeLength + keyLength,
+					valueLength);
 
 				// Reset buffer for next request.
 				dataBuf->bufferUsedSize = 0;

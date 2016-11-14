@@ -10,7 +10,7 @@
 #include "utils/ext/libuvline/libuvline.h"
 
 #ifdef __APPLE__
-    #include <sys/syslimits.h>
+#include <sys/syslimits.h>
 #endif
 
 static void handleInputLine(const char *buf, size_t bufLength);
@@ -211,7 +211,7 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 	// EXTRA, NODE, KEY, VALUE have to be NUL terminated, and their length
 	// must include the NUL termination byte.
 	// This results in a maximum message size of 4096 bytes (4KB).
-	uint8_t dataBuffer[4096];
+	uint8_t dataBuffer[CAER_CONFIG_SERVER_BUFFER_SIZE];
 	size_t dataBufferLength = 0;
 
 	// Now that we know what we want to do, let's decode the command line.
@@ -236,9 +236,9 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 			setKeyLen(dataBuffer, 0); // UNUSED.
 			setValueLen(dataBuffer, 0); // UNUSED.
 
-			memcpy(dataBuffer + 10, commandParts[CMD_PART_NODE], nodeLength);
+			memcpy(dataBuffer + CAER_CONFIG_SERVER_HEADER_SIZE, commandParts[CMD_PART_NODE], nodeLength);
 
-			dataBufferLength = 10 + nodeLength;
+			dataBufferLength = CAER_CONFIG_SERVER_HEADER_SIZE + nodeLength;
 
 			break;
 		}
@@ -279,10 +279,10 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 			setKeyLen(dataBuffer, (uint16_t) keyLength);
 			setValueLen(dataBuffer, 0); // UNUSED.
 
-			memcpy(dataBuffer + 10, commandParts[CMD_PART_NODE], nodeLength);
-			memcpy(dataBuffer + 10 + nodeLength, commandParts[CMD_PART_KEY], keyLength);
+			memcpy(dataBuffer + CAER_CONFIG_SERVER_HEADER_SIZE, commandParts[CMD_PART_NODE], nodeLength);
+			memcpy(dataBuffer + CAER_CONFIG_SERVER_HEADER_SIZE + nodeLength, commandParts[CMD_PART_KEY], keyLength);
 
-			dataBufferLength = 10 + nodeLength + keyLength;
+			dataBufferLength = CAER_CONFIG_SERVER_HEADER_SIZE + nodeLength + keyLength;
 
 			break;
 		}
@@ -327,11 +327,12 @@ static void handleInputLine(const char *buf, size_t bufLength) {
 			setKeyLen(dataBuffer, (uint16_t) keyLength);
 			setValueLen(dataBuffer, (uint16_t) valueLength);
 
-			memcpy(dataBuffer + 10, commandParts[CMD_PART_NODE], nodeLength);
-			memcpy(dataBuffer + 10 + nodeLength, commandParts[CMD_PART_KEY], keyLength);
-			memcpy(dataBuffer + 10 + nodeLength + keyLength, commandParts[CMD_PART_VALUE], valueLength);
+			memcpy(dataBuffer + CAER_CONFIG_SERVER_HEADER_SIZE, commandParts[CMD_PART_NODE], nodeLength);
+			memcpy(dataBuffer + CAER_CONFIG_SERVER_HEADER_SIZE + nodeLength, commandParts[CMD_PART_KEY], keyLength);
+			memcpy(dataBuffer + CAER_CONFIG_SERVER_HEADER_SIZE + nodeLength + keyLength, commandParts[CMD_PART_VALUE],
+				valueLength);
 
-			dataBufferLength = 10 + nodeLength + keyLength + valueLength;
+			dataBufferLength = CAER_CONFIG_SERVER_HEADER_SIZE + nodeLength + keyLength + valueLength;
 
 			break;
 		}
@@ -572,7 +573,7 @@ static void nodeCompletion(const char *buf, size_t bufLength, libuvTTYCompletion
 
 	size_t lastNodeLength = (size_t) (lastNode - partialNodeString) + 1;
 
-	uint8_t dataBuffer[1024];
+	uint8_t dataBuffer[CAER_CONFIG_SERVER_BUFFER_SIZE];
 
 	// Send request for all children names.
 	dataBuffer[0] = CAER_CONFIG_GET_CHILDREN;
@@ -582,10 +583,10 @@ static void nodeCompletion(const char *buf, size_t bufLength, libuvTTYCompletion
 	setKeyLen(dataBuffer, 0); // UNUSED.
 	setValueLen(dataBuffer, 0); // UNUSED.
 
-	memcpy(dataBuffer + 10, partialNodeString, lastNodeLength);
-	dataBuffer[10 + lastNodeLength] = '\0';
+	memcpy(dataBuffer + CAER_CONFIG_SERVER_HEADER_SIZE, partialNodeString, lastNodeLength);
+	dataBuffer[CAER_CONFIG_SERVER_HEADER_SIZE + lastNodeLength] = '\0';
 
-	if (!sendUntilDone(sockFd, dataBuffer, 10 + lastNodeLength + 1)) {
+	if (!sendUntilDone(sockFd, dataBuffer, CAER_CONFIG_SERVER_HEADER_SIZE + lastNodeLength + 1)) {
 		// Failed to contact remote host, no auto-completion!
 		return;
 	}
@@ -627,7 +628,7 @@ static void keyCompletion(const char *buf, size_t bufLength, libuvTTYCompletions
 	const char *nodeString, size_t nodeStringLength, const char *partialKeyString, size_t partialKeyStringLength) {
 	UNUSED_ARGUMENT(actionCode);
 
-	uint8_t dataBuffer[1024];
+	uint8_t dataBuffer[CAER_CONFIG_SERVER_BUFFER_SIZE];
 
 	// Send request for all attribute names for this node.
 	dataBuffer[0] = CAER_CONFIG_GET_ATTRIBUTES;
@@ -637,10 +638,10 @@ static void keyCompletion(const char *buf, size_t bufLength, libuvTTYCompletions
 	setKeyLen(dataBuffer, 0); // UNUSED.
 	setValueLen(dataBuffer, 0); // UNUSED.
 
-	memcpy(dataBuffer + 10, nodeString, nodeStringLength);
-	dataBuffer[10 + nodeStringLength] = '\0';
+	memcpy(dataBuffer + CAER_CONFIG_SERVER_HEADER_SIZE, nodeString, nodeStringLength);
+	dataBuffer[CAER_CONFIG_SERVER_HEADER_SIZE + nodeStringLength] = '\0';
 
-	if (!sendUntilDone(sockFd, dataBuffer, 10 + nodeStringLength + 1)) {
+	if (!sendUntilDone(sockFd, dataBuffer, CAER_CONFIG_SERVER_HEADER_SIZE + nodeStringLength + 1)) {
 		// Failed to contact remote host, no auto-completion!
 		return;
 	}
@@ -684,7 +685,7 @@ static void typeCompletion(const char *buf, size_t bufLength, libuvTTYCompletion
 	const char *partialTypeString, size_t partialTypeStringLength) {
 	UNUSED_ARGUMENT(actionCode);
 
-	uint8_t dataBuffer[1024];
+	uint8_t dataBuffer[CAER_CONFIG_SERVER_BUFFER_SIZE];
 
 	// Send request for all type names for this key on this node.
 	dataBuffer[0] = CAER_CONFIG_GET_TYPES;
@@ -694,13 +695,14 @@ static void typeCompletion(const char *buf, size_t bufLength, libuvTTYCompletion
 	setKeyLen(dataBuffer, (uint16_t) (keyStringLength + 1)); // +1 for terminating NUL byte.
 	setValueLen(dataBuffer, 0); // UNUSED.
 
-	memcpy(dataBuffer + 10, nodeString, nodeStringLength);
-	dataBuffer[10 + nodeStringLength] = '\0';
+	memcpy(dataBuffer + CAER_CONFIG_SERVER_HEADER_SIZE, nodeString, nodeStringLength);
+	dataBuffer[CAER_CONFIG_SERVER_HEADER_SIZE + nodeStringLength] = '\0';
 
-	memcpy(dataBuffer + 10 + nodeStringLength + 1, keyString, keyStringLength);
-	dataBuffer[10 + nodeStringLength + 1 + keyStringLength] = '\0';
+	memcpy(dataBuffer + CAER_CONFIG_SERVER_HEADER_SIZE + nodeStringLength + 1, keyString, keyStringLength);
+	dataBuffer[CAER_CONFIG_SERVER_HEADER_SIZE + nodeStringLength + 1 + keyStringLength] = '\0';
 
-	if (!sendUntilDone(sockFd, dataBuffer, 10 + nodeStringLength + 1 + keyStringLength + 1)) {
+	if (!sendUntilDone(sockFd, dataBuffer,
+		CAER_CONFIG_SERVER_HEADER_SIZE + nodeStringLength + 1 + keyStringLength + 1)) {
 		// Failed to contact remote host, no auto-completion!
 		return;
 	}
@@ -766,7 +768,7 @@ static void valueCompletion(const char *buf, size_t bufLength, libuvTTYCompletio
 		return;
 	}
 
-	uint8_t dataBuffer[1024];
+	uint8_t dataBuffer[CAER_CONFIG_SERVER_BUFFER_SIZE];
 
 	// Send request for the current value, so we can auto-complete with it as default.
 	dataBuffer[0] = CAER_CONFIG_GET;
@@ -776,13 +778,14 @@ static void valueCompletion(const char *buf, size_t bufLength, libuvTTYCompletio
 	setKeyLen(dataBuffer, (uint16_t) (keyStringLength + 1)); // +1 for terminating NUL byte.
 	setValueLen(dataBuffer, 0); // UNUSED.
 
-	memcpy(dataBuffer + 10, nodeString, nodeStringLength);
-	dataBuffer[10 + nodeStringLength] = '\0';
+	memcpy(dataBuffer + CAER_CONFIG_SERVER_HEADER_SIZE, nodeString, nodeStringLength);
+	dataBuffer[CAER_CONFIG_SERVER_HEADER_SIZE + nodeStringLength] = '\0';
 
-	memcpy(dataBuffer + 10 + nodeStringLength + 1, keyString, keyStringLength);
-	dataBuffer[10 + nodeStringLength + 1 + keyStringLength] = '\0';
+	memcpy(dataBuffer + CAER_CONFIG_SERVER_HEADER_SIZE + nodeStringLength + 1, keyString, keyStringLength);
+	dataBuffer[CAER_CONFIG_SERVER_HEADER_SIZE + nodeStringLength + 1 + keyStringLength] = '\0';
 
-	if (!sendUntilDone(sockFd, dataBuffer, 10 + nodeStringLength + 1 + keyStringLength + 1)) {
+	if (!sendUntilDone(sockFd, dataBuffer,
+		CAER_CONFIG_SERVER_HEADER_SIZE + nodeStringLength + 1 + keyStringLength + 1)) {
 		// Failed to contact remote host, no auto-completion!
 		return;
 	}
