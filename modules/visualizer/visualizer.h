@@ -33,19 +33,25 @@ void caerVisualizerUpdate(caerVisualizerState state, caerEventPacketContainer co
 void caerVisualizerExit(caerVisualizerState state);
 void caerVisualizerReset(caerVisualizerState state);
 
+// Event packet visualizer.
 void caerVisualizer(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer,
 	caerVisualizerEventHandler eventHandler, caerEventPacketHeader packetHeader);
 
+// Default renderers.
 bool caerVisualizerRendererPolarityEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
 bool caerVisualizerRendererFrameEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
 bool caerVisualizerRendererIMU6Events(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
 bool caerVisualizerRendererPoint2DEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
 bool caerVisualizerRendererSpikeEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
+
+// Default event handlers.
 void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLEGRO_EVENT event);
 
+// Event packet container visualizer (multiple packets).
 void caerVisualizerMulti(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer,
 	caerVisualizerEventHandler eventHandler, caerEventPacketContainer container);
 
+// Default multi renderers.
 bool caerVisualizerMultiRendererPolarityAndFrameEvents(caerVisualizerPublicState state, caerEventPacketContainer container,
 	bool doClear);
 
