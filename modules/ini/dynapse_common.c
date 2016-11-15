@@ -1568,11 +1568,10 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 			"HighBias", "Normal", "PBias", true);
 
 	// Clear SRAM --> DYNAPSE_CONFIG_DYNAPSE_U2
-	uint32_t bits = 0;
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing SRAM ...\n");
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
 	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_DEFAULT_SRAM, DYNAPSE_CONFIG_DYNAPSE_U2, 0);
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U2, 0);
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
 	// Clear CAM -->  DYNAPSE_CONFIG_DYNAPSE_U2
@@ -2137,6 +2136,14 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 			"HighBias", "Normal", "PBias", true);
 
 	/* output one neuron per core, neuron id 0 chip DYNAPSE_CONFIG_DYNAPSE_U2*/
+
+
+	// Configure SRAM for Monitoring--> DYNAPSE_CONFIG_DYNAPSE_U2
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing SRAM ...\n");
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_DEFAULT_SRAM, DYNAPSE_CONFIG_DYNAPSE_U2, 0);
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
 
 	/* need to make a libcaer function for this */

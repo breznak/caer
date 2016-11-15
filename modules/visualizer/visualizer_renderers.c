@@ -254,33 +254,16 @@ bool doClear) {
 	// Render all spikes.
 	CAER_SPIKE_ITERATOR_ALL_START( (caerSpikeEventPacket) spikeEventPacketHeader )
 
-		int32_t ts = caerSpikeEventGetTimestamp(caerSpikeIteratorElement);
+		//int32_t ts = caerSpikeEventGetTimestamp(caerSpikeIteratorElement);
 		uint64_t neuronId = caerSpikeEventGetNeuronID(caerSpikeIteratorElement);
 		uint64_t coreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);// destination core (used as chip id)
 
-		/*printf("\n\n");
-		 printf("neuronId %d\n", neuronId);*/
 		uint32_t rowid = 0;
 		uint32_t colid = 0;
 
-		//for each row
-		for (size_t i = 0; i < 16; i++) {
-			//check if the index parameter is in the row
-			if (neuronId < (16 * i) + 16 && neuronId >= 16 * i) {
-				//return x, y
-				rowid = neuronId - 16 * i;
-				break;
-			}
-		}
+		rowid = neuronId & 0x0F;
+		colid = (neuronId >> 4) & 0x0F;
 
-		//for each row
-		for (size_t i = 0; i < 16; i++) {
-			//check if the index parameter is in the row
-			if (neuronId < (16 * i) + 16 && neuronId >= 16 * i) {
-				colid = i;
-				break;
-			}
-		}
 
 		if (coreId == 0) {
 			rowid = rowid + 16;
@@ -297,12 +280,6 @@ bool doClear) {
 		}
 		else if (coreId == 3) {
 			al_put_pixel(rowid, colid, al_map_rgb(120, 120, 120));
-		}
-
-		if ((rowid == 0 && colid == 0) || (rowid == 16 && colid == 16)) {
-			printf("rowid %d\n", rowid);
-			printf("colid %d\n", colid);
-			printf("\n\n");
 		}
 
 		al_put_pixel(32, 32, al_map_rgb(255, 0, 0));
