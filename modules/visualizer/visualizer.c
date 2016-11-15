@@ -13,11 +13,14 @@
 #include <libcaer/events/imu6.h>
 #include <libcaer/events/point2d.h>
 #include <libcaer/events/spike.h>
+#include <libcaer/devices/dynapse.h>
 #include <allegro5/allegro_primitives.h>
 #include <allegro5/allegro_ttf.h>
 
 struct caer_visualizer_state {
+	int16_t eventSourceID;
 	sshsNode eventSourceConfigNode;
+	sshsNode visualizerConfigNode;
 	int32_t bitmapRendererSizeX;
 	int32_t bitmapRendererSizeY;
 	ALLEGRO_FONT *displayFont;
@@ -191,7 +194,9 @@ caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisu
 	}
 
 	state->parentModule = parentModule;
+	state->visualizerConfigNode = parentModule->moduleNode;
 	if (eventSourceID >= 0) {
+		state->eventSourceID = eventSourceID;
 		state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(eventSourceID));
 	}
 
@@ -482,7 +487,8 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 		// Update bitmap with new content. (0, 0) is upper left corner.
 		// NULL renderer is supported and simply does nothing (black screen).
 		if (state->renderer != NULL) {
-			bool didDrawSomething = (*state->renderer)((caerVisualizerPublicState) state, container, !state->bitmapDrawUpdate);
+			bool didDrawSomething = (*state->renderer)((caerVisualizerPublicState) state, container,
+				!state->bitmapDrawUpdate);
 
 			// Remember if something was drawn, even just once.
 			if (!state->bitmapDrawUpdate) {
@@ -585,7 +591,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 					currentZoomFactor = 50;
 				}
 
-								sshsNodePutFloat(state->parentModule->moduleNode, "zoomFactor", currentZoomFactor);
+				sshsNodePutFloat(state->parentModule->moduleNode, "zoomFactor", currentZoomFactor);
 			}
 			else if (displayEvent.type == ALLEGRO_EVENT_MOUSE_AXES && displayEvent.mouse.dz < 0) {
 				float currentZoomFactor = sshsNodeGetFloat(state->parentModule->moduleNode, "zoomFactor");
@@ -608,70 +614,6 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 			}
 		}
 	}
-
-#ifdef DYNAPSEFX2
-#define DYNAPSE_CONFIG_NEUROW 16
-#define DYNAPSE_CONFIG_NEUCOL 16
-#define DYNAPSE_CONFIG_DYNAPSE_U2 4
-
-	if ( displayEvent.type == ALLEGRO_EVENT_MOUSE_BUTTON_UP){
-		//mouseup(&event.mouse);
-		uint32_t posx, posy;
-		posx = displayEvent.mouse.x;
-		posy = displayEvent.mouse.y;
-
-		float currentZoomFactor = sshsNodeGetFloat(state->parentModule->moduleNode, "zoomFactor");
-
-		uint8_t coreid = 0;
-		if(posx > (int)  DYNAPSE_CONFIG_NEUROW*currentZoomFactor && 
-				posy >(int)  DYNAPSE_CONFIG_NEUCOL*currentZoomFactor){
-			coreid = 3;
-		}else if(posx < (int)  DYNAPSE_CONFIG_NEUROW*currentZoomFactor  &&  
-				posy >(int)  DYNAPSE_CONFIG_NEUCOL*currentZoomFactor){
-			coreid = 2;
-		}else if(posx > (int) DYNAPSE_CONFIG_NEUROW*currentZoomFactor  &&  
-				posy < (int) DYNAPSE_CONFIG_NEUCOL*currentZoomFactor){
-			coreid = 1;
-		}else if(posx < (int) DYNAPSE_CONFIG_NEUROW*currentZoomFactor  && 
-			 posy < (int)  DYNAPSE_CONFIG_NEUCOL*currentZoomFactor){
-			coreid = 0;
-		}
-
-		//which chip is it?
-		uint16_t chipid = DYNAPSE_CONFIG_DYNAPSE_U2;
-
-		if(chipid == DYNAPSE_CONFIG_DYNAPSE_U2){
-			uint32_t indexLin = (int) posy/currentZoomFactor * (int) DYNAPSE_CONFIG_NEUCOL/currentZoomFactor + posx/currentZoomFactor;
-			//if does not yet exists and put
-			if(coreid == 0){
-				sshsNodePutIntIfAbsent(state->parentModule->moduleNode, "Chip0_MonitorNeuCore0", indexLin);
-				sshsNodePutInt(state->parentModule->moduleNode, "Chip0_MonitorNeuCore0", indexLin);
-			}else if(coreid == 1){
-				sshsNodePutIntIfAbsent(state->parentModule->moduleNode, "Chip0_MonitorNeuCore1", indexLin);
-				sshsNodePutInt(state->parentModule->moduleNode, "Chip0_MonitorNeuCore1", indexLin);
-			}else if(coreid == 2){
-				sshsNodePutIntIfAbsent(state->parentModule->moduleNode, "Chip0_MonitorNeuCore2", indexLin);
-				sshsNodePutInt(state->parentModule->moduleNode, "Chip0_MonitorNeuCore2", indexLin);
-			}else if(coreid == 3){
-				sshsNodePutIntIfAbsent(state->parentModule->moduleNode, "Chip0_MonitorNeuCore3", indexLin);
-				sshsNodePutInt(state->parentModule->moduleNode, "Chip0_MonitorNeuCore3", indexLin);
-			}
-
-			caerLog(CAER_LOG_NOTICE, "Visualizer", "Monitoring neuron indexLin %d core %d\n", indexLin, coreid);
-
-		}
-
-
-		//dynapseConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, coreid, indexLin);  // core 0 neuron 0
-		//dynapseConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, coreid, indexLin);  //  core 1 neuron 5
-		//dynapseConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, coreid, indexLin); // core 2 neuron 10
-		//dynapseConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, coreid, indexLin); // core 3 neuron 20
-
-
-
-	}
-#endif
-
 
 	if (!al_is_event_queue_empty(state->displayEventQueue)) {
 		// Handle all events before rendering, to avoid
@@ -703,7 +645,7 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 			GLOBAL_FONT_SPACING, 0, state->packetStatistics.currentStatisticsStringTotal);
 
 			al_draw_text(state->displayFont, al_map_rgb(255, 255, 255), GLOBAL_FONT_SPACING,
-			(2 * GLOBAL_FONT_SPACING) + GLOBAL_FONT_SIZE, 0, state->packetStatistics.currentStatisticsStringValid);
+				(2 * GLOBAL_FONT_SPACING) + GLOBAL_FONT_SIZE, 0, state->packetStatistics.currentStatisticsStringValid);
 		}
 
 		// Blit bitmap to screen.
@@ -916,7 +858,8 @@ static void caerVisualizerModuleRun(caerModuleData moduleData, size_t argsNumber
 	caerVisualizerUpdate(moduleData->moduleState, container);
 }
 
-bool caerVisualizerRendererSpikeEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear) {
+bool caerVisualizerRendererSpikeEvents(caerVisualizerPublicState state, caerEventPacketContainer container,
+bool doClear) {
 	UNUSED_ARGUMENT(state);
 
 	// Clear bitmap to black to erase old events.
@@ -924,76 +867,118 @@ bool caerVisualizerRendererSpikeEvents(caerVisualizerPublicState state, caerEven
 		al_clear_to_color(al_map_rgb(0, 0, 0));
 	}
 
-	caerEventPacketHeader spikeEventPacketHeader  = caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
+	caerEventPacketHeader spikeEventPacketHeader = caerEventPacketContainerFindEventPacketByType(container,
+		SPIKE_EVENT);
 
 	if (spikeEventPacketHeader == NULL || caerEventPacketHeaderGetEventValid(spikeEventPacketHeader) == 0) {
 		return (false);
 	}
 
-
 	// Render all spikes.
 	CAER_SPIKE_ITERATOR_ALL_START( (caerSpikeEventPacket) spikeEventPacketHeader )
 
-			uint64_t ts = caerSpikeEventGetTimestamp(caerSpikeIteratorElement);
-			uint64_t neuronId = caerSpikeEventGetNeuronID(caerSpikeIteratorElement);
-			uint64_t coreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);// destination core (used as chip id)
+		int32_t ts = caerSpikeEventGetTimestamp(caerSpikeIteratorElement);
+		uint64_t neuronId = caerSpikeEventGetNeuronID(caerSpikeIteratorElement);
+		uint64_t coreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);// destination core (used as chip id)
 
-			/*printf("\n\n");
-			printf("neuronId %d\n", neuronId);*/
-			uint32_t rowid = 0;
-			uint32_t colid = 0;
+		/*printf("\n\n");
+		 printf("neuronId %d\n", neuronId);*/
+		uint32_t rowid = 0;
+		uint32_t colid = 0;
 
-			//for each row
-			for(size_t i=0; i<16; i++){
-				//check if the index parameter is in the row
-				if(neuronId < (16 * i) + 16 && neuronId >= 16 * i){
-					//return x, y
-					rowid = neuronId - 16 * i;
-					break;
-				}
+		//for each row
+		for (size_t i = 0; i < 16; i++) {
+			//check if the index parameter is in the row
+			if (neuronId < (16 * i) + 16 && neuronId >= 16 * i) {
+				//return x, y
+				rowid = neuronId - 16 * i;
+				break;
 			}
+		}
 
-			//for each row
-			for(size_t i=0; i<16; i++){
-				//check if the index parameter is in the row
-				if(neuronId < (16 * i) + 16 && neuronId >= 16 * i){
-					colid = i;
-					break;
-				}
+		//for each row
+		for (size_t i = 0; i < 16; i++) {
+			//check if the index parameter is in the row
+			if (neuronId < (16 * i) + 16 && neuronId >= 16 * i) {
+				colid = i;
+				break;
 			}
+		}
 
+		if (coreId == 0) {
+			rowid = rowid + 16;
+			colid = colid + 16;
+			al_put_pixel(rowid, colid, al_map_rgb(0, 255, 0));
+		}
+		else if (coreId == 1) {
+			colid = colid + 16;
+			al_put_pixel(rowid, colid, al_map_rgb(255, 0, 0));
+		}
+		else if (coreId == 2) {
+			rowid = rowid + 16;
+			al_put_pixel(rowid, colid, al_map_rgb(0, 0, 255));
+		}
+		else if (coreId == 3) {
+			al_put_pixel(rowid, colid, al_map_rgb(120, 120, 120));
+		}
 
-			if(coreId == 0){
-				rowid = rowid+16;
-				colid = colid+16;
-				al_put_pixel(rowid, colid, al_map_rgb(0, 255, 0));
-			}else if(coreId == 1){
-				colid = colid+16;
-				al_put_pixel(rowid, colid, al_map_rgb(255, 0, 0));
-			}else if(coreId == 2){
-				rowid = rowid+16;
-				al_put_pixel(rowid, colid, al_map_rgb(0, 0, 255));
-			}else if(coreId == 3){
-				al_put_pixel(rowid, colid, al_map_rgb(120, 120, 120));
-			}
+		if ((rowid == 0 && colid == 0) || (rowid == 16 && colid == 16)) {
+			printf("rowid %d\n", rowid);
+			printf("colid %d\n", colid);
+			printf("\n\n");
+		}
 
-			if((rowid == 0 && colid == 0 )|| (rowid == 16 && colid == 16)){
-				printf("rowid %d\n", rowid);
-				printf("colid %d\n", colid);
-				printf("\n\n");
-			}
-		
-			al_put_pixel(32, 32, al_map_rgb(255, 0, 0));
-
+		al_put_pixel(32, 32, al_map_rgb(255, 0, 0));
 
 	CAER_SPIKE_ITERATOR_ALL_END
-
 
 	return (true);
 }
 
+void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLEGRO_EVENT event) {
+	if (event.type == ALLEGRO_EVENT_MOUSE_BUTTON_UP) {
+		uint32_t posx, posy;
+		posx = U32T(event.mouse.x);
+		posy = U32T(event.mouse.y);
 
-bool caerVisualizerRendererPolarityEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear) {
+		float currentZoomFactor = sshsNodeGetFloat(state->visualizerConfigNode, "zoomFactor");
+
+		uint8_t coreid = 0;
+		if (posx > (int) DYNAPSE_CONFIG_NEUROW * currentZoomFactor
+			&& posy > (int) DYNAPSE_CONFIG_NEUCOL * currentZoomFactor) {
+			coreid = 3;
+		}
+		else if (posx < (int) DYNAPSE_CONFIG_NEUROW * currentZoomFactor
+			&& posy > (int) DYNAPSE_CONFIG_NEUCOL * currentZoomFactor) {
+			coreid = 2;
+		}
+		else if (posx > (int) DYNAPSE_CONFIG_NEUROW * currentZoomFactor
+			&& posy < (int) DYNAPSE_CONFIG_NEUCOL * currentZoomFactor) {
+			coreid = 1;
+		}
+		else if (posx < (int) DYNAPSE_CONFIG_NEUROW * currentZoomFactor
+			&& posy < (int) DYNAPSE_CONFIG_NEUCOL * currentZoomFactor) {
+			coreid = 0;
+		}
+
+		// Which chip is it?
+		uint16_t chipid = DYNAPSE_CONFIG_DYNAPSE_U2;
+
+		if (chipid == DYNAPSE_CONFIG_DYNAPSE_U2) {
+			uint32_t indexLin = posy / U32T(currentZoomFactor) * DYNAPSE_CONFIG_NEUCOL / U32T(currentZoomFactor)
+				+ posx / U32T(currentZoomFactor);
+
+			void *eventSourceModuleState = caerMainloopGetSourceState(U16T(state->eventSourceID));
+
+			caerDeviceConfigSet(eventSourceModuleState, DYNAPSE_CONFIG_MONITOR_NEU, coreid, indexLin);
+
+			caerLog(CAER_LOG_NOTICE, "Visualizer", "Monitoring neuron indexLin %d core %d\n", indexLin, coreid);
+		}
+	}
+}
+
+bool caerVisualizerRendererPolarityEvents(caerVisualizerPublicState state, caerEventPacketContainer container,
+bool doClear) {
 	UNUSED_ARGUMENT(state);
 
 	// Clear bitmap to black to erase old events.
@@ -1025,7 +1010,8 @@ bool caerVisualizerRendererPolarityEvents(caerVisualizerPublicState state, caerE
 	return (true);
 }
 
-bool caerVisualizerRendererFrameEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear) {
+bool caerVisualizerRendererFrameEvents(caerVisualizerPublicState state, caerEventPacketContainer container,
+bool doClear) {
 	UNUSED_ARGUMENT(state);
 	UNUSED_ARGUMENT(doClear); // Don't erase last frame.
 
@@ -1187,7 +1173,8 @@ bool caerVisualizerRendererIMU6Events(caerVisualizerPublicState state, caerEvent
 	return (true);
 }
 
-bool caerVisualizerRendererPoint2DEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear) {
+bool caerVisualizerRendererPoint2DEvents(caerVisualizerPublicState state, caerEventPacketContainer container,
+bool doClear) {
 	UNUSED_ARGUMENT(state);
 
 	// Clear bitmap to black to erase old events.
@@ -1214,8 +1201,8 @@ bool caerVisualizerRendererPoint2DEvents(caerVisualizerPublicState state, caerEv
 	return (true);
 }
 
-bool caerVisualizerMultiRendererPolarityAndFrameEvents(caerVisualizerPublicState state, caerEventPacketContainer container,
-	bool doClear) {
+bool caerVisualizerMultiRendererPolarityAndFrameEvents(caerVisualizerPublicState state,
+	caerEventPacketContainer container, bool doClear) {
 	UNUSED_ARGUMENT(doClear); // Don't clear old frames, add events on top.
 
 	bool drewFrameEvents = caerVisualizerRendererFrameEvents(state, container, false);

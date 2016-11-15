@@ -11,7 +11,9 @@
 #define VISUALIZER_REFRESH_RATE 60.0f
 
 struct caer_visualizer_public_state {
+	int16_t eventSourceID;
 	sshsNode eventSourceConfigNode;
+	sshsNode visualizerConfigNode;
 	int32_t bitmapRendererSizeX;
 	int32_t bitmapRendererSizeY;
 	ALLEGRO_FONT *displayFont;
@@ -39,6 +41,7 @@ bool caerVisualizerRendererFrameEvents(caerVisualizerPublicState state, caerEven
 bool caerVisualizerRendererIMU6Events(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
 bool caerVisualizerRendererPoint2DEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
 bool caerVisualizerRendererSpikeEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
+void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLEGRO_EVENT event);
 
 void caerVisualizerMulti(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer,
 	caerVisualizerEventHandler eventHandler, caerEventPacketContainer container);

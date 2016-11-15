@@ -1572,14 +1572,14 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing SRAM ...\n");
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
 	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	dynapseConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_DEFAULT_SRAM, DYNAPSE_CONFIG_DYNAPSE_U2, 0);
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_DEFAULT_SRAM, DYNAPSE_CONFIG_DYNAPSE_U2, 0);
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
 	// Clear CAM -->  DYNAPSE_CONFIG_DYNAPSE_U2
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing CAM ...\n");
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
 	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	dynapseConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
 	// close config
@@ -2141,10 +2141,10 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 
 	/* need to make a libcaer function for this */
 	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	dynapseConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 0, 0);  // core 0 neuron 0
-	dynapseConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 1, 5);  //  core 1 neuron 5
-	dynapseConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 2, 60); // core 2 neuron 10
-	dynapseConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 3, 105); // core 3 neuron 20
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 0, 0);  // core 0 neuron 0
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 1, 5);  //  core 1 neuron 5
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 2, 60); // core 2 neuron 10
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 3, 105); // core 3 neuron 20
 
 
 	// Start data acquisition.
