@@ -12,7 +12,7 @@
 #include <allegro5/allegro_ttf.h>
 
 struct caer_visualizer_state {
-	int16_t eventSourceID;
+	void *eventSourceModuleState;
 	sshsNode eventSourceConfigNode;
 	sshsNode visualizerConfigNode;
 	int32_t bitmapRendererSizeX;
@@ -190,7 +190,7 @@ caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisu
 	state->parentModule = parentModule;
 	state->visualizerConfigNode = parentModule->moduleNode;
 	if (eventSourceID >= 0) {
-		state->eventSourceID = eventSourceID;
+		state->eventSourceModuleState = caerMainloopGetSourceState(U16T(eventSourceID));
 		state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(eventSourceID));
 	}
 

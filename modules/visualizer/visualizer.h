@@ -11,7 +11,7 @@
 #define VISUALIZER_REFRESH_RATE 60.0f
 
 struct caer_visualizer_public_state {
-	int16_t eventSourceID;
+	void *eventSourceModuleState;
 	sshsNode eventSourceConfigNode;
 	sshsNode visualizerConfigNode;
 	int32_t bitmapRendererSizeX;
