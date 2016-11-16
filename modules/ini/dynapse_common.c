@@ -61,15 +61,8 @@ static void chipConfigListener(sshsNode node, void *userData,
 
 	caerModuleData moduleData = userData;
 	struct caer_dynapse_info devInfo = caerDynapseInfoGet(
-			moduleData->moduleState);
+			((caerInputDynapseState) moduleData->moduleState)->deviceState);
 
-	if (event == SSHS_ATTRIBUTE_MODIFIED) {
-		if (changeType == SSHS_BYTE && caerStrEquals(changeKey, "MonNeu0")) {
-			//caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP, DDYNAPS_CONFIG_CHIP_DIGITALMUX0,
-			//		U32T(changeValue.ibyte));
-		}
-
-	}
 }
 
 static void systemConfigListener(sshsNode node, void *userData,
@@ -83,13 +76,13 @@ static void systemConfigListener(sshsNode node, void *userData,
 	if (event == SSHS_ATTRIBUTE_MODIFIED) {
 		if (changeType == SSHS_INT
 				&& caerStrEquals(changeKey, "PacketContainerMaxPacketSize")) {
-			caerDeviceConfigSet(moduleData->moduleState,
+			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
 			CAER_HOST_CONFIG_PACKETS,
 			CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_PACKET_SIZE,
 					U32T(changeValue.iint));
 		} else if (changeType == SSHS_INT
 				&& caerStrEquals(changeKey, "PacketContainerInterval")) {
-			caerDeviceConfigSet(moduleData->moduleState,
+			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
 			CAER_HOST_CONFIG_PACKETS,
 			CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_INTERVAL,
 					U32T(changeValue.iint));
@@ -98,16 +91,16 @@ static void systemConfigListener(sshsNode node, void *userData,
 }
 
 static void usbConfigSend(sshsNode node, caerModuleData moduleData) {
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_USB,
+	caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, CAER_HOST_CONFIG_USB,
 	CAER_HOST_CONFIG_USB_BUFFER_NUMBER,
 			U32T(sshsNodeGetInt(node, "BufferNumber")));
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_USB,
+	caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, CAER_HOST_CONFIG_USB,
 	CAER_HOST_CONFIG_USB_BUFFER_SIZE, U32T(sshsNodeGetInt(node, "BufferSize")));
 
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_USB,
+	caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, DYNAPSE_CONFIG_USB,
 	DYNAPSE_CONFIG_USB_EARLY_PACKET_DELAY,
 			U32T(sshsNodeGetShort(node, "EarlyPacketDelay")));
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_USB,
+	caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, DYNAPSE_CONFIG_USB,
 	DYNAPSE_CONFIG_USB_RUN, sshsNodeGetBool(node, "Run"));
 }
 
@@ -122,18 +115,18 @@ static void usbConfigListener(sshsNode node, void *userData,
 	if (event == SSHS_ATTRIBUTE_MODIFIED) {
 		if (changeType == SSHS_INT
 				&& caerStrEquals(changeKey, "BufferNumber")) {
-			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_USB,
+			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, CAER_HOST_CONFIG_USB,
 			CAER_HOST_CONFIG_USB_BUFFER_NUMBER, U32T(changeValue.iint));
 		} else if (changeType == SSHS_INT
 				&& caerStrEquals(changeKey, "BufferSize")) {
-			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_USB,
+			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, CAER_HOST_CONFIG_USB,
 			CAER_HOST_CONFIG_USB_BUFFER_SIZE, U32T(changeValue.iint));
 		} else if (changeType == SSHS_SHORT
 				&& caerStrEquals(changeKey, "EarlyPacketDelay")) {
-			caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_USB,
+			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, DYNAPSE_CONFIG_USB,
 			DYNAPSE_CONFIG_USB_EARLY_PACKET_DELAY, U32T(changeValue.ishort));
 		} else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "Run")) {
-			caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_USB,
+			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, DYNAPSE_CONFIG_USB,
 			DYNAPSE_CONFIG_USB_RUN, changeValue.boolean);
 		}
 	}
@@ -176,7 +169,7 @@ static void updateCoarseFineBiasSetting(caerModuleData moduleData,
 	uint32_t value = generateCoarseFineBiasParent(biasConfigNode, nodeName);
 
 	// finally send configuration via USB
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+	caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, DYNAPSE_CONFIG_CHIP,
 	DYNAPSE_CONFIG_CHIP_CONTENT, value);
 
 }
@@ -213,8 +206,7 @@ static void biasConfigListener(sshsNode node, void *userData,
 	UNUSED_ARGUMENT(changeValue);
 
 	caerModuleData moduleData = userData;
-	struct caer_dynapse_info devInfo = caerDynapseInfoGet(
-			moduleData->moduleState);
+	struct caer_dynapse_info devInfo = caerDynapseInfoGet(((caerInputDynapseState) moduleData->moduleState)->deviceState);
 
 	if (event == SSHS_ATTRIBUTE_MODIFIED) {
 		const char *nodeName = sshsNodeGetName(node);
@@ -222,7 +214,7 @@ static void biasConfigListener(sshsNode node, void *userData,
 		uint32_t value = generateCoarseFineBiasParent(node, nodeName);
 
 		// finally send configuration via USB
-		caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+		caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, DYNAPSE_CONFIG_CHIP,
 		DYNAPSE_CONFIG_CHIP_CONTENT, value);
 
 	}
@@ -877,7 +869,7 @@ static void biasConfigSend(sshsNode node, caerModuleData moduleData,
 	// SEND DEFAULT BIASES TO ALL CHIPS in BOARD (0,3) only chip id 4 for now
 	for (uint32_t this_chip = 4; this_chip < 5; this_chip++) {
 		// Let's select this chip for configuration
-		if (!caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+		if (!caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, DYNAPSE_CONFIG_CHIP,
 		DYNAPSE_CONFIG_CHIP_ID, this_chip)) {
 			caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString,
 					"Failed to configure chip bits");
@@ -890,7 +882,7 @@ static void biasConfigSend(sshsNode node, caerModuleData moduleData,
 				value = generateCoarseFineBiasParent(biasNodes[i], nodeName);
 
 				// finally send configuration via USB
-				caerDeviceConfigSet(moduleData->moduleState,
+				caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
 				DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, value);
 
 			}
@@ -973,19 +965,20 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	char *serialNumber = sshsNodeGetString(moduleData->moduleNode,
 			"serialNumber");
 
-	moduleData->moduleState = caerDeviceOpen(1, CAER_DEVICE_DYNAPSE, 0, 0,
-	NULL);
+	caerInputDynapseState state = moduleData->moduleState;
+
+	state->deviceState = caerDeviceOpen(1, CAER_DEVICE_DYNAPSE, 0, 0, NULL);
 
 	free(serialNumber);
 
-	if (moduleData->moduleState == NULL) {
+	if (state->deviceState == NULL) {
 		// Failed to open device.
 		return (false);
 	}
 
 // Let's take a look at the information we have on the device.
 	struct caer_dynapse_info dynapse_info = caerDynapseInfoGet(
-			moduleData->moduleState);
+			state->deviceState);
 
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
 			"%s --- ID: %d, Master: %d,  Logic: %d,  ChipID: %d.\n",
@@ -1038,24 +1031,23 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	caerModuleSetSubSystemString(moduleData, subSystemString);
 
 	// Let's turn on blocking data-get mode to avoid wasting resources.
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_DATAEXCHANGE,
+	caerDeviceConfigSet(state->deviceState, CAER_HOST_CONFIG_DATAEXCHANGE,
 	CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, true);
 
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
 	DYNAPSE_CONFIG_CHIP_RUN, true);
 
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_AER,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER,
 	DYNAPSE_CONFIG_AER_RUN,
 	true);
 	// chip id is CONFCHIPID
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
 	DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MUX,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MUX,
 	DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE, true);
 
 	// Create default settings and send them to the device.
 	createDefaultConfiguration(moduleData, &dynapse_info);
-	//sendDefaultConfiguration(moduleData, &dynapse_info); // all silent
 
 	// make chip silent while programming AER
 	// core 0
@@ -1561,9 +1553,9 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 			"Clearing SRAM ...\n");
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
 			"Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
 			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(moduleData->moduleState,
+	caerDeviceConfigSet(state->deviceState,
 			DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U2, 0);
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
@@ -1572,51 +1564,51 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 			"Clearing CAM ...\n");
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
 			"Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
 			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CLEAR_CAM, 0,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0,
 			0);
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
 	// close config
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
 	DYNAPSE_CONFIG_CHIP_RUN, false);
 
 	//close aer communication
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_AER,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER,
 	DYNAPSE_CONFIG_AER_RUN, false);
 
-	caerDeviceClose(&moduleData->moduleState);
+	caerDeviceClose(&state->deviceState);
 
 	// Open the communication with Dynap-se, give it a device ID of 1, and don't care about USB bus or SN restrictions.
-	moduleData->moduleState = caerDeviceOpen(1, CAER_DEVICE_DYNAPSE, 0, 0,
+	state->deviceState = caerDeviceOpen(1, CAER_DEVICE_DYNAPSE, 0, 0,
 	NULL);
-	if (moduleData->moduleState == NULL) {
+	if (state->deviceState == NULL) {
 		return (EXIT_FAILURE);
 	}
 
 	// Let's take a look at the information we have on the device.
-	dynapse_info = caerDynapseInfoGet(moduleData->moduleState);
+	dynapse_info = caerDynapseInfoGet(state->deviceState);
 
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
 			"%s --- ID: %d, Master: %d,  Logic: %d.\n",
 			dynapse_info.deviceString, dynapse_info.deviceID,
 			dynapse_info.deviceIsMaster, dynapse_info.logicVersion);
 
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_DATAEXCHANGE,
+	caerDeviceConfigSet(state->deviceState, CAER_HOST_CONFIG_DATAEXCHANGE,
 			CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, true);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
 			DYNAPSE_CONFIG_CHIP_RUN, true);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_AER,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER,
 			DYNAPSE_CONFIG_AER_RUN, true);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
 			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
 
 	// force chip to be enable even if aer is off
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MUX,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MUX,
 			DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE, true);
 	// for now work on core id DYNAPSE_CONFIG_DYNAPSE_U2
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
 			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
 
 	// now set default low power biases
@@ -2147,33 +2139,33 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 			"Clearing SRAM ...\n");
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
 			"Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
 			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_DEFAULT_SRAM,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM,
 			DYNAPSE_CONFIG_DYNAPSE_U2, 0);
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
 	/* need to make a libcaer function for this */
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
 			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 0,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU, 0,
 			0);  // core 0 neuron 0
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 1,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU, 1,
 			5);  //  core 1 neuron 5
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 2,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU, 2,
 			60); // core 2 neuron 10
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 3,
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU, 3,
 			105); // core 3 neuron 20
 
 	// Start data acquisition.
-	bool ret = caerDeviceDataStart(moduleData->moduleState,
+	bool ret = caerDeviceDataStart(state->deviceState,
 			&mainloopDataNotifyIncrease, &mainloopDataNotifyDecrease,
 			caerMainloopGetReference(), &moduleShutdownNotify,
 			moduleData->moduleNode);
 
 	if (!ret) {
 		// Failed to start data acquisition, close device and exit.
-		caerDeviceClose((caerDeviceHandle *) &moduleData->moduleState);
+		caerDeviceClose((caerDeviceHandle *) &state->deviceState);
 
 		return (false);
 	}
@@ -2206,6 +2198,8 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 		free(biasNodes);
 	}
 
+	caerGenSpikeInit(moduleData);
+
 	return (true);
 
 }
@@ -2213,11 +2207,11 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 void caerInputDYNAPSEExit(caerModuleData moduleData) {
 // Device related configuration has its own sub-node.
 	struct caer_dynapse_info devInfo = caerDynapseInfoGet(
-			moduleData->moduleState);
+			((caerInputDynapseState) moduleData->moduleState)->deviceState);
 	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode,
 			chipIDToName(devInfo.chipID, true));
 
-	caerDeviceDataStop(moduleData->moduleState);
+	caerDeviceDataStop(((caerInputDynapseState) moduleData->moduleState)->deviceState);
 
 	caerDeviceClose((caerDeviceHandle *) &moduleData->moduleState);
 
@@ -2235,7 +2229,7 @@ void caerInputDYNAPSERun(caerModuleData moduleData, size_t argsNumber,
 	caerEventPacketContainer *container = va_arg(args,
 			caerEventPacketContainer *);
 
-	*container = caerDeviceDataGet(moduleData->moduleState);
+	*container = caerDeviceDataGet(((caerInputDynapseState) moduleData->moduleState)->deviceState);
 
 	if (*container != NULL) {
 		caerMainloopFreeAfterLoop(
@@ -2260,7 +2254,7 @@ void caerInputDYNAPSERun(caerModuleData moduleData, size_t argsNumber,
 
 			// Update master/slave information.
 			struct caer_dynapse_info devInfo = caerDynapseInfoGet(
-					moduleData->moduleState);
+					((caerInputDynapseState) moduleData->moduleState)->deviceState);
 			sshsNodePutBool(sourceInfoNode, "deviceIsMaster",
 					devInfo.deviceIsMaster);
 		}

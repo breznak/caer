@@ -14,7 +14,7 @@ caerEventPacketContainer caerInputDYNAPSEFX2(uint16_t moduleID) {
 
 	caerEventPacketContainer result = NULL;
 
-	caerModuleSM(&caerInputDYNAPSEFX2Functions, moduleData, 0, 1, &result);
+	caerModuleSM(&caerInputDYNAPSEFX2Functions, moduleData, sizeof(struct caer_input_dynapse_state), 1, &result);
 
 	return (result);
 }

@@ -47,7 +47,7 @@ ENDIF()
 IF (DYNAPSEFX2)
 	SET(CAER_COMPILE_DEFINITIONS ${CAER_COMPILE_DEFINITIONS} -DDYNAPSEFX2=1)
 
-	SET(CAER_DYNAPSEFX2_FILES modules/ini/dynapse_common.c modules/ini/dynapse_fx2.c)
+	SET(CAER_DYNAPSEFX2_FILES modules/ini/dynapse_common.c modules/ini/dynapse_fx2.c modules/ini/gen_spikes.c)
 
 	SET(CAER_C_SRC_FILES ${CAER_C_SRC_FILES} ${CAER_DYNAPSEFX2_FILES})
 ENDIF()

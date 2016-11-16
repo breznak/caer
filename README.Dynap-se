@@ -36,8 +36,8 @@ Optional input/output modules:
 
 Optional modules:
  -DENABLE_STATISTICS=1  	- enable events statistics
- -DENABLE_VISUALIZER=1		 - enable the visualizer module 
-
+ -DENABLE_VISUALIZER=1		- enable the visualizer module 
+ 
 2) build:
 
 $ make
