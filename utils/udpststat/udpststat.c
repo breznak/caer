@@ -15,12 +15,15 @@
 #include <stdatomic.h>
 
 struct udp_packet {
+	struct udp_packet *next;
 	caerEventPacketHeader content;
 	int64_t startSequenceNumber;
 	int64_t endSequenceNumber;
-	size_t intermediateSequenceNumbersLength;
-	bool intermediateSequenceNumbers[];
+	size_t numUDPPackets;
+	bool udpPacketsReceived[];
 };
+
+typedef struct udp_packet *udpPacket;
 
 struct udp_message {
 	struct udp_message *next;
@@ -29,8 +32,10 @@ struct udp_message {
 	uint8_t message[];
 };
 
-static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, UT_array *incompleteUDPPackets, struct udp_message *unassignedUDPMessages,
-	int64_t sequenceNumber, uint8_t *data, size_t dataLength);
+typedef struct udp_message *udpMessage;
+
+static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket incompleteUDPPackets,
+	udpMessage unassignedUDPMessages, int64_t sequenceNumber, uint8_t *data, size_t dataLength);
 static void printPacketInfo(caerEventPacketHeader header);
 
 static atomic_bool globalShutdown = ATOMIC_VAR_INIT(false);
@@ -111,9 +116,8 @@ int main(int argc, char *argv[]) {
 		return (EXIT_FAILURE);
 	}
 
-	// 64K data buffer should be enough for the UDP packets. That should be the
-	// maximum single datagram size.
-	size_t dataBufferLength = 1024 * 64;
+	// Use cAER maximum UDP message size.
+	size_t dataBufferLength = MAX_OUTPUT_UDP_SIZE;
 	uint8_t *dataBuffer = malloc(dataBufferLength);
 	if (dataBuffer == NULL) {
 		close(listenUDPSocket);
@@ -122,12 +126,9 @@ int main(int argc, char *argv[]) {
 		return (EXIT_FAILURE);
 	}
 
-	// Use a UT array to keep track of all currently open packets.
-	UT_array *incompleteUDPPackets = NULL;
+	udpPacket incompleteUDPPackets = NULL;
 
-	utarray_new(incompleteUDPPackets, &ut_ptr_icd);
-
-	struct udp_message *unassignedUDPMessages = NULL;
+	udpMessage unassignedUDPMessages = NULL;
 
 	int64_t highestParsedSequenceNumber = -1;
 
@@ -168,66 +169,98 @@ int main(int argc, char *argv[]) {
 		printf("Format number: %" PRIi8 "\n", networkHeader.formatNumber);
 		printf("Source ID: %" PRIi16 "\n", networkHeader.sourceID);
 
-		analyzeUDPMessage(highestParsedSequenceNumber, incompleteUDPPackets, unassignedUDPMessages, networkHeader.sequenceNumber,
-			dataBuffer + AEDAT3_NETWORK_HEADER_LENGTH, (size_t) result - AEDAT3_NETWORK_HEADER_LENGTH);
+		analyzeUDPMessage(highestParsedSequenceNumber, incompleteUDPPackets, unassignedUDPMessages,
+			networkHeader.sequenceNumber, dataBuffer + AEDAT3_NETWORK_HEADER_LENGTH,
+			(size_t) result - AEDAT3_NETWORK_HEADER_LENGTH);
 	}
 
 	// Close connection.
 	close(listenUDPSocket);
 
-	struct udp_message *msg = NULL;
+	udpMessage msg = NULL;
 	LL_FOREACH(unassignedUDPMessages, msg)
 	{
 		free(msg);
 	}
 
-	// Free all incomplete packets.
-	struct udp_packet *pkt = NULL;
-	while ((pkt = (struct udp_packet *) utarray_next(incompleteUDPPackets, pkt)) != NULL) {
+	udpPacket pkt = NULL;
+	LL_FOREACH(incompleteUDPPackets, pkt)
+	{
 		free(pkt);
 	}
-
-	utarray_free(incompleteUDPPackets);
 
 	free(dataBuffer);
 
 	return (EXIT_SUCCESS);
 }
 
-static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, UT_array *incompleteUDPPackets, struct udp_message *unassignedUDPMessages,
-	int64_t sequenceNumber, uint8_t *data, size_t dataLength) {
+static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket incompleteUDPPackets,
+	udpMessage unassignedUDPMessages, int64_t sequenceNumber, uint8_t *data, size_t dataLength) {
+	// Is this a start message or an intermediate/end one?
+	bool startMessage = (U64T(sequenceNumber) & 0x8000000000000000LL);
+	sequenceNumber = sequenceNumber & 0x7FFFFFFFFFFFFFFFLL;
+
 	// If the sequence number is smaller or equal of the highest already parsed
 	// UDP packet, we discard it right away. The stream reconstruction has already
 	// passed this point, so we can't insert this old data anywhere anyway.
-	if ((sequenceNumber & 0x7FFFFFFFFFFFFFFFLL) <= highestParsedSequenceNumber) {
+	if (sequenceNumber <= highestParsedSequenceNumber) {
 		return;
 	}
-
-	// Is this a start message or an intermediate/end one?
-	bool startMessage = (sequenceNumber & 0x8000000000000000LL);
 
 	// First check if this is a start message. If yes, we allocate a new packet for it and
 	// put it at the right place. Also detect duplicate start messages here.
 	if (startMessage) {
-		struct udp_packet *newPacket = malloc(sizeof(*newPacket));
-		if (newPacket == NULL) {
+		// Now we check if we already have an UDP packet with this particular starting
+		// sequence number. Duplicate messages are possible with UDP!
+		udpPacket packet = NULL;
+		LL_FOREACH(incompleteUDPPackets, packet)
+		{
+			if (packet->startSequenceNumber == sequenceNumber) {
+				return;
+			}
+		}
+
+		// This is the first time we see this start packet, and all seems valid, so we
+		// parse the header and populate the other fields, then insert the packet at
+		// its right place in the list based upon the sequence number.
+		caerEventPacketHeader eventHeader = (caerEventPacketHeader) data;
+
+		int32_t eventSize = caerEventPacketHeaderGetEventSize(eventHeader);
+		int32_t eventNumber = caerEventPacketHeaderGetEventNumber(eventHeader);
+
+		size_t eventPacketSize = CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (eventSize * eventNumber);
+
+		caerEventPacketHeader newEventPacket = calloc(1, eventPacketSize);
+		if (newEventPacket == NULL) {
 			return;
 		}
 
-		// Get sequence number (clean highest bit).
-		newPacket->startSequenceNumber = sequenceNumber & 0x7FFFFFFFFFFFFFFFLL;
+		// Calculate over how many UDP packets this event packet is split up.
+		size_t numUDPPackets = eventPacketSize / MAX_OUTPUT_UDP_SIZE;
+		if ((eventPacketSize % MAX_OUTPUT_UDP_SIZE) != 0) {
+			numUDPPackets++;
+		}
 
-		// Now we check if we already have an UDP packet with this particular starting
-		// sequence number. Duplicate messages are possible with UDP!
+		udpPacket newPacket = calloc(1, sizeof(*newPacket) + (numUDPPackets * sizeof(bool)));
+		if (newPacket == NULL) {
+			free(newEventPacket);
+			return;
+		}
 
+		newPacket->content = newEventPacket;
+		memcpy(newPacket->content, data, dataLength);
+		newPacket->startSequenceNumber = sequenceNumber;
+		newPacket->endSequenceNumber = I64T((size_t ) sequenceNumber + numUDPPackets - 1);
+		newPacket->numUDPPackets = numUDPPackets;
+		newPacket->udpPacketsReceived[0] = true;
 
 	}
 
 	// Check if this is part of any incomplete packet we're still building.
-	struct udp_packet *pkt = NULL;
-	while ((pkt = (struct udp_packet *) utarray_next(incompleteUDPPackets, pkt)) != NULL) {
-
-		if (sequenceNumber > pkt->startSequenceNumber && sequenceNumber <= pkt->endSequenceNumber) {
+	udpPacket packet = NULL;
+	LL_FOREACH(incompleteUDPPackets, packet)
+	{
+		if (sequenceNumber > packet->startSequenceNumber && sequenceNumber <= packet->endSequenceNumber) {
 
 		}
 	}
