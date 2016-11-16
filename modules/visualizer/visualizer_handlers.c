@@ -43,7 +43,7 @@ void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLE
 
 			caerDeviceConfigSet(state->eventSourceModuleState, DYNAPSE_CONFIG_MONITOR_NEU, coreid, indexLin);
 
-			caerLog(CAER_LOG_NOTICE, "Visualizer", "Monitoring neuron indexLin %d core %d\n", indexLin, coreid);
+			caerLog(CAER_LOG_NOTICE, "Visualizer", "Monitoring neuron %d of core %d\n", indexLin, coreid);
 		}
 	}
 }

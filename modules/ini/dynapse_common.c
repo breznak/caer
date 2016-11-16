@@ -859,17 +859,6 @@ static uint32_t convertBias(const char *biasName, const char* lowhi,
 				| fineValue << 4 | confbits;
 	}
 
-	/*printf("\nconfbits  %d\n", confbits);
-	 printf"address_branch: %d\n", addr);
-	 printf"confbits fineValue %d\n", fineValue);
-	 printf"confbits biasLowHi %d\n", lws << 3);
-	 printf"confbits biasCascode %d\n", cls << 2);
-	 printf"confbits biasType/sex %d\n", ssx << 1);
-	 printf"confbits special %d\n", special);
-	 printf"confbits biasEnable/en %d\n", (uint8_t) enal);
-	 printf"coarse value converted %d\n", coarseRev);
-	 printf"--> INBITS %d\n", inbits);*/
-
 	return inbits;
 
 }
@@ -1568,17 +1557,25 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 			"HighBias", "Normal", "PBias", true);
 
 	// Clear SRAM --> DYNAPSE_CONFIG_DYNAPSE_U2
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing SRAM ...\n");
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U2, 0);
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Clearing SRAM ...\n");
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	caerDeviceConfigSet(moduleData->moduleState,
+			DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U2, 0);
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
 	// Clear CAM -->  DYNAPSE_CONFIG_DYNAPSE_U2
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing CAM ...\n");
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Clearing CAM ...\n");
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CLEAR_CAM, 0,
+			0);
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
 	// close config
@@ -1606,20 +1603,28 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 			dynapse_info.deviceString, dynapse_info.deviceID,
 			dynapse_info.deviceIsMaster, dynapse_info.logicVersion);
 
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_DATAEXCHANGE,CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, true);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_RUN, true);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_AER,DYNAPSE_CONFIG_AER_RUN, true);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_DATAEXCHANGE,
+			CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, true);
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_RUN, true);
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_AER,
+			DYNAPSE_CONFIG_AER_RUN, true);
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
 
 	// force chip to be enable even if aer is off
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MUX,DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE, true);
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MUX,
+			DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE, true);
 	// for now work on core id DYNAPSE_CONFIG_DYNAPSE_U2
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
 
 	// now set default low power biases
 	// core 0
-	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_BUF_P", 3, 0, "HighBias", "Normal", "PBias", true);
-	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_BUF_P", 3, 80, "HighBias", "Normal", "PBias", true);
+	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_BUF_P", 3, 0,
+			"HighBias", "Normal", "PBias", true);
+	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_BUF_P", 3, 80,
+			"HighBias", "Normal", "PBias", true);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_BUF_P", 3, 80,
 			"HighBias", "Normal", "PBias", true);
 
@@ -2137,22 +2142,28 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 
 	/* output one neuron per core, neuron id 0 chip DYNAPSE_CONFIG_DYNAPSE_U2*/
 
-
 	// Configure SRAM for Monitoring--> DYNAPSE_CONFIG_DYNAPSE_U2
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing SRAM ...\n");
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_DEFAULT_SRAM, DYNAPSE_CONFIG_DYNAPSE_U2, 0);
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Clearing SRAM ...\n");
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_DEFAULT_SRAM,
+			DYNAPSE_CONFIG_DYNAPSE_U2, 0);
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
-
 	/* need to make a libcaer function for this */
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 0, 0);  // core 0 neuron 0
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 1, 5);  //  core 1 neuron 5
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 2, 60); // core 2 neuron 10
-	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 3, 105); // core 3 neuron 20
-
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 0,
+			0);  // core 0 neuron 0
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 1,
+			5);  //  core 1 neuron 5
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 2,
+			60); // core 2 neuron 10
+	caerDeviceConfigSet(moduleData->moduleState, DYNAPSE_CONFIG_MONITOR_NEU, 3,
+			105); // core 3 neuron 20
 
 	// Start data acquisition.
 	bool ret = caerDeviceDataStart(moduleData->moduleState,

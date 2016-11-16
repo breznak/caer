@@ -10,7 +10,6 @@ ADD_SUBDIRECTORY(misc)
 ADD_SUBDIRECTORY(statistics)
 ADD_SUBDIRECTORY(visualizer)
 ADD_SUBDIRECTORY(poseestimation)
-ADD_SUBDIRECTORY(dynapseinit)
 
 # Support private modules that don't get considered for commit,
 # by reserving a directory called PrivateModules with its own
