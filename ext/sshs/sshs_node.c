@@ -72,12 +72,16 @@ sshsNode sshsNodeNew(const char *nodeName, sshsNode parent) {
 
 	if (mtx_shared_init(&newNode->traversal_lock) != thrd_success) {
 		// Locks are critical for thread-safety.
-		(*sshsGetGlobalErrorLogCallback())("Failed to initialize traversal_lock.");
+		char errorMsg[4096];
+		snprintf(errorMsg, 4096, "Failed to initialize traversal_lock for node: '%s'.", nodeName);
+		(*sshsGetGlobalErrorLogCallback())(errorMsg);
 		exit(EXIT_FAILURE);
 	}
 	if (mtx_shared_init(&newNode->node_lock) != thrd_success) {
 		// Locks are critical for thread-safety.
-		(*sshsGetGlobalErrorLogCallback())("Failed to initialize node_lock.");
+		char errorMsg[4096];
+		snprintf(errorMsg, 4096, "Failed to initialize node_lock for node: '%s'.", nodeName);
+		(*sshsGetGlobalErrorLogCallback())(errorMsg);
 		exit(EXIT_FAILURE);
 	}
 

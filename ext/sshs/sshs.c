@@ -254,7 +254,9 @@ static bool sshsCheckAbsoluteNodePath(const char *absolutePath, size_t absoluteP
 	}
 
 	if (slre_match(sshsAbsoluteNodePathRegexp, absolutePath, (int) absolutePathLength, NULL, 0, 0) <= 0) {
-		(*sshsGetGlobalErrorLogCallback())("Invalid absolute node path format.");
+		char errorMsg[4096];
+		snprintf(errorMsg, 4096, "Invalid absolute node path format: '%s'.", absolutePath);
+		(*sshsGetGlobalErrorLogCallback())(errorMsg);
 		return (false);
 	}
 
@@ -268,7 +270,9 @@ static bool sshsCheckRelativeNodePath(const char *relativePath, size_t relativeP
 	}
 
 	if (slre_match(sshsRelativeNodePathRegexp, relativePath, (int) relativePathLength, NULL, 0, 0) <= 0) {
-		(*sshsGetGlobalErrorLogCallback())("Invalid relative node path format.");
+		char errorMsg[4096];
+		snprintf(errorMsg, 4096, "Invalid relative node path format: '%s'.", relativePath);
+		(*sshsGetGlobalErrorLogCallback())(errorMsg);
 		return (false);
 	}
 
