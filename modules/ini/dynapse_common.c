@@ -14,6 +14,10 @@ static void usbConfigListener(sshsNode node, void *userData,
 		enum sshs_node_attribute_events event, const char *changeKey,
 		enum sshs_node_attr_value_type changeType,
 		union sshs_node_attr_value changeValue);
+static void spikeConfigListener(sshsNode node, void *userData,
+		enum sshs_node_attribute_events event, const char *changeKey,
+		enum sshs_node_attr_value_type changeType,
+		union sshs_node_attr_value changeValue);
 static void usbConfigSend(sshsNode node, caerModuleData moduleData);
 static void biasConfigListener(sshsNode node, void *userData,
 		enum sshs_node_attribute_events event, const char *changeKey,
@@ -63,6 +67,25 @@ static void chipConfigListener(sshsNode node, void *userData,
 	struct caer_dynapse_info devInfo = caerDynapseInfoGet(
 			((caerInputDynapseState) moduleData->moduleState)->deviceState);
 
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+			/*if (changeType == SSHS_INT
+					&& caerStrEquals(changeKey, "BufferNumber")) {
+				caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, CAER_HOST_CONFIG_USB,
+				CAER_HOST_CONFIG_USB_BUFFER_NUMBER, U32T(changeValue.iint));
+			} else if (changeType == SSHS_INT
+					&& caerStrEquals(changeKey, "BufferSize")) {
+				caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, CAER_HOST_CONFIG_USB,
+				CAER_HOST_CONFIG_USB_BUFFER_SIZE, U32T(changeValue.iint));
+			} else if (changeType == SSHS_SHORT
+					&& caerStrEquals(changeKey, "EarlyPacketDelay")) {
+				caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, DYNAPSE_CONFIG_USB,
+				DYNAPSE_CONFIG_USB_EARLY_PACKET_DELAY, U32T(changeValue.ishort));
+			} else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "Run")) {
+				caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, DYNAPSE_CONFIG_USB,
+				DYNAPSE_CONFIG_USB_RUN, changeValue.boolean);
+			}*/
+		}
+
 }
 
 static void systemConfigListener(sshsNode node, void *userData,
@@ -104,6 +127,49 @@ static void usbConfigSend(sshsNode node, caerModuleData moduleData) {
 	DYNAPSE_CONFIG_USB_RUN, sshsNodeGetBool(node, "Run"));
 }
 
+static void spikeConfigListener(sshsNode node, void *userData,
+		enum sshs_node_attribute_events event, const char *changeKey,
+		enum sshs_node_attr_value_type changeType,
+		union sshs_node_attr_value changeValue) {
+	UNUSED_ARGUMENT(node);
+
+	//caerModuleData moduleData = userData;
+	caerInputDynapseState state = userData;
+
+	if (event == SSHS_ATTRIBUTE_MODIFIED) {
+		if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "doStim")) {
+			atomic_store(&state->genSpikeState.doStim, sshsNodeGetBool(node, "doStim"));
+			if(state->genSpikeState.doStim){
+				caerLog(CAER_LOG_NOTICE, "spikeGen",
+							"stimulation started.\n");
+				atomic_store(&state->genSpikeState.started, false);
+				atomic_store(&state->genSpikeState.done, false);  // we just started
+			}
+			if(!state->genSpikeState.doStim){
+				caerLog(CAER_LOG_NOTICE, "spikeGen",
+											"stimulation ended.\n");
+				atomic_store(&state->genSpikeState.started, false);
+				atomic_store(&state->genSpikeState.done, true);
+			}
+		}else if(changeType == SSHS_LONG && caerStrEquals(changeKey, "stim_type")){
+			atomic_store(&state->genSpikeState.stim_type, sshsNodeGetLong(node, "stim_type"));
+		}else if(changeType == SSHS_LONG && caerStrEquals(changeKey, "stim_avr")){
+			atomic_store(&state->genSpikeState.stim_avr, sshsNodeGetLong(node, "stim_avr"));
+		}else if(changeType == SSHS_LONG && caerStrEquals(changeKey, "stim_std")){
+			atomic_store(&state->genSpikeState.stim_std, sshsNodeGetLong(node, "stim_std"));
+		}else if(changeType == SSHS_LONG && caerStrEquals(changeKey, "duration")){
+			atomic_store(&state->genSpikeState.stim_duration, sshsNodeGetLong(node, "stim_duration"));
+		}else if(changeType == SSHS_BOOL && caerStrEquals(changeKey, "repeat")){
+			atomic_store(&state->genSpikeState.repeat, sshsNodeGetBool(node, "repeat"));
+			//if(state->genSpikeState.repeat){
+			//	atomic_store(&state->genSpikeState.done, false);
+			//}
+		}else if(changeType == SSHS_LONG && caerStrEquals(changeKey, "running")){
+			atomic_store(&state->genSpikeState.running, sshsNodeGetBool(node, "running"));
+		}
+	}
+
+}
 static void usbConfigListener(sshsNode node, void *userData,
 		enum sshs_node_attribute_events event, const char *changeKey,
 		enum sshs_node_attr_value_type changeType,
@@ -2197,6 +2263,10 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 
 		free(biasNodes);
 	}
+
+	//spike Generator Node
+	sshsNode spikeNode = sshsGetRelativeNode(moduleData->moduleNode, "spikeGen/");
+	sshsNodeAddAttributeListener(spikeNode, state, &spikeConfigListener);
 
 	caerGenSpikeInit(moduleData);
 

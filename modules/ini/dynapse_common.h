@@ -36,13 +36,14 @@ typedef struct input_spike_event *spike_event;
 
 struct gen_spike_state {
 	atomic_bool doStim;
-	uint8_t stimType;
-	atomic_int_fast32_t avr;				// Hertz [1/s]
-	atomic_int_fast32_t std;				//
-	float duration;
-	bool repeat;
+	atomic_int_fast32_t stim_type;
+	atomic_int_fast32_t stim_avr;				// Hertz [1/s]
+	atomic_int_fast32_t stim_std;				//
+	atomic_int_fast32_t stim_duration;
+	atomic_bool repeat;
+	atomic_bool done;
+	atomic_bool started;
 	spike_event inp;
-	float loopTime;
 	thrd_t spikeGenThread;
 	atomic_bool running;
 };
