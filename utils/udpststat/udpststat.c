@@ -29,7 +29,7 @@ struct udp_message {
 	uint8_t message[];
 };
 
-static void analyzeUDPMessage(UT_array *incompleteUDPPackets, struct udp_message *unassignedUDPMessages,
+static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, UT_array *incompleteUDPPackets, struct udp_message *unassignedUDPMessages,
 	int64_t sequenceNumber, uint8_t *data, size_t dataLength);
 static void printPacketInfo(caerEventPacketHeader header);
 
@@ -129,6 +129,8 @@ int main(int argc, char *argv[]) {
 
 	struct udp_message *unassignedUDPMessages = NULL;
 
+	int64_t highestParsedSequenceNumber = -1;
+
 	while (!atomic_load_explicit(&globalShutdown, memory_order_relaxed)) {
 		ssize_t result = recv(listenUDPSocket, dataBuffer, dataBufferLength, 0);
 		if (result <= 0) {
@@ -166,7 +168,7 @@ int main(int argc, char *argv[]) {
 		printf("Format number: %" PRIi8 "\n", networkHeader.formatNumber);
 		printf("Source ID: %" PRIi16 "\n", networkHeader.sourceID);
 
-		analyzeUDPMessage(incompleteUDPPackets, unassignedUDPMessages, networkHeader.sequenceNumber,
+		analyzeUDPMessage(highestParsedSequenceNumber, incompleteUDPPackets, unassignedUDPMessages, networkHeader.sequenceNumber,
 			dataBuffer + AEDAT3_NETWORK_HEADER_LENGTH, (size_t) result - AEDAT3_NETWORK_HEADER_LENGTH);
 	}
 
@@ -192,8 +194,15 @@ int main(int argc, char *argv[]) {
 	return (EXIT_SUCCESS);
 }
 
-static void analyzeUDPMessage(UT_array *incompleteUDPPackets, struct udp_message *unassignedUDPMessages,
+static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, UT_array *incompleteUDPPackets, struct udp_message *unassignedUDPMessages,
 	int64_t sequenceNumber, uint8_t *data, size_t dataLength) {
+	// If the sequence number is smaller or equal of the highest already parsed
+	// UDP packet, we discard it right away. The stream reconstruction has already
+	// passed this point, so we can't insert this old data anywhere anyway.
+	if ((sequenceNumber & 0x7FFFFFFFFFFFFFFFLL) <= highestParsedSequenceNumber) {
+		return;
+	}
+
 	// Is this a start message or an intermediate/end one?
 	bool startMessage = (sequenceNumber & 0x8000000000000000LL);
 
@@ -205,7 +214,12 @@ static void analyzeUDPMessage(UT_array *incompleteUDPPackets, struct udp_message
 			return;
 		}
 
+		// Get sequence number (clean highest bit).
 		newPacket->startSequenceNumber = sequenceNumber & 0x7FFFFFFFFFFFFFFFLL;
+
+		// Now we check if we already have an UDP packet with this particular starting
+		// sequence number. Duplicate messages are possible with UDP!
+
 
 	}
 
