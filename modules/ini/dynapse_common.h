@@ -17,23 +17,6 @@
 #include <libcaer/devices/dynapse.h>
 
 
-/**
- * Input spike event data structure definition.
- * This contains destination core, source core, dest address,
- * sign of x, sign of y, delta x and delta y, as well as chip id.
- */
-struct input_spike_event {
-	uint8_t dest_core;
-	uint8_t dest_addr;
-	uint8_t source_core;
-	uint8_t sx;
-	uint8_t dx;
-	uint8_t sy;
-	uint8_t dy;
-	uint8_t chipid;
-};
-typedef struct input_spike_event *spike_event;
-
 struct gen_spike_state {
 	atomic_bool doStim;
 	atomic_int_fast32_t stim_type;
@@ -43,10 +26,11 @@ struct gen_spike_state {
 	atomic_bool repeat;
 	atomic_bool done;
 	atomic_bool started;
-	spike_event inp;
 	thrd_t spikeGenThread;
 	atomic_bool running;
 };
+
+
 
 struct caer_input_dynapse_state {
 	caerDeviceHandle deviceState;
@@ -54,7 +38,6 @@ struct caer_input_dynapse_state {
 };
 
 typedef struct caer_input_dynapse_state *caerInputDynapseState;
-
 
 bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType);
 void caerInputDYNAPSEExit(caerModuleData moduleData);

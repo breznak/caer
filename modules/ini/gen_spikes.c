@@ -50,11 +50,7 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(spikeNode, "repeat", true);
 	atomic_store(&state->genSpikeState.repeat, sshsNodeGetBool(spikeNode, "repeat"));
 
-	//sshsNodePutBoolIfAbsent(spikeNode, "done", false);
-	//state->genSpikeState.done = sshsNodeGetBool(spikeNode, "done");
-
-	// Start separate rendering thread. Decouples presentation from
-	// data processing and preparation. Communication over ring-buffer.
+	// Start separate stimulation thread.
 	atomic_store(&state->genSpikeState.running, true);
 
 	if (thrd_create(&state->genSpikeState.spikeGenThread, &spikeGenThread, state) != thrd_success) {
@@ -68,7 +64,7 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 void caerGenSpikeExit(caerModuleData moduleData) {
 	caerInputDynapseState state = moduleData->moduleState;
 
-	// Shut down rendering thread and wait on it to finish.
+	// Shut down stimulation thread and wait on it to finish.
 	atomic_store(&state->genSpikeState.running, false);
 
 	if ((errno = thrd_join(state->genSpikeState.spikeGenThread, NULL)) != thrd_success) {
