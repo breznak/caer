@@ -34,8 +34,8 @@ struct udp_message {
 
 typedef struct udp_message *udpMessage;
 
-static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket incompleteUDPPackets,
-	udpMessage unassignedUDPMessages, int64_t sequenceNumber, uint8_t *data, size_t dataLength);
+static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket *incompleteUDPPackets,
+	udpMessage *unassignedUDPMessages, int64_t sequenceNumber, uint8_t *data, size_t dataLength);
 static void printPacketInfo(caerEventPacketHeader header);
 
 static atomic_bool globalShutdown = ATOMIC_VAR_INIT(false);
@@ -169,7 +169,7 @@ int main(int argc, char *argv[]) {
 		printf("Format number: %" PRIi8 "\n", networkHeader.formatNumber);
 		printf("Source ID: %" PRIi16 "\n", networkHeader.sourceID);
 
-		analyzeUDPMessage(highestParsedSequenceNumber, incompleteUDPPackets, unassignedUDPMessages,
+		analyzeUDPMessage(highestParsedSequenceNumber, &incompleteUDPPackets, &unassignedUDPMessages,
 			networkHeader.sequenceNumber, dataBuffer + AEDAT3_NETWORK_HEADER_LENGTH,
 			(size_t) result - AEDAT3_NETWORK_HEADER_LENGTH);
 	}
@@ -194,8 +194,8 @@ int main(int argc, char *argv[]) {
 	return (EXIT_SUCCESS);
 }
 
-static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket incompleteUDPPackets,
-	udpMessage unassignedUDPMessages, int64_t sequenceNumber, uint8_t *data, size_t dataLength) {
+static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket *incompleteUDPPackets,
+	udpMessage *unassignedUDPMessages, int64_t sequenceNumber, uint8_t *data, size_t dataLength) {
 	// Is this a start message or an intermediate/end one?
 	bool startMessage = (U64T(sequenceNumber) & 0x8000000000000000LL);
 	sequenceNumber = sequenceNumber & 0x7FFFFFFFFFFFFFFFLL;
@@ -210,12 +210,13 @@ static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket inc
 	// First check if this is a start message. If yes, we allocate a new packet for it and
 	// put it at the right place. Also detect duplicate start messages here.
 	if (startMessage) {
-		// Now we check if we already have an UDP packet with this particular starting
+		// First we check if we already have an UDP packet with this particular starting
 		// sequence number. Duplicate messages are possible with UDP!
 		udpPacket packet = NULL;
-		LL_FOREACH(incompleteUDPPackets, packet)
+		LL_FOREACH(*incompleteUDPPackets, packet)
 		{
 			if (packet->startSequenceNumber == sequenceNumber) {
+				// Duplicate, ignore!
 				return;
 			}
 		}
@@ -228,8 +229,11 @@ static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket inc
 		int32_t eventSize = caerEventPacketHeaderGetEventSize(eventHeader);
 		int32_t eventNumber = caerEventPacketHeaderGetEventNumber(eventHeader);
 
+		// Determine event packe size in bytes, so we can allocate space for it and
+		// calculate how many UDP packets are used to send this.
 		size_t eventPacketSize = CAER_EVENT_PACKET_HEADER_SIZE + (size_t) (eventSize * eventNumber);
 
+		// Allocate memory for new event packet.
 		caerEventPacketHeader newEventPacket = calloc(1, eventPacketSize);
 		if (newEventPacket == NULL) {
 			return;
@@ -241,12 +245,15 @@ static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket inc
 			numUDPPackets++;
 		}
 
+		// Allocate memory for tracking the reconstruction of the full event packet from
+		// lots of smaller UDP packets.
 		udpPacket newPacket = calloc(1, sizeof(*newPacket) + (numUDPPackets * sizeof(bool)));
 		if (newPacket == NULL) {
 			free(newEventPacket);
 			return;
 		}
 
+		// Copy content at start, set all required fields.
 		newPacket->content = newEventPacket;
 		memcpy(newPacket->content, data, dataLength);
 		newPacket->startSequenceNumber = sequenceNumber;
@@ -254,11 +261,34 @@ static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket inc
 		newPacket->numUDPPackets = numUDPPackets;
 		newPacket->udpPacketsReceived[0] = true;
 
+		// Find out where to link new UDP packet into ordered list.
+		// We already checked and excluded equality above, so it can only be smaller
+		// or bigger, never equal.
+		udpPacket prevPacket = NULL;
+		LL_FOREACH(*incompleteUDPPackets, packet)
+		{
+			if (packet->startSequenceNumber > newPacket->startSequenceNumber) {
+				break;
+			}
+
+			prevPacket = packet;
+		}
+
+		if (prevPacket == NULL) {
+			// Insert at HEAD of list.
+			newPacket->next = *incompleteUDPPackets;
+			*incompleteUDPPackets = newPacket;
+		}
+		else {
+			// Insert somewhere inside list.
+			newPacket->next = prevPacket->next;
+			prevPacket->next = newPacket;
+		}
 	}
 
 	// Check if this is part of any incomplete packet we're still building.
 	udpPacket packet = NULL;
-	LL_FOREACH(incompleteUDPPackets, packet)
+	LL_FOREACH(*incompleteUDPPackets, packet)
 	{
 		if (sequenceNumber > packet->startSequenceNumber && sequenceNumber <= packet->endSequenceNumber) {
 
