@@ -284,14 +284,20 @@ static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket *in
 			newPacket->next = prevPacket->next;
 			prevPacket->next = newPacket;
 		}
+
+		// TODO: scan unassigned messages list and try to pair up.
 	}
+	else {
+		// Not a start message, but an intermediate/end one!
+		// Let's find out if we can assign it to any existing UDP packet.
+		// If not, we put it into the unassigned messages list.
+		udpPacket packet = NULL;
+		LL_FOREACH(*incompleteUDPPackets, packet)
+		{
+			if (sequenceNumber > packet->startSequenceNumber && sequenceNumber <= packet->endSequenceNumber) {
+				// This message is part of this UDP packet!
 
-	// Check if this is part of any incomplete packet we're still building.
-	udpPacket packet = NULL;
-	LL_FOREACH(*incompleteUDPPackets, packet)
-	{
-		if (sequenceNumber > packet->startSequenceNumber && sequenceNumber <= packet->endSequenceNumber) {
-
+			}
 		}
 	}
 }
