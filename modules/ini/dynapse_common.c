@@ -156,37 +156,32 @@ static void sramConfigListener(sshsNode node, void *userData,
 	caerInputDynapseState state = userData;
 
 	if (event == SSHS_ATTRIBUTE_MODIFIED) {
-		if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "doProg") && changeValue.boolean) {
-				uint32_t chipid = sshsNodeGetInt(node,  "chip_id");
-				uint32_t neuron_id = sshsNodeGetInt(node, "neuron_id");
-				uint32_t sram_addr = sshsNodeGetInt(node,  "sram_addr");
-				uint32_t core_id = sshsNodeGetInt(node, "core_id");
-				uint32_t dest_core_id = sshsNodeGetInt(node, "dest_core_id");
-				uint32_t dx = sshsNodeGetInt(node, "dx");
-				uint32_t dy = sshsNodeGetInt(node, "dy");
-				bool sx = sshsNodeGetBool(node, "sx");
-				bool sy = sshsNodeGetBool(node, "sy");
-				uint32_t virtual_core_id = sshsNodeGetInt(node, "virtual_core_id");
-				// select chip
-				if(chipid > 0 && chipid < 4){
-					caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, chipid);
-				}
-				uint32_t bits = 1 << 4
-						| neuron_id << 7
-						| sram_addr << 5
-						| core_id << 15 | 1 << 17
-						| dest_core_id << 18
-						| dx << 22
-						| sx << 24
-						| dy << 25
-						| sy << 27
-						| virtual_core_id << 28;
-				caerLog(CAER_LOG_NOTICE, "samProg",
-						"programming chip id %d with sram event %d\n",
-						chipid, bits);
+		if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "doProg")
+				&& changeValue.boolean) {
+			uint32_t chipid = sshsNodeGetInt(node, "chip_id");
+			uint32_t neuron_id = sshsNodeGetInt(node, "neuron_id");
+			uint32_t sram_addr = sshsNodeGetInt(node, "sram_addr");
+			uint32_t core_id = sshsNodeGetInt(node, "core_id");
+			uint32_t dest_core_id = sshsNodeGetInt(node, "dest_core_id");
+			uint32_t dx = sshsNodeGetInt(node, "dx");
+			uint32_t dy = sshsNodeGetInt(node, "dy");
+			bool sx = sshsNodeGetBool(node, "sx");
+			bool sy = sshsNodeGetBool(node, "sy");
+			uint32_t virtual_core_id = sshsNodeGetInt(node, "virtual_core_id");
+			// select chip
+			if (chipid > 0 && chipid < 4) {
 				caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-								DYNAPSE_CONFIG_CHIP_CONTENT, bits);
+						DYNAPSE_CONFIG_CHIP_ID, chipid);
 			}
+			uint32_t bits = 1 << 4 | neuron_id << 7 | sram_addr << 5
+					| core_id << 15 | 1 << 17 | dest_core_id << 18 | dx << 22
+					| sx << 24 | dy << 25 | sy << 27 | virtual_core_id << 28;
+			caerLog(CAER_LOG_NOTICE, "samProg",
+					"programming chip id %d with sram event %d\n", chipid,
+					bits);
+			caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_CONTENT, bits);
+		}
 	}
 }
 
@@ -201,36 +196,31 @@ static void camConfigListener(sshsNode node, void *userData,
 
 	if (event == SSHS_ATTRIBUTE_MODIFIED) {
 		if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "doProg")) {
-			if (sshsNodeGetBool(node,  "doProg")) {
-				uint32_t chipid = sshsNodeGetInt(node,  "chip_id");
-				uint32_t col_addr = sshsNodeGetInt(node,  "col_addr");
-				uint32_t row_addr = sshsNodeGetInt(node,  "row_addr");
-				uint32_t cam_addr = sshsNodeGetInt(node,  "cam_addr");
-				uint32_t core_id = sshsNodeGetInt(node,  "core_id");
-				uint32_t core_s = sshsNodeGetInt(node,  "core_s");
-				uint32_t address = sshsNodeGetInt(node,  "address");
-				bool ei = sshsNodeGetBool(node,  "ei");
-				bool fs = sshsNodeGetBool(node,  "fs");
+			if (sshsNodeGetBool(node, "doProg")) {
+				uint32_t chipid = sshsNodeGetInt(node, "chip_id");
+				uint32_t col_addr = sshsNodeGetInt(node, "col_addr");
+				uint32_t row_addr = sshsNodeGetInt(node, "row_addr");
+				uint32_t cam_addr = sshsNodeGetInt(node, "cam_addr");
+				uint32_t core_id = sshsNodeGetInt(node, "core_id");
+				uint32_t core_s = sshsNodeGetInt(node, "core_s");
+				uint32_t address = sshsNodeGetInt(node, "address");
+				bool ei = sshsNodeGetBool(node, "ei");
+				bool fs = sshsNodeGetBool(node, "fs");
 				// select chip
-				if(chipid > 0 && chipid < 4){
+				if (chipid > 0 && chipid < 4) {
 					caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-							DYNAPSE_CONFIG_CHIP_ID, chipid);
+					DYNAPSE_CONFIG_CHIP_ID, chipid);
 				}
 				// compose bit address
-				uint32_t bits = col_addr
-						| row_addr << 11
-						| cam_addr << 5
-						| core_id << 15 | 1 << 17
-						| core_s << 18
-						| address << 20
-						| ei << 29
-						| fs << 28;
+				uint32_t bits = col_addr | row_addr << 11 | cam_addr << 5
+						| core_id << 15 | 1 << 17 | core_s << 18 | address << 20
+						| ei << 29 | fs << 28;
 				caerLog(CAER_LOG_NOTICE, "camProg",
-						"programming chip id %d with cam event %d\n",
-						chipid, bits);
-				if(bits > 0){
+						"programming chip id %d with cam event %d\n", chipid,
+						bits);
+				if (bits > 0) {
 					caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-							DYNAPSE_CONFIG_CHIP_CONTENT, bits);
+					DYNAPSE_CONFIG_CHIP_CONTENT, bits);
 				}
 
 			}
@@ -251,44 +241,75 @@ static void spikeConfigListener(sshsNode node, void *userData,
 
 	if (event == SSHS_ATTRIBUTE_MODIFIED) {
 		if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "doStim")) {
-			if (state->genSpikeState.doStim) {
+			//atomic_load(&state->genSpikeState.doStim);
+			if (sshsNodeGetBool(node, "doStim")) {
 				caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation started.\n");
-				atomic_store(&state->genSpikeState.started, false);
-				atomic_store(&state->genSpikeState.done, false); // we just started
-			}
-			if (!state->genSpikeState.doStim) {
+				atomic_store(&state->genSpikeState.done, false); 	// we just started
+				atomic_store(&state->genSpikeState.started, true);
+			}else if (!sshsNodeGetBool(node, "doStim")) {
 				caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation ended.\n");
 				atomic_store(&state->genSpikeState.started, false);
 				atomic_store(&state->genSpikeState.done, true);
 			}
-		} else if (changeType == SSHS_LONG
+		} else if (changeType == SSHS_INT
 				&& caerStrEquals(changeKey, "stim_type")) {
-			atomic_store(&state->genSpikeState.stim_type,
-					sshsNodeGetLong(node, "stim_type"));
-		} else if (changeType == SSHS_LONG
+				atomic_store(&state->genSpikeState.stim_type,
+					sshsNodeGetInt(node, "stim_type"));
+		} else if (changeType == SSHS_INT
 				&& caerStrEquals(changeKey, "stim_avr")) {
-			atomic_store(&state->genSpikeState.stim_avr,
-					sshsNodeGetLong(node, "stim_avr"));
-		} else if (changeType == SSHS_LONG
+				atomic_store(&state->genSpikeState.stim_avr,
+					sshsNodeGetInt(node, "stim_avr"));
+		} else if (changeType == SSHS_INT
 				&& caerStrEquals(changeKey, "stim_std")) {
-			atomic_store(&state->genSpikeState.stim_std,
-					sshsNodeGetLong(node, "stim_std"));
-		} else if (changeType == SSHS_LONG
-				&& caerStrEquals(changeKey, "duration")) {
-			atomic_store(&state->genSpikeState.stim_duration,
-					sshsNodeGetLong(node, "stim_duration"));
+				atomic_store(&state->genSpikeState.stim_std,
+					sshsNodeGetInt(node, "stim_std"));
+		} else if (changeType == SSHS_INT
+				&& caerStrEquals(changeKey, "stim_duration")) {
+				atomic_store(&state->genSpikeState.stim_duration,
+					sshsNodeGetInt(node, "stim_duration"));
 		} else if (changeType == SSHS_BOOL
 				&& caerStrEquals(changeKey, "repeat")) {
-			atomic_store(&state->genSpikeState.repeat,
+				atomic_store(&state->genSpikeState.repeat,
 					sshsNodeGetBool(node, "repeat"));
-			//if(state->genSpikeState.repeat){
-			//	atomic_store(&state->genSpikeState.done, false);
-			//}
-		} else if (changeType == SSHS_LONG
+		} else if (changeType == SSHS_BOOL
 				&& caerStrEquals(changeKey, "running")) {
 			atomic_store(&state->genSpikeState.running,
 					sshsNodeGetBool(node, "running"));
+		}else if (changeType == SSHS_BOOL
+				&& caerStrEquals(changeKey, "sx")) {
+			atomic_store(&state->genSpikeState.sx,
+					sshsNodeGetBool(node, "sx"));
+		}else if (changeType == SSHS_BOOL
+				&& caerStrEquals(changeKey, "sy")) {
+			atomic_store(&state->genSpikeState.sy,
+					sshsNodeGetBool(node, "sy"));
+		}else if (changeType == SSHS_INT
+				&& caerStrEquals(changeKey, "dx")) {
+			atomic_store(&state->genSpikeState.dx,
+					sshsNodeGetInt(node, "dx"));
+		}else if (changeType == SSHS_INT
+				&& caerStrEquals(changeKey, "dy")) {
+			atomic_store(&state->genSpikeState.dy,
+					sshsNodeGetInt(node, "dy"));
+		}else if (changeType == SSHS_INT
+				&& caerStrEquals(changeKey, "core_d")) {
+			atomic_store(&state->genSpikeState.core_d,
+					sshsNodeGetInt(node, "core_d"));
+		}else if (changeType == SSHS_INT
+				&& caerStrEquals(changeKey, "core_s")) {
+			atomic_store(&state->genSpikeState.core_s,
+					sshsNodeGetInt(node, "core_s"));
+		}else if (changeType == SSHS_INT
+				&& caerStrEquals(changeKey, "address")) {
+			atomic_store(&state->genSpikeState.address,
+					sshsNodeGetInt(node, "address"));
+		}else if (changeType == SSHS_INT
+				&& caerStrEquals(changeKey, "chip_id")) {
+			atomic_store(&state->genSpikeState.chip_id,
+					sshsNodeGetInt(node, "chip_id"));
 		}
+
+
 	}
 
 }

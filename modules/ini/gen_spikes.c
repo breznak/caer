@@ -23,40 +23,74 @@ void caerGenSpikeExit(caerModuleData moduleData);
 int spikeGenThread(void *spikeGenState);
 void spiketrainReg(void *spikeGenState);
 
-struct timespec tstart={0,0}, tend={0,0};
+struct timespec tstart = { 0, 0 }, tend = { 0, 0 };
 
 bool caerGenSpikeInit(caerModuleData moduleData) {
 
 	caerInputDynapseState state = moduleData->moduleState;
 
-	sshsNode spikeNode = sshsGetRelativeNode(moduleData->moduleNode, "spikeGen/");
+	sshsNode spikeNode = sshsGetRelativeNode(moduleData->moduleNode,
+			"spikeGen/");
 
 	sshsNodePutBoolIfAbsent(spikeNode, "doStim", false);
-	atomic_store(&state->genSpikeState.doStim, sshsNodeGetBool(spikeNode, "doStim"));
-	atomic_store(&state->genSpikeState.started, false); // at start we do not stimulate
 
-	sshsNodePutLongIfAbsent(spikeNode, "stim_type", U8T(STIM_REGULAR));
-	atomic_store(&state->genSpikeState.stim_type, sshsNodeGetLong(spikeNode, "stim_type"));
+	sshsNodePutIntIfAbsent(spikeNode, "stim_type", U8T(STIM_REGULAR));
+	atomic_store(&state->genSpikeState.stim_type,
+			sshsNodeGetInt(spikeNode, "stim_type"));
 
-	sshsNodePutLongIfAbsent(spikeNode, "stim_avr", 3);
-	atomic_store(&state->genSpikeState.stim_avr, sshsNodeGetLong(spikeNode, "stim_avr"));
+	sshsNodePutIntIfAbsent(spikeNode, "stim_avr", 3);
+	atomic_store(&state->genSpikeState.stim_avr,
+			sshsNodeGetInt(spikeNode, "stim_avr"));
 
-	sshsNodePutLongIfAbsent(spikeNode, "stim_std", 1);
-	atomic_store(&state->genSpikeState.stim_std, sshsNodeGetLong(spikeNode, "stim_std"));
+	sshsNodePutIntIfAbsent(spikeNode, "stim_std", 1);
+	atomic_store(&state->genSpikeState.stim_std,
+			sshsNodeGetInt(spikeNode, "stim_std"));
 
-	sshsNodePutLongIfAbsent(spikeNode, "stim_duration", 10);
-	atomic_store(&state->genSpikeState.stim_duration, sshsNodeGetLong(spikeNode, "stim_duration"));
+	sshsNodePutIntIfAbsent(spikeNode, "stim_duration", 10);
+	atomic_store(&state->genSpikeState.stim_duration,
+			sshsNodeGetInt(spikeNode, "stim_duration"));
 
-	sshsNodePutBoolIfAbsent(spikeNode, "repeat", true);
-	atomic_store(&state->genSpikeState.repeat, sshsNodeGetBool(spikeNode, "repeat"));
+	sshsNodePutBoolIfAbsent(spikeNode, "repeat", false);
+	atomic_store(&state->genSpikeState.repeat,
+			sshsNodeGetBool(spikeNode, "repeat"));
+
+	atomic_store(&state->genSpikeState.started, false);
+	atomic_store(&state->genSpikeState.done, true);
 
 	// Start separate stimulation thread.
 	atomic_store(&state->genSpikeState.running, true);
 
-	if (thrd_create(&state->genSpikeState.spikeGenThread, &spikeGenThread, state) != thrd_success) {
-		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "SpikeGen: Failed to start thread.");
+	if (thrd_create(&state->genSpikeState.spikeGenThread, &spikeGenThread,
+			state) != thrd_success) {
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+				"SpikeGen: Failed to start thread.");
 		return (NULL);
 	}
+
+	/*address*/
+	sshsNodePutBoolIfAbsent(spikeNode, "sx", false);
+	atomic_store(&state->genSpikeState.sx, sshsNodeGetBool(spikeNode, "sx"));
+
+	sshsNodePutBoolIfAbsent(spikeNode, "sy", false);
+	atomic_store(&state->genSpikeState.sy, sshsNodeGetBool(spikeNode, "sy"));
+
+	sshsNodePutIntIfAbsent(spikeNode, "core_d", 0);
+	atomic_store(&state->genSpikeState.core_d, sshsNodeGetInt(spikeNode, "core_d"));
+
+	sshsNodePutIntIfAbsent(spikeNode, "core_s", 0);
+	atomic_store(&state->genSpikeState.core_s, sshsNodeGetInt(spikeNode, "core_s"));
+
+	sshsNodePutIntIfAbsent(spikeNode, "address", 1);
+	atomic_store(&state->genSpikeState.address, sshsNodeGetInt(spikeNode, "address"));
+
+	sshsNodePutIntIfAbsent(spikeNode, "dx", 0);
+	atomic_store(&state->genSpikeState.dx, sshsNodeGetInt(spikeNode, "dx"));
+
+	sshsNodePutIntIfAbsent(spikeNode, "dy", 0);
+	atomic_store(&state->genSpikeState.dy, sshsNodeGetInt(spikeNode, "dy"));
+
+	sshsNodePutIntIfAbsent(spikeNode, "chip_id", 4);
+	atomic_store(&state->genSpikeState.chip_id, sshsNodeGetInt(spikeNode, "chip_id"));
 
 	return (true);
 }
@@ -67,12 +101,12 @@ void caerGenSpikeExit(caerModuleData moduleData) {
 	// Shut down stimulation thread and wait on it to finish.
 	atomic_store(&state->genSpikeState.running, false);
 
-	if ((errno = thrd_join(state->genSpikeState.spikeGenThread, NULL)) != thrd_success) {
+	if ((errno = thrd_join(state->genSpikeState.spikeGenThread, NULL))
+			!= thrd_success) {
 		// This should never happen!
 		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"SpikeGen: Failed to join rendering thread. Error: %d.", errno);
+				"SpikeGen: Failed to join rendering thread. Error: %d.", errno);
 	}
-
 
 }
 
@@ -85,25 +119,24 @@ int spikeGenThread(void *spikeGenState) {
 
 	thrd_set_name("SpikeGenThread");
 
-	while (atomic_load_explicit(&state->genSpikeState.running, memory_order_relaxed)) {
-
+	while (atomic_load_explicit(&state->genSpikeState.running,
+			memory_order_relaxed)) {
 
 		/* generate spikes*/
-		if(state->genSpikeState.stim_type == STIM_REGULAR){
+		if (state->genSpikeState.stim_type == STIM_REGULAR) {
 			spiketrainReg(state);
-		}else if(state->genSpikeState.stim_type == STIM_POISSON){
+		} else if (state->genSpikeState.stim_type == STIM_POISSON) {
 
-		}else if(state->genSpikeState.stim_type == STIM_GAUSSIAN){
+		} else if (state->genSpikeState.stim_type == STIM_GAUSSIAN) {
 
 		}
-
 
 	}
 
 	return (thrd_success);
 }
 
-void spiketrainReg(void *spikeGenState){
+void spiketrainReg(void *spikeGenState) {
 
 	if (spikeGenState == NULL) {
 		return;
@@ -113,47 +146,75 @@ void spiketrainReg(void *spikeGenState){
 
 	struct timespec tim;
 	tim.tv_sec = 0;
-	atomic_load(&state->genSpikeState.stim_avr);
-	if(state->genSpikeState.stim_avr > 0){
-		tim.tv_nsec = 1000000000L/atomic_load(&state->genSpikeState.stim_avr);
-	}else{
-		tim.tv_nsec = 1000000000L;
-	}
-
-	uint32_t value = 0 | 1 << 13 | 0 << 16 | 0 << 17 | 0 << 18 | 1 << 20; //address
 
 	/* load current values into thread stimulation*/
 	atomic_load(&state->genSpikeState.repeat);
 	atomic_load(&state->genSpikeState.done);
-	atomic_load(&state->genSpikeState.doStim);
 	atomic_load(&state->genSpikeState.started);
+	atomic_load(&state->genSpikeState.stim_avr);
+	atomic_load(&state->genSpikeState.stim_duration);
 
-	if(!state->genSpikeState.started){
-		clock_gettime(CLOCK_MONOTONIC, &tstart); /*start counting*/
-		atomic_store(&state->genSpikeState.started, true);
+	atomic_load(&state->genSpikeState.dx);
+	atomic_load(&state->genSpikeState.dy);
+	atomic_load(&state->genSpikeState.sx);
+	atomic_load(&state->genSpikeState.sy);
+	atomic_load(&state->genSpikeState.address);
+	atomic_load(&state->genSpikeState.chip_id);
+	atomic_load(&state->genSpikeState.core_s);
+	atomic_load(&state->genSpikeState.core_d);
+
+	if (state->genSpikeState.stim_avr > 0) {
+		tim.tv_nsec = 1000000000L / atomic_load(&state->genSpikeState.stim_avr);
+	} else {
+		tim.tv_nsec = 1000000000L;
+	}
+
+	uint32_t value = state->genSpikeState.chip_id |
+			1 << 13 |
+			0 << 16 | 0 << 17 |
+			state->genSpikeState.core_s << 18 |
+			state->genSpikeState.address << 20 |
+			state->genSpikeState.dx << 4 |
+			state->genSpikeState.sx << 6 |
+			state->genSpikeState.dy << 7 |
+			state->genSpikeState.sy << 9;
+
+	if (!state->genSpikeState.started) {
+		LABELSTART:
+			clock_gettime(CLOCK_MONOTONIC, &tstart);
 	}
 
 	clock_gettime(CLOCK_MONOTONIC, &tend);
 
-	/*in case we finished one repetition*/
-	atomic_load(&state->genSpikeState.stim_duration);
-	if(  state->genSpikeState.stim_duration <= ((double)tend.tv_sec + 1.0e-9*tend.tv_nsec) -
-	           ((double)tstart.tv_sec + 1.0e-9*tstart.tv_nsec)  &&
-			   !state->genSpikeState.repeat){
-				if(state->genSpikeState.done == false){
-					caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation finished.\n");
-				}
-				atomic_store(&state->genSpikeState.done, true);/*end stimulation*/
+
+	if (state->genSpikeState.stim_duration
+			<= ((double) tend.tv_sec + 1.0e-9 * tend.tv_nsec)
+					- ((double) tstart.tv_sec + 1.0e-9 * tstart.tv_nsec)) {
+		if (state->genSpikeState.started) {
+			caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation finished.\n");
+		}
+		atomic_store(&state->genSpikeState.done, true);
+		atomic_store(&state->genSpikeState.started, false);
+		if(state->genSpikeState.repeat){
+			caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation re-started.\n");
+			atomic_store(&state->genSpikeState.started, true);
+			atomic_store(&state->genSpikeState.done, false);
+			goto LABELSTART;
+		}
 	}
 
-	if(state->genSpikeState.doStim && !state->genSpikeState.done){
+	if (!state->genSpikeState.done) {
 		nanosleep(&tim, NULL);
 		// send spikes
 		caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-				 DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+		DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+
+		/*send the spike*/
+		caerDeviceConfigSet(state->deviceState,
+					DYNAPSE_CONFIG_CHIP,
+					DYNAPSE_CONFIG_CHIP_CONTENT, value);
 
 	}
 
 }
-
 

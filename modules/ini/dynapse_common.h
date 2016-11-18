@@ -18,7 +18,7 @@
 
 
 struct gen_spike_state {
-	atomic_bool doStim;
+	bool doStim;
 	atomic_int_fast32_t stim_type;
 	atomic_int_fast32_t stim_avr;				// Hertz [1/s]
 	atomic_int_fast32_t stim_std;				//
@@ -28,6 +28,15 @@ struct gen_spike_state {
 	atomic_bool started;
 	thrd_t spikeGenThread;
 	atomic_bool running;
+	/*address spike*/
+	atomic_int_fast32_t core_d;
+	atomic_int_fast32_t address;
+	atomic_int_fast32_t core_s;
+	atomic_int_fast32_t chip_id;
+	atomic_int_fast32_t dx;
+	atomic_int_fast32_t dy;
+	atomic_bool sx;
+	atomic_bool sy;
 };
 
 
