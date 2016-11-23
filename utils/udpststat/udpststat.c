@@ -34,8 +34,10 @@ struct udp_message {
 
 typedef struct udp_message *udpMessage;
 
-static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket *incompleteUDPPackets,
+static void rebuildUDPPackets(int64_t highestParsedSequenceNumber, udpPacket *incompleteUDPPackets,
 	udpMessage *unassignedUDPMessages, int64_t sequenceNumber, uint8_t *data, size_t dataLength);
+static caerEventPacketHeader getNextUDPEventPacket(int64_t *highestParsedSequenceNumber,
+	udpPacket *incompleteUDPPackets, udpMessage *unassignedUDPMessages);
 static void printPacketInfo(caerEventPacketHeader header);
 
 static atomic_bool globalShutdown = ATOMIC_VAR_INIT(false);
@@ -169,9 +171,16 @@ int main(int argc, char *argv[]) {
 		printf("Format number: %" PRIi8 "\n", networkHeader.formatNumber);
 		printf("Source ID: %" PRIi16 "\n", networkHeader.sourceID);
 
-		analyzeUDPMessage(highestParsedSequenceNumber, &incompleteUDPPackets, &unassignedUDPMessages,
+		rebuildUDPPackets(highestParsedSequenceNumber, &incompleteUDPPackets, &unassignedUDPMessages,
 			networkHeader.sequenceNumber, dataBuffer + AEDAT3_NETWORK_HEADER_LENGTH,
 			(size_t) result - AEDAT3_NETWORK_HEADER_LENGTH);
+
+		caerEventPacketHeader eventPacket = getNextUDPEventPacket(&highestParsedSequenceNumber, &incompleteUDPPackets,
+			&unassignedUDPMessages);
+
+		printPacketInfo(eventPacket);
+
+		free(eventPacket);
 	}
 
 	// Close connection.
@@ -195,7 +204,7 @@ int main(int argc, char *argv[]) {
 	return (EXIT_SUCCESS);
 }
 
-static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket *incompleteUDPPackets,
+static void rebuildUDPPackets(int64_t highestParsedSequenceNumber, udpPacket *incompleteUDPPackets,
 	udpMessage *unassignedUDPMessages, int64_t sequenceNumber, uint8_t *data, size_t dataLength) {
 	// Is this a start message or an intermediate/end one?
 	bool startMessage = (U64T(sequenceNumber) & 0x8000000000000000LL);
@@ -392,6 +401,11 @@ static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket *in
 			prevMessage->next = newMessage;
 		}
 	}
+}
+
+static caerEventPacketHeader getNextUDPEventPacket(int64_t *highestParsedSequenceNumber,
+	udpPacket *incompleteUDPPackets, udpMessage *unassignedUDPMessages) {
+	return (NULL);
 }
 
 static void printPacketInfo(caerEventPacketHeader header) {
