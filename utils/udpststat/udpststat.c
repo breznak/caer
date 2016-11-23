@@ -186,6 +186,7 @@ int main(int argc, char *argv[]) {
 	udpPacket pkt = NULL;
 	LL_FOREACH(incompleteUDPPackets, pkt)
 	{
+		free(pkt->content);
 		free(pkt);
 	}
 
@@ -292,8 +293,8 @@ static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket *in
 
 		// Scan unassigned messages list and try to pick up messages that are part
 		// of this UDP packet.
-		udpMessage prevMessage = NULL, message = NULL;
-		LL_FOREACH(*unassignedUDPMessages, message)
+		udpMessage prevMessage = NULL, message = NULL, nextMessage = NULL;
+		LL_FOREACH_SAFE(*unassignedUDPMessages, message, nextMessage)
 		{
 			if (message->sequenceNumber > newPacket->endSequenceNumber) {
 				// There can't be any more possible candidates if we're past
@@ -312,12 +313,14 @@ static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket *in
 				// Remove from unassigned UDP messages list.
 				if (prevMessage == NULL) {
 					// Delete at HEAD of list.
-					*unassignedUDPMessages = message->next;
+					*unassignedUDPMessages = nextMessage;
+					free(message);
 					continue;
 				}
 				else {
 					// Delete somewhere inside list.
-					prevMessage->next = message->next;
+					prevMessage->next = nextMessage;
+					free(message);
 					continue;
 				}
 			}
