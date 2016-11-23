@@ -207,6 +207,11 @@ static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket *in
 		return;
 	}
 
+	// Verify data size. Can't ever be bigger than maximum UDP message size.
+	if (dataLength > MAX_OUTPUT_UDP_SIZE) {
+		return;
+	}
+
 	// First check if this is a start message. If yes, we allocate a new packet for it and
 	// put it at the right place. Also detect duplicate start messages here.
 	if (startMessage) {
@@ -285,7 +290,40 @@ static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket *in
 			prevPacket->next = newPacket;
 		}
 
-		// TODO: scan unassigned messages list and try to pair up.
+		// Scan unassigned messages list and try to pick up messages that are part
+		// of this UDP packet.
+		udpMessage prevMessage = NULL, message = NULL;
+		LL_FOREACH(*unassignedUDPMessages, message)
+		{
+			if (message->sequenceNumber > newPacket->endSequenceNumber) {
+				// There can't be any more possible candidates if we're past
+				// the end sequence number.
+				break;
+			}
+			else if (message->sequenceNumber > newPacket->startSequenceNumber) {
+				// Found a candidate. Due to above checks, it must be > start and <= end.
+				int64_t sequencePosition = message->sequenceNumber - newPacket->startSequenceNumber;
+
+				// Copy content.
+				memcpy(((uint8_t *) newPacket->content) + (sequencePosition * MAX_OUTPUT_UDP_SIZE), message->message,
+					message->messageLength);
+				newPacket->udpPacketsReceived[sequencePosition] = true;
+
+				// Remove from unassigned UDP messages list.
+				if (prevMessage == NULL) {
+					// Delete at HEAD of list.
+					*unassignedUDPMessages = message->next;
+					continue;
+				}
+				else {
+					// Delete somewhere inside list.
+					prevMessage->next = message->next;
+					continue;
+				}
+			}
+
+			prevMessage = message;
+		}
 	}
 	else {
 		// Not a start message, but an intermediate/end one!
@@ -296,8 +334,59 @@ static void analyzeUDPMessage(int64_t highestParsedSequenceNumber, udpPacket *in
 		{
 			if (sequenceNumber > packet->startSequenceNumber && sequenceNumber <= packet->endSequenceNumber) {
 				// This message is part of this UDP packet!
+				// First check for duplication (is it already there?).
+				int64_t sequencePosition = sequenceNumber - packet->startSequenceNumber;
+				if (packet->udpPacketsReceived[sequencePosition]) {
+					return; // Duplicate.
+				}
 
+				// Not duplicate, copy content.
+				memcpy(((uint8_t *) packet->content) + (sequencePosition * MAX_OUTPUT_UDP_SIZE), data, dataLength);
+				packet->udpPacketsReceived[sequencePosition] = true;
+
+				return;
 			}
+		}
+
+		// This message was not part of any existing incomplete packet!
+		// Add to unassigned messages list, find place and check for duplicates.
+		udpMessage prevMessage = NULL, message = NULL;
+		LL_FOREACH(*unassignedUDPMessages, message)
+		{
+			if (message->sequenceNumber == sequenceNumber) {
+				// Duplicates are possible, just ignore them.
+				return;
+			}
+			else if (message->sequenceNumber > sequenceNumber) {
+				// We already check for equality above, so this must be strictly
+				// bigger, which means we insert the new message here.
+				break;
+			}
+
+			prevMessage = message;
+		}
+
+		// Allocate new message.
+		udpMessage newMessage = malloc(sizeof(*newMessage) + dataLength);
+		if (newMessage == NULL) {
+			return;
+		}
+
+		// Copy data into new message.
+		newMessage->sequenceNumber = sequenceNumber;
+		newMessage->messageLength = dataLength;
+		memcpy(newMessage->message, data, dataLength);
+
+		// Insert new message.
+		if (prevMessage == NULL) {
+			// Insert at HEAD of list.
+			newMessage->next = *unassignedUDPMessages;
+			*unassignedUDPMessages = newMessage;
+		}
+		else {
+			// Insert somewhere inside list.
+			newMessage->next = prevMessage->next;
+			prevMessage->next = newMessage;
 		}
 	}
 }
