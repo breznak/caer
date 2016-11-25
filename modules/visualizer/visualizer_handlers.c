@@ -41,6 +41,7 @@ void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLE
 			uint32_t indexLin = posy / U32T(currentZoomFactor) * DYNAPSE_CONFIG_NEUCOL / U32T(currentZoomFactor)
 				+ posx / U32T(currentZoomFactor);
 
+			caerDeviceConfigSet(state->eventSourceModuleState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
 			caerDeviceConfigSet(state->eventSourceModuleState, DYNAPSE_CONFIG_MONITOR_NEU, coreid, indexLin);
 
 			caerLog(CAER_LOG_NOTICE, "Visualizer", "Monitoring neuron %d of core %d\n", indexLin, coreid);

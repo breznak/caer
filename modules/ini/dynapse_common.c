@@ -394,13 +394,15 @@ static void updateCoarseFineBiasSetting(caerModuleData moduleData,
 	const char *nodeName = sshsNodeGetName(biasConfigNode);
 
 	uint32_t value = generateCoarseFineBiasParent(biasConfigNode, nodeName);
+	printf("updatecoarsefile %d\n", value);
 
 	// finally send configuration via USB
-	caerDeviceConfigSet(
-			((caerInputDynapseState) moduleData->moduleState)->deviceState,
-			DYNAPSE_CONFIG_CHIP,
+	bool retval = caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, DYNAPSE_CONFIG_CHIP,
 			DYNAPSE_CONFIG_CHIP_CONTENT, value);
-
+	if(retval == false){
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_CONTENT");
+			exit(1);
+	}
 }
 
 static void createCoarseFineBiasSetting(sshsNode biasNode, const char *biasName,
@@ -442,6 +444,7 @@ static void biasConfigListener(sshsNode node, void *userData,
 		const char *nodeName = sshsNodeGetName(node);
 
 		uint32_t value = generateCoarseFineBiasParent(node, nodeName);
+		printf("value %d\n", value);
 
 		// finally send configuration via USB
 		caerDeviceConfigSet(
@@ -477,11 +480,11 @@ static void updateLowPowerBiases(caerModuleData moduleData,
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_NMDA_N", 7, 0,
 			"HighBias", "Normal", "PBias", true,chipid);
 
-	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_DC_P", 1, 0,
+	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_DC_P", 2, 0,
 			"HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_DC_P", 1, 30,
+	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_DC_P", 2, 30,
 			"HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_DC_P", 1, 30,
+	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_DC_P", 3, 30,
 			"HighBias", "Normal", "PBias", true,chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_TAU1_N", 7,
@@ -604,9 +607,9 @@ static void updateLowPowerBiases(caerModuleData moduleData,
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_NMDA_N", 7, 0,
 			"HighBias", "Normal", "PBias", true,chipid);
 
-	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_DC_P", 1, 0,
+	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_DC_P", 3, 0,
 			"HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_DC_P", 1, 30,
+	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_DC_P", 2, 30,
 			"HighBias", "Normal", "PBias", true,chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_DC_P", 1, 30,
 			"HighBias", "Normal", "PBias", true,chipid);
@@ -733,11 +736,8 @@ static void updateLowPowerBiases(caerModuleData moduleData,
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_NMDA_N", 7, 0,
 			"HighBias", "Normal", "PBias", true,chipid);
 
-	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_DC_P", 1, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_DC_P", 1, 30,
-			"HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_DC_P", 1, 30,
+
+	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_DC_P", 3, 30,
 			"HighBias", "Normal", "PBias", true,chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_TAU1_N", 7,
@@ -856,11 +856,7 @@ static void updateLowPowerBiases(caerModuleData moduleData,
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_NMDA_N", 7, 0,
 			"HighBias", "Normal", "PBias", true,chipid);
 
-	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_DC_P", 1, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_DC_P", 1, 30,
-			"HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_DC_P", 1, 30,
+	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_DC_P", 2, 30,
 			"HighBias", "Normal", "PBias", true,chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_TAU1_N", 7,
@@ -2295,91 +2291,209 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 
 	caerModuleSetSubSystemString(moduleData, subSystemString);
 
+	bool retval;
 	// Let's turn on blocking data-get mode to avoid wasting resources.
-	caerDeviceConfigSet(state->deviceState, CAER_HOST_CONFIG_DATAEXCHANGE,CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, true);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_RUN, true);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER, DYNAPSE_CONFIG_AER_RUN, true);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MUX, DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE, true);
-
+	retval = caerDeviceConfigSet(state->deviceState, CAER_HOST_CONFIG_DATAEXCHANGE,CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, true);
+	if(retval == false){
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING");
+		exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_RUN, true);
+	if(retval == false){
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_RUN");
+			exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER, DYNAPSE_CONFIG_AER_RUN, true);
+	if(retval == false){
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_AER_RUN");
+			exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_REQ_DELAY, 30);
+	if(retval == false){
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_REQ_DELAY");
+			exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_REQ_EXTENSION, 20);
+	if(retval == false){
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_REQ_EXTENSION");
+			exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MUX, DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE, true);
+	if(retval == false){
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE");
+			exit(1);
+	}
 	// Create default settings and send them to the devices.
 	createDefaultConfiguration(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U0);
 	createDefaultConfiguration(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U1);
 	createDefaultConfiguration(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U2);
 	createDefaultConfiguration(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U3);
 
-	//caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
-	//updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U0);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
+	if(retval == false){
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U0");
+			exit(1);
+	}
+	updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U0);
 
-	//caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
-	//updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U1);
+	/*retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
+	if(retval == false){
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U1");
+			exit(1);
+	}
+	updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U1);*/
 
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
+				exit(1);
+	}
 	updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U2);
 
-	//caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
-	//updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U3);
+	/*retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U3");
+				exit(1);
+	}
+	updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U3);*/
 
 
 	// Clear SRAM --> DYNAPSE_CONFIG_DYNAPSE_U0
-	/*caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing SRAM ...\n");
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing SRAM ...\n");
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U0);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U0, 0);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U0");
+				exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U0, 0);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY to DYNAPSE_CONFIG_DYNAPSE_U0");
+				exit(1);
+	}
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 	// Clear CAM -->  DYNAPSE_CONFIG_DYNAPSE_U0
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing CAM ...\n");
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U0);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");*/
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U0");
+				exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CLEAR_CAM of DYNAPSE_CONFIG_DYNAPSE_U0");
+				exit(1);
+	}
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
 	// Clear SRAM --> DYNAPSE_CONFIG_DYNAPSE_U1
 	/*caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing SRAM ...\n");
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U1);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U1, 0);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U1");
+				exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U1, 0);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY to DYNAPSE_CONFIG_DYNAPSE_U1");
+				exit(1);
+	}
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 	// Clear CAM -->  DYNAPSE_CONFIG_DYNAPSE_U1
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing CAM ...\n");
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U1);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U1");
+				exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CLEAR_CAM of DYNAPSE_CONFIG_DYNAPSE_U1");
+				exit(1);
+	}
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");*/
 
 	// Clear SRAM --> DYNAPSE_CONFIG_DYNAPSE_U2
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing SRAM ...\n");
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U2, 0);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
+				exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U2, 0);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY to DYNAPSE_CONFIG_DYNAPSE_U2");
+				exit(1);
+	}
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 	// Clear CAM -->  DYNAPSE_CONFIG_DYNAPSE_U2
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing CAM ...\n");
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
+				exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CLEAR_CAM of DYNAPSE_CONFIG_DYNAPSE_U2");
+				exit(1);
+	}
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
 	// Clear SRAM --> DYNAPSE_CONFIG_DYNAPSE_U3
 	/*caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing SRAM ...\n");
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U3);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U3, 0);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U3");
+				exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U3, 0);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY to DYNAPSE_CONFIG_DYNAPSE_U3");
+				exit(1);
+	}
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 	// Clear CAM -->  DYNAPSE_CONFIG_DYNAPSE_U3
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing CAM ...\n");
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U3);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");*/
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U3");
+				exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CLEAR_CAM of DYNAPSE_CONFIG_DYNAPSE_U3");
+				exit(1);
+	}
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
+	 */
 
 	// close config and AER communication
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_RUN, false);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER, DYNAPSE_CONFIG_AER_RUN, false);
-	caerDeviceClose(&state->deviceState);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_RUN, false);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_RUN false");
+				exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER, DYNAPSE_CONFIG_AER_RUN, false);
+	if(retval == false){
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_RUN false");
+				exit(1);
+	}
+	retval = caerDeviceClose(&state->deviceState);
+	if(retval == false){
+					caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_RUN false");
+					exit(1);
+	}
 
 	// Open the communication with Dynap-se, give it a device ID of 1, and don't care about USB bus or SN restrictions.
-	state->deviceState = caerDeviceOpen(1, CAER_DEVICE_DYNAPSE, 0, 0,
-	NULL);
+	state->deviceState = caerDeviceOpen(1, CAER_DEVICE_DYNAPSE, 0, 0, NULL);
 	if (state->deviceState == NULL) {
 		return (EXIT_FAILURE);
 	}
@@ -2392,43 +2506,126 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 			dynapse_info.deviceString, dynapse_info.deviceID,
 			dynapse_info.deviceIsMaster, dynapse_info.logicVersion);
 
-	caerDeviceConfigSet(state->deviceState, CAER_HOST_CONFIG_DATAEXCHANGE, CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, true);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_RUN, true);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER, DYNAPSE_CONFIG_AER_RUN, true);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	retval = caerDeviceConfigSet(state->deviceState, CAER_HOST_CONFIG_DATAEXCHANGE, CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, true);
+	if(retval == false){
+					caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING");
+					exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_RUN, true);
+	if(retval == false){
+					caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_RUN true");
+					exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER, DYNAPSE_CONFIG_AER_RUN, true);
+	if(retval == false){
+					caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_AER_RUN true");
+					exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	if(retval == false){
+					caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
+					exit(1);
+	}
 
 	// force chip to be enable even if aer is off
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MUX, DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE, true);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MUX, DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE, true);
+	if(retval == false){
+						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE");
+						exit(1);
+	}
 
 	//  DYNAPSE_CONFIG_DYNAPSE_U0
-	//caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
-	//updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U0);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
+	if(retval == false){
+						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_DYNAPSE_U0");
+						exit(1);
+	}
+	updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U0);
+
 	//  DYNAPSE_CONFIG_DYNAPSE_U1
-	//caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
-	//updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U1);
+	/*retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
+	if(retval == false){
+						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U1");
+						exit(1);
+	}
+	updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U1);
+	*/
 	// DYNAPSE_CONFIG_DYNAPSE_U2
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	if(retval == false){
+						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
+						exit(1);
+	}
 	updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U2);
+
 	//  DYNAPSE_CONFIG_DYNAPSE_U3
-	//caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
-	//updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U3);
+	/*retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
+	if(retval == false){
+						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U3");
+						exit(1);
+	}
+	updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U3);*/
 
 	/* output one neuron per core, neuron id 0 chip DYNAPSE_CONFIG_DYNAPSE_U2*/
 
-	// Configure SRAM for Monitoring--> DYNAPSE_CONFIG_DYNAPSE_U2
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing SRAM ...\n");
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM, DYNAPSE_CONFIG_DYNAPSE_U2, 0);
+	// Configure SRAM for Monitoring--> DYNAPSE_CONFIG_DYNAPSE_U0
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Default SRAM ...\n");
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U0);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
+	if(retval == false){
+						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U0");
+						exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM, DYNAPSE_CONFIG_DYNAPSE_U0, 0);
+	if(retval == false){
+						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_DEFAULT_SRAM to DYNAPSE_CONFIG_DYNAPSE_U0");
+						exit(1);
+	}
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
+	// Configure SRAM for Monitoring--> DYNAPSE_CONFIG_DYNAPSE_U2
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Default SRAM ...\n");
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	if(retval == false){
+						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
+						exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM, DYNAPSE_CONFIG_DYNAPSE_U2, 0);
+	if(retval == false){
+						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_DEFAULT_SRAM to DYNAPSE_CONFIG_DYNAPSE_U2");
+						exit(1);
+	}
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
+
+
+
 	/* need to make a libcaer function for this */
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-	DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU, 0, 0); // core 0 neuron 0
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU, 1, 5); //  core 1 neuron 5
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU, 2, 60); // core 2 neuron 10
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU, 3, 105); // core 3 neuron 20
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	if(retval == false){
+						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
+						exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU, 0, 0); // core 0 neuron 0
+	if(retval == false){
+						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_MONITOR_NEU to 0 0");
+						exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU, 1, 5); //  core 1 neuron 5
+	if(retval == false){
+						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_MONITOR_NEU to 1 5");
+						exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU, 2, 60); // core 2 neuron 10
+	if(retval == false){
+						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_MONITOR_NEU to 2 60");
+						exit(1);
+	}
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU, 3, 105); // core 3 neuron 20
+	if(retval == false){
+						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_MONITOR_NEU to 3 105");
+						exit(1);
+	}
 
 	// Start data acquisition.
 	bool ret = caerDeviceDataStart(state->deviceState,
@@ -2455,7 +2652,12 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	sshsNode usbNode = sshsGetRelativeNode(deviceConfigNode, "usb/");
 	sshsNodeAddAttributeListener(usbNode, moduleData, &usbConfigListener);
 
-	sshsNode biasNode = sshsGetRelativeNode(deviceConfigNode, "bias/");
+
+	// Device related configuration has its own sub-node.
+	sshsNode deviceConfigNodeLP = sshsGetRelativeNode(moduleData->moduleNode,
+			chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U2, true));
+
+	sshsNode biasNode = sshsGetRelativeNode(deviceConfigNodeLP, "bias/");
 
 	size_t biasNodesLength = 0;
 	sshsNode *biasNodes = sshsNodeGetChildren(biasNode, &biasNodesLength);
@@ -2471,19 +2673,20 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	}
 
 	//spike Generator Node
-	sshsNode spikeNode = sshsGetRelativeNode(moduleData->moduleNode,
-			"spikeGen/");
+	deviceConfigNodeLP = sshsGetRelativeNode(moduleData->moduleNode,
+			chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U2, true));
+
+	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNodeLP, "spikeGen/");
 	sshsNodeAddAttributeListener(spikeNode, state, &spikeConfigListener);
 	caerGenSpikeInit(moduleData); // init module and start thread
 
 	//sram programmer Node
-	sshsNode sramNode = sshsGetRelativeNode(moduleData->moduleNode,
-			"sramProg/");
+	sshsNode sramNode = sshsGetRelativeNode(deviceConfigNodeLP, "sramProg/");
 	sshsNodeAddAttributeListener(sramNode, state, &sramConfigListener);
 	caerSramProgInit(moduleData);	// init sram prog
 
 	//cam programmer Node
-	sshsNode camNode = sshsGetRelativeNode(moduleData->moduleNode, "camProg/");
+	sshsNode camNode = sshsGetRelativeNode(deviceConfigNodeLP, "camProg/");
 	sshsNodeAddAttributeListener(camNode, state, &camConfigListener);
 	caerCamProgInit(moduleData);	// init cam prog
 
@@ -2496,7 +2699,7 @@ void caerInputDYNAPSEExit(caerModuleData moduleData) {
 	struct caer_dynapse_info devInfo = caerDynapseInfoGet(
 			((caerInputDynapseState) moduleData->moduleState)->deviceState);
 	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode,
-			chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U0, true));
+			chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U2, true));
 
 	caerDeviceDataStop(
 			((caerInputDynapseState) moduleData->moduleState)->deviceState);
