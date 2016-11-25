@@ -146,24 +146,21 @@ static void systemConfigListener(sshsNode node, void *userData,
 static void usbConfigSend(sshsNode node, caerModuleData moduleData) {
 	caerDeviceConfigSet(
 			((caerInputDynapseState) moduleData->moduleState)->deviceState,
-			CAER_HOST_CONFIG_USB,
-			CAER_HOST_CONFIG_USB_BUFFER_NUMBER,
+			CAER_HOST_CONFIG_USB, CAER_HOST_CONFIG_USB_BUFFER_NUMBER,
 			U32T(sshsNodeGetInt(node, "BufferNumber")));
 	caerDeviceConfigSet(
 			((caerInputDynapseState) moduleData->moduleState)->deviceState,
-			CAER_HOST_CONFIG_USB,
-			CAER_HOST_CONFIG_USB_BUFFER_SIZE,
+			CAER_HOST_CONFIG_USB, CAER_HOST_CONFIG_USB_BUFFER_SIZE,
 			U32T(sshsNodeGetInt(node, "BufferSize")));
 
 	caerDeviceConfigSet(
 			((caerInputDynapseState) moduleData->moduleState)->deviceState,
-			DYNAPSE_CONFIG_USB,
-			DYNAPSE_CONFIG_USB_EARLY_PACKET_DELAY,
+			DYNAPSE_CONFIG_USB, DYNAPSE_CONFIG_USB_EARLY_PACKET_DELAY,
 			U32T(sshsNodeGetShort(node, "EarlyPacketDelay")));
 	caerDeviceConfigSet(
 			((caerInputDynapseState) moduleData->moduleState)->deviceState,
-			DYNAPSE_CONFIG_USB,
-			DYNAPSE_CONFIG_USB_RUN, sshsNodeGetBool(node, "Run"));
+			DYNAPSE_CONFIG_USB, DYNAPSE_CONFIG_USB_RUN,
+			sshsNodeGetBool(node, "Run"));
 }
 
 static void sramConfigListener(sshsNode node, void *userData,
@@ -190,7 +187,7 @@ static void sramConfigListener(sshsNode node, void *userData,
 			uint32_t virtual_core_id = sshsNodeGetInt(node, "virtual_core_id");
 			// select chip
 			caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-			DYNAPSE_CONFIG_CHIP_ID, chipid);
+					DYNAPSE_CONFIG_CHIP_ID, chipid);
 
 			uint32_t bits = 1 << 4 | neuron_id << 7 | sram_addr << 5
 					| core_id << 15 | 1 << 17 | dest_core_id << 18 | dx << 22
@@ -199,7 +196,7 @@ static void sramConfigListener(sshsNode node, void *userData,
 					"programming chip id %d with sram event %d\n", chipid,
 					bits);
 			caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-			DYNAPSE_CONFIG_CHIP_CONTENT, bits);
+					DYNAPSE_CONFIG_CHIP_CONTENT, bits);
 		}
 	}
 }
@@ -227,7 +224,7 @@ static void camConfigListener(sshsNode node, void *userData,
 				bool fs = sshsNodeGetBool(node, "fs");
 				// select chip
 				caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-				DYNAPSE_CONFIG_CHIP_ID, chipid);
+						DYNAPSE_CONFIG_CHIP_ID, chipid);
 				// compose bit address
 				uint32_t bits = col_addr | row_addr << 11 | cam_addr << 5
 						| core_id << 15 | 1 << 17 | core_s << 18 | address << 20
@@ -237,7 +234,7 @@ static void camConfigListener(sshsNode node, void *userData,
 						bits);
 				if (bits > 0) {
 					caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-					DYNAPSE_CONFIG_CHIP_CONTENT, bits);
+							DYNAPSE_CONFIG_CHIP_CONTENT, bits);
 				}
 
 			}
@@ -335,26 +332,25 @@ static void usbConfigListener(sshsNode node, void *userData,
 				&& caerStrEquals(changeKey, "BufferNumber")) {
 			caerDeviceConfigSet(
 					((caerInputDynapseState) moduleData->moduleState)->deviceState,
-					CAER_HOST_CONFIG_USB,
-					CAER_HOST_CONFIG_USB_BUFFER_NUMBER, U32T(changeValue.iint));
+					CAER_HOST_CONFIG_USB, CAER_HOST_CONFIG_USB_BUFFER_NUMBER,
+					U32T(changeValue.iint));
 		} else if (changeType == SSHS_INT
 				&& caerStrEquals(changeKey, "BufferSize")) {
 			caerDeviceConfigSet(
 					((caerInputDynapseState) moduleData->moduleState)->deviceState,
-					CAER_HOST_CONFIG_USB,
-					CAER_HOST_CONFIG_USB_BUFFER_SIZE, U32T(changeValue.iint));
+					CAER_HOST_CONFIG_USB, CAER_HOST_CONFIG_USB_BUFFER_SIZE,
+					U32T(changeValue.iint));
 		} else if (changeType == SSHS_SHORT
 				&& caerStrEquals(changeKey, "EarlyPacketDelay")) {
 			caerDeviceConfigSet(
 					((caerInputDynapseState) moduleData->moduleState)->deviceState,
-					DYNAPSE_CONFIG_USB,
-					DYNAPSE_CONFIG_USB_EARLY_PACKET_DELAY,
+					DYNAPSE_CONFIG_USB, DYNAPSE_CONFIG_USB_EARLY_PACKET_DELAY,
 					U32T(changeValue.ishort));
 		} else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "Run")) {
 			caerDeviceConfigSet(
 					((caerInputDynapseState) moduleData->moduleState)->deviceState,
-					DYNAPSE_CONFIG_USB,
-					DYNAPSE_CONFIG_USB_RUN, changeValue.boolean);
+					DYNAPSE_CONFIG_USB, DYNAPSE_CONFIG_USB_RUN,
+					changeValue.boolean);
 		}
 	}
 }
@@ -394,14 +390,15 @@ static void updateCoarseFineBiasSetting(caerModuleData moduleData,
 	const char *nodeName = sshsNodeGetName(biasConfigNode);
 
 	uint32_t value = generateCoarseFineBiasParent(biasConfigNode, nodeName);
-	printf("updatecoarsefile %d\n", value);
 
 	// finally send configuration via USB
-	bool retval = caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, DYNAPSE_CONFIG_CHIP,
-			DYNAPSE_CONFIG_CHIP_CONTENT, value);
-	if(retval == false){
-			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_CONTENT");
-			exit(1);
+	bool retval = caerDeviceConfigSet(
+			((caerInputDynapseState) moduleData->moduleState)->deviceState,
+			DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, value);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_CONTENT");
+		exit(1);
 	}
 }
 
@@ -443,14 +440,67 @@ static void biasConfigListener(sshsNode node, void *userData,
 	if (event == SSHS_ATTRIBUTE_MODIFIED) {
 		const char *nodeName = sshsNodeGetName(node);
 
+		sshsNode parent = sshsNodeGetParent(node);
+		const char *nodeParent = sshsNodeGetName(parent);
+		sshsNode grandparent = sshsNodeGetParent(parent);
+		const char *nodeGrandParent = sshsNodeGetName(grandparent);
 		uint32_t value = generateCoarseFineBiasParent(node, nodeName);
-		printf("value %d\n", value);
+		//printf("nodename %s parent %s nodeGrandParent %s\n", nodeName,
+		//		nodeParent, nodeGrandParent);
+
+		if (caerStrEquals(nodeGrandParent, "DYNAPSE_CONFIG_DYNAPSE_U0")) {
+			int retval =
+					caerDeviceConfigSet(
+							((caerInputDynapseState) moduleData->moduleState)->deviceState,
+							DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
+							DYNAPSE_CONFIG_DYNAPSE_U0);
+			if (retval == false) {
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+						"failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U0");
+			}
+		} else if (caerStrEquals(nodeGrandParent,
+				"DYNAPSE_CONFIG_DYNAPSE_U1")) {
+			int retval =
+					caerDeviceConfigSet(
+							((caerInputDynapseState) moduleData->moduleState)->deviceState,
+							DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
+							DYNAPSE_CONFIG_DYNAPSE_U1);
+			if (retval == false) {
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+						"failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U1");
+			}
+		}else if (caerStrEquals(nodeGrandParent,
+				"DYNAPSE_CONFIG_DYNAPSE_U2")) {
+			int retval =
+					caerDeviceConfigSet(
+							((caerInputDynapseState) moduleData->moduleState)->deviceState,
+							DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
+							DYNAPSE_CONFIG_DYNAPSE_U2);
+			if (retval == false) {
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+						"failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
+			}
+		}else if (caerStrEquals(nodeGrandParent,
+				"DYNAPSE_CONFIG_DYNAPSE_U3")) {
+			int retval =
+					caerDeviceConfigSet(
+							((caerInputDynapseState) moduleData->moduleState)->deviceState,
+							DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
+							DYNAPSE_CONFIG_DYNAPSE_U3);
+			if (retval == false) {
+				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+						"failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U3");
+			}
+		}
 
 		// finally send configuration via USB
-		caerDeviceConfigSet(
+		int retval = caerDeviceConfigSet(
 				((caerInputDynapseState) moduleData->moduleState)->deviceState,
-				DYNAPSE_CONFIG_CHIP,
-				DYNAPSE_CONFIG_CHIP_CONTENT, value);
+				DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, value);
+		if (retval == false) {
+			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+					"failed to set bias");
+		}
 
 	}
 
@@ -464,514 +514,529 @@ static void updateLowPowerBiases(caerModuleData moduleData,
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_BUF_P", 3, 0,
 			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_BUF_P", 3, 80,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_BUF_P", 3, 80,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_RFR_N", 3, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_RFR_N", 3, 3,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_RFR_N", 3, 3,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_NMDA_N", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_NMDA_N", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_DC_P", 2, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_DC_P", 2, 30,
-			"HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_DC_P", 3, 30,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
+	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_DC_P", 3, 100,
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_TAU1_N", 7,
-			10, "HighBias", "Normal", "NBias", true,chipid);
+			10, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_TAU1_N", 7,
-			10, "LowBias", "Normal", "NBias", true,chipid);
+			10, "LowBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_TAU1_N", 7,
-			10, "LowBias", "Normal", "NBias", true,chipid);
+			10, "LowBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_TAU2_N", 6, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_TAU2_N", 6,
-			100, "HighBias", "Normal", "NBias", true,chipid);
+			100, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_TAU2_N", 6,
-			100, "HighBias", "Normal", "NBias", true,chipid);
+			100, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_THR_N", 3, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_THR_N", 3, 30,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_THR_N", 3, 30,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_AHW_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_AHTAU_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_AHTAU_N", 7,
-			35, "HighBias", "Normal", "NBias", true,chipid);
+			35, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_AHTAU_N", 7,
-			35, "HighBias", "Normal", "NBias", true,chipid);
+			35, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_AHTHR_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_CASC_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_PULSE_PWLK_P", 3,
-			0, "HighBias", "Normal", "PBias", true,chipid);
+			0, "HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_PULSE_PWLK_P", 3,
-			106, "HighBias", "Normal", "PBias", true,chipid);
+			106, "HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_PULSE_PWLK_P", 3,
-			106, "HighBias", "Normal", "PBias", true,chipid);
+			106, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C0_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C0_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C0_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C0_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C0_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C0_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C0_PS_WEIGHT_EXC_F_N", 15, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C0_PS_WEIGHT_EXC_F_N", 15, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPII_TAU_S_P",
-			7, 40, "HighBias", "Normal", "PBias", true,chipid);
+			7, 40, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPII_TAU_S_P",
-			7, 40, "HighBias", "Normal", "NBias", true,chipid);
+			7, 40, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPII_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPII_THR_S_P",
-			7, 40, "HighBias", "Normal", "PBias", true,chipid);
+			7, 40, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPII_THR_S_P",
-			7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			7, 0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPII_THR_S_P",
-			7, 40, "HighBias", "Normal", "NBias", true,chipid);
+			7, 40, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPII_THR_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPIE_TAU_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPIE_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPIE_TAU_F_P",
-			7, 40, "HighBias", "Normal", "PBias", true,chipid);
+			7, 40, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPIE_TAU_F_P",
-			7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			7, 0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPIE_TAU_F_P",
-			7, 40, "HighBias", "Normal", "NBias", true,chipid);
+			7, 40, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPIE_THR_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_R2R_P", 4, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_R2R_P", 4, 85,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_R2R_P", 4, 85,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	// core 1
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_BUF_P", 3, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_BUF_P", 3, 80,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_BUF_P", 3, 80,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_RFR_N", 3, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_RFR_N", 3, 3,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_RFR_N", 3, 3,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_NMDA_N", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_NMDA_N", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_DC_P", 3, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_DC_P", 2, 30,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_DC_P", 1, 30,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_TAU1_N", 7,
-			10, "HighBias", "Normal", "NBias", true,chipid);
+			10, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_TAU1_N", 7,
-			10, "LowBias", "Normal", "NBias", true,chipid);
+			10, "LowBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_TAU1_N", 7,
-			10, "LowBias", "Normal", "NBias", true,chipid);
+			10, "LowBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_TAU2_N", 6, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_TAU2_N", 6,
-			100, "HighBias", "Normal", "NBias", true,chipid);
+			100, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_TAU2_N", 6,
-			100, "HighBias", "Normal", "NBias", true,chipid);
+			100, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_THR_N", 3, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_THR_N", 3, 30,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_THR_N", 3, 30,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_AHW_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_AHTAU_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_AHTAU_N", 7,
-			35, "HighBias", "Normal", "NBias", true,chipid);
+			35, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_AHTAU_N", 7,
-			35, "HighBias", "Normal", "NBias", true,chipid);
+			35, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_AHTHR_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_CASC_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_PULSE_PWLK_P", 3,
-			0, "HighBias", "Normal", "PBias", true,chipid);
+			0, "HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_PULSE_PWLK_P", 3,
-			106, "HighBias", "Normal", "PBias", true,chipid);
+			106, "HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_PULSE_PWLK_P", 3,
-			106, "HighBias", "Normal", "PBias", true,chipid);
+			106, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C1_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C1_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C1_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C1_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C1_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C1_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C1_PS_WEIGHT_EXC_F_N", 15, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C1_PS_WEIGHT_EXC_F_N", 15, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPII_TAU_S_P",
-			7, 40, "HighBias", "Normal", "PBias", true,chipid);
+			7, 40, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPII_TAU_S_P",
-			7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			7, 0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPII_TAU_S_P",
-			7, 40, "HighBias", "Normal", "NBias", true,chipid);
+			7, 40, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPII_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPII_THR_S_P",
-			7, 40, "HighBias", "Normal", "PBias", true,chipid);
+			7, 40, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPII_THR_S_P",
-			7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			7, 0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPII_THR_S_P",
-			7, 40, "HighBias", "Normal", "NBias", true,chipid);
+			7, 40, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPII_THR_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPIE_TAU_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPIE_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPIE_TAU_F_P",
-			7, 40, "HighBias", "Normal", "PBias", true,chipid);
+			7, 40, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPIE_TAU_F_P",
-			7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			7, 0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPIE_TAU_F_P",
-			7, 40, "HighBias", "Normal", "NBias", true,chipid);
+			7, 40, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPIE_THR_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_R2R_P", 4, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_R2R_P", 4, 85,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_R2R_P", 4, 85,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	// core 2
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_BUF_P", 3, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_BUF_P", 3, 80,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_BUF_P", 3, 80,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_RFR_N", 3, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_RFR_N", 3, 3,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_RFR_N", 3, 3,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_NMDA_N", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_NMDA_N", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
-
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_DC_P", 3, 30,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_TAU1_N", 7,
-			10, "HighBias", "Normal", "NBias", true,chipid);
+			10, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_TAU1_N", 7,
-			10, "LowBias", "Normal", "NBias", true,chipid);
+			10, "LowBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_TAU1_N", 7,
-			10, "LowBias", "Normal", "NBias", true,chipid);
+			10, "LowBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_TAU2_N", 6, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_TAU2_N", 6,
-			100, "HighBias", "Normal", "NBias", true,chipid);
+			100, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_TAU2_N", 6,
-			100, "HighBias", "Normal", "NBias", true,chipid);
+			100, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_THR_N", 3, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_THR_N", 3, 30,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_THR_N", 3, 30,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_AHW_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_AHTAU_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_AHTAU_N", 7,
-			35, "HighBias", "Normal", "NBias", true,chipid);
+			35, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_AHTAU_N", 7,
-			35, "HighBias", "Normal", "NBias", true,chipid);
+			35, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_AHTHR_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_CASC_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_PULSE_PWLK_P", 3,
-			0, "HighBias", "Normal", "PBias", true,chipid);
+			0, "HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_PULSE_PWLK_P", 3,
-			106, "HighBias", "Normal", "PBias", true,chipid);
+			106, "HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_PULSE_PWLK_P", 3,
-			106, "HighBias", "Normal", "PBias", true,chipid);
+			106, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C2_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C2_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C2_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C2_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C2_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C2_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C2_PS_WEIGHT_EXC_F_N", 15, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C2_PS_WEIGHT_EXC_F_N", 15, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPII_TAU_S_P",
-			7, 40, "HighBias", "Normal", "PBias", true,chipid);
+			7, 40, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPII_TAU_S_P",
-			7, 40, "HighBias", "Normal", "NBias", true,chipid);
+			7, 40, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPII_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPII_THR_S_P",
-			7, 40, "HighBias", "Normal", "PBias", true,chipid);
+			7, 40, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPII_THR_S_P",
-			7, 40, "HighBias", "Normal", "NBias", true,chipid);
+			7, 40, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPII_THR_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPIE_TAU_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPIE_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPIE_TAU_F_P",
-			7, 40, "HighBias", "Normal", "PBias", true,chipid);
+			7, 40, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPIE_TAU_F_P",
-			7, 40, "HighBias", "Normal", "NBias", true,chipid);
+			7, 40, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPIE_THR_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_R2R_P", 4, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_R2R_P", 4, 85,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_R2R_P", 4, 85,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	// core 3
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_BUF_P", 3, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_BUF_P", 3, 80,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_BUF_P", 3, 80,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_RFR_N", 3, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_RFR_N", 3, 3,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_RFR_N", 3, 3,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_NMDA_N", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_NMDA_N", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_DC_P", 2, 30,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_TAU1_N", 7,
-			10, "HighBias", "Normal", "NBias", true,chipid);
+			10, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_TAU1_N", 7,
-			10, "LowBias", "Normal", "NBias", true,chipid);
+			10, "LowBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_TAU1_N", 7,
-			10, "LowBias", "Normal", "NBias", true,chipid);
+			10, "LowBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_TAU2_N", 6, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_TAU2_N", 6,
-			100, "HighBias", "Normal", "NBias", true,chipid);
+			100, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_TAU2_N", 6,
-			100, "HighBias", "Normal", "NBias", true,chipid);
+			100, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_THR_N", 3, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_THR_N", 3, 30,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_THR_N", 3, 30,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_AHW_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_AHTAU_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_AHTAU_N", 7,
-			35, "HighBias", "Normal", "NBias", true,chipid);
+			35, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_AHTAU_N", 7,
-			35, "HighBias", "Normal", "NBias", true,chipid);
+			35, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_AHTHR_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_CASC_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_PULSE_PWLK_P", 3,
-			0, "HighBias", "Normal", "PBias", true,chipid);
+			0, "HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_PULSE_PWLK_P", 3,
-			106, "HighBias", "Normal", "PBias", true,chipid);
+			106, "HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_PULSE_PWLK_P", 3,
-			106, "HighBias", "Normal", "PBias", true,chipid);
+			106, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C3_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C3_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C3_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C3_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C3_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C3_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C3_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C3_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPII_TAU_S_P",
-			7, 40, "HighBias", "Normal", "PBias", true,chipid);
+			7, 40, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPII_TAU_S_P",
-			7, 40, "HighBias", "Normal", "NBias", true,chipid);
+			7, 40, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPII_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPII_THR_S_P",
-			7, 40, "HighBias", "Normal", "PBias", true,chipid);
+			7, 40, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPII_THR_S_P",
-			7, 40, "HighBias", "Normal", "NBias", true,chipid);
+			7, 40, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPII_THR_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPIE_TAU_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPIE_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPIE_TAU_F_P",
-			7, 40, "HighBias", "Normal", "PBias", true,chipid);
+			7, 40, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPIE_TAU_F_P",
-			7, 40, "HighBias", "Normal", "NBias", true,chipid);
+			7, 40, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPIE_THR_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_R2R_P", 4, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_R2R_P", 4, 85,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_R2R_P", 4, 85,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "D_BUFFER", 1, 2,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "D_SSP", 0, 7,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "D_SSN", 0, 15,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "U_BUFFER", 1, 2,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "U_SSP", 0, 7,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "U_SSN", 0, 15,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 }
 
@@ -981,501 +1046,517 @@ static void updateSilentBiases(caerModuleData moduleData,
 	// make chip silent while programming AER
 	// core 0
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_BUF_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_BUF_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_BUF_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_RFR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_RFR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_RFR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_NMDA_N", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_NMDA_N", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_DC_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_DC_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_DC_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_TAU1_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_TAU1_N", 7, 0,
-			"LowBias", "Normal", "NBias", true,chipid);
+			"LowBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_TAU1_N", 7, 0,
-			"LowBias", "Normal", "NBias", true,chipid);
+			"LowBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_TAU2_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_TAU2_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_TAU2_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_THR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_THR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_THR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_AHW_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_AHTAU_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_AHTAU_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_AHTAU_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_AHTHR_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_CASC_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_PULSE_PWLK_P", 7,
-			0, "HighBias", "Normal", "PBias", true,chipid);
+			0, "HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_PULSE_PWLK_P", 7,
-			0, "HighBias", "Normal", "PBias", true,chipid);
+			0, "HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_PULSE_PWLK_P", 7,
-			0, "HighBias", "Normal", "PBias", true,chipid);
+			0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C0_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C0_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C0_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C0_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C0_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C0_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C0_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C0_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPII_TAU_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPII_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPII_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPII_THR_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPIE_TAU_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPIE_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPIE_TAU_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_NPDPIE_THR_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_R2R_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_R2R_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_R2R_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	// core 1
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_BUF_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_BUF_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_BUF_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_RFR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_RFR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_RFR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_NMDA_N", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_NMDA_N", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_DC_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_DC_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_DC_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_TAU1_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_TAU1_N", 7, 0,
-			"LowBias", "Normal", "NBias", true,chipid);
+			"LowBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_TAU1_N", 7, 0,
-			"LowBias", "Normal", "NBias", true,chipid);
+			"LowBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_TAU2_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_TAU2_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_TAU2_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_THR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_THR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_THR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_AHW_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_AHTAU_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_AHTAU_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_AHTAU_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_AHTHR_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_CASC_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_PULSE_PWLK_P", 7,
-			0, "HighBias", "Normal", "PBias", true,chipid);
+			0, "HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_PULSE_PWLK_P", 7,
-			0, "HighBias", "Normal", "PBias", true,chipid);
+			0, "HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_PULSE_PWLK_P", 7,
-			0, "HighBias", "Normal", "PBias", true,chipid);
+			0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C1_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C1_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C1_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C1_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C1_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C1_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C1_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C1_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPII_TAU_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPII_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPII_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPII_THR_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPIE_TAU_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPIE_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPIE_TAU_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_NPDPIE_THR_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_R2R_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_R2R_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_R2R_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	// core 2
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_BUF_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_BUF_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_BUF_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_RFR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_RFR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_RFR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_NMDA_N", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_NMDA_N", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_DC_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_DC_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_DC_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_TAU1_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_TAU1_N", 7, 0,
-			"LowBias", "Normal", "NBias", true,chipid);
+			"LowBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_TAU1_N", 7, 0,
-			"LowBias", "Normal", "NBias", true,chipid);
+			"LowBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_TAU2_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_TAU2_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_TAU2_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_THR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_THR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_THR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_AHW_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_AHTAU_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_AHTAU_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_AHTAU_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_AHTHR_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_CASC_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_PULSE_PWLK_P", 7,
-			0, "HighBias", "Normal", "PBias", true,chipid);
+			0, "HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_PULSE_PWLK_P", 7,
-			0, "HighBias", "Normal", "PBias", true,chipid);
+			0, "HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_PULSE_PWLK_P", 7,
-			0, "HighBias", "Normal", "PBias", true,chipid);
+			0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C2_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C2_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C2_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C2_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C2_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C2_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C2_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C2_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPII_TAU_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPII_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPII_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPII_THR_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPIE_TAU_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPIE_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPIE_TAU_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_NPDPIE_THR_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_R2R_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_R2R_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_R2R_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	// core 3
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_BUF_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_BUF_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_BUF_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_RFR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_RFR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_RFR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_NMDA_N", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_NMDA_N", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_DC_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_DC_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_DC_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_TAU1_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_TAU1_N", 7, 0,
-			"LowBias", "Normal", "NBias", true,chipid);
+			"LowBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_TAU1_N", 7, 0,
-			"LowBias", "Normal", "NBias", true,chipid);
+			"LowBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_TAU2_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_TAU2_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_TAU2_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_THR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_THR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_THR_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_AHW_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_AHTAU_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_AHTAU_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_AHTAU_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_AHTHR_N", 7,
-			0, "HighBias", "Normal", "NBias", true,chipid);
+			0, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_IF_CASC_N", 7, 0,
-			"HighBias", "Normal", "NBias", true,chipid);
+			"HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_PULSE_PWLK_P", 7,
-			0, "HighBias", "Normal", "PBias", true,chipid);
+			0, "HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_PULSE_PWLK_P", 7,
-			0, "HighBias", "Normal", "PBias", true,chipid);
+			0, "HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_PULSE_PWLK_P", 7,
-			0, "HighBias", "Normal", "PBias", true,chipid);
+			0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C3_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C3_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C3_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C3_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C3_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C3_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info,
-			"C3_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			"C3_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias", true,
+			chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPII_TAU_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPII_TAU_S_P",
-			7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			7, 0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPII_TAU_S_P",
-			7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			7, 0, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPII_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPII_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPII_THR_S_P",
-			7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			7, 0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPII_THR_S_P",
-			7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			7, 0, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPII_THR_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPIE_TAU_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPIE_THR_S_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPIE_TAU_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 	// ning sets this to N
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPIE_TAU_F_P",
-			7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			7, 0, "HighBias", "Normal", "NBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPIE_TAU_F_P",
-			7, 0, "HighBias", "Normal", "NBias", true,chipid);
+			7, 0, "HighBias", "Normal", "NBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_NPDPIE_THR_F_P",
-			7, 0, "HighBias", "Normal", "PBias", true,chipid);
+			7, 0, "HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_R2R_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_R2R_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C3_R2R_P", 7, 0,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "D_BUFFER", 1, 2,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "D_SSP", 0, 7,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "D_SSN", 0, 15,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "U_BUFFER", 1, 2,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "U_SSP", 0, 7,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "U_SSN", 0, 15,
-			"HighBias", "Normal", "PBias", true,chipid);
+			"HighBias", "Normal", "PBias", true, chipid);
 
 }
 
@@ -2128,8 +2209,7 @@ static void biasConfigSend(sshsNode node, caerModuleData moduleData,
 		// Let's select this chip for configuration
 		if (!caerDeviceConfigSet(
 				((caerInputDynapseState) moduleData->moduleState)->deviceState,
-				DYNAPSE_CONFIG_CHIP,
-				DYNAPSE_CONFIG_CHIP_ID, this_chip)) {
+				DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, this_chip)) {
 			caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString,
 					"Failed to configure chip bits");
 		}
@@ -2197,18 +2277,6 @@ static uint32_t generateCoarseFineBias(sshsNode biasNode) {
 
 	return (bits);
 }
-
-/*static void sendDefaultConfiguration(caerModuleData moduleData,
- struct caer_dynapse_info *devInfo, int chipid) {
- // Device related configuration has its own sub-node.
- sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode,
- chipIDToName(chipid, true));
-
- // send default bias configuration
- biasConfigSend(sshsGetRelativeNode(deviceConfigNode, "bias/"), moduleData,
- devInfo);
-
- }*/
 
 bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 
@@ -2293,203 +2361,252 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 
 	bool retval;
 	// Let's turn on blocking data-get mode to avoid wasting resources.
-	retval = caerDeviceConfigSet(state->deviceState, CAER_HOST_CONFIG_DATAEXCHANGE,CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, true);
-	if(retval == false){
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING");
+	retval = caerDeviceConfigSet(state->deviceState,
+			CAER_HOST_CONFIG_DATAEXCHANGE,
+			CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, true);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING");
 		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_RUN, true);
-	if(retval == false){
-			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_RUN");
-			exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_RUN, true);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_RUN");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER, DYNAPSE_CONFIG_AER_RUN, true);
-	if(retval == false){
-			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_AER_RUN");
-			exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER,
+			DYNAPSE_CONFIG_AER_RUN, true);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_AER_RUN");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_REQ_DELAY, 30);
-	if(retval == false){
-			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_REQ_DELAY");
-			exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_REQ_DELAY, 30);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_REQ_DELAY");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_REQ_EXTENSION, 20);
-	if(retval == false){
-			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_REQ_EXTENSION");
-			exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_REQ_EXTENSION, 20);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_REQ_EXTENSION");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MUX, DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE, true);
-	if(retval == false){
-			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE");
-			exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MUX,
+			DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE, true);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE");
+		exit(1);
 	}
 	// Create default settings and send them to the devices.
-	createDefaultConfiguration(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U0);
-	createDefaultConfiguration(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U1);
-	createDefaultConfiguration(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U2);
-	createDefaultConfiguration(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U3);
+	createDefaultConfiguration(moduleData, &dynapse_info,
+			DYNAPSE_CONFIG_DYNAPSE_U0);
+	createDefaultConfiguration(moduleData, &dynapse_info,
+			DYNAPSE_CONFIG_DYNAPSE_U1);
+	createDefaultConfiguration(moduleData, &dynapse_info,
+			DYNAPSE_CONFIG_DYNAPSE_U2);
+	createDefaultConfiguration(moduleData, &dynapse_info,
+			DYNAPSE_CONFIG_DYNAPSE_U3);
 
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
-	if(retval == false){
-			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U0");
-			exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U0");
+		exit(1);
 	}
 	updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U0);
 
 	/*retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
-	if(retval == false){
-			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U1");
-			exit(1);
-	}
-	updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U1);*/
+	 if(retval == false){
+	 caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U1");
+	 exit(1);
+	 }
+	 updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U1);*/
 
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
-				exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
+		exit(1);
 	}
 	updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U2);
 
 	/*retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U3");
-				exit(1);
-	}
-	updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U3);*/
-
+	 if(retval == false){
+	 caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U3");
+	 exit(1);
+	 }
+	 updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U3);*/
 
 	// Clear SRAM --> DYNAPSE_CONFIG_DYNAPSE_U0
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing SRAM ...\n");
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U0);
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U0");
-				exit(1);
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Clearing SRAM ...\n");
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U0);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U0");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U0, 0);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY to DYNAPSE_CONFIG_DYNAPSE_U0");
-				exit(1);
+	retval = caerDeviceConfigSet(state->deviceState,
+			DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U0, 0);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY to DYNAPSE_CONFIG_DYNAPSE_U0");
+		exit(1);
 	}
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 	// Clear CAM -->  DYNAPSE_CONFIG_DYNAPSE_U0
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing CAM ...\n");
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U0);
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U0");
-				exit(1);
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Clearing CAM ...\n");
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U0);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U0");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CLEAR_CAM of DYNAPSE_CONFIG_DYNAPSE_U0");
-				exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CLEAR_CAM,
+			0, 0);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CLEAR_CAM of DYNAPSE_CONFIG_DYNAPSE_U0");
+		exit(1);
 	}
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
 	// Clear SRAM --> DYNAPSE_CONFIG_DYNAPSE_U1
 	/*caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing SRAM ...\n");
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U1);
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U1");
-				exit(1);
-	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U1, 0);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY to DYNAPSE_CONFIG_DYNAPSE_U1");
-				exit(1);
-	}
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
-	// Clear CAM -->  DYNAPSE_CONFIG_DYNAPSE_U1
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing CAM ...\n");
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U1);
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U1");
-				exit(1);
-	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CLEAR_CAM of DYNAPSE_CONFIG_DYNAPSE_U1");
-				exit(1);
-	}
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");*/
+	 caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U1);
+	 retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
+	 if(retval == false){
+	 caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U1");
+	 exit(1);
+	 }
+	 retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U1, 0);
+	 if(retval == false){
+	 caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY to DYNAPSE_CONFIG_DYNAPSE_U1");
+	 exit(1);
+	 }
+	 caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
+	 // Clear CAM -->  DYNAPSE_CONFIG_DYNAPSE_U1
+	 caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing CAM ...\n");
+	 caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U1);
+	 retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
+	 if(retval == false){
+	 caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U1");
+	 exit(1);
+	 }
+	 retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
+	 if(retval == false){
+	 caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CLEAR_CAM of DYNAPSE_CONFIG_DYNAPSE_U1");
+	 exit(1);
+	 }
+	 caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");*/
 
 	// Clear SRAM --> DYNAPSE_CONFIG_DYNAPSE_U2
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing SRAM ...\n");
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
-				exit(1);
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Clearing SRAM ...\n");
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U2, 0);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY to DYNAPSE_CONFIG_DYNAPSE_U2");
-				exit(1);
+	retval = caerDeviceConfigSet(state->deviceState,
+			DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U2, 0);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY to DYNAPSE_CONFIG_DYNAPSE_U2");
+		exit(1);
 	}
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 	// Clear CAM -->  DYNAPSE_CONFIG_DYNAPSE_U2
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing CAM ...\n");
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
-				exit(1);
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Clearing CAM ...\n");
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CLEAR_CAM of DYNAPSE_CONFIG_DYNAPSE_U2");
-				exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CLEAR_CAM,
+			0, 0);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CLEAR_CAM of DYNAPSE_CONFIG_DYNAPSE_U2");
+		exit(1);
 	}
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
 	// Clear SRAM --> DYNAPSE_CONFIG_DYNAPSE_U3
 	/*caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing SRAM ...\n");
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U3);
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U3");
-				exit(1);
-	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U3, 0);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY to DYNAPSE_CONFIG_DYNAPSE_U3");
-				exit(1);
-	}
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
-	// Clear CAM -->  DYNAPSE_CONFIG_DYNAPSE_U3
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing CAM ...\n");
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U3);
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U3");
-				exit(1);
-	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CLEAR_CAM of DYNAPSE_CONFIG_DYNAPSE_U3");
-				exit(1);
-	}
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
+	 caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U3);
+	 retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
+	 if(retval == false){
+	 caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U3");
+	 exit(1);
+	 }
+	 retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U3, 0);
+	 if(retval == false){
+	 caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY to DYNAPSE_CONFIG_DYNAPSE_U3");
+	 exit(1);
+	 }
+	 caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
+	 // Clear CAM -->  DYNAPSE_CONFIG_DYNAPSE_U3
+	 caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing CAM ...\n");
+	 caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U3);
+	 retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
+	 if(retval == false){
+	 caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U3");
+	 exit(1);
+	 }
+	 retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
+	 if(retval == false){
+	 caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CLEAR_CAM of DYNAPSE_CONFIG_DYNAPSE_U3");
+	 exit(1);
+	 }
+	 caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 	 */
 
 	// close config and AER communication
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_RUN, false);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_RUN false");
-				exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_RUN, false);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_RUN false");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER, DYNAPSE_CONFIG_AER_RUN, false);
-	if(retval == false){
-				caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_RUN false");
-				exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER,
+			DYNAPSE_CONFIG_AER_RUN, false);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_RUN false");
+		exit(1);
 	}
 	retval = caerDeviceClose(&state->deviceState);
-	if(retval == false){
-					caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_RUN false");
-					exit(1);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_RUN false");
+		exit(1);
 	}
 
 	// Open the communication with Dynap-se, give it a device ID of 1, and don't care about USB bus or SN restrictions.
@@ -2506,125 +2623,160 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 			dynapse_info.deviceString, dynapse_info.deviceID,
 			dynapse_info.deviceIsMaster, dynapse_info.logicVersion);
 
-	retval = caerDeviceConfigSet(state->deviceState, CAER_HOST_CONFIG_DATAEXCHANGE, CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, true);
-	if(retval == false){
-					caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING");
-					exit(1);
+	retval = caerDeviceConfigSet(state->deviceState,
+			CAER_HOST_CONFIG_DATAEXCHANGE,
+			CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, true);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_RUN, true);
-	if(retval == false){
-					caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_RUN true");
-					exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_RUN, true);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_RUN true");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER, DYNAPSE_CONFIG_AER_RUN, true);
-	if(retval == false){
-					caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_AER_RUN true");
-					exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER,
+			DYNAPSE_CONFIG_AER_RUN, true);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_AER_RUN true");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	if(retval == false){
-					caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
-					exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
+		exit(1);
 	}
 
 	// force chip to be enable even if aer is off
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MUX, DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE, true);
-	if(retval == false){
-						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE");
-						exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MUX,
+			DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE, true);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE");
+		exit(1);
 	}
 
 	//  DYNAPSE_CONFIG_DYNAPSE_U0
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
-	if(retval == false){
-						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_DYNAPSE_U0");
-						exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_DYNAPSE_U0");
+		exit(1);
 	}
 	updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U0);
 
 	//  DYNAPSE_CONFIG_DYNAPSE_U1
 	/*retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
-	if(retval == false){
-						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U1");
-						exit(1);
-	}
-	updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U1);
-	*/
+	 if(retval == false){
+	 caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U1");
+	 exit(1);
+	 }
+	 updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U1);
+	 */
 	// DYNAPSE_CONFIG_DYNAPSE_U2
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	if(retval == false){
-						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
-						exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
+		exit(1);
 	}
 	updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U2);
 
 	//  DYNAPSE_CONFIG_DYNAPSE_U3
 	/*retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
-	if(retval == false){
-						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U3");
-						exit(1);
-	}
-	updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U3);*/
+	 if(retval == false){
+	 caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U3");
+	 exit(1);
+	 }
+	 updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U3);*/
 
 	/* output one neuron per core, neuron id 0 chip DYNAPSE_CONFIG_DYNAPSE_U2*/
 
 	// Configure SRAM for Monitoring--> DYNAPSE_CONFIG_DYNAPSE_U0
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Default SRAM ...\n");
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U0);
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
-	if(retval == false){
-						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U0");
-						exit(1);
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Default SRAM ...\n");
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U0);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U0");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM, DYNAPSE_CONFIG_DYNAPSE_U0, 0);
-	if(retval == false){
-						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_DEFAULT_SRAM to DYNAPSE_CONFIG_DYNAPSE_U0");
-						exit(1);
+	retval = caerDeviceConfigSet(state->deviceState,
+			DYNAPSE_CONFIG_DEFAULT_SRAM, DYNAPSE_CONFIG_DYNAPSE_U0, 0);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_DEFAULT_SRAM to DYNAPSE_CONFIG_DYNAPSE_U0");
+		exit(1);
 	}
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
 	// Configure SRAM for Monitoring--> DYNAPSE_CONFIG_DYNAPSE_U2
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Default SRAM ...\n");
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	if(retval == false){
-						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
-						exit(1);
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Default SRAM ...\n");
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			"Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U2);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM, DYNAPSE_CONFIG_DYNAPSE_U2, 0);
-	if(retval == false){
-						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_DEFAULT_SRAM to DYNAPSE_CONFIG_DYNAPSE_U2");
-						exit(1);
+	retval = caerDeviceConfigSet(state->deviceState,
+			DYNAPSE_CONFIG_DEFAULT_SRAM, DYNAPSE_CONFIG_DYNAPSE_U2, 0);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_DEFAULT_SRAM to DYNAPSE_CONFIG_DYNAPSE_U2");
+		exit(1);
 	}
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
-
-
 	/* need to make a libcaer function for this */
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	if(retval == false){
-						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
-						exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_CHIP_ID to DYNAPSE_CONFIG_DYNAPSE_U2");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU, 0, 0); // core 0 neuron 0
-	if(retval == false){
-						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_MONITOR_NEU to 0 0");
-						exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU,
+			0, 0); // core 0 neuron 0
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_MONITOR_NEU to 0 0");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU, 1, 5); //  core 1 neuron 5
-	if(retval == false){
-						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_MONITOR_NEU to 1 5");
-						exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU,
+			1, 5); //  core 1 neuron 5
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_MONITOR_NEU to 1 5");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU, 2, 60); // core 2 neuron 10
-	if(retval == false){
-						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_MONITOR_NEU to 2 60");
-						exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU,
+			2, 60); // core 2 neuron 10
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_MONITOR_NEU to 2 60");
+		exit(1);
 	}
-	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU, 3, 105); // core 3 neuron 20
-	if(retval == false){
-						caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set DYNAPSE_CONFIG_MONITOR_NEU to 3 105");
-						exit(1);
+	retval = caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MONITOR_NEU,
+			3, 105); // core 3 neuron 20
+	if (retval == false) {
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+				"failed to set DYNAPSE_CONFIG_MONITOR_NEU to 3 105");
+		exit(1);
 	}
 
 	// Start data acquisition.
@@ -2641,7 +2793,8 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	}
 
 	// Device related configuration has its own sub-node.
-	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U2, true));
+	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode,
+			chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U2, true));
 
 	sshsNode chipNode = sshsGetRelativeNode(deviceConfigNode, "chip/");
 	sshsNodeAddAttributeListener(chipNode, moduleData, &chipConfigListener);
@@ -2652,10 +2805,10 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	sshsNode usbNode = sshsGetRelativeNode(deviceConfigNode, "usb/");
 	sshsNodeAddAttributeListener(usbNode, moduleData, &usbConfigListener);
 
-
 	// Device related configuration has its own sub-node.
+	//DYNAPSE_CONFIG_DYNAPSE_U0
 	sshsNode deviceConfigNodeLP = sshsGetRelativeNode(moduleData->moduleNode,
-			chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U2, true));
+			chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U0, true));
 
 	sshsNode biasNode = sshsGetRelativeNode(deviceConfigNodeLP, "bias/");
 
@@ -2669,8 +2822,29 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 					&biasConfigListener);
 		}
 
-		free(biasNodes);
+		//free(biasNodes);
 	}
+
+	//DYNAPSE_CONFIG_DYNAPSE_U2
+	deviceConfigNodeLP = sshsGetRelativeNode(moduleData->moduleNode,
+			chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U2, true));
+
+	biasNode = sshsGetRelativeNode(deviceConfigNodeLP, "bias/");
+
+	biasNodesLength = 0;
+	*biasNodes = sshsNodeGetChildren(biasNode, &biasNodesLength);
+
+	if (biasNodes != NULL) {
+		for (size_t i = 0; i < biasNodesLength; i++) {
+			// Add listener for this particular bias.
+			sshsNodeAddAttributeListener(biasNodes[i], moduleData,
+					&biasConfigListener);
+		}
+
+	}
+
+	//free
+	free(biasNodes);
 
 	//spike Generator Node
 	deviceConfigNodeLP = sshsGetRelativeNode(moduleData->moduleNode,
