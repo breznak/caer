@@ -38,27 +38,29 @@ static void updateSilentBiases(caerModuleData moduleData,
 
 static inline const char *chipIDToName(int16_t chipID, bool withEndSlash) {
 	switch (chipID) {
-	case DYNAPSE_CONFIG_DYNAPSE_U0: {
-		return ((withEndSlash) ?
-				("DYNAPSE_CONFIG_DYNAPSE_U0/") : ("DYNAPSE_CONFIG_DYNAPSE_U0"));
-		break;
+		case DYNAPSE_CONFIG_DYNAPSE_U0: {
+			return ((withEndSlash) ?
+					("DYNAPSE_CONFIG_DYNAPSE_U0/") : ("DYNAPSE_CONFIG_DYNAPSE_U0"));
+			break;
+		}
+		case DYNAPSE_CONFIG_DYNAPSE_U1: {
+			return ((withEndSlash) ?
+					("DYNAPSE_CONFIG_DYNAPSE_U1/") : ("DYNAPSE_CONFIG_DYNAPSE_U1"));
+			break;
+		}
+		case DYNAPSE_CONFIG_DYNAPSE_U2: {
+			return ((withEndSlash) ?
+					("DYNAPSE_CONFIG_DYNAPSE_U2/") : ("DYNAPSE_CONFIG_DYNAPSE_U2"));
+			break;
+		}
+		case DYNAPSE_CONFIG_DYNAPSE_U3: {
+			return ((withEndSlash) ?
+					("DYNAPSE_CONFIG_DYNAPSE_U3/") : ("DYNAPSE_CONFIG_DYNAPSE_U3"));
+			break;
+		}
 	}
-	case DYNAPSE_CONFIG_DYNAPSE_U1: {
-		return ((withEndSlash) ?
-				("DYNAPSE_CONFIG_DYNAPSE_U1/") : ("DYNAPSE_CONFIG_DYNAPSE_U1"));
-		break;
-	}
-	case DYNAPSE_CONFIG_DYNAPSE_U2: {
-		return ((withEndSlash) ?
-				("DYNAPSE_CONFIG_DYNAPSE_U2/") : ("DYNAPSE_CONFIG_DYNAPSE_U2"));
-		break;
-	}
-	case DYNAPSE_CONFIG_DYNAPSE_U3: {
-		return ((withEndSlash) ?
-				("DYNAPSE_CONFIG_DYNAPSE_U3/") : ("DYNAPSE_CONFIG_DYNAPSE_U3"));
-		break;
-	}
-	}
+	printf("unknown device id exiting...\n");
+	exit(1);
 	return ((withEndSlash) ? ("Unknown/") : ("Unknown"));
 }
 
@@ -358,8 +360,7 @@ static void usbConfigListener(sshsNode node, void *userData,
 static void updateCoarseFineBiasSetting(caerModuleData moduleData,
 		struct caer_dynapse_info *devInfo, const char *biasName,
 		uint8_t coarseValue, uint16_t fineValue, const char *hlbias,
-		const char *currentLevel, const char *sex, int chipid,
-		bool enabled) {
+		const char *currentLevel, const char *sex, bool enabled, int chipid) {
 
 	// Add trailing slash to node name (required!).
 	size_t biasNameLength = strlen(biasName);
@@ -367,6 +368,7 @@ static void updateCoarseFineBiasSetting(caerModuleData moduleData,
 	memcpy(biasNameFull, biasName, biasNameLength);
 	biasNameFull[biasNameLength] = '/';
 	biasNameFull[biasNameLength + 1] = '\0';
+
 
 	// Device related configuration has its own sub-node.
 	sshsNode deviceConfigNodeLP = sshsGetRelativeNode(moduleData->moduleNode,
@@ -510,6 +512,7 @@ static void updateLowPowerBiases(caerModuleData moduleData,
 		struct caer_dynapse_info *dynapse_info, int chipid) {
 
 	// now set default low power biases
+
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_BUF_P", 3, 80,
 			"HighBias", "Normal", "PBias", true, chipid);
@@ -1292,7 +1295,7 @@ static void updateSilentBiases(caerModuleData moduleData,
 static void createDefaultConfiguration(caerModuleData moduleData,
 		struct caer_dynapse_info *devInfo, int chipid) {
 
-	// Device related configuration has its own sub-node.
+	// Device related configuration has its own sub-node..
 	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode,
 			chipIDToName(chipid, true));
 
@@ -2104,6 +2107,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 			DYNAPSE_CONFIG_CHIP_REQ_EXTENSION, 20);
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_MUX,
 			DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE, true);
+
 	// Create default settings and send them to the devices.
 	createDefaultConfiguration(moduleData, &dynapse_info,
 			DYNAPSE_CONFIG_DYNAPSE_U0);
@@ -2114,15 +2118,9 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	createDefaultConfiguration(moduleData, &dynapse_info,
 			DYNAPSE_CONFIG_DYNAPSE_U3);
 
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
+	// Update silent biases
 	updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U0);
-
-
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
 	updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U2);
-
 
 	// Clear SRAM --> DYNAPSE_CONFIG_DYNAPSE_U0
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
@@ -2131,7 +2129,6 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 			"Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U0);
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
 			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
-
 	caerDeviceConfigSet(state->deviceState,
 			DYNAPSE_CONFIG_DEFAULT_SRAM_EMPTY, DYNAPSE_CONFIG_DYNAPSE_U0, 0);
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
@@ -2169,20 +2166,6 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
 
-
-	// close config and AER communication
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-			DYNAPSE_CONFIG_CHIP_RUN, false);
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER,
-			DYNAPSE_CONFIG_AER_RUN, false);
-	caerDeviceClose(&state->deviceState);
-
-	// Open the communication with Dynap-se, give it a device ID of 1, and don't care about USB bus or SN restrictions.
-	state->deviceState = caerDeviceOpen(1, CAER_DEVICE_DYNAPSE, 0, 0, NULL);
-	if (state->deviceState == NULL) {
-		return (EXIT_FAILURE);
-	}
-
 	// Let's take a look at the information we have on the device.
 	dynapse_info = caerDynapseInfoGet(state->deviceState);
 
@@ -2207,21 +2190,13 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 			DYNAPSE_CONFIG_MUX_FORCE_CHIP_BIAS_ENABLE, true);
 
 	//  DYNAPSE_CONFIG_DYNAPSE_U0
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
 	updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U0);
-
-
 	// DYNAPSE_CONFIG_DYNAPSE_U2
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
 	updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U2);
 
-	
-	/* output one neuron per core, neuron id 0 chip DYNAPSE_CONFIG_DYNAPSE_U2*/
 
 	// Configure SRAM for Monitoring--> DYNAPSE_CONFIG_DYNAPSE_U0
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+	/*caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
 			"Default SRAM ...\n");
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
 			"Device number  %d...\n", DYNAPSE_CONFIG_DYNAPSE_U0);
@@ -2229,7 +2204,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 			DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
 	caerDeviceConfigSet(state->deviceState,
 			DYNAPSE_CONFIG_DEFAULT_SRAM, DYNAPSE_CONFIG_DYNAPSE_U0, 0);
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");*/
 
 	// Configure SRAM for Monitoring--> DYNAPSE_CONFIG_DYNAPSE_U2
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
@@ -2297,7 +2272,6 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 					&biasConfigListener);
 		}
 
-		//free(biasNodes);
 	}
 
 	//DYNAPSE_CONFIG_DYNAPSE_U2

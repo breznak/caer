@@ -7,7 +7,7 @@
  *  Compile & run:
  *  $ cd caer/
  *  $ rm -rf CMakeFiles CMakeCache.txt
- *  $ cmake -DDYNAPSEFX2=1 -DENABLE_DYNAPSEINIT=1 -DENABLE_STATISTICS=1 -DENABLE_VISUALIZER=1 .
+ *  $ cmake -DDYNAPSEFX2=1 -DENABLE_STATISTICS=1 -DENABLE_VISUALIZER=1 .
  *  $ make
  *  $ ./caer-bin
  */
