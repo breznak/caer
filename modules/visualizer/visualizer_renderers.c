@@ -259,7 +259,7 @@ bool doClear) {
 		uint64_t coreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);// destination core (used as chip id)
 		uint64_t chipId = caerSpikeEventGetChipID(caerSpikeIteratorElement);
 
-		printf("chip id %d coreId %d  neuronId %d \n", chipId, coreId, neuronId);
+		//printf("chip id %d coreId %d  neuronId %d \n", chipId, coreId, neuronId);
 
 		uint32_t rowid = 0;
 		uint32_t colid = 0;

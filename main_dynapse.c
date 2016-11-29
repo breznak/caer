@@ -7,7 +7,7 @@
  *  Compile & run:
  *  $ cd caer/
  *  $ rm -rf CMakeFiles CMakeCache.txt
- *  $ cmake -DDYNAPSEFX2=1 -DENABLE_STATISTICS=1 -DENABLE_VISUALIZER=1 .
+ *  $ cmake -DCMAKE_BUILD_TYPE=Debug -DDYNAPSEFX2=1 -DENABLE_STATISTICS=1 -DENABLE_VISUALIZER=1 .
  *  $ make
  *  $ ./caer-bin
  */
@@ -22,6 +22,10 @@
 // Devices support.
 #ifdef DYNAPSEFX2
 #include "modules/ini/dynapse_fx2.h"
+#endif
+
+#ifdef ENABLE_GEN_SPIKES
+#include "modules/misc/in/gen_spikes.h"
 #endif
 
 // Input/Output support.
@@ -59,10 +63,6 @@ static bool mainloop_1(void) {
 	caerSpikeEventPacket spike = NULL;
 	caerSpecialEventPacket special = NULL;
 
-#ifdef ENABLE_VISUALIZER
-	caerVisualizerEventHandler visualizerEventHandler = NULL;
-#endif
-
 	// Input modules grab data from outside sources (like devices, files, ...)
 	// and put events into an event packet.
 
@@ -98,12 +98,7 @@ static bool mainloop_1(void) {
 
 	// A simple visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
-	caerVisualizer(64, "Spike", &caerVisualizerRendererSpikeEvents, visualizerEventHandler, (caerEventPacketHeader) spike);
-	//caerVisualizer(60, "Polarity", &caerVisualizerRendererPolarityEvents, visualizerEventHandler, (caerEventPacketHeader) polarity);
-	//caerVisualizer(61, "Frame", &caerVisualizerRendererFrameEvents, visualizerEventHandler, (caerEventPacketHeader) frame);
-	//caerVisualizer(62, "IMU6", &caerVisualizerRendererIMU6Events, visualizerEventHandler, (caerEventPacketHeader) imu);
-
-	//caerVisualizerMulti(68, "PolarityAndFrame", &caerVisualizerMultiRendererPolarityAndFrameEvents, visualizerEventHandler, container);
+	caerVisualizer(64, "Spike", &caerVisualizerRendererSpikeEvents, &caerVisualizerEventHandlerSpikeEvents, (caerEventPacketHeader) spike);
 #endif
 
 #ifdef ENABLE_FILE_OUTPUT
