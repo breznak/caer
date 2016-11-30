@@ -51,5 +51,6 @@ typedef struct caer_input_dynapse_state *caerInputDynapseState;
 bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType);
 void caerInputDYNAPSEExit(caerModuleData moduleData);
 void caerInputDYNAPSERun(caerModuleData moduleData, size_t argsNumber, va_list args);
+const char *chipIDToName(int16_t chipID, bool withEndSlash);
 
 #endif /* DYNAPSE_COMMON_H_ */

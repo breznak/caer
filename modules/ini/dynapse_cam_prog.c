@@ -18,7 +18,9 @@ bool caerCamProgInit(caerModuleData moduleData) {
 
 	caerInputDynapseState state = moduleData->moduleState;
 
-	sshsNode spikeNode = sshsGetRelativeNode(moduleData->moduleNode, "camProg/");
+	sshsNode deviceConfigNodeMain = sshsGetRelativeNode(moduleData->moduleState, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
+
+	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNodeMain, "camProg/");
 
 	sshsNodePutBoolIfAbsent(spikeNode, "doProg", false);
 	sshsNodePutIntIfAbsent(spikeNode, "chip_id", DYNAPSE_CONFIG_DYNAPSE_U2); // default is chip U2

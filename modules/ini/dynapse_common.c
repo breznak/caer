@@ -20,7 +20,7 @@ static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_att
 static void updateLowPowerBiases(caerModuleData moduleData, struct caer_dynapse_info *devInfo, int chipid);
 static void updateSilentBiases(caerModuleData moduleData, struct caer_dynapse_info *devInfo, int chipid);
 
-static inline const char *chipIDToName(int16_t chipID, bool withEndSlash) {
+const char *chipIDToName(int16_t chipID, bool withEndSlash) {
 	switch (chipID) {
 		case DYNAPSE_CONFIG_DYNAPSE_U0: {
 			return ((withEndSlash) ? ("DYNAPSE_CONFIG_DYNAPSE_U0/") : ("DYNAPSE_CONFIG_DYNAPSE_U0"));
@@ -149,15 +149,14 @@ static void sramConfigListener(sshsNode node, void *userData, enum sshs_node_att
 			bool sx = sshsNodeGetBool(node, "sx");
 			bool sy = sshsNodeGetBool(node, "sy");
 			uint32_t virtual_core_id = sshsNodeGetInt(node, "virtual_core_id");
+
 			// select chip
-			caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-			DYNAPSE_CONFIG_CHIP_ID, chipid);
+			caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, chipid);
 
 			uint32_t bits = 1 << 4 | neuron_id << 7 | sram_addr << 5 | core_id << 15 | 1 << 17 | dest_core_id << 18
 				| dx << 22 | sx << 24 | dy << 25 | sy << 27 | virtual_core_id << 28;
 			caerLog(CAER_LOG_NOTICE, "samProg", "programming chip id %d with sram event %d\n", chipid, bits);
-			caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-			DYNAPSE_CONFIG_CHIP_CONTENT, bits);
+			caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_CONTENT, bits);
 		}
 	}
 }
@@ -1903,21 +1902,21 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	}
 
 	//spike Generator Node
-	deviceConfigNodeU2 = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U2, true));
+	sshsNode deviceConfigNodeMain = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
 
-	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNodeU2, "spikeGen/");
+	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNodeMain, "spikeGen/");
 	sshsNodeAddAttributeListener(spikeNode, state, &spikeConfigListener);
 	caerGenSpikeInit(moduleData); // init module and start thread
 
 	//sram programmer Node
-	sshsNode sramNode = sshsGetRelativeNode(deviceConfigNodeU2, "sramProg/");
+	/*sshsNode sramNode = sshsGetRelativeNode(deviceConfigNodeMain, "sramProg/");
 	sshsNodeAddAttributeListener(sramNode, state, &sramConfigListener);
 	caerSramProgInit(moduleData);	// init sram prog
 
 	//cam programmer Node
-	sshsNode camNode = sshsGetRelativeNode(deviceConfigNodeU2, "camProg/");
+	sshsNode camNode = sshsGetRelativeNode(deviceConfigNodeMain, "camProg/");
 	sshsNodeAddAttributeListener(camNode, state, &camConfigListener);
-	caerCamProgInit(moduleData);	// init cam prog
+	caerCamProgInit(moduleData);	// init cam prog*/
 
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_RUN, false);
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER, DYNAPSE_CONFIG_AER_RUN, false);

@@ -29,8 +29,9 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 
 	caerInputDynapseState state = moduleData->moduleState;
 
-	sshsNode spikeNode = sshsGetRelativeNode(moduleData->moduleNode,
-			"spikeGen/");
+	sshsNode deviceConfigNodeMain = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
+
+	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNodeMain, "spikeGen/");
 
 	sshsNodePutBoolIfAbsent(spikeNode, "doStim", false);
 
@@ -154,14 +155,14 @@ void spiketrainReg(void *spikeGenState) {
 	atomic_load(&state->genSpikeState.stim_avr);
 	atomic_load(&state->genSpikeState.stim_duration);
 
-	atomic_load(&state->genSpikeState.dx);
-	atomic_load(&state->genSpikeState.dy);
-	atomic_load(&state->genSpikeState.sx);
-	atomic_load(&state->genSpikeState.sy);
-	atomic_load(&state->genSpikeState.address);
-	atomic_load(&state->genSpikeState.chip_id);
-	atomic_load(&state->genSpikeState.core_s);
-	atomic_load(&state->genSpikeState.core_d);
+	atomic_load(&state->genSpikeState.dx);			// 1
+	atomic_load(&state->genSpikeState.dy);			// 1
+	atomic_load(&state->genSpikeState.sx);			// 1
+	atomic_load(&state->genSpikeState.sy);			// 0
+	atomic_load(&state->genSpikeState.address);		// neuron id address
+	atomic_load(&state->genSpikeState.chip_id);		// which chip has to ack
+	atomic_load(&state->genSpikeState.core_s);		// from which core the event is from
+	atomic_load(&state->genSpikeState.core_d);		// each bit is for one core 1111 goes to all cores
 
 	if (state->genSpikeState.stim_avr > 0) {
 		tim.tv_nsec = 1000000000L / atomic_load(&state->genSpikeState.stim_avr);
@@ -169,9 +170,8 @@ void spiketrainReg(void *spikeGenState) {
 		tim.tv_nsec = 1000000000L;
 	}
 
-	uint32_t value = state->genSpikeState.chip_id |
-			1 << 13 |
-			0 << 16 | 0 << 17 |
+	uint32_t value = state->genSpikeState.core_d |
+			0 << 16 | 0 << 17 | 1 << 13 |
 			state->genSpikeState.core_s << 18 |
 			state->genSpikeState.address << 20 |
 			state->genSpikeState.dx << 4 |
@@ -206,13 +206,11 @@ void spiketrainReg(void *spikeGenState) {
 	if (!state->genSpikeState.done) {
 		nanosleep(&tim, NULL);
 		// send spikes
-		caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-		DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+		caerDeviceConfigSet((caerDeviceHandle) state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, state->genSpikeState.chip_id);
 
 		/*send the spike*/
-		caerDeviceConfigSet(state->deviceState,
-					DYNAPSE_CONFIG_CHIP,
-					DYNAPSE_CONFIG_CHIP_CONTENT, value);
+		caerDeviceConfigSet((caerDeviceHandle) state->deviceState,DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_CONTENT, value);
+		caerLog(CAER_LOG_NOTICE, "spikeGen", "sending spikes %d \n", value);
 
 	}
 
