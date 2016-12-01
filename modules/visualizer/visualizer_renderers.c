@@ -235,6 +235,39 @@ bool doClear) {
 	return (true);
 }
 
+bool caerVisualizerRendererSpikeEventsFrequency(caerVisualizerPublicState state, caerEventPacketContainer container,
+bool doClear) {
+	UNUSED_ARGUMENT(state);
+
+	// Clear bitmap to black to erase old events.
+	if (doClear) {
+		al_clear_to_color(al_map_rgb(0, 0, 0));
+	}
+
+	caerEventPacketHeader spikeEventPacketHeader = caerEventPacketContainerFindEventPacketByType(container,
+		SPIKE_EVENT);
+
+	if (spikeEventPacketHeader == NULL || caerEventPacketHeaderGetEventValid(spikeEventPacketHeader) == 0) {
+		return (false);
+	}
+
+	// Render all spikes.
+	CAER_SPIKE_ITERATOR_ALL_START( (caerSpikeEventPacket) spikeEventPacketHeader )
+
+		//get x,y position
+		uint16_t y = caerSpikeEventGetY(caerSpikeIteratorElement);	
+		uint16_t x = caerSpikeEventGetX(caerSpikeIteratorElement);	
+
+
+		al_put_pixel(x, y, al_map_rgb(120, 120, 120));
+
+		//al_put_pixel(32, 32, al_map_rgb(255, 0, 0));
+
+	CAER_SPIKE_ITERATOR_ALL_END
+
+	return (true);
+}
+
 bool caerVisualizerRendererSpikeEvents(caerVisualizerPublicState state, caerEventPacketContainer container,
 bool doClear) {
 	UNUSED_ARGUMENT(state);
@@ -254,90 +287,15 @@ bool doClear) {
 	// Render all spikes.
 	CAER_SPIKE_ITERATOR_ALL_START( (caerSpikeEventPacket) spikeEventPacketHeader )
 
-		//int32_t ts = caerSpikeEventGetTimestamp(caerSpikeIteratorElement);
-		uint64_t neuronId = caerSpikeEventGetNeuronID(caerSpikeIteratorElement);
-		uint64_t coreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);// destination core (used as chip id)
-		uint64_t chipId = caerSpikeEventGetChipID(caerSpikeIteratorElement);
+		// get core id
+		uint64_t coreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);
+		//get x,y position
+		uint16_t y = caerSpikeEventGetY(caerSpikeIteratorElement);	
+		uint16_t x = caerSpikeEventGetX(caerSpikeIteratorElement);	
 
-		//printf("chip id %d coreId %d  neuronId %d \n", chipId, coreId, neuronId);
 
-		uint32_t rowid = 0;
-		uint32_t colid = 0;
-
-		rowid = neuronId & 0x0F;
-		colid = (neuronId >> 4) & 0x0F;
-
-		if(chipId == 4){
-			if (coreId == 0) {
-				rowid = rowid + 16;
-				colid = colid + 16;
-				al_put_pixel(rowid, colid, al_map_rgb(0, 255, 0));
-			}
-			else if (coreId == 1) {
-				colid = colid + 16;
-				al_put_pixel(rowid, colid, al_map_rgb(255, 0, 0));
-			}
-			else if (coreId == 2) {
-				rowid = rowid + 16;
-				al_put_pixel(rowid, colid, al_map_rgb(0, 0, 255));
-			}
-			else if (coreId == 3) {
-				al_put_pixel(rowid, colid, al_map_rgb(120, 120, 120));
-			}
-		}else if(chipId == 1){
-			if (coreId == 0) {
-				rowid = rowid + 16;
-				colid = colid + 16;
-				al_put_pixel(rowid, colid+32, al_map_rgb(0, 255, 0));
-			}
-			else if (coreId == 1) {
-				colid = colid + 16;
-				al_put_pixel(rowid, colid+32, al_map_rgb(255, 0, 0));
-			}
-			else if (coreId == 2) {
-				rowid = rowid + 16;
-				al_put_pixel(rowid, colid+32, al_map_rgb(0, 0, 255));
-			}
-			else if (coreId == 3) {
-				al_put_pixel(rowid, colid+32, al_map_rgb(120, 120, 120));
-			}
-		}else if(chipId == 8){
-			if (coreId == 0) {
-				rowid = rowid + 16;
-				colid = colid + 16;
-				al_put_pixel(rowid+32, colid, al_map_rgb(0, 255, 0));
-			}
-			else if (coreId == 1) {
-				colid = colid + 16;
-				al_put_pixel(rowid+32, colid, al_map_rgb(255, 0, 0));
-			}
-			else if (coreId == 2) {
-				rowid = rowid + 16;
-				al_put_pixel(rowid+32, colid, al_map_rgb(0, 0, 255));
-			}
-			else if (coreId == 3) {
-				al_put_pixel(rowid+32, colid, al_map_rgb(120, 120, 120));
-			}
-		}else if(chipId == 12){
-			if (coreId == 0) {
-				rowid = rowid + 16;
-				colid = colid + 16;
-				al_put_pixel(rowid+32, colid+32, al_map_rgb(0, 255, 0));
-			}
-			else if (coreId == 1) {
-				colid = colid + 16;
-				al_put_pixel(rowid+32, colid+32, al_map_rgb(255, 0, 0));
-			}
-			else if (coreId == 2) {
-				rowid = rowid + 16;
-				al_put_pixel(rowid+32, colid+32, al_map_rgb(0, 0, 255));
-			}
-			else if (coreId == 3) {
-				al_put_pixel(rowid+32, colid+32, al_map_rgb(120, 120, 120));
-			}
-		}
-
-		//al_put_pixel(32, 32, al_map_rgb(255, 0, 0));
+		al_put_pixel(x, y, al_map_rgb(coreId*80, 85, 30*coreId));
+		
 
 	CAER_SPIKE_ITERATOR_ALL_END
 

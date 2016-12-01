@@ -96,9 +96,14 @@ static bool mainloop_1(void) {
 	caerStatistics(3, (caerEventPacketHeader) spike, 1000);
 #endif
 
+#ifdef ENABLE_MEANRATEFILTER
+	caerMeanRateFilter(4, spike);
+#endif
+
 	// A simple visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
 	caerVisualizer(64, "Spike", &caerVisualizerRendererSpikeEvents, &caerVisualizerEventHandlerSpikeEvents, (caerEventPacketHeader) spike);
+	caerVisualizer(65, "Frequency", &caerVisualizerRendererSpikeEventsFrequency,  &caerVisualizerEventHandlerSpikeEvents, (caerEventPacketHeader) spike);
 #endif
 
 #ifdef ENABLE_FILE_OUTPUT

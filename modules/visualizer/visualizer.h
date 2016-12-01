@@ -43,6 +43,8 @@ bool caerVisualizerRendererFrameEvents(caerVisualizerPublicState state, caerEven
 bool caerVisualizerRendererIMU6Events(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
 bool caerVisualizerRendererPoint2DEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
 bool caerVisualizerRendererSpikeEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
+bool caerVisualizerRendererSpikeEventsFrequency(caerVisualizerPublicState state, caerEventPacketContainer container,
+bool doClear);
 
 // Default event handlers.
 void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLEGRO_EVENT event);
