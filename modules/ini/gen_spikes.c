@@ -148,38 +148,23 @@ void spiketrainReg(void *spikeGenState) {
 	struct timespec tim;
 	tim.tv_sec = 0;
 
-	/* load current values into thread stimulation*/
-	atomic_load(&state->genSpikeState.repeat);
-	atomic_load(&state->genSpikeState.done);
-	atomic_load(&state->genSpikeState.started);
-	atomic_load(&state->genSpikeState.stim_avr);
-	atomic_load(&state->genSpikeState.stim_duration);
 
-	atomic_load(&state->genSpikeState.dx);			// 1
-	atomic_load(&state->genSpikeState.dy);			// 1
-	atomic_load(&state->genSpikeState.sx);			// 1
-	atomic_load(&state->genSpikeState.sy);			// 0
-	atomic_load(&state->genSpikeState.address);		// neuron id address
-	atomic_load(&state->genSpikeState.chip_id);		// which chip has to ack
-	atomic_load(&state->genSpikeState.core_s);		// from which core the event is from
-	atomic_load(&state->genSpikeState.core_d);		// each bit is for one core 1111 goes to all cores
-
-	if (state->genSpikeState.stim_avr > 0) {
+	if (atomic_load(&state->genSpikeState.stim_avr) > 0) {
 		tim.tv_nsec = 1000000000L / atomic_load(&state->genSpikeState.stim_avr);
 	} else {
 		tim.tv_nsec = 1000000000L;
 	}
 
-	uint32_t value = state->genSpikeState.core_d |
+	uint32_t value = atomic_load(&state->genSpikeState.core_d) |
 			0 << 16 | 0 << 17 | 1 << 13 |
-			state->genSpikeState.core_s << 18 |
-			state->genSpikeState.address << 20 |
-			state->genSpikeState.dx << 4 |
-			state->genSpikeState.sx << 6 |
-			state->genSpikeState.dy << 7 |
-			state->genSpikeState.sy << 9;
+			atomic_load(&state->genSpikeState.core_s) << 18 |
+			atomic_load(&state->genSpikeState.address) << 20 |
+			atomic_load(&state->genSpikeState.dx) << 4 |
+			atomic_load(&state->genSpikeState.sx) << 6 |
+			atomic_load(&state->genSpikeState.dy) << 7 |
+			atomic_load(&state->genSpikeState.sy) << 9;
 
-	if (!state->genSpikeState.started) {
+	if (!atomic_load(&state->genSpikeState.started)) {
 		LABELSTART:
 			clock_gettime(CLOCK_MONOTONIC, &tstart);
 	}
@@ -187,15 +172,15 @@ void spiketrainReg(void *spikeGenState) {
 	clock_gettime(CLOCK_MONOTONIC, &tend);
 
 
-	if (state->genSpikeState.stim_duration
+	if (atomic_load(&state->genSpikeState.stim_duration)
 			<= ((double) tend.tv_sec + 1.0e-9 * tend.tv_nsec)
 					- ((double) tstart.tv_sec + 1.0e-9 * tstart.tv_nsec)) {
-		if (state->genSpikeState.started) {
+		if (atomic_load(&state->genSpikeState.started)) {
 			caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation finished.\n");
 		}
 		atomic_store(&state->genSpikeState.done, true);
 		atomic_store(&state->genSpikeState.started, false);
-		if(state->genSpikeState.repeat){
+		if(atomic_load(&state->genSpikeState.repeat)){
 			caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation re-started.\n");
 			atomic_store(&state->genSpikeState.started, true);
 			atomic_store(&state->genSpikeState.done, false);
@@ -203,10 +188,10 @@ void spiketrainReg(void *spikeGenState) {
 		}
 	}
 
-	if (!state->genSpikeState.done) {
+	if (!atomic_load(&state->genSpikeState.done)) {
 		nanosleep(&tim, NULL);
 		// send spikes
-		caerDeviceConfigSet((caerDeviceHandle) state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, state->genSpikeState.chip_id);
+		caerDeviceConfigSet((caerDeviceHandle) state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, atomic_load(&state->genSpikeState.chip_id));
 
 		/*send the spike*/
 		caerDeviceConfigSet((caerDeviceHandle) state->deviceState,DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_CONTENT, value);

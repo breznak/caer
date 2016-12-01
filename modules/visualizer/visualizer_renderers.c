@@ -267,25 +267,77 @@ bool doClear) {
 		rowid = neuronId & 0x0F;
 		colid = (neuronId >> 4) & 0x0F;
 
+		if(chipId == 4){
+			if (coreId == 0) {
+				rowid = rowid + 16;
+				colid = colid + 16;
+				al_put_pixel(rowid, colid, al_map_rgb(0, 255, 0));
+			}
+			else if (coreId == 1) {
+				colid = colid + 16;
+				al_put_pixel(rowid, colid, al_map_rgb(255, 0, 0));
+			}
+			else if (coreId == 2) {
+				rowid = rowid + 16;
+				al_put_pixel(rowid, colid, al_map_rgb(0, 0, 255));
+			}
+			else if (coreId == 3) {
+				al_put_pixel(rowid, colid, al_map_rgb(120, 120, 120));
+			}
+		}else if(chipId == 1){
+			if (coreId == 0) {
+				rowid = rowid + 16;
+				colid = colid + 16;
+				al_put_pixel(rowid, colid+32, al_map_rgb(0, 255, 0));
+			}
+			else if (coreId == 1) {
+				colid = colid + 16;
+				al_put_pixel(rowid, colid+32, al_map_rgb(255, 0, 0));
+			}
+			else if (coreId == 2) {
+				rowid = rowid + 16;
+				al_put_pixel(rowid, colid+32, al_map_rgb(0, 0, 255));
+			}
+			else if (coreId == 3) {
+				al_put_pixel(rowid, colid+32, al_map_rgb(120, 120, 120));
+			}
+		}else if(chipId == 8){
+			if (coreId == 0) {
+				rowid = rowid + 16;
+				colid = colid + 16;
+				al_put_pixel(rowid+32, colid, al_map_rgb(0, 255, 0));
+			}
+			else if (coreId == 1) {
+				colid = colid + 16;
+				al_put_pixel(rowid+32, colid, al_map_rgb(255, 0, 0));
+			}
+			else if (coreId == 2) {
+				rowid = rowid + 16;
+				al_put_pixel(rowid+32, colid, al_map_rgb(0, 0, 255));
+			}
+			else if (coreId == 3) {
+				al_put_pixel(rowid+32, colid, al_map_rgb(120, 120, 120));
+			}
+		}else if(chipId == 12){
+			if (coreId == 0) {
+				rowid = rowid + 16;
+				colid = colid + 16;
+				al_put_pixel(rowid+32, colid+32, al_map_rgb(0, 255, 0));
+			}
+			else if (coreId == 1) {
+				colid = colid + 16;
+				al_put_pixel(rowid+32, colid+32, al_map_rgb(255, 0, 0));
+			}
+			else if (coreId == 2) {
+				rowid = rowid + 16;
+				al_put_pixel(rowid+32, colid+32, al_map_rgb(0, 0, 255));
+			}
+			else if (coreId == 3) {
+				al_put_pixel(rowid+32, colid+32, al_map_rgb(120, 120, 120));
+			}
+		}
 
-		if (coreId == 0) {
-			rowid = rowid + 16;
-			colid = colid + 16;
-			al_put_pixel(rowid, colid, al_map_rgb(0, 255, 0));
-		}
-		else if (coreId == 1) {
-			colid = colid + 16;
-			al_put_pixel(rowid, colid, al_map_rgb(255, 0, 0));
-		}
-		else if (coreId == 2) {
-			rowid = rowid + 16;
-			al_put_pixel(rowid, colid, al_map_rgb(0, 0, 255));
-		}
-		else if (coreId == 3) {
-			al_put_pixel(rowid, colid, al_map_rgb(120, 120, 120));
-		}
-
-		al_put_pixel(32, 32, al_map_rgb(255, 0, 0));
+		//al_put_pixel(32, 32, al_map_rgb(255, 0, 0));
 
 	CAER_SPIKE_ITERATOR_ALL_END
 
