@@ -8,13 +8,19 @@
 #include "base/mainloop.h"
 #include "base/module.h"
 #include "ext/buffers.h"
+#include "libcaer/devices/dynapse.h"
 
 struct MRFilter_state {
 	simple2DBufferLong timestampMap;
 	simple2DBufferFloat frequencyMap;
-	int32_t deltaT;
 	int8_t subSampleBy;
+	int32_t colorscaleMax;
+	int32_t colorscaleMin;
 };
+
+typedef struct {
+    double r,g,b;
+} COLOUR;
 
 typedef struct MRFilter_state *MRFilterState;
 
@@ -25,32 +31,40 @@ static void caerMeanRateFilterExit(caerModuleData moduleData);
 static void caerMeanRateFilterReset(caerModuleData moduleData, uint16_t resetCallSourceID);
 static bool allocateFrequencyMap(MRFilterState state, int16_t sourceID);
 static bool allocateTimestampMap(MRFilterState state, int16_t sourceID);
+COLOUR GetColour(double v, double vmin, double vmax);
 
 static struct caer_module_functions caerMeanRateFilterFunctions = { .moduleInit =
 	&caerMeanRateFilterInit, .moduleRun = &caerMeanRateFilterRun, .moduleConfig =
 	&caerMeanRateFilterConfig, .moduleExit = &caerMeanRateFilterExit, .moduleReset =
 	&caerMeanRateFilterReset };
 
-void caerMeanRateFilter(uint16_t moduleID, caerSpikeEventPacket spike) {
+void caerMeanRateFilter(uint16_t moduleID, caerSpikeEventPacket spike, caerFrameEventPacket *freqplot) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "MRFilter", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}
 
-	caerModuleSM(&caerMeanRateFilterFunctions, moduleData, sizeof(struct MRFilter_state), 1, spike);
+	caerModuleSM(&caerMeanRateFilterFunctions, moduleData, sizeof(struct MRFilter_state), 2, spike, freqplot);
 }
 
 static bool caerMeanRateFilterInit(caerModuleData moduleData) {
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "deltaT", 30000);
 	sshsNodePutByteIfAbsent(moduleData->moduleNode, "subSampleBy", 0);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "colorscaleMax", 500);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "colorscaleMin", 0);
 
 	MRFilterState state = moduleData->moduleState;
 
-	state->deltaT = sshsNodeGetInt(moduleData->moduleNode, "deltaT");
 	state->subSampleBy = sshsNodeGetByte(moduleData->moduleNode, "subSampleBy");
 
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
+
+
+	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
+	if (!sshsNodeAttributeExists(sourceInfoNode, "apsSizeX", SSHS_SHORT)) {
+		sshsNodePutShort(sourceInfoNode, "apsSizeX", DYNAPSE_X4BOARD_NEUY);
+		sshsNodePutShort(sourceInfoNode, "apsSizeY", DYNAPSE_X4BOARD_NEUY);
+	}
 
 	// Nothing that can fail here.
 	return (true);
@@ -61,6 +75,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 
 	// Interpret variable arguments (same as above in main function).
 	caerSpikeEventPacket spike = va_arg(args, caerSpikeEventPacket);
+	caerFrameEventPacket *freqplot = va_arg(args, caerFrameEventPacket*);
 
 	// Only process packets with content.
 	if (spike == NULL) {
@@ -68,6 +83,9 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	}
 
 	MRFilterState state = moduleData->moduleState;
+
+	//update parameters
+	caerMeanRateFilterConfig(moduleData);
 
 	// If the map is not allocated yet, do it.
 	if (state->frequencyMap == NULL) {
@@ -98,10 +116,38 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		y = U16T(y >> state->subSampleBy);
 
 		// Update value into maps 
-		state->frequencyMap->buffer2d[x][y] = ((float)ts - state->timestampMap->buffer2d[x][y])/2.0;
-		state->timestampMap->buffer2d[x][y] = ts;
+		state->frequencyMap->buffer2d[y][x] = ((float)ts - state->timestampMap->buffer2d[y][x])/2.0;
+		state->timestampMap->buffer2d[y][x] = ts;
 
 	CAER_SPIKE_ITERATOR_VALID_END
+
+
+
+	// put info into frame
+	*freqplot = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, 64, 64, 3);
+	if (*freqplot != NULL) {
+		caerFrameEvent singleplot = caerFrameEventPacketGetEvent(*freqplot, 0);
+
+		uint32_t counter = 0;
+		for (size_t i = 0; i < 64; i++) {
+			for (size_t ys = 0; ys < 64; ys++) {
+
+				COLOUR col  = GetColour((double) state->frequencyMap->buffer2d[i][ys]/1000.0, state->colorscaleMin, state->colorscaleMax);
+
+				singleplot->pixels[counter] = (uint16_t) ( (int)(col.r*65535));			// red
+				singleplot->pixels[counter + 1] = (uint16_t) ( (int)(col.g*65535));		// green
+				singleplot->pixels[counter + 2] = (uint16_t) ( (int)(col.b*65535) );		// blue
+				counter += 3;
+
+			}
+		}
+
+		//add info to the frame
+		caerFrameEventSetLengthXLengthYChannelNumber(singleplot, 64, 64, 3, *freqplot);
+		//validate frame
+		caerFrameEventValidate(singleplot, *freqplot);
+	}
+
 }
 
 static void caerMeanRateFilterConfig(caerModuleData moduleData) {
@@ -109,8 +155,10 @@ static void caerMeanRateFilterConfig(caerModuleData moduleData) {
 
 	MRFilterState state = moduleData->moduleState;
 
-	state->deltaT = sshsNodeGetInt(moduleData->moduleNode, "deltaT");
 	state->subSampleBy = sshsNodeGetByte(moduleData->moduleNode, "subSampleBy");
+	state->colorscaleMax = sshsNodeGetInt(moduleData->moduleNode, "colorscaleMax");
+	state->colorscaleMin = sshsNodeGetInt(moduleData->moduleNode, "colorscaleMin");
+
 }
 
 static void caerMeanRateFilterExit(caerModuleData moduleData) {
@@ -173,4 +221,32 @@ static bool allocateFrequencyMap(MRFilterState state, int16_t sourceID) {
 
 	// TODO: size the map differently if subSampleBy is set!
 	return (true);
+}
+
+COLOUR GetColour(double v,double vmin,double vmax)
+{
+   COLOUR c = {1.0,1.0,1.0}; // white
+   double dv;
+
+   if (v < vmin)
+      v = vmin;
+   if (v > vmax)
+      v = vmax;
+   dv = vmax - vmin;
+
+   if (v < (vmin + 0.25 * dv)) {
+      c.r = 0;
+      c.g = 4 * (v - vmin) / dv;
+   } else if (v < (vmin + 0.5 * dv)) {
+      c.r = 0;
+      c.b = 1 + 4 * (vmin + 0.25 * dv - v) / dv;
+   } else if (v < (vmin + 0.75 * dv)) {
+      c.r = 4 * (v - vmin - 0.5 * dv) / dv;
+      c.b = 0;
+   } else {
+      c.g = 1 + 4 * (vmin + 0.75 * dv - v) / dv;
+      c.b = 0;
+   }
+
+   return(c);
 }

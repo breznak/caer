@@ -51,6 +51,11 @@
 #ifdef ENABLE_VISUALIZER
 #include "modules/visualizer/visualizer.h"
 #endif
+
+#ifdef ENABLE_MEANRATEFILTER
+#include <libcaer/events/frame.h>
+#endif
+
 // Common filters support.
 
 static bool mainloop_1(void);
@@ -97,13 +102,18 @@ static bool mainloop_1(void) {
 #endif
 
 #ifdef ENABLE_MEANRATEFILTER
-	caerMeanRateFilter(4, spike);
+	// create frame for displaying frequencoes
+	caerFrameEventPacket freqplot = NULL;
+	caerMeanRateFilter(4, spike, &freqplot);
 #endif
 
 	// A simple visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
 	caerVisualizer(64, "Spike", &caerVisualizerRendererSpikeEvents, &caerVisualizerEventHandlerSpikeEvents, (caerEventPacketHeader) spike);
-	caerVisualizer(65, "Frequency", &caerVisualizerRendererSpikeEventsFrequency,  &caerVisualizerEventHandlerSpikeEvents, (caerEventPacketHeader) spike);
+#ifdef ENABLE_MEANRATEFILTER
+	//caerVisualizer(65, "Frequency", &caerVisualizerRendererSpikeEventsFrequency,  &caerVisualizerEventHandlerSpikeEvents, (caerEventPacketHeader) spike);
+	caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
+#endif
 #endif
 
 #ifdef ENABLE_FILE_OUTPUT
@@ -120,6 +130,10 @@ static bool mainloop_1(void) {
 
 	// And also send them via UDP. This is fast, as it doesn't care what is on the other side.
 	caerOutputNetUDP(9, 2, spike, special);
+#endif
+
+#ifdef ENABLE_MEANRATEFILTER
+	free(freqplot);
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.
