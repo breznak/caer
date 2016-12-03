@@ -61,8 +61,8 @@ static bool caerMeanRateFilterInit(caerModuleData moduleData) {
 
 
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
-	if (!sshsNodeAttributeExists(sourceInfoNode, "apsSizeX", SSHS_SHORT)) {
-		sshsNodePutShort(sourceInfoNode, "apsSizeX", DYNAPSE_X4BOARD_NEUY);
+	if (!sshsNodeAttributeExists(sourceInfoNode, "apsSizeX", SSHS_SHORT)) { //to do for visualizer change name of field to a more generic one
+		sshsNodePutShort(sourceInfoNode, "apsSizeX", DYNAPSE_X4BOARD_NEUY); 
 		sshsNodePutShort(sourceInfoNode, "apsSizeY", DYNAPSE_X4BOARD_NEUY);
 	}
 
@@ -122,15 +122,18 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	CAER_SPIKE_ITERATOR_VALID_END
 
 
+	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(caerEventPacketHeaderGetEventSource(&spike->packetHeader));
+	uint16_t sizeX =sshsNodeGetShort(sourceInfoNode, "dataSizeX");
+	uint16_t sizeY =sshsNodeGetShort(sourceInfoNode, "dataSizeY");
 
 	// put info into frame
-	*freqplot = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, 64, 64, 3);
+	*freqplot = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, sizeX, sizeY, 3);
 	if (*freqplot != NULL) {
 		caerFrameEvent singleplot = caerFrameEventPacketGetEvent(*freqplot, 0);
 
 		uint32_t counter = 0;
-		for (size_t i = 0; i < 64; i++) {
-			for (size_t ys = 0; ys < 64; ys++) {
+		for (size_t i = 0; i < sizeX; i++) {
+			for (size_t ys = 0; ys < sizeY; ys++) {
 
 				COLOUR col  = GetColour((double) state->frequencyMap->buffer2d[i][ys]/1000.0, state->colorscaleMin, state->colorscaleMax);
 
@@ -143,7 +146,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		}
 
 		//add info to the frame
-		caerFrameEventSetLengthXLengthYChannelNumber(singleplot, 64, 64, 3, *freqplot);
+		caerFrameEventSetLengthXLengthYChannelNumber(singleplot, sizeX, sizeY, 3, *freqplot);
 		//validate frame
 		caerFrameEventValidate(singleplot, *freqplot);
 	}
