@@ -70,7 +70,7 @@
 #ifdef ENABLE_IMAGEGENERATOR
 #include "modules/imagegenerator/imagegenerator.h"
 #define MAX_IMG_QTY 8
-#define CLASSIFYSIZE 36 
+#define CLASSIFYSIZE 36
 #define DISPLAYIMGSIZE 256
 #endif
 #ifdef ENABLE_CAFFEINTERFACE
@@ -177,15 +177,21 @@ static bool mainloop_1(void) {
 	// A simple visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
 	caerVisualizer(60, "Polarity", &caerVisualizerRendererPolarityEvents, visualizerEventHandler, (caerEventPacketHeader) polarity);
+#if defined(DAVISFX2) || defined(DAVISFX3)
 	caerVisualizer(61, "Frame", &caerVisualizerRendererFrameEvents, visualizerEventHandler, (caerEventPacketHeader) frame);
 	caerVisualizer(62, "IMU6", &caerVisualizerRendererIMU6Events, visualizerEventHandler, (caerEventPacketHeader) imu);
+#endif
 
 	//caerVisualizerMulti(68, "PolarityAndFrame", &caerVisualizerMultiRendererPolarityAndFrameEvents, visualizerEventHandler, container);
 #endif
 
 #ifdef ENABLE_FILE_OUTPUT
 	// Enable output to file (AEDAT 3.X format).
+#ifdef DVS128
+	caerOutputFile(7, 2, polarity, special);
+#else
 	caerOutputFile(7, 4, polarity, frame, imu, special);
+#endif
 #endif
 
 #ifdef ENABLE_NETWORK_OUTPUT
@@ -193,10 +199,18 @@ static bool mainloop_1(void) {
 	// External clients connect to cAER, and we send them the data.
 	// WARNING: slow clients can dramatically slow this and the whole
 	// processing pipeline down!
+#ifdef DVS128
+	caerOutputNetTCPServer(8, 2, polarity, special);
+#else
 	caerOutputNetTCPServer(8, 4, polarity, frame, imu, special);
+#endif
 
 	// And also send them via UDP. This is fast, as it doesn't care what is on the other side.
+#ifdef DVS128
+	caerOutputNetUDP(9, 2, polarity, special);
+#else
 	caerOutputNetUDP(9, 4, polarity, frame, imu, special);
+#endif
 #endif
 
 #ifdef ENABLE_IMAGEGENERATOR
