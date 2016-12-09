@@ -7,7 +7,7 @@
  *  Compile & run:
  *  $ cd caer/
  *  $ rm -rf CMakeFiles CMakeCache.txt
- *  $ cmake -DCMAKE_BUILD_TYPE=Debug -DDYNAPSEFX2=1 -DENABLE_STATISTICS=1 -DENABLE_VISUALIZER=1 .
+ *  $ cmake -DCMAKE_BUILD_TYPE=Debug -DDYNAPSEFX2=1 -DENABLE_STATISTICS=1 -DENABLE_VISUALIZER=1 -DENABLE_MEANRATEFILTER=1 -DENABLE_FILE_OUTPUT=1 .
  *  $ make
  *  $ ./caer-bin
  */
@@ -20,9 +20,7 @@
 #include "base/misc.h"
 
 // Devices support.
-#ifdef DYNAPSEFX2
 #include "modules/ini/dynapse_fx2.h"
-#endif
 
 #ifdef ENABLE_GEN_SPIKES
 #include "modules/misc/in/gen_spikes.h"
@@ -55,6 +53,9 @@
 #ifdef ENABLE_MEANRATEFILTER
 #include <libcaer/events/frame.h>
 #endif
+#ifdef ENABLE_LEARNINGFILTER
+#include <libcaer/events/frame.h>
+#endif
 
 // Common filters support.
 
@@ -71,7 +72,7 @@ static bool mainloop_1(void) {
 	// Input modules grab data from outside sources (like devices, files, ...)
 	// and put events into an event packet.
 
-#ifdef DYNAPSEFX2
+#ifdef DYNAPSEFX2 //should be 1 foe experiment
 	container = caerInputDYNAPSEFX2(1);
 
 	// We search for them by type here, because input modules may not have all or any of them.
@@ -79,20 +80,15 @@ static bool mainloop_1(void) {
 	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
 #endif
 
-#ifdef ENABLE_FILE_INPUT
+#ifdef ENABLE_FILE_INPUT //should be 0 for experiment
 	container = caerInputFile(10);
-#endif
-#ifdef ENABLE_NETWORK_INPUT
-	container = caerInputNetTCP(11);
-#endif
-#if defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT)
-#ifdef ENABLE_VISUALIZER
-	visualizerEventHandler = &caerInputVisualizerEventHandler;
-#endif
-
 	// We search for them by type here, because input modules may not have all or any of them.
 	spike = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
 	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
+#endif
+
+#ifdef ENABLE_NETWORK_INPUT
+	container = caerInputNetTCP(11);
 #endif
 
 	// Filters can also extract information from event packets: for example
@@ -106,13 +102,22 @@ static bool mainloop_1(void) {
 	caerFrameEventPacket freqplot = NULL;
 	caerMeanRateFilter(4, spike, &freqplot);
 #endif
+#ifdef ENABLE_LEARNINGFILTER
+	caerFrameEventPacket weightplot = NULL;
+	caerFrameEventPacket synapseplot = NULL;
+	caerLearningFilter(5, spike, &weightplot, &synapseplot);
+#endif
 
 	// A simple visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
-	caerVisualizer(64, "Spike", &caerVisualizerRendererSpikeEvents, &caerVisualizerEventHandlerSpikeEvents, (caerEventPacketHeader) spike);
+	caerVisualizer(64, "Spike", &caerVisualizerRendererSpikeEvents, NULL, (caerEventPacketHeader) spike);
 #ifdef ENABLE_MEANRATEFILTER
 	//caerVisualizer(65, "Frequency", &caerVisualizerRendererSpikeEventsFrequency,  &caerVisualizerEventHandlerSpikeEvents, (caerEventPacketHeader) spike);
 	caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
+#endif
+#ifdef ENABLE_LEARNINGFILTER
+	caerVisualizer(66, "Weight", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) weightplot);
+	caerVisualizer(67, "Synapse", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplot);
 #endif
 #endif
 
@@ -134,6 +139,10 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_MEANRATEFILTER
 	free(freqplot);
+#endif
+#ifdef ENABLE_LEARNINGFILTER
+	free(weightplot);
+	free(synapseplot);
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.
