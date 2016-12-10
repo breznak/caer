@@ -86,7 +86,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 
 	MRFilterState state = moduleData->moduleState;
 
-	// example to get the USB handle
+/*	// ---  example to get the USB handle
 	// please consider also that we are passing source module id
 	// as argument to the filter
 	state->eventSourceModuleState = caerMainloopGetSourceState(U16T(eventSourceID));
@@ -95,14 +95,24 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	// one could now use the state for changing biases
 	caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
 	//generate random value for injection current
-	uint32_t random_number = rand() % 255 + 1;
 	struct caer_dynapse_info dynapse_info = caerDynapseInfoGet(stateSource->deviceState);
-	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "%s --- ID: %d, Master: %d,  Logic: %d,  ChipID: %d.\n",
-		dynapse_info.deviceString, dynapse_info.deviceID, dynapse_info.deviceIsMaster, dynapse_info.logicVersion,
-		dynapse_info.chipID);
+	//caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "%s --- ID: %d, Master: %d,  Logic: %d,  ChipID: %d.\n",
+	//	dynapse_info.deviceString, dynapse_info.deviceID, dynapse_info.deviceIsMaster, dynapse_info.logicVersion,
+	//	dynapse_info.chipID);
+	sshsNode chips = sshsGetRelativeNode(
+			state->eventSourceConfigNode,
+			chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U2, true));
+    sshsNode biasNodeU2 = sshsGetRelativeNode(chips, "bias/");
+    //also update sshsnode
+    uint32_t bits = generatesBitsCoarseFineBiasSetting(state->eventSourceConfigNode, &dynapse_info,
+			"C0_IF_DC_P", 7, 80, "HighBias", "Normal", "PBias", true,
+			DYNAPSE_CONFIG_DYNAPSE_U2);
+	// finally send configuration via USB
+	caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
+	DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, bits);
+	// --- end example to change bias dynamically*/
 
-
-	//update parameters
+	// update filter parameters
 	caerMeanRateFilterConfig(moduleData);
 
 	// If the map is not allocated yet, do it.

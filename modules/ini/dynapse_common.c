@@ -293,6 +293,43 @@ static void usbConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 	}
 }
 
+uint32_t generatesBitsCoarseFineBiasSetting(sshsNode node, struct caer_dynapse_info *devInfo,
+	const char *biasName, uint8_t coarseValue, uint16_t fineValue, const char *hlbias, const char *currentLevel,
+	const char *sex, bool enabled, int chipid) {
+
+	// Add trailing slash to node name (required!).
+	size_t biasNameLength = strlen(biasName);
+	char biasNameFull[biasNameLength + 2];
+	memcpy(biasNameFull, biasName, biasNameLength);
+	biasNameFull[biasNameLength] = '/';
+	biasNameFull[biasNameLength + 1] = '\0';
+
+	// Device related configuration has its own sub-node.
+	sshsNode deviceConfigNodeLP = sshsGetRelativeNode(node, chipIDToName(chipid, true));
+
+	sshsNode biasNodeLP = sshsGetRelativeNode(deviceConfigNodeLP, "bias/");
+
+	// Create configuration node for this particular bias.
+	sshsNode biasConfigNode = sshsGetRelativeNode(biasNodeLP, biasNameFull);
+
+	// Add bias settings.
+	sshsNodePutByte(biasConfigNode, "coarseValue", I8T(coarseValue));
+	sshsNodePutShort(biasConfigNode, "fineValue", I16T(fineValue));
+	sshsNodePutString(biasConfigNode, "BiasLowHi", hlbias);
+	sshsNodePutString(biasConfigNode, "currentLevel", currentLevel);
+	sshsNodePutString(biasConfigNode, "sex", sex);
+	sshsNodePutBool(biasConfigNode, "enabled", enabled);
+	sshsNodePutBool(biasConfigNode, "special", false);
+
+	//now send
+	const char *nodeName = sshsNodeGetName(biasConfigNode);
+
+	uint32_t value = generateCoarseFineBiasParent(biasConfigNode, nodeName);
+
+	return(value);
+
+}
+
 static void updateCoarseFineBiasSetting(caerModuleData moduleData, struct caer_dynapse_info *devInfo,
 	const char *biasName, uint8_t coarseValue, uint16_t fineValue, const char *hlbias, const char *currentLevel,
 	const char *sex, bool enabled, int chipid) {
