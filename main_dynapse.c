@@ -21,6 +21,7 @@
 
 // Devices support.
 #include "modules/ini/dynapse_fx2.h"
+#include "modules/ini/dynapse_common.h"
 
 #ifdef ENABLE_GEN_SPIKES
 #include "modules/misc/in/gen_spikes.h"
@@ -47,13 +48,10 @@
 #endif
 
 #ifdef ENABLE_VISUALIZER
-#include "modules/visualizer/visualizer.h"
+#include "modules/visualizer.h"
 #endif
 
 #ifdef ENABLE_MEANRATEFILTER
-#include <libcaer/events/frame.h>
-#endif
-#ifdef ENABLE_LEARNINGFILTER
 #include <libcaer/events/frame.h>
 #endif
 
@@ -100,12 +98,12 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_MEANRATEFILTER
 	// create frame for displaying frequencoes
 	caerFrameEventPacket freqplot = NULL;
-	caerMeanRateFilter(4, container, spike, &freqplot);
+#ifdef DYNAPSEFX2
+	caerMeanRateFilter(4, 1, spike, &freqplot);
 #endif
-#ifdef ENABLE_LEARNINGFILTER
-	caerFrameEventPacket weightplot = NULL;
-	caerFrameEventPacket synapseplot = NULL;
-	caerLearningFilter(5, spike, &weightplot, &synapseplot);
+#ifdef ENABLE_FILE_INPUT
+	caerMeanRateFilter(4, 10, spike, &freqplot);
+#endif
 #endif
 
 	// A simple visualizer exists to show what the output looks like.
@@ -139,10 +137,6 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_MEANRATEFILTER
 	free(freqplot);
-#endif
-#ifdef ENABLE_LEARNINGFILTER
-	free(weightplot);
-	free(synapseplot);
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.

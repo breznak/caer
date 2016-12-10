@@ -40,13 +40,13 @@ static struct caer_module_functions caerMeanRateFilterFunctions = { .moduleInit 
 	&caerMeanRateFilterConfig, .moduleExit = &caerMeanRateFilterExit, .moduleReset =
 	&caerMeanRateFilterReset };
 
-void caerMeanRateFilter(uint16_t moduleID, caerEventPacketContainer container, caerSpikeEventPacket spike, caerFrameEventPacket *freqplot) {
+void caerMeanRateFilter(uint16_t moduleID,  int16_t eventSourceID, caerSpikeEventPacket spike, caerFrameEventPacket *freqplot) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "MRFilter", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}
 
-	caerModuleSM(&caerMeanRateFilterFunctions, moduleData, sizeof(struct MRFilter_state), 3, container, spike, freqplot);
+	caerModuleSM(&caerMeanRateFilterFunctions, moduleData, sizeof(struct MRFilter_state), 3, eventSourceID, spike, freqplot);
 }
 
 static bool caerMeanRateFilterInit(caerModuleData moduleData) {
@@ -75,7 +75,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	UNUSED_ARGUMENT(argsNumber);
 
 	// Interpret variable arguments (same as above in main function).
-	caerEventPacketContainer container = va_arg(args, caerEventPacketContainer);
+	int16_t eventSourceID = va_arg(args, int16_t);
 	caerSpikeEventPacket spike = va_arg(args, caerSpikeEventPacket);
 	caerFrameEventPacket *freqplot = va_arg(args, caerFrameEventPacket*);
 
@@ -86,25 +86,27 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 
 	MRFilterState state = moduleData->moduleState;
 
-	/*
 	// example to get the USB handle
 	// please consider also that we are passing caerEventPacketContainer container
 	// as argument to the filter
-	int16_t sourceID = -1;
 	// get event source id
-	CAER_EVENT_PACKET_CONTAINER_ITERATOR_START(container)
-		sourceID = caerEventPacketHeaderGetEventSource(caerEventPacketContainerIteratorElement);
-	CAER_EVENT_PACKET_CONTAINER_ITERATOR_END
-	// get event source state and config node
-	if (sourceID >= 0) {
-		state->eventSourceModuleState = caerMainloopGetSourceState(U16T(sourceID));
-		state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(sourceID));
-	}
+	state->eventSourceModuleState = caerMainloopGetSourceState(U16T(eventSourceID));
+	state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(eventSourceID));
+	caerInputDynapseState stateSource = state->eventSourceModuleState;
 	// one could now use the state for changing biases
-	caerDeviceConfigSet(state->eventSourceModuleState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	//send bits to the configuration channel...
-	caerDeviceConfigSet(state->eventSourceModuleState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, 5333005);
-	 */
+	caerDeviceConfigSet(stateSource, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	//generate random value for injection current
+	uint32_t random_number = rand() % 255 + 1;
+	struct caer_dynapse_info dynapse_info = caerDynapseInfoGet(stateSource->deviceState);
+	//caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "%s --- ID: %d, Master: %d,  Logic: %d,  ChipID: %d.\n",
+	//	dynapse_info.deviceString, dynapse_info.deviceID, dynapse_info.deviceIsMaster, dynapse_info.logicVersion,
+	//	dynapse_info.chipID);
+	/*sshsNode deviceConfigNode = sshsGetRelativeNode(state->eventSourceConfigNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
+	sshsNode biasNode = sshsGetRelativeNode(deviceConfigNode, "bias/");
+	updateCoarseFineBiasSetting(biasNode,
+			&dynapse_info,
+			"C0_IF_DC_P", 3, random_number, "HighBias", "Normal", "NBias", true,
+			DYNAPSE_CONFIG_DYNAPSE_U2);*/
 
 	//update parameters
 	caerMeanRateFilterConfig(moduleData);
