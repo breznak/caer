@@ -87,9 +87,8 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	MRFilterState state = moduleData->moduleState;
 
 	// example to get the USB handle
-	// please consider also that we are passing caerEventPacketContainer container
+	// please consider also that we are passing source module id
 	// as argument to the filter
-	// get event source id
 	state->eventSourceModuleState = caerMainloopGetSourceState(U16T(eventSourceID));
 	state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(eventSourceID));
 	caerInputDynapseState stateSource = state->eventSourceModuleState;
@@ -98,15 +97,10 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	//generate random value for injection current
 	uint32_t random_number = rand() % 255 + 1;
 	struct caer_dynapse_info dynapse_info = caerDynapseInfoGet(stateSource->deviceState);
-	//caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "%s --- ID: %d, Master: %d,  Logic: %d,  ChipID: %d.\n",
-	//	dynapse_info.deviceString, dynapse_info.deviceID, dynapse_info.deviceIsMaster, dynapse_info.logicVersion,
-	//	dynapse_info.chipID);
-	/*sshsNode deviceConfigNode = sshsGetRelativeNode(state->eventSourceConfigNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
-	sshsNode biasNode = sshsGetRelativeNode(deviceConfigNode, "bias/");
-	updateCoarseFineBiasSetting(biasNode,
-			&dynapse_info,
-			"C0_IF_DC_P", 3, random_number, "HighBias", "Normal", "NBias", true,
-			DYNAPSE_CONFIG_DYNAPSE_U2);*/
+	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "%s --- ID: %d, Master: %d,  Logic: %d,  ChipID: %d.\n",
+		dynapse_info.deviceString, dynapse_info.deviceID, dynapse_info.deviceIsMaster, dynapse_info.logicVersion,
+		dynapse_info.chipID);
+
 
 	//update parameters
 	caerMeanRateFilterConfig(moduleData);
