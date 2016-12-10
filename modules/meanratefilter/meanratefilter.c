@@ -93,7 +93,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(eventSourceID));
 	caerInputDynapseState stateSource = state->eventSourceModuleState;
 	// one could now use the state for changing biases
-	caerDeviceConfigSet(stateSource, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
 	//generate random value for injection current
 	uint32_t random_number = rand() % 255 + 1;
 	struct caer_dynapse_info dynapse_info = caerDynapseInfoGet(stateSource->deviceState);
