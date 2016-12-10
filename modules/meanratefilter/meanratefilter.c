@@ -11,6 +11,8 @@
 #include "libcaer/devices/dynapse.h"
 
 struct MRFilter_state {
+	sshsNode eventSourceModuleState;
+	sshsNode eventSourceConfigNode;
 	simple2DBufferLong timestampMap;
 	simple2DBufferFloat frequencyMap;
 	int8_t subSampleBy;
@@ -38,13 +40,13 @@ static struct caer_module_functions caerMeanRateFilterFunctions = { .moduleInit 
 	&caerMeanRateFilterConfig, .moduleExit = &caerMeanRateFilterExit, .moduleReset =
 	&caerMeanRateFilterReset };
 
-void caerMeanRateFilter(uint16_t moduleID, caerSpikeEventPacket spike, caerFrameEventPacket *freqplot) {
+void caerMeanRateFilter(uint16_t moduleID, caerEventPacketContainer container, caerSpikeEventPacket spike, caerFrameEventPacket *freqplot) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "MRFilter", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}
 
-	caerModuleSM(&caerMeanRateFilterFunctions, moduleData, sizeof(struct MRFilter_state), 2, spike, freqplot);
+	caerModuleSM(&caerMeanRateFilterFunctions, moduleData, sizeof(struct MRFilter_state), 3, container, spike, freqplot);
 }
 
 static bool caerMeanRateFilterInit(caerModuleData moduleData) {
@@ -58,7 +60,6 @@ static bool caerMeanRateFilterInit(caerModuleData moduleData) {
 
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
-
 
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
 	if (!sshsNodeAttributeExists(sourceInfoNode, "apsSizeX", SSHS_SHORT)) { //to do for visualizer change name of field to a more generic one
@@ -74,6 +75,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	UNUSED_ARGUMENT(argsNumber);
 
 	// Interpret variable arguments (same as above in main function).
+	caerEventPacketContainer container = va_arg(args, caerEventPacketContainer);
 	caerSpikeEventPacket spike = va_arg(args, caerSpikeEventPacket);
 	caerFrameEventPacket *freqplot = va_arg(args, caerFrameEventPacket*);
 
@@ -83,6 +85,26 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	}
 
 	MRFilterState state = moduleData->moduleState;
+
+	/*
+	// example to get the USB handle
+	// please consider also that we are passing caerEventPacketContainer container
+	// as argument to the filter
+	int16_t sourceID = -1;
+	// get event source id
+	CAER_EVENT_PACKET_CONTAINER_ITERATOR_START(container)
+		sourceID = caerEventPacketHeaderGetEventSource(caerEventPacketContainerIteratorElement);
+	CAER_EVENT_PACKET_CONTAINER_ITERATOR_END
+	// get event source state and config node
+	if (sourceID >= 0) {
+		state->eventSourceModuleState = caerMainloopGetSourceState(U16T(sourceID));
+		state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(sourceID));
+	}
+	// one could now use the state for changing biases
+	caerDeviceConfigSet(state->eventSourceModuleState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	//send bits to the configuration channel...
+	caerDeviceConfigSet(state->eventSourceModuleState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, 5333005);
+	 */
 
 	//update parameters
 	caerMeanRateFilterConfig(moduleData);
@@ -120,7 +142,6 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		state->timestampMap->buffer2d[y][x] = ts;
 
 	CAER_SPIKE_ITERATOR_VALID_END
-
 
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(caerEventPacketHeaderGetEventSource(&spike->packetHeader));
 	uint16_t sizeX =sshsNodeGetShort(sourceInfoNode, "dataSizeX");

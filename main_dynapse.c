@@ -100,7 +100,7 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_MEANRATEFILTER
 	// create frame for displaying frequencoes
 	caerFrameEventPacket freqplot = NULL;
-	caerMeanRateFilter(4, spike, &freqplot);
+	caerMeanRateFilter(4, container, spike, &freqplot);
 #endif
 #ifdef ENABLE_LEARNINGFILTER
 	caerFrameEventPacket weightplot = NULL;
