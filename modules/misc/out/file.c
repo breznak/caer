@@ -6,6 +6,11 @@
 #include <fcntl.h>
 #include <time.h>
 
+#if __APPLE__
+#include <sys/syslimits.h>
+#endif
+
+
 static bool caerOutputFileInit(caerModuleData moduleData);
 
 static struct caer_module_functions caerOutputFileFunctions = { .moduleInit = &caerOutputFileInit, .moduleRun =
