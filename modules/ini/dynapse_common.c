@@ -473,7 +473,7 @@ static void updateLowPowerBiases(caerModuleData moduleData, struct caer_dynapse_
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_NMDA_N", 7, 0, "HighBias", "Normal", "PBias", true,
 		chipid);
 
-	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_DC_P", 3, 100, "HighBias", "Normal", "PBias", true,
+	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_DC_P", 3, 60, "HighBias", "Normal", "PBias", true,
 		chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C0_IF_TAU1_N", 7, 10, "LowBias", "Normal", "NBias", true,
@@ -562,7 +562,7 @@ static void updateLowPowerBiases(caerModuleData moduleData, struct caer_dynapse_
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_NMDA_N", 7, 0, "HighBias", "Normal", "PBias", true,
 		chipid);
 
-	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_DC_P", 2, 30, "HighBias", "Normal", "PBias", true,
+	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_DC_P", 3, 60, "HighBias", "Normal", "PBias", true,
 		chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C1_IF_TAU1_N", 7, 10, "LowBias", "Normal", "NBias", true,
@@ -649,7 +649,7 @@ static void updateLowPowerBiases(caerModuleData moduleData, struct caer_dynapse_
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_NMDA_N", 7, 0, "HighBias", "Normal", "PBias", true,
 		chipid);
 
-	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_DC_P", 3, 30, "HighBias", "Normal", "PBias", true,
+	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_DC_P", 3, 60, "HighBias", "Normal", "PBias", true,
 		chipid);
 
 	updateCoarseFineBiasSetting(moduleData, &dynapse_info, "C2_IF_TAU1_N", 7, 10, "LowBias", "Normal", "NBias", true,

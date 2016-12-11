@@ -235,39 +235,6 @@ bool doClear) {
 	return (true);
 }
 
-bool caerVisualizerRendererSpikeEventsFrequency(caerVisualizerPublicState state, caerEventPacketContainer container,
-bool doClear) {
-	UNUSED_ARGUMENT(state);
-
-	// Clear bitmap to black to erase old events.
-	if (doClear) {
-		al_clear_to_color(al_map_rgb(0, 0, 0));
-	}
-
-	caerEventPacketHeader spikeEventPacketHeader = caerEventPacketContainerFindEventPacketByType(container,
-		SPIKE_EVENT);
-
-	if (spikeEventPacketHeader == NULL || caerEventPacketHeaderGetEventValid(spikeEventPacketHeader) == 0) {
-		return (false);
-	}
-
-	// Render all spikes.
-	CAER_SPIKE_ITERATOR_ALL_START( (caerSpikeEventPacket) spikeEventPacketHeader )
-
-		//get x,y position
-		uint16_t y = caerSpikeEventGetY(caerSpikeIteratorElement);	
-		uint16_t x = caerSpikeEventGetX(caerSpikeIteratorElement);	
-
-
-		al_put_pixel(x, y, al_map_rgb(120, 120, 120));
-
-		//al_put_pixel(32, 32, al_map_rgb(255, 0, 0));
-
-	CAER_SPIKE_ITERATOR_ALL_END
-
-	return (true);
-}
-
 bool caerVisualizerRendererSpikeEvents(caerVisualizerPublicState state, caerEventPacketContainer container,
 bool doClear) {
 	UNUSED_ARGUMENT(state);
@@ -293,10 +260,8 @@ bool doClear) {
 		uint16_t y = caerSpikeEventGetY(caerSpikeIteratorElement);	
 		uint16_t x = caerSpikeEventGetX(caerSpikeIteratorElement);	
 
-
 		al_put_pixel(x, y, al_map_rgb(coreId*80, 85, 30*coreId));
 		
-
 	CAER_SPIKE_ITERATOR_ALL_END
 
 	return (true);

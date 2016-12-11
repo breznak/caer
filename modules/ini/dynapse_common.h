@@ -39,8 +39,6 @@ struct gen_spike_state {
 	atomic_bool sy;
 };
 
-
-
 struct caer_input_dynapse_state {
 	caerDeviceHandle deviceState;
 	struct gen_spike_state genSpikeState;
