@@ -98,6 +98,23 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		return;
 	}
 
+	// If the map is not allocated yet, do it.
+	if (state->frequencyMap == NULL) {
+		if (!allocateFrequencyMap(state, caerEventPacketHeaderGetEventSource(&spike->packetHeader))) {
+			// Failed to allocate memory, nothing to do.
+			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for frequencyMap.");
+			return;
+		}
+	}
+	// If the map is not allocated yet, do it.
+	if (state->spikeCountMap == NULL) {
+		if (!allocateSpikeCountMap(state, caerEventPacketHeaderGetEventSource(&spike->packetHeader))) {
+			// Failed to allocate memory, nothing to do.
+			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for spikeCountMap.");
+			return;
+		}
+	}
+
 	MRFilterState state = moduleData->moduleState;
 
 	// --- start  usb handle / from spike event source id
@@ -296,23 +313,6 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 
 	// update filter parameters
 	caerMeanRateFilterConfig(moduleData);
-
-	// If the map is not allocated yet, do it.
-	if (state->frequencyMap == NULL) {
-		if (!allocateFrequencyMap(state, caerEventPacketHeaderGetEventSource(&spike->packetHeader))) {
-			// Failed to allocate memory, nothing to do.
-			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for frequencyMap.");
-			return;
-		}
-	}
-	// If the map is not allocated yet, do it.
-	if (state->spikeCountMap == NULL) {
-		if (!allocateSpikeCountMap(state, caerEventPacketHeaderGetEventSource(&spike->packetHeader))) {
-			// Failed to allocate memory, nothing to do.
-			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for spikeCountMap.");
-			return;
-		}
-	}
 
 	// Iterate over events and update frequency
 	CAER_SPIKE_ITERATOR_VALID_START(spike)
