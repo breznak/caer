@@ -98,6 +98,8 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		return;
 	}
 
+	MRFilterState state = moduleData->moduleState;
+
 	// If the map is not allocated yet, do it.
 	if (state->frequencyMap == NULL) {
 		if (!allocateFrequencyMap(state, caerEventPacketHeaderGetEventSource(&spike->packetHeader))) {
@@ -114,8 +116,6 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 			return;
 		}
 	}
-
-	MRFilterState state = moduleData->moduleState;
 
 	// --- start  usb handle / from spike event source id
 	state->eventSourceModuleState = caerMainloopGetSourceState(U16T(eventSourceID));
