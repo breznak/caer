@@ -14,7 +14,6 @@
 struct MRFilter_state {
 	sshsNode eventSourceModuleState;
 	sshsNode eventSourceConfigNode;
-	simple2DBufferLong timestampMap;
 	simple2DBufferFloat frequencyMap;
 	simple2DBufferLong spikeCountMap;
 	int8_t subSampleBy;
@@ -307,14 +306,6 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		}
 	}
 	// If the map is not allocated yet, do it.
-	if (state->timestampMap == NULL) {
-		if (!allocateTimestampMap(state, caerEventPacketHeaderGetEventSource(&spike->packetHeader))) {
-			// Failed to allocate memory, nothing to do.
-			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for timestampMap.");
-			return;
-		}
-	}
-	// If the map is not allocated yet, do it.
 	if (state->spikeCountMap == NULL) {
 		if (!allocateSpikeCountMap(state, caerEventPacketHeaderGetEventSource(&spike->packetHeader))) {
 			// Failed to allocate memory, nothing to do.
@@ -331,8 +322,6 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		uint16_t y = caerSpikeEventGetY(caerSpikeIteratorElement);
 
 		// Update value into maps 
-		//state->frequencyMap->buffer2d[x][y] = ((float)ts - (float)state->timestampMap->buffer2d[x][y])/2.0f;
-		state->timestampMap->buffer2d[x][y] = ts;
 		state->spikeCountMap->buffer2d[x][y] += 1;
 
 	CAER_SPIKE_ITERATOR_VALID_END
@@ -383,7 +372,7 @@ static void caerMeanRateFilterExit(caerModuleData moduleData) {
 
 	// Ensure maps are freed.
 	simple2DBufferFreeFloat(state->frequencyMap);
-	simple2DBufferFreeLong(state->timestampMap);
+	simple2DBufferFreeLong(state->spikeCountMap);
 }
 
 static void caerMeanRateFilterReset(caerModuleData moduleData, uint16_t resetCallSourceID) {
@@ -392,7 +381,7 @@ static void caerMeanRateFilterReset(caerModuleData moduleData, uint16_t resetCal
 	MRFilterState state = moduleData->moduleState;
 
 	// Reset maps to all zeros (startup state).
-	simple2DBufferResetLong(state->timestampMap);
+	simple2DBufferResetLong(state->spikeCountMap);
 	simple2DBufferResetFloat(state->frequencyMap);
 }
 
@@ -401,7 +390,7 @@ static bool allocateSpikeCountMap(MRFilterState state, int16_t sourceID) {
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
 	if (sourceInfoNode == NULL) {
 		// This should never happen, but we handle it gracefully.
-		caerLog(CAER_LOG_ERROR, __func__, "Failed to get source info to timestamp frequency map.");
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to get source info to allocate map.");
 		return (false);
 	}
 
@@ -423,39 +412,12 @@ static bool allocateSpikeCountMap(MRFilterState state, int16_t sourceID) {
 	return (true);
 }
 
-static bool allocateTimestampMap(MRFilterState state, int16_t sourceID) {
-	// Get size information from source.
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
-	if (sourceInfoNode == NULL) {
-		// This should never happen, but we handle it gracefully.
-		caerLog(CAER_LOG_ERROR, __func__, "Failed to get source info to timestamp frequency map.");
-		return (false);
-	}
-
-	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dataSizeX");
-	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dataSizeY");
-
-	state->timestampMap = simple2DBufferInitLong((size_t) sizeX, (size_t) sizeY);
-	if (state->timestampMap == NULL) {
-		return (false);
-	}
-
-	for(size_t x=0; x<sizeX; x++){
-		for(size_t y=0; y<sizeY; y++){
-			state->timestampMap->buffer2d[x][y] = 0; // init to zero
-		}
-	}
-
-	// TODO: size the map differently if subSampleBy is set!
-	return (true);
-}
-
 static bool allocateFrequencyMap(MRFilterState state, int16_t sourceID) {
 	// Get size information from source.
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
 	if (sourceInfoNode == NULL) {
 		// This should never happen, but we handle it gracefully.
-		caerLog(CAER_LOG_ERROR, __func__, "Failed to get source info to allocate frequency map.");
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to get source info to allocate map.");
 		return (false);
 	}
 
