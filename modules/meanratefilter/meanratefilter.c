@@ -89,7 +89,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	UNUSED_ARGUMENT(argsNumber);
 
 	// Interpret variable arguments (same as above in main function).
-	int16_t eventSourceID = va_arg(args, int16_t);
+	int16_t eventSourceID = va_arg(args, int);
 	caerSpikeEventPacket spike = va_arg(args, caerSpikeEventPacket);
 	caerFrameEventPacket *freqplot = va_arg(args, caerFrameEventPacket*);
 
@@ -99,6 +99,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	}
 
 	MRFilterState state = moduleData->moduleState;
+
 
 	// If the map is not allocated yet, do it.
 	if (state->frequencyMap == NULL) {
@@ -120,7 +121,13 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	// --- start  usb handle / from spike event source id
 	state->eventSourceModuleState = caerMainloopGetSourceState(U16T(eventSourceID));
 	state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(eventSourceID));
+	if(state->eventSourceModuleState == NULL || state->eventSourceConfigNode == NULL){
+		return;
+	}
 	caerInputDynapseState stateSource = state->eventSourceModuleState;
+	if(stateSource->deviceState == NULL){
+		return;
+	}
 	struct caer_dynapse_info dynapse_info = caerDynapseInfoGet(stateSource->deviceState);
 	// --- end usb handle
 
