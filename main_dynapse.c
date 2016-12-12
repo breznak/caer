@@ -48,7 +48,7 @@
 #endif
 
 #ifdef ENABLE_VISUALIZER
-#include "modules/visualizer.h"
+#include "modules/visualizer/visualizer.h"
 #endif
 
 #ifdef ENABLE_MEANRATEFILTER
