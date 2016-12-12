@@ -48,11 +48,13 @@
 #endif
 
 #ifdef ENABLE_VISUALIZER
-#include "modules/visualizer.h"
+#include "modules/visualizer/visualizer.h"
 #endif
 
 #ifdef ENABLE_MEANRATEFILTER
 #include <libcaer/events/frame.h>
+#include "modules/meanratefilter/meanratefilter.h"
+#include "modules/statistics/statistics.h"
 #endif
 
 // Common filters support.
