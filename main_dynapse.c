@@ -53,13 +53,20 @@
 
 #ifdef ENABLE_MEANRATEFILTER
 #include <libcaer/events/frame.h>
-#include "modules/meanratefilter/meanratefilter.h"
-#include "modules/statistics/statistics.h"
+#endif
+#ifdef ENABLE_LEARNINGFILTER
+#include <libcaer/events/frame.h>
 #endif
 
 // Common filters support.
 
 static bool mainloop_1(void);
+
+#ifdef ENABLE_LEARNINGFILTER
+	// create frame for displaying weight and synapse
+	caerFrameEventPacket weightplot = NULL;
+	caerFrameEventPacket synapseplot = NULL;
+#endif
 
 static bool mainloop_1(void) {
 
@@ -108,11 +115,21 @@ static bool mainloop_1(void) {
 #endif
 #endif
 
+#ifdef ENABLE_LEARNINGFILTER
+#ifdef DYNAPSEFX2
+	caerLearningFilter(5, 1, spike, &weightplot, &synapseplot);
+#endif
+#endif
+
 	// A simple visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
 	caerVisualizer(64, "Spike", &caerVisualizerRendererSpikeEvents, NULL, (caerEventPacketHeader) spike);
 #ifdef ENABLE_MEANRATEFILTER
 	caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
+#endif
+#ifdef ENABLE_LEARNINGFILTER
+	caerVisualizer(66, "Weight", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) weightplot);
+	caerVisualizer(67, "Synapse", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplot);
 #endif
 #endif
 
@@ -145,7 +162,7 @@ int main(int argc, char **argv) {
 
 	// Initialize config storage from file, support command-line overrides.
 	// If no init from file needed, pass NULL.
-	caerConfigInit("caer-config.xml", argc, argv);
+//	caerConfigInit("caer-config.xml", argc, argv); //?
 
 	// Initialize logging sub-system.
 	caerLogInit();
