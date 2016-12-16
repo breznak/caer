@@ -33,6 +33,9 @@ Optional input/output modules:
  -DENABLE_FILE_OUTPUT=1
  -DENABLE_NETWORK_OUTPUT=1
 
+NB: in the example mainloop (contained in the main.c file) only one input device can be active per time,
+    in addition at least one input device must be enabled (ie. one camera input device OR an input stream from network)
+
 Optional modules:
  -DENABLE_BAFILTER=1    - enable background activity filter module
  -DENABLE_STATISTICS=1  - enable console statistics module
