@@ -46,7 +46,7 @@ static struct caer_module_functions caerMeanRateFilterFunctions = { .moduleInit 
 	&caerMeanRateFilterReset };
 
 void caerMeanRateFilter(uint16_t moduleID,  int16_t eventSourceID, caerSpikeEventPacket spike, caerFrameEventPacket *freqplot) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "MRFilter", CAER_MODULE_PROCESSOR);
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "MeanRate", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}

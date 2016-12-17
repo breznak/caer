@@ -14,7 +14,7 @@ struct MNFilter_state {
 	int dynapse_u0_c0;
 	int dynapse_u0_c1;
 	int dynapse_u0_c2;
-	int dynapse_u0_c3;
+	int dynapse_u0_c3;	//chip id core id
 	int dynapse_u1_c0;
 	int dynapse_u1_c1;
 	int dynapse_u1_c2;
