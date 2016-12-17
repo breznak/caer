@@ -62,12 +62,6 @@
 
 static bool mainloop_1(void);
 
-#ifdef ENABLE_LEARNINGFILTER
-	// create frame for displaying weight and synapse
-	caerFrameEventPacket weightplot = NULL;
-	caerFrameEventPacket synapseplot = NULL;
-#endif
-
 static bool mainloop_1(void) {
 
 	// An eventPacketContainer bundles event packets of different types together,
@@ -85,6 +79,13 @@ static bool mainloop_1(void) {
 	// We search for them by type here, because input modules may not have all or any of them.
 	spike = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
 	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
+
+#ifdef ENABLE_LEARNINGFILTER
+	// create frame for displaying weight and synapse
+	caerFrameEventPacket weightplot = NULL;
+	caerFrameEventPacket synapseplot = NULL;
+#endif
+
 #endif
 
 #ifdef ENABLE_FILE_INPUT //should be 0 for experiment
@@ -92,6 +93,13 @@ static bool mainloop_1(void) {
 	// We search for them by type here, because input modules may not have all or any of them.
 	spike = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
 	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
+
+#ifdef ENABLE_LEARNINGFILTER
+	// create frame for displaying weight and synapse
+	caerFrameEventPacket weightplot = NULL;
+	caerFrameEventPacket synapseplot = NULL;
+#endif
+
 #endif
 
 #ifdef ENABLE_NETWORK_INPUT

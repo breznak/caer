@@ -8,6 +8,7 @@
 #include "base/module.h"
 #include "ext/buffers.h"
 #include "libcaer/devices/dynapse.h"
+#include "ext/colorjet/colorjet.h"
 #include <math.h>
 
 #include <stdio.h>
@@ -52,10 +53,6 @@ struct LFilter_memory {
 
 double deltaWeights[DELTA_WEIGHT_LUT_LENGTH];
 
-typedef struct {
-	uint16_t r,g,b;
-} COLOUR;
-
 typedef struct LFilter_state *LFilterState;
 typedef struct LFilter_memory LFilterMemory; // *LFilterMemory
 
@@ -80,8 +77,6 @@ static bool EnableStimuliGen(caerModuleData moduleData, int16_t eventSourceID);
 static bool ClearAllCam(caerModuleData moduleData, int16_t eventSourceID);
 static uint32_t getBiasBits(caerModuleData moduleData, int16_t eventSourceID, uint32_t chipId, uint32_t coreId, const char *biasName_t,
 		uint8_t coarseValue, uint16_t fineValue, const char *lowHigh, const char *npBias);
-
-COLOUR GetColour(double v, double vmin, double vmax);
 
 static struct caer_module_functions caerLearningFilterFunctions = { .moduleInit =
 	&caerLearningFilterInit, .moduleRun = &caerLearningFilterRun, .moduleConfig =
@@ -784,59 +779,6 @@ void GetRand1DBinaryArray(int64_t *binaryArray, int64_t Range) {
 		num = array[i];
 		binaryArray[num] = 1;
 	}
-}
-
-COLOUR GetColour(double v, double vmin, double vmax)
-{
-   COLOUR c = {0,0,0}; //{65535, 65535, 65535}; // white
-   double dv;
-   double value;
-
-   if (v < vmin)
-      v = vmin;
-   if (v > vmax)
-      v = vmax;
-   dv = vmax - vmin;
-
-   if (v < (vmin + dv / 4)) {
-      c.r = 0;
-      value = ( 4 * (v - vmin) / dv ) * 65535;
-      if (value > 30000)
-    	  c.g = 30000;
-      else if (value < 0)
-    	  c.g = 0;
-      else
-    	  c.g = (uint16_t) value;
-   } else if (v < (vmin + dv / 2)) {
-      c.r = 0;
-      value = (1 + 4 * (vmin + dv / 4 - v) / dv) * 65535;
-      if (value > 30000)
-    	  c.b = 30000;
-      else if (value < 0)
-    	  c.b = 0;
-      else
-    	  c.b = (uint16_t) value;
-   } else if (v < (vmin + dv * 3 / 4)) {
-      c.b = 0;
-      value = (4 * (v - vmin - dv / 2) / dv) * 65535;
-      if (value > 30000)
-    	  c.r = 30000;
-      else if (value < 0)
-    	  c.r = 0;
-      else
-    	  c.r = (uint16_t) value;
-   } else {
-      c.b = 0;
-      value = (1 + 4 * (vmin + dv * 3 / 4 - v) / dv) * 65535;
-      if (value > 30000)
-    	  c.g = 30000;
-      else if (value < 0)
-    	  c.g = 0;
-      else
-    	  c.g = (uint16_t) value;
-   }
-
-   return(c);
 }
 
 bool ResetBiases(caerModuleData moduleData, int16_t eventSourceID) {
