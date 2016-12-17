@@ -23,7 +23,7 @@ $ mv main_dynapse.c main.c
 
 1) configure: 
 
-$ cmake . 
+$ cmake -DDYNAPSEFX2=1 -DENABLE_STATISTICS=1 -DENABLE_VISUALIZER=1 -DENABLE_MEANRATEFILTER=1 .
 
 One of the following options is required to select a device:
  -DDYNAPSEFX2=1         - set dynapsefx2 (for FX2 platform models)
@@ -37,6 +37,9 @@ Optional input/output modules:
 Optional modules:
  -DENABLE_STATISTICS=1  	- enable events statistics
  -DENABLE_VISUALIZER=1		- enable the visualizer module 
+ 
+Useful options: 
+ -DCMAKE_BUILD_TYPE=Debug  -- enable debug build , you can then use gdb to debug your code
  
 2) build:
 
