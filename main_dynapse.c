@@ -54,6 +54,11 @@
 #ifdef ENABLE_MEANRATEFILTER
 #include <libcaer/events/frame.h>
 #endif
+
+#ifdef ENABLE_MONITORNEUFILTER
+#include "modules/monitorneufilter/monitorneufilter.h"
+#endif
+
 #ifdef ENABLE_LEARNINGFILTER
 #include <libcaer/events/frame.h>
 #endif
@@ -123,10 +128,15 @@ static bool mainloop_1(void) {
 #endif
 #endif
 
+
 #ifdef ENABLE_LEARNINGFILTER
 #ifdef DYNAPSEFX2
 	caerLearningFilter(5, 1, spike, &weightplot, &synapseplot);
 #endif
+#endif
+
+#ifdef ENABLE_MONITORNEUFILTER
+	caerMonitorNeuFilter(6, 1);
 #endif
 
 	// A simple visualizer exists to show what the output looks like.

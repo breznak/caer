@@ -11,6 +11,7 @@ ADD_SUBDIRECTORY(statistics)
 ADD_SUBDIRECTORY(visualizer)
 ADD_SUBDIRECTORY(poseestimation)
 ADD_SUBDIRECTORY(meanratefilter)
+ADD_SUBDIRECTORY(monitorneufilter)
 ADD_SUBDIRECTORY(learningfilter)
 
 # Support private modules that don't get considered for commit,
