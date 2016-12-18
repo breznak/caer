@@ -50,6 +50,9 @@ void caerMonitorNeuFilter(uint16_t moduleID,  int16_t eventSourceID) {
 }
 
 static bool caerMonitorNeuFilterInit(caerModuleData moduleData) {
+	MNFilterState state = moduleData->moduleState;
+
+
 	// defaults is first neurons of all cores
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "dynapse_u0_c0", 0);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "dynapse_u0_c1", 0);
@@ -70,11 +73,6 @@ static bool caerMonitorNeuFilterInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "dynapse_u3_c1", 0);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "dynapse_u3_c2", 0);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "dynapse_u3_c3", 0);
-
-	MNFilterState state = moduleData->moduleState;
-
-	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
-	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
 	// variables
 	state->dynapse_u0_c0 = sshsNodeGetInt(moduleData->moduleNode, "dynapse_u0_c0");
@@ -356,7 +354,6 @@ static void caerMonitorNeuFilterRun(caerModuleData moduleData, size_t argsNumber
 
 static void caerMonitorNeuFilterExit(caerModuleData moduleData) {
 	// Remove listener, which can reference invalid memory in userData.
-	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
 	MNFilterState state = moduleData->moduleState;
 

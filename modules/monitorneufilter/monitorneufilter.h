@@ -4,8 +4,8 @@
  *      Author: federico.corradi@inilabs.com
  */
 
-#ifndef MEANRATEFILTER_H_
-#define MEANRATEFILTER_H_
+#ifndef MONITORNEUFILTER_H_
+#define MONITORNEUFILTER_H_
 
 #include "main.h"
 #include "modules/ini/dynapse_common.h"
@@ -14,4 +14,4 @@
 
 void caerMonitorNeuFilter(uint16_t moduleID, int16_t eventSourceID);
 
-#endif /* MEANRATEFILTER_H_ */
+#endif /* MONITORNEUFILTER_H_ */

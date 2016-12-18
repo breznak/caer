@@ -448,9 +448,6 @@ void WriteCam(void *spikeGenState, uint32_t preNeuronAddr,
 	uint32_t column = postNeuronAddr & 0xf;
 	bits = ei << 29 | fs << 28 | address << 20 | source_core << 18 | 1 << 17
 			| coreId << 15 | row << 5 | column;
-	//printf("Write CAM: \n");
-	//printf("Chip ID: %d\n", atomic_load(&state->genSpikeState.chip_id)); //0
-	//printf("Bits: %d\n", bits);
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP,
 			DYNAPSE_CONFIG_CHIP_CONTENT, bits);
 }

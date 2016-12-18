@@ -7,7 +7,7 @@
  *  Compile & run:
  *  $ cd caer/
  *  $ rm -rf CMakeFiles CMakeCache.txt
- *  $ cmake -DCMAKE_BUILD_TYPE=Debug -DDYNAPSEFX2=1 -DENABLE_STATISTICS=1 -DENABLE_VISUALIZER=1 -DENABLE_MEANRATEFILTER=1 -DENABLE_FILE_OUTPUT=0 .
+ *  $ cmake -DCMAKE_BUILD_TYPE=Debug -DDYNAPSEFX2=1 -DENABLE_STATISTICS=1 -DENABLE_VISUALIZER=1 -DENABLE_MEANRATEFILTER=1 -DENABLE_MONITORNEUFILTER=1 -DENABLE_FILE_OUTPUT=0 .
  *  $ make
  *  $ ./caer-bin
  */
@@ -180,7 +180,7 @@ int main(int argc, char **argv) {
 
 	// Initialize config storage from file, support command-line overrides.
 	// If no init from file needed, pass NULL.
-//	caerConfigInit("caer-config.xml", argc, argv); //?
+	caerConfigInit("caer-config.xml", argc, argv);
 
 	// Initialize logging sub-system.
 	caerLogInit();
