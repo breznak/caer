@@ -37,7 +37,7 @@ const char * caerCaffeWrapper(uint16_t moduleID, int * classifyhist, int size,
 	}
 
 	caerModuleSM(&caerCaffeWrapperFunctions, moduleData,
-			sizeof(struct caffewrapper_state), 4, classifyhist, size,
+			sizeof(struct caffewrapper_state), 5, classifyhist, size,
 			classificationResults, networkActivity, sizeDisplay);
 
 	return (NULL);
@@ -108,7 +108,7 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber,
 		//add info to the frame
 		caerFrameEventSetLengthXLengthYChannelNumber(single_frame, frame_x,
 				frame_y, 1, *networkActivity); // to do remove hard coded size
-				MyCaffe_file_set(state->cpp_class, hist,
+				MyCaffe_file_set(state->cpp_class, hist, size,
 						&classificationResults, state->detThreshold,
 						state->doPrintOutputs, &single_frame,
 						state->doShowActivations);
