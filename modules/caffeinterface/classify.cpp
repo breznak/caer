@@ -5,44 +5,42 @@
 #include "settings.h"
 
 using namespace caffe;
-// NOLINT(build/namespaces)
 using std::string;
 
-void MyCaffe::file_set(char * i, double *b, double thr, bool printoutputs,
-		caerFrameEvent *single_frame, bool showactivations) {
-	MyCaffe::file_i = i;
+void MyCaffe::file_set(int * i, int size, double *b, double thr,
+		bool printoutputs, caerFrameEvent *single_frame, bool showactivations) {
 
-	if (file_i != NULL) {
-
-		//std::cout << "\n---------- Prediction for " << file_i << " started ----------\n" << std::endl;
-		cv::Mat img = cv::imread(file_i, 0);
-		cv::Mat img2;
-		img.convertTo(img2, CV_32FC1);
-		img2 = img2 * 0.00390625; // normalize 0,255 to 1
-
-		CHECK(!img.empty()) << "Unable to decode image " << file_i;
-		std::vector<Prediction> predictions = MyCaffe::Classify(img2, 5,
-				single_frame, showactivations);
-
-		/* Print the top N predictions. */
-		for (size_t i = 0; i < predictions.size(); ++i) {
-			Prediction p = predictions[i];
-			if (printoutputs) {
-				std::cout << "\n" << std::fixed << std::setprecision(4)
-						<< p.second << " - \"" << p.first << "\"" << std::endl;
-			}
-			// for face detection net
-			if (p.first.compare("FACE") == 0 && p.second > thr) {
-				*b = p.second;
-				std::cout << "\n" << p.second << " DETECTION " << std::endl;
+	for (size_t x = 0; x < size; x++) {
+		for (size_t y = 0; y < size; y++) {
+			int linindex = x * size + y;
+			if (i[linindex] == 256) {
+				i[linindex] = 255; // [0,255] is png
 			}
 		}
 	}
+
+	cv::Mat img = cv::Mat(size, size, CV_8UC1, i);
+	cv::Mat img2;
+	img.convertTo(img2, CV_32FC1);
+	img2 = img2 * 0.00390625; // normalize 0,255 to 1
+
+	CHECK(!img.empty()) << "Unable to decode image " << file_i;
+	std::vector<Prediction> predictions = MyCaffe::Classify(img2, 5,
+			single_frame, showactivations);
+
+	/* Print the top N predictions. */
+	for (size_t i = 0; i < predictions.size(); ++i) {
+		Prediction p = predictions[i];
+		if (printoutputs) {
+			std::cout << "\n" << std::fixed << std::setprecision(4) << p.second
+					<< " - \"" << p.first << "\"" << std::endl;
+		}
+	}
+
 }
 
 void MyCaffe::init_network() {
 
-	//::google::InitGoogleLogging(0);
 	string model_file = NET_MODEL
 	;
 	string trained_file = NET_WEIGHTS
@@ -198,11 +196,11 @@ std::vector<float> MyCaffe::Predict(const cv::Mat& img,
 			int n, c, h, w;
 			float data;
 
-			if(strcmp(layers[i]->type(),"Convolution")  != 0 &&
-			   strcmp(layers[i]->type(),"ReLU") != 0   &&
-			   strcmp(layers[i]->type(),"Pooling") != 0 &&
-			   strcmp(layers[i]->type(),"InnerProduct") != 0 ){
-				 continue;
+			if (strcmp(layers[i]->type(), "Convolution") != 0
+					&& strcmp(layers[i]->type(), "ReLU") != 0
+					&& strcmp(layers[i]->type(), "Pooling") != 0
+					&& strcmp(layers[i]->type(), "InnerProduct") != 0) {
+				continue;
 			}
 
 			n = this_layer_blobs[i]->num();
@@ -235,18 +233,19 @@ std::vector<float> MyCaffe::Predict(const cv::Mat& img,
 					//std::cout << layers[i]->type() << std::endl;
 					//cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
 					/*if(strcmp(layers[i]->type(),"Convolution") == 0){
-					    cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
-					}
-					if(strcmp(layers[i]->type(),"ReLU") == 0){
-					    cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
-					}
-					if(strcmp(layers[i]->type(),"Pooling") == 0){
-					    cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
-					}*/
+					 cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
+					 }
+					 if(strcmp(layers[i]->type(),"ReLU") == 0){
+					 cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
+					 }
+					 if(strcmp(layers[i]->type(),"Pooling") == 0){
+					 cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
+					 }*/
 					//if(strcmp(layers[i]->type(),"InnerProduct") == 0){
 					//	;
 					//}else{
-						cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
+					cv::normalize(newImage, newImage, 0.0, 65535,
+							cv::NORM_MINMAX, -1);
 					//}
 					//cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
 					imageVector.push_back(newImage);
@@ -265,7 +264,8 @@ std::vector<float> MyCaffe::Predict(const cv::Mat& img,
 
 		// mat final Frame of activations
 		cv::Mat1f frame_activity(tmp_frame->lengthX, tmp_frame->lengthY);
-		int size_y_single_image = floor(tmp_frame->lengthY / layersVector.size()); // num layers
+		int size_y_single_image = floor(
+				tmp_frame->lengthY / layersVector.size()); // num layers
 		for (int layer_num = 0; layer_num < layersVector.size(); layer_num++) { //layersVector.size()
 			counter_y += 1; // count y position of image (layers)
 			counter_x = -1; // reset counter_x
@@ -279,8 +279,9 @@ std::vector<float> MyCaffe::Predict(const cv::Mat& img,
 				int size_x_single_image = floor(
 						tmp_frame->lengthX / layersVector[layer_num].size());
 
-				if(size_x_single_image <= 0){
-					caerLog(CAER_LOG_ERROR, __func__, "Please check your: CAFFEVISUALIZERSIZE constant. Display size too small. Not displaying activations.");
+				if (size_x_single_image <= 0) {
+					caerLog(CAER_LOG_ERROR, __func__,
+							"Please check your: CAFFEVISUALIZERSIZE constant. Display size too small. Not displaying activations.");
 					goto error_in_plotting;
 				}
 				cv::Size sizeI(size_x_single_image, size_y_single_image);
@@ -300,29 +301,30 @@ std::vector<float> MyCaffe::Predict(const cv::Mat& img,
 			}
 		}
 
-		cv::Mat data_frame = cv::Mat(frame_activity.cols, frame_activity.rows, CV_16UC3);
+		cv::Mat data_frame = cv::Mat(frame_activity.cols, frame_activity.rows,
+				CV_16UC3);
 		cv::transpose(frame_activity, data_frame);
 
-	    // normalize output into [0,65535]
-	    //cv::normalize(data_frame, data_frame, 0.0, 65535, cv::NORM_MINMAX, -1);
+		// normalize output into [0,65535]
+		//cv::normalize(data_frame, data_frame, 0.0, 65535, cv::NORM_MINMAX, -1);
 
 		/*cv::Scalar avg,sdv;
-		cv::meanStdDev(data_frame, avg, sdv);
-		sdv.val[0] = sqrt(data_frame.cols*data_frame.rows*sdv.val[0]*sdv.val[0]);
-		cv::Mat image_32f;
-		data_frame.convertTo(image_32f,CV_32F,1/sdv.val[0],-avg.val[0]/sdv.val[0]);*/
+		 cv::meanStdDev(data_frame, avg, sdv);
+		 sdv.val[0] = sqrt(data_frame.cols*data_frame.rows*sdv.val[0]*sdv.val[0]);
+		 cv::Mat image_32f;
+		 data_frame.convertTo(image_32f,CV_32F,1/sdv.val[0],-avg.val[0]/sdv.val[0]);*/
 
 		// copy activations image into frame
 		for (int y = 0; y < tmp_frame->lengthY; y++) {
 			for (int x = 0; x < tmp_frame->lengthX; x++) {
-				caerFrameEventSetPixel(tmp_frame, x, y, (uint16_t) data_frame.at<float>(y, x));
+				caerFrameEventSetPixel(tmp_frame, x, y,
+						(uint16_t) data_frame.at<float>(y, x));
 			}
 		}
 		*single_frame = tmp_frame;
-	}//if show activations
-	else{
-		error_in_plotting:
-		single_frame = NULL;
+	}	    //if show activations
+	else {
+		error_in_plotting: single_frame = NULL;
 	}
 
 	/* Copy the output layer to a std::vector */
