@@ -76,6 +76,9 @@
 #define CAFFEVISUALIZERSIZE 1024
 #include "modules/caffeinterface/wrapper.h"
 #endif
+#ifdef ENABLE_NULLHOPINTERFACE
+#include "modules/nullhopinterface/nullhopinterface.h"
+#endif
 
 static bool mainloop_1(void);
 
@@ -228,7 +231,7 @@ static bool mainloop_1(void) {
 #endif
 #endif
 
-#ifdef ENABLE_CAFFEINTERFACE
+#ifdef ENABLE_NULLHOPINTERFACE || ENABLE_CAFFEINTERFACE
 	// this modules requires image generator
 #ifdef ENABLE_IMAGEGENERATOR
 	// this wrapper let you interact with caffe framework
@@ -237,11 +240,16 @@ static bool mainloop_1(void) {
 	caerFrameEventPacket networkActivity = NULL; /* visualization of network activity */
 	double * classification_results = calloc(sizeof(double), 1); /* classification_results: */
 	if (classification_results == NULL) {
-		caerLog(CAER_LOG_ERROR, mainString, "Failed to allocate classification_results.");
+		caerLog(CAER_LOG_ERROR, "\nmainLoop", "Failed to allocate classification_results.");
 		return (false);
 	}
-	if(haveimg[0]) {
+	if(haveimage[0]) {
+#ifdef ENABLE_CAFFEINTERFACE
 		caerCaffeWrapper(21, classifyhist, CLASSIFYSIZE, classification_results,  &networkActivity, CAFFEVISUALIZERSIZE);
+#endif
+#ifdef ENABLE_NULLHOPINTERFACE
+		caerNullHopWrapper(22, classifyhist, haveimage, classification_results);
+#endif
 	}
 #endif
 #endif
@@ -260,6 +268,9 @@ static bool mainloop_1(void) {
 	free(haveimage);
 #ifdef ENABLE_VISUALIZER
 	free(imagegeneratorFrame);
+#endif
+#ifdef defined(ENABLE_CAFFEINTERFACE) || defined(ENABLE_NULLHOPINTERFACE)
+	free(classification_results);
 #endif
 #ifdef ENABLE_CAFFEINTERFACE
 	free(networkActivity); // frame that plots network outputs
