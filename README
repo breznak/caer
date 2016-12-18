@@ -56,6 +56,12 @@ Optional modules:
 		-DCAFFE_CPU_ONLY=1 - to use the Caffe framework with CPU only (ie. no GPU)
 		-DCaffe_DIRECTORY=<caffe dir>  - to define custom caffe installation folder 
 
+ -DENABLE_NULLHOPINTERFACE=1    - this module enable software or hardware interface to the nullhop architecture
+				This module can be configured with the following options:
+				-DFPGA_MODE=1 enable FPGA SoC mode
+				-DENABLE_RESULT_MONITOR=1 enable printing of results for both FPGA and or software
+				-DSOFTWARE_ONLY_MODE=1 emulates hw computation in sw
+
  -DENABLE_IMAGESTREAMERBEEPER=1 - this module produces beeps based on classification results 
 
 2) build:
