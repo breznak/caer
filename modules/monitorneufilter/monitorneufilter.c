@@ -126,10 +126,7 @@ static void caerMonitorNeuFilterRun(caerModuleData moduleData, size_t argsNumber
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Wrong neuron ID %d, please choose a value from [0,255]", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u0_c0"));
 		}else{
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
-			int reset = 1 << 11 | 0 << 8;
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-							DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, reset);
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
+			caerDeviceConfigSet(stateSource->deviceState,
 					DYNAPSE_CONFIG_MONITOR_NEU, 0, sshsNodeGetInt(moduleData->moduleNode, "dynapse_u0_c0"));
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Monitoring neuron dynapse_u0_c0 num: %d", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u0_c0"));
 			state->dynapse_u0_c0 = sshsNodeGetInt(moduleData->moduleNode, "dynapse_u0_c0");
@@ -140,10 +137,7 @@ static void caerMonitorNeuFilterRun(caerModuleData moduleData, size_t argsNumber
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Wrong neuron ID %d, please choose a value from [0,255]", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u0_c1"));
 		}else{
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
-			int reset = 1 << 11 | 1 << 8;
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-							DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, reset);
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
+			caerDeviceConfigSet(stateSource->deviceState,
 					DYNAPSE_CONFIG_MONITOR_NEU, 1, sshsNodeGetInt(moduleData->moduleNode, "dynapse_u0_c1"));
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Monitoring neuron dynapse_u0_c1 num: %d", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u0_c1"));
 			state->dynapse_u0_c1 = sshsNodeGetInt(moduleData->moduleNode, "dynapse_u0_c1");
@@ -154,10 +148,7 @@ static void caerMonitorNeuFilterRun(caerModuleData moduleData, size_t argsNumber
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Wrong neuron ID %d, please choose a value from [0,255]", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u0_c2"));
 		}else{
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
-			int reset = 1 << 11 | 2 << 8;
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-										DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, reset);
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
+			caerDeviceConfigSet(stateSource->deviceState,
 					DYNAPSE_CONFIG_MONITOR_NEU, 2, sshsNodeGetInt(moduleData->moduleNode, "dynapse_u0_c2"));
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Monitoring neuron dynapse_u0_c2 num: %d", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u0_c2"));
 			state->dynapse_u0_c2 = sshsNodeGetInt(moduleData->moduleNode, "dynapse_u0_c2");
@@ -168,10 +159,7 @@ static void caerMonitorNeuFilterRun(caerModuleData moduleData, size_t argsNumber
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Wrong neuron ID %d, please choose a value from [0,255]", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u0_c3"));
 		}else{
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
-			int reset = 1 << 11 | 3 << 8;
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-										DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, reset);
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
+			caerDeviceConfigSet(stateSource->deviceState,
 					DYNAPSE_CONFIG_MONITOR_NEU, 3, sshsNodeGetInt(moduleData->moduleNode, "dynapse_u0_c3"));
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Monitoring neuron dynapse_u0_c3 num: %d", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u0_c3"));
 			state->dynapse_u0_c3 = sshsNodeGetInt(moduleData->moduleNode, "dynapse_u0_c3");
@@ -183,10 +171,7 @@ static void caerMonitorNeuFilterRun(caerModuleData moduleData, size_t argsNumber
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Wrong neuron ID %d, please choose a value from [0,255]", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u1_c0"));
 		}else{
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
-			int reset = 1 << 11 | 0 << 8;
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-										DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, reset);
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
+			caerDeviceConfigSet(stateSource->deviceState,
 					DYNAPSE_CONFIG_MONITOR_NEU, 0, sshsNodeGetInt(moduleData->moduleNode, "dynapse_u1_c0"));
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Monitoring neuron dynapse_u1_c0 num: %d", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u1_c0"));
 			state->dynapse_u1_c0 = sshsNodeGetInt(moduleData->moduleNode, "dynapse_u1_c0");
@@ -198,10 +183,7 @@ static void caerMonitorNeuFilterRun(caerModuleData moduleData, size_t argsNumber
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Wrong neuron ID %d, please choose a value from [0,255]", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u1_c1"));
 		}else{
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
-			int reset = 1 << 11 | 1 << 8;
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-										DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, reset);
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
+			caerDeviceConfigSet(stateSource->deviceState,
 					DYNAPSE_CONFIG_MONITOR_NEU, 1, sshsNodeGetInt(moduleData->moduleNode, "dynapse_u1_c1"));
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Monitoring neuron dynapse_u1_c1 num: %d", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u1_c1"));
 			state->dynapse_u1_c1 = sshsNodeGetInt(moduleData->moduleNode, "dynapse_u1_c1");
@@ -212,10 +194,7 @@ static void caerMonitorNeuFilterRun(caerModuleData moduleData, size_t argsNumber
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Wrong neuron ID %d, please choose a value from [0,255]", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u1_c2"));
 		}else{
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
-			int reset = 1 << 11 | 2 << 8;
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-										DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, reset);
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
+			caerDeviceConfigSet(stateSource->deviceState,
 					DYNAPSE_CONFIG_MONITOR_NEU, 2, sshsNodeGetInt(moduleData->moduleNode, "dynapse_u1_c2"));
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Monitoring neuron dynapse_u1_c2 num: %d", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u1_c2"));
 			state->dynapse_u1_c2 = sshsNodeGetInt(moduleData->moduleNode, "dynapse_u1_c2");
@@ -226,10 +205,7 @@ static void caerMonitorNeuFilterRun(caerModuleData moduleData, size_t argsNumber
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Wrong neuron ID %d, please choose a value from [0,255]", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u1_c3"));
 		}else{
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
-			int reset = 1 << 11 | 3 << 8;
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-										DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, reset);
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
+			caerDeviceConfigSet(stateSource->deviceState,
 					DYNAPSE_CONFIG_MONITOR_NEU, 3, sshsNodeGetInt(moduleData->moduleNode, "dynapse_u1_c3"));
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Monitoring neuron dynapse_u1_c3 num: %d", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u1_c3"));
 			state->dynapse_u1_c3 = sshsNodeGetInt(moduleData->moduleNode, "dynapse_u1_c3");
@@ -241,10 +217,7 @@ static void caerMonitorNeuFilterRun(caerModuleData moduleData, size_t argsNumber
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Wrong neuron ID %d, please choose a value from [0,255]", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u2_c0"));
 		}else{
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-			int reset = 1 << 11 | 0 << 8;
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-										DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, reset);
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
+			caerDeviceConfigSet(stateSource->deviceState,
 					DYNAPSE_CONFIG_MONITOR_NEU, 0, sshsNodeGetInt(moduleData->moduleNode, "dynapse_u2_c0"));
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Monitoring neuron dynapse_u2_c0 num: %d", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u2_c0"));
 			state->dynapse_u2_c0 = sshsNodeGetInt(moduleData->moduleNode, "dynapse_u2_c0");
@@ -255,10 +228,7 @@ static void caerMonitorNeuFilterRun(caerModuleData moduleData, size_t argsNumber
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Wrong neuron ID %d, please choose a value from [0,255]", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u2_c1"));
 		}else{
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-			int reset = 1 << 11 | 1 << 8;
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-										DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, reset);
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
+			caerDeviceConfigSet(stateSource->deviceState,
 					DYNAPSE_CONFIG_MONITOR_NEU, 1, sshsNodeGetInt(moduleData->moduleNode, "dynapse_u2_c1"));
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Monitoring neuron dynapse_u2_c1 num: %d", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u2_c1"));
 			state->dynapse_u2_c1 = sshsNodeGetInt(moduleData->moduleNode, "dynapse_u2_c1");
@@ -269,10 +239,7 @@ static void caerMonitorNeuFilterRun(caerModuleData moduleData, size_t argsNumber
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Wrong neuron ID %d, please choose a value from [0,255]", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u2_c2"));
 		}else{
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-			int reset = 1 << 11 | 2 << 8;
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-										DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, reset);
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
+			caerDeviceConfigSet(stateSource->deviceState,
 					DYNAPSE_CONFIG_MONITOR_NEU, 2, sshsNodeGetInt(moduleData->moduleNode, "dynapse_u2_c2"));
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Monitoring neuron dynapse_u2_c2 num: %d", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u2_c2"));
 			state->dynapse_u2_c2 = sshsNodeGetInt(moduleData->moduleNode, "dynapse_u2_c2");
@@ -283,10 +250,7 @@ static void caerMonitorNeuFilterRun(caerModuleData moduleData, size_t argsNumber
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Wrong neuron ID %d, please choose a value from [0,255]", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u2_c3"));
 		}else{
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-			int reset = 1 << 11 | 3 << 8;
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-										DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, reset);
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
+			caerDeviceConfigSet(stateSource->deviceState,
 					DYNAPSE_CONFIG_MONITOR_NEU, 3, sshsNodeGetInt(moduleData->moduleNode, "dynapse_u2_c3"));
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Monitoring neuron dynapse_u2_c3 num: %d", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u2_c3"));
 			state->dynapse_u2_c3 = sshsNodeGetInt(moduleData->moduleNode, "dynapse_u2_c3");
@@ -298,10 +262,7 @@ static void caerMonitorNeuFilterRun(caerModuleData moduleData, size_t argsNumber
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Wrong neuron ID %d, please choose a value from [0,255]", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u3_c0"));
 		}else{
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
-			int reset = 1 << 11 | 0 << 8;
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-										DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, reset);
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
+			caerDeviceConfigSet(stateSource->deviceState,
 					DYNAPSE_CONFIG_MONITOR_NEU, 0, sshsNodeGetInt(moduleData->moduleNode, "dynapse_u3_c0"));
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Monitoring neuron dynapse_u3_c0 num: %d", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u3_c0"));
 			state->dynapse_u3_c0 = sshsNodeGetInt(moduleData->moduleNode, "dynapse_u3_c0");
@@ -312,10 +273,7 @@ static void caerMonitorNeuFilterRun(caerModuleData moduleData, size_t argsNumber
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Wrong neuron ID %d, please choose a value from [0,255]", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u3_c1"));
 		}else{
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
-			int reset = 1 << 11 | 1 << 8;
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-										DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, reset);
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
+			caerDeviceConfigSet(stateSource->deviceState,
 					DYNAPSE_CONFIG_MONITOR_NEU, 1, sshsNodeGetInt(moduleData->moduleNode, "dynapse_u3_c1"));
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Monitoring neuron dynapse_u3_c1 num: %d", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u3_c1"));
 			state->dynapse_u3_c1 = sshsNodeGetInt(moduleData->moduleNode, "dynapse_u3_c1");
@@ -326,10 +284,7 @@ static void caerMonitorNeuFilterRun(caerModuleData moduleData, size_t argsNumber
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Wrong neuron ID %d, please choose a value from [0,255]", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u3_c2"));
 		}else{
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
-			int reset = 1 << 11 | 2 << 8;
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-										DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, reset);
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
+			caerDeviceConfigSet(stateSource->deviceState,
 					DYNAPSE_CONFIG_MONITOR_NEU, 2, sshsNodeGetInt(moduleData->moduleNode, "dynapse_u3_c2"));
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Monitoring neuron dynapse_u3_c2 num: %d", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u3_c2"));
 			state->dynapse_u3_c2 = sshsNodeGetInt(moduleData->moduleNode, "dynapse_u3_c2");
@@ -340,10 +295,7 @@ static void caerMonitorNeuFilterRun(caerModuleData moduleData, size_t argsNumber
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Wrong neuron ID %d, please choose a value from [0,255]", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u3_c3"));
 		}else{
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
-			int reset = 1 << 11 | 3 << 8;
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-										DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, reset);
-			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
+			caerDeviceConfigSet(stateSource->deviceState,
 					DYNAPSE_CONFIG_MONITOR_NEU, 3, sshsNodeGetInt(moduleData->moduleNode, "dynapse_u3_c3"));
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Monitoring neuron dynapse_u3_c3 num: %d", sshsNodeGetInt(moduleData->moduleNode, "dynapse_u3_c3"));
 			state->dynapse_u3_c3 = sshsNodeGetInt(moduleData->moduleNode, "dynapse_u3_c3");
