@@ -72,7 +72,7 @@ void * StereoCalibration_findNewPoints(StereoCalibration *calibClass,
 	} catch (const std::exception& ex) {
 		caerLog(CAER_LOG_ERROR, "StereoCalibration_multicalib()",
 				"Failed with C++ exception: %s", ex.what());
-		return (false);
+		return (NULL);
 	}
 }
 

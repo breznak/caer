@@ -181,7 +181,7 @@ void StereoCalibration::addStereoCalib(vector<Point2f>*vec1, vector<Point2f>*vec
 
 void * StereoCalibration::findNewPoints(caerFrameEvent frame, int camid) {
 	if (frame == NULL || !caerFrameEventIsValid(frame)) {
-		return (false);
+		return(NULL);
 	}
 
 	// Initialize OpenCV Mat based on caerFrameEvent data directly (no image copy).

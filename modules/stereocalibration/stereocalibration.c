@@ -4,9 +4,12 @@
 #include "base/mainloop.h"
 #include "base/module.h"
 
+#include <allegro5/allegro_audio.h>
+#include <allegro5/allegro_acodec.h>
+
 struct StereoCalibrationState_struct {
 	struct StereoCalibrationSettings_struct settings; // Struct containing all settings (shared)
-	struct StereoCalibrarion *cpp_class; // Pointer to cpp_class_object
+	struct StereoCalibrarion *cpp_class; 			  // Pointer to cpp_class_object
 	uint64_t lastFrameTimestamp_cam0;
 	uint64_t lastFrameTimestamp_cam1;
 	uint32_t points_found;
@@ -77,6 +80,24 @@ static bool caerStereoCalibrationInit(caerModuleData moduleData) {
 	state->points_found = 0;
 	state->last_points_found = 0;
 
+
+	if (!al_init()) {
+		fprintf(stderr, "failed to initialize allegro!\n");
+		return (false);
+	}
+	if (!al_install_audio()) {
+		fprintf(stderr, "failed to initialize audio!\n");
+		return (false);
+	}
+	if (!al_init_acodec_addon()) {
+		fprintf(stderr, "failed to initialize audio codecs!\n");
+		return (false);
+	}
+	if (!al_reserve_samples(1)) {
+		fprintf(stderr, "failed to reserve samples!\n");
+		return (false);
+	}
+
 	return (true);
 }
 
@@ -99,7 +120,7 @@ static void updateSettings(caerModuleData moduleData) {
 	state->settings.doDisparity = sshsNodeGetBool(moduleData->moduleNode, "doDisparity");
 	state->settings.acceptableAvrEpipolarErr = sshsNodeGetFloat(moduleData->moduleNode, "acceptableAvrEpipolarErr");
 	state->settings.acceptableRMSErr = sshsNodeGetFloat(moduleData->moduleNode, "acceptableRMSErr");
-	state->settings.doCalibration = sshsNodeGetBool(moduleData->moduleNode, "isCalibrated");
+	//state->settings.doCalibration = sshsNodeGetBool(moduleData->moduleNode, "isCalibrated");
 
 }
 
@@ -140,8 +161,10 @@ static void caerStereoCalibrationRun(caerModuleData moduleData, size_t argsNumbe
 		state->calibrationLoaded = StereoCalibration_loadCalibrationFile(state->cpp_class, &state->settings);
 	}
 
-	// Multi Camera calibration is done only using frames.
+	// Stereo Camera calibration is done only using frames.
 	if (state->settings.doCalibration && frame_0 != NULL && frame_1 != NULL) {
+
+		//caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Looking for calibration patterns...");
 
 		bool frame_0_pattern = false;
 		uint64_t frame_0_ts = NULL;
@@ -175,7 +198,7 @@ static void caerStereoCalibrationRun(caerModuleData moduleData, size_t argsNumbe
 
 			foundPoint_cam1 = StereoCalibration_findNewPoints(state->cpp_class, caerFrameIteratorElement, 1);
 			if (foundPoint_cam1 != NULL) {
-				caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString, "Found calibration pattern cam1");
+				caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Found calibration pattern cam1");
 				frame_1_ts = currTimestamp_0;
 				frame_1_pattern = true;
 			}
@@ -191,6 +214,14 @@ static void caerStereoCalibrationRun(caerModuleData moduleData, size_t argsNumbe
 				state->points_found += 1;
 				StereoCalibration_addStereoCalibVec(state->cpp_class, foundPoint_cam0, foundPoint_cam1);
 				caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Pairs have been successfully detected");
+
+				ALLEGRO_SAMPLE *sample = NULL;
+
+				sample = al_load_sample("modules/stereocalibration/beep5.ogg");
+				al_reserve_samples(1);
+				al_play_sample(sample, 100.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, 0);
+				al_rest(0.06);
+				al_destroy_sample(sample);
 			}
 
 		}
@@ -199,7 +230,7 @@ static void caerStereoCalibrationRun(caerModuleData moduleData, size_t argsNumbe
 
 		if ((state->points_found >= state->settings.numPairsImagesBeforCalib)
 			&& (state->last_points_found < state->points_found)) {
-			caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString, "Running stereo calibration ...");
+			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Running stereo calibration ...");
 			bool calib_done = StereoCalibration_stereoCalibrate(state->cpp_class, &state->settings);
 			state->last_points_found = state->points_found; // make sure we do not re-calibrate if we did not add new points
 			if (calib_done)
