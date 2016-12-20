@@ -14,7 +14,7 @@ void StereoMatching_destroy(StereoMatching *matchingClass);
 void StereoMatching_updateSettings(StereoMatching *matchingClass);
 bool StereoMatching_loadCalibrationFile(StereoMatching *matchingClass,
 		StereoMatchingSettings settings);
-void StereoMatching_stereoMatch(StereoMatching *matchingClass, caerFrameEvent vec1, caerFrameEvent vec2);
+bool StereoMatching_stereoMatch(StereoMatching *matchingClass, StereoMatchingSettings setting,  caerFrameEvent vec1, caerFrameEvent vec2);
 
 #ifdef __cplusplus
 }

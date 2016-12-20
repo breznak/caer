@@ -43,6 +43,8 @@ static bool caerStereoMatchingInit(caerModuleData moduleData) {
 	// Create config settings.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doMatching", false); // Do calibration using live images
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "captureDelay", 2000);
+	sshsNodePutStringIfAbsent(moduleData->moduleNode, "loadFileName_extrinsic", "extrinsics.xml"); // The name of the file from which to load the calibration
+	sshsNodePutStringIfAbsent(moduleData->moduleNode, "loadFileName_intrinsic", "intrinsics.xml"); // The name of the file from which to load the calibration
 
 	// Update all settings.
 	updateSettings(moduleData);
@@ -64,6 +66,8 @@ static void updateSettings(caerModuleData moduleData) {
 
 	state->settings.doMatching = sshsNodeGetBool(moduleData->moduleNode, "doMatching");
 	state->settings.captureDelay = sshsNodeGetInt(moduleData->moduleNode, "captureDelay");
+	state->settings.loadFileName_extrinsic = sshsNodeGetString(moduleData->moduleNode, "loadFileName_extrinsic");
+	state->settings.loadFileName_intrinsic = sshsNodeGetString(moduleData->moduleNode, "loadFileName_intrinsic");
 
 
 }
@@ -141,7 +145,7 @@ static void caerStereoMatchingRun(caerModuleData moduleData, size_t argsNumber, 
 
 		if(have_frame_1 && have_frame_0){
 			//we got frames proceed with stereo matching
-			 StereoMatching_stereoMatch(state->cpp_class, currFrameEvent_cam0, currFrameEvent_cam1);
+			StereoMatching_stereoMatch(state->cpp_class,  &state->settings, currFrameEvent_cam0, currFrameEvent_cam1);
 		}
 
 	}

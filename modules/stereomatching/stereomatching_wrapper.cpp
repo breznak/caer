@@ -24,16 +24,16 @@ void StereoMatching_updateSettings(StereoMatching *calibClass) {
 
 }
 
-void StereoMatching_stereoMatch(StereoMatching *calibClass,
+bool StereoMatching_stereoMatch(StereoMatching *calibClass, StereoMatchingSettings settings,
 	caerFrameEvent  vec1, caerFrameEvent  vec2) {
 
-	// Initialize OpenCV Mat based on caerFrameEvent data directly (no image copy).
-	Size frameSize_cam0(caerFrameEventGetLengthX(vec1), caerFrameEventGetLengthY(vec1));
-	Mat Image_cam0(frameSize_cam0, CV_16UC(caerFrameEventGetChannelNumber(vec1)), caerFrameEventGetPixelArrayUnsafe(vec1));
-
-	Size frameSize_cam1(caerFrameEventGetLengthX(vec2), caerFrameEventGetLengthY(vec2));
-	Mat Image_cam1(frameSize_cam1, CV_16UC(caerFrameEventGetChannelNumber(vec2)), caerFrameEventGetPixelArrayUnsafe(vec2));
-
+	try {
+			return (calibClass->stereoMatch(settings, vec1, vec2));
+	} catch (const std::exception& ex) {
+			caerLog(CAER_LOG_ERROR, "StereoMatching_stereMatch()",
+					"Failed with C++ exception: %s", ex.what());
+			return (false);
+	}
 
 }
 

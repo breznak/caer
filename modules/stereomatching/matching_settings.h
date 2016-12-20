@@ -7,6 +7,8 @@ struct StereoMatchingSettings_struct {
 	int alg;
 	int doMatching;
 	int captureDelay;
+	char * loadFileName_extrinsic;
+	char * loadFileName_intrinsic;
 };
 
 typedef struct StereoMatchingSettings_struct *StereoMatchingSettings;

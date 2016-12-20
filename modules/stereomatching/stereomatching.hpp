@@ -36,9 +36,12 @@ public:
 	StereoMatching(StereoMatchingSettings settings);
 	void updateSettings(StereoMatchingSettings settings);
 	bool loadCalibrationFile(StereoMatchingSettings settings);
-	void stereoMatch(caerFrameEvent vec1, caerFrameEvent vec2);
+	bool stereoMatch(StereoMatchingSettings settings, caerFrameEvent vec1, caerFrameEvent vec2);
 
 private:
+	Mat M1, D1, M2, D2;
+	Mat R, T, R1, P1, R2, P2;
+	Mat Q;
 	StereoMatchingSettings settings = NULL;
 
 };
