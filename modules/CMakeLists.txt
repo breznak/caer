@@ -10,8 +10,12 @@ ADD_SUBDIRECTORY(misc)
 ADD_SUBDIRECTORY(statistics)
 ADD_SUBDIRECTORY(visualizer)
 ADD_SUBDIRECTORY(poseestimation)
+ADD_SUBDIRECTORY(stereocalibration)
+ADD_SUBDIRECTORY(stereomatching)
 ADD_SUBDIRECTORY(meanratefilter)
+ADD_SUBDIRECTORY(monitorneufilter)
 ADD_SUBDIRECTORY(learningfilter)
+ADD_SUBDIRECTORY(nullhopinterface)
 
 # Support private modules that don't get considered for commit,
 # by reserving a directory called PrivateModules with its own

@@ -69,16 +69,15 @@
 
 #ifdef ENABLE_IMAGEGENERATOR
 #include "modules/imagegenerator/imagegenerator.h"
-#define MAX_IMG_QTY 8
-#define CLASSIFYSIZE 36
+#define CLASSIFYSIZE 64
 #define DISPLAYIMGSIZE 256
 #endif
 #ifdef ENABLE_CAFFEINTERFACE
 #define CAFFEVISUALIZERSIZE 1024
 #include "modules/caffeinterface/wrapper.h"
 #endif
-#ifdef ENABLE_IMAGESTREAMERBEEPER
-#include "modules/imagestreamerbeeper/imagestreamerbeeper.h"
+#ifdef ENABLE_NULLHOPINTERFACE
+#include "modules/nullhopinterface/nullhopinterface.h"
 #endif
 
 static bool mainloop_1(void);
@@ -181,7 +180,6 @@ static bool mainloop_1(void) {
 	caerVisualizer(61, "Frame", &caerVisualizerRendererFrameEvents, visualizerEventHandler, (caerEventPacketHeader) frame);
 	caerVisualizer(62, "IMU6", &caerVisualizerRendererIMU6Events, visualizerEventHandler, (caerEventPacketHeader) imu);
 #endif
-
 	//caerVisualizerMulti(68, "PolarityAndFrame", &caerVisualizerMultiRendererPolarityAndFrameEvents, visualizerEventHandler, container);
 #endif
 
@@ -214,144 +212,67 @@ static bool mainloop_1(void) {
 #endif
 
 #ifdef ENABLE_IMAGEGENERATOR
-	// save images of accumulated spikes and frames
-	int CLASSIFY_IMG_SIZE = CLASSIFYSIZE;
-	char mainString[16] = "_main.c_";
-
-	/* class_region_sizes:
-	 * (Not used so far)
-	 *
-	 * So far we only classify big faces in the center, that cover almost the whole screen.
-	 * Instead of classifying only a down-scaled version of the whole quadratic image (created in imagegenerator.c),
-	 * we might want to cut out some smaller quadratic windows, downscale them to CLASSIFY_IMAGE_SIZE
-	 * and check whether a face is recognized in that smaller area.
-	 *
-	 * class_region_sizes would store the sizes of this cut out sub-images / windows.
-	 * Could be used to display a different frame based on how big the face was, that was recognized)
-	 * (assuming only faces in the center are relevant. If other faces should be classified to, one
-	 * has to add an array with position of face)
-	 */
-	int * class_region_sizes = calloc(sizeof(int), MAX_IMG_QTY);
-	if (class_region_sizes == NULL) {
-		caerLog(CAER_LOG_ERROR, mainString, "Failed to allocate class_region_sizes.");
-		return (false);
+	// it creates images by accumulating spikes
+	int * classifyhist = calloc((int)CLASSIFYSIZE * CLASSIFYSIZE, sizeof(int));
+	if (classifyhist == NULL) {
+			return (false); // Failure.
 	}
-
-	/* classification_results:
-	 *
-	 * Stores the result of the classification (true = FACE, false = NON FACE) for each
-	 * element in file_strings_classify
-	 */
-	double * classification_results = calloc(sizeof(double), MAX_IMG_QTY);
-	if (classification_results == NULL) {
-		caerLog(CAER_LOG_ERROR, mainString, "Failed to allocate classification_results.");
-		return (false);
-	}
-
-	/* file_strings_classify:
-	 *
-	 * Stores all disk locations of images, which we want to classify (so far only one
-	 * classify-image per spike-image is generated and put on file_strings_classify[0])
-	 */
-	unsigned char ** file_strings_classify = calloc(sizeof(unsigned char *), MAX_IMG_QTY);
-	if (file_strings_classify == NULL) {
-		caerLog(CAER_LOG_ERROR, mainString, "Failed to allocate file_strings_classify.");
-		return (false);
-	}
-
-	/* display_img_ptr:
-	 *
-	 * points to the memory location of th image that will be displayed by
-	 * the imageStreamerVisualizer
-	 */
-	unsigned char ** display_img_ptr = calloc(sizeof(unsigned char *), 1);
-	if (display_img_ptr == NULL) {
-		caerLog(CAER_LOG_ERROR, mainString, "Failed to allocate display_img_ptr.");
-		return (false);
-	}
-
-	// create image streamer histogram/frame packet
-	caerFrameEventPacket imagestreamer = NULL;
-	caerFrameEventPacket imagestreamer_frame = NULL;
-
-#if defined(DAVISFX2) || defined(DAVISFX3) || defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT)
+	bool *haveimage;
+	haveimage = (bool*)malloc(1);
 	unsigned char ** frame_img_ptr = calloc(sizeof(unsigned char *), 1);
-	// generate images
-	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, frame, &imagestreamer, &imagestreamer_frame, frame_img_ptr);
-#else
-	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, NULL, &imagestreamer, NULL, NULL,);
+	// generate image and place it in classifyhist
+	caerImageGenerator(20, polarity, CLASSIFYSIZE, classifyhist, haveimage);
+#ifdef ENABLE_VISUALIZER
+   //put image into a frame packet containing a single frame
+   caerFrameEventPacket imagegeneratorFrame = NULL;
+   if(haveimage[0]){
+	  caerImageGeneratorMakeFrame(20, classifyhist, &imagegeneratorFrame, CLASSIFYSIZE);
+   }
 #endif
 #endif
 
-#ifdef ENABLE_CAFFEINTERFACE
-	// this also requires image generator
-#ifdef ENABLE_IMAGEGENERATOR
+	// this modules requires image generator
+#if defined(ENABLE_CAFFEINTERFACE) || defined(ENABLE_NULLHOPINTERFACE)
 	// this wrapper let you interact with caffe framework
-	// for example, we now classify the latest image
-	// only run CNN if we have a file to classify
-
-	// create image describing network activity
-	caerFrameEventPacket networkActivity = NULL;
-
-	if(*file_strings_classify != NULL) {
-		caerCaffeWrapper(21, file_strings_classify, classification_results, (int) MAX_IMG_QTY, &networkActivity, CAFFEVISUALIZERSIZE);
+	// we now classify the latest image that has been generated by the imagegenerator filter
+	// it also can create an image with activations values for different layers
+	caerFrameEventPacket networkActivity = NULL; /* visualization of network activity */
+	double * classification_results = calloc(sizeof(double), 1); /* classification_results: */
+	if (classification_results == NULL) {
+		caerLog(CAER_LOG_ERROR, "\nmainLoop", "Failed to allocate classification_results.");
+		return (false);
+	}
+	if(haveimage[0]) {
+#ifdef ENABLE_CAFFEINTERFACE
+		caerCaffeWrapper(21, classifyhist, CLASSIFYSIZE, classification_results,  &networkActivity, CAFFEVISUALIZERSIZE);
+#endif
+#ifdef ENABLE_NULLHOPINTERFACE
+		caerNullHopWrapper(22, classifyhist, haveimage, classification_results);
+#endif
 	}
 #endif
-#endif
 
-#if defined(ENABLE_VISUALIZER) && defined(ENABLE_IMAGEGENERATOR)
-	caerVisualizer(65, "ImageStreamerHist", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) imagestreamer);
-#if defined(DAVISFX2) || defined(DAVISFX3) || defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT)
-	// Open a second window of the visualizer
-	// display images of accumulated spikes
-	// this also requires imagegenerator
-	caerVisualizer(64, "ImageStreamerFrame", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) imagestreamer_frame);
+#if defined(ENABLE_VISUALIZER) && defined (ENABLE_IMAGEGENERATOR)
+	caerVisualizer(65, "ImageStreamerHist", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) imagegeneratorFrame);
 #ifdef ENABLE_CAFFEINTERFACE
 	//show the activations of the deep network
 	caerVisualizer(66, "DeepNetworkActivations", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) networkActivity);
 #endif
 #endif
-#endif
 
-#ifdef ENABLE_IMAGESTREAMERBEEPER
-	// add allegro sound on detection
-#ifdef ENABLE_CAFFEINTERFACE
-	if(classification_results != NULL) {
-		caerImagestreamerBeeper(22, classification_results, (int) MAX_IMG_QTY);
-	}
-#endif
-#endif
 
 #ifdef ENABLE_IMAGEGENERATOR
-	//free all used data structures
-	free(class_region_sizes);
-	class_region_sizes = NULL;
+	free(classifyhist);
+	free(haveimage);
+#ifdef ENABLE_VISUALIZER
+	free(imagegeneratorFrame);
+#endif
+#if defined(ENABLE_CAFFEINTERFACE) || defined(ENABLE_NULLHOPINTERFACE)
 	free(classification_results);
-	classification_results = NULL;
-
-	for (int i = 1; i < MAX_IMG_QTY; ++i) {
-		if (file_strings_classify[i]!= NULL) {
-			free(file_strings_classify[i]);
-			file_strings_classify[i] = NULL;
-		}
-	}
-
-	free(file_strings_classify);
-	file_strings_classify = NULL;
-	free(*display_img_ptr);
-	*display_img_ptr = NULL;
-	free(display_img_ptr);
-	display_img_ptr = NULL;
-	free(*frame_img_ptr);
-	*frame_img_ptr = NULL;
-	free(frame_img_ptr);
-	frame_img_ptr = NULL;
-	free(imagestreamer);
-	free(imagestreamer_frame);
-#ifdef ENABLE_CAFFEINTERFACE
-	free(networkActivity); // frame that plots network outputs
+	free(networkActivity);
 #endif
 #endif
+
 
 	return (true); // If false is returned, processing of this loop stops.
 }

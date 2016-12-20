@@ -7,7 +7,7 @@
  *  Compile & run:
  *  $ cd caer/
  *  $ rm -rf CMakeFiles CMakeCache.txt
- *  $ cmake -DCMAKE_BUILD_TYPE=Debug -DDYNAPSEFX2=1 -DENABLE_STATISTICS=1 -DENABLE_VISUALIZER=1 -DENABLE_MEANRATEFILTER=1 -DENABLE_FILE_OUTPUT=0 .
+ *  $ cmake -DCMAKE_BUILD_TYPE=Debug -DDYNAPSEFX2=1 -DENABLE_STATISTICS=1 -DENABLE_VISUALIZER=1 -DENABLE_MEANRATEFILTER=1 -DENABLE_MONITORNEUFILTER=1 -DENABLE_FILE_OUTPUT=0 .
  *  $ make
  *  $ ./caer-bin
  */
@@ -54,6 +54,11 @@
 #ifdef ENABLE_MEANRATEFILTER
 #include <libcaer/events/frame.h>
 #endif
+
+#ifdef ENABLE_MONITORNEUFILTER
+#include "modules/monitorneufilter/monitorneufilter.h"
+#endif
+
 #ifdef ENABLE_LEARNINGFILTER
 #include <libcaer/events/frame.h>
 #endif
@@ -61,12 +66,6 @@
 // Common filters support.
 
 static bool mainloop_1(void);
-
-#ifdef ENABLE_LEARNINGFILTER
-	// create frame for displaying weight and synapse
-	caerFrameEventPacket weightplot = NULL;
-	caerFrameEventPacket synapseplot = NULL;
-#endif
 
 static bool mainloop_1(void) {
 
@@ -85,6 +84,13 @@ static bool mainloop_1(void) {
 	// We search for them by type here, because input modules may not have all or any of them.
 	spike = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
 	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
+
+#ifdef ENABLE_LEARNINGFILTER
+	// create frame for displaying weight and synapse
+	caerFrameEventPacket weightplot = NULL;
+	caerFrameEventPacket synapseplot = NULL;
+#endif
+
 #endif
 
 #ifdef ENABLE_FILE_INPUT //should be 0 for experiment
@@ -92,6 +98,13 @@ static bool mainloop_1(void) {
 	// We search for them by type here, because input modules may not have all or any of them.
 	spike = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
 	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
+
+#ifdef ENABLE_LEARNINGFILTER
+	// create frame for displaying weight and synapse
+	caerFrameEventPacket weightplot = NULL;
+	caerFrameEventPacket synapseplot = NULL;
+#endif
+
 #endif
 
 #ifdef ENABLE_NETWORK_INPUT
@@ -115,10 +128,15 @@ static bool mainloop_1(void) {
 #endif
 #endif
 
+
 #ifdef ENABLE_LEARNINGFILTER
 #ifdef DYNAPSEFX2
 	caerLearningFilter(5, 1, spike, &weightplot, &synapseplot);
 #endif
+#endif
+
+#ifdef ENABLE_MONITORNEUFILTER
+	caerMonitorNeuFilter(6, 1);
 #endif
 
 	// A simple visualizer exists to show what the output looks like.
@@ -162,7 +180,7 @@ int main(int argc, char **argv) {
 
 	// Initialize config storage from file, support command-line overrides.
 	// If no init from file needed, pass NULL.
-//	caerConfigInit("caer-config.xml", argc, argv); //?
+	caerConfigInit("caer-config.xml", argc, argv);
 
 	// Initialize logging sub-system.
 	caerLogInit();

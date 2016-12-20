@@ -27,16 +27,18 @@ static struct caer_module_functions caerCaffeWrapperFunctions = { .moduleInit =
 		.moduleConfig =
 		NULL, .moduleExit = &caerCaffeWrapperExit };
 
-const char * caerCaffeWrapper(uint16_t moduleID, char ** file_string, double *classificationResults, int max_img_qty,
-	caerFrameEventPacket *networkActivity, int sizeDisplay) {
+
+const char * caerCaffeWrapper(uint16_t moduleID, int * classifyhist, int size,
+		double *classificationResults,
+		caerFrameEventPacket *networkActivity, int sizeDisplay) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "caerCaffeWrapper", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return (NULL);
 	}
 
 	caerModuleSM(&caerCaffeWrapperFunctions, moduleData,
-			sizeof(struct caffewrapper_state), 5, file_string,
-			classificationResults, max_img_qty, networkActivity, sizeDisplay);
+			sizeof(struct caffewrapper_state), 5, classifyhist, size,
+			classificationResults, networkActivity, sizeDisplay);
 
 	return (NULL);
 }
@@ -69,12 +71,14 @@ static void caerCaffeWrapperExit(caerModuleData moduleData) {
 static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber,
 		va_list args) {
 	UNUSED_ARGUMENT(argsNumber);
-	caffewrapperState state = moduleData->moduleState;
-	char ** file_string = va_arg(args, char **);
+
+	int * hist = va_arg(args, int *);
+	int size = va_arg(args, int);
 	double *classificationResults = va_arg(args, double*);
-	int max_img_qty = va_arg(args, int);
 	caerFrameEventPacket *networkActivity = va_arg(args, caerFrameEventPacket*);
 	int sizeDisplay = va_arg(args, int);
+
+	caffewrapperState state = moduleData->moduleState;
 
 	//update module state
 	state->detThreshold = sshsNodeGetDouble(moduleData->moduleNode,
@@ -104,15 +108,10 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber,
 		//add info to the frame
 		caerFrameEventSetLengthXLengthYChannelNumber(single_frame, frame_x,
 				frame_y, 1, *networkActivity); // to do remove hard coded size
-		for (int i = 0; i < max_img_qty; ++i) {
-			if (file_string[i] != NULL) {
-				MyCaffe_file_set(state->cpp_class, file_string[i],
-						&classificationResults[i], state->detThreshold,
+				MyCaffe_file_set(state->cpp_class, hist, size,
+						&classificationResults, state->detThreshold,
 						state->doPrintOutputs, &single_frame,
 						state->doShowActivations);
-			}
-		}
-
 		// validate frame
 		if (single_frame != NULL) {
 			caerFrameEventValidate(single_frame, *networkActivity);
