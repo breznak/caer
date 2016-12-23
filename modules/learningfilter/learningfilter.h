@@ -14,7 +14,7 @@
 #define SPIKE_QUEUE_LENGTH 500
 #define SPIKE_QUEUE_WIDTH 2
 #define MAXIMUM_CONSIDERED_SPIKE_DELAY 80 //???what is the unit of timestamp???
-#define MINIMUM_CONSIDERED_SPIKE_NUM 10
+#define MINIMUM_CONSIDERED_SPIKE_NUM 100 //10
 
 //for configuring the deep spiking neural network on chip
 #define MEMORY_NEURON_ADDR_OFFSET 1024

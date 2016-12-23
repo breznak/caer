@@ -19,6 +19,7 @@ static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_att
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
 static void updateLowPowerBiases(caerModuleData moduleData, struct caer_dynapse_info *devInfo, int chipid);
 static void updateSilentBiases(caerModuleData moduleData, struct caer_dynapse_info *devInfo, int chipid);
+static char *int2bin(int a);
 
 const char *chipIDToName(int16_t chipID, bool withEndSlash) {
 	switch (chipID) {
@@ -244,6 +245,9 @@ static void spikeConfigListener(sshsNode node, void *userData, enum sshs_node_at
 		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "clearAllCam")) {
 			atomic_store(&state->genSpikeState.clearAllCam, changeValue.boolean);
 		}
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "loadDefaultBiases")) {
+			atomic_store(&state->genSpikeState.loadDefaultBiases, changeValue.boolean);
+		}
 		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "running")) {
 			atomic_store(&state->genSpikeState.running, changeValue.boolean);
 		}
@@ -418,8 +422,8 @@ static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_att
 		sshsNode grandparent = sshsNodeGetParent(parent);
 		const char *nodeGrandParent = sshsNodeGetName(grandparent);
 		uint32_t value = generateCoarseFineBiasParent(node, nodeName);
-		//printf("nodename %s parent %s nodeGrandParent %s\n", nodeName,
-		//		nodeParent, nodeGrandParent);
+		printf("\nnodename %s parent %s nodeGrandParent %s\n", nodeName,
+				nodeParent, nodeGrandParent);
 
 		if (caerStrEquals(nodeGrandParent, "DYNAPSE_CONFIG_DYNAPSE_U0")) {
 			int retval = caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
@@ -459,6 +463,7 @@ static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_att
 		}
 
 		// finally send configuration via USB
+		printf("%s\n", int2bin(value));
 		int retval = caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
 		DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, value);
 		if (retval == false) {
@@ -1681,8 +1686,29 @@ static uint32_t convertBias(const char *biasName, const char* lowhi, const char*
 		inbits = addr << 18 | 1 << 16 | special << 15 | coarseRev << 12 | fineValue << 4 | confbits;
 	}
 
+//	printf("\n%s\n", int2bin(inbits));
 	return inbits;
 
+}
+
+char *int2bin(int a) {
+	char *str,*tmp;
+	int cnt = 31;
+	str = (char *) malloc(32); /*32 + 1 , because its a 32 bit bin number*/
+	tmp = str;
+	while ( cnt > -1 ){
+		str[cnt]= '0';
+		cnt --;
+	}
+	cnt = 31;
+	while (a > 0){
+		if (a%2==1){
+			str[cnt] = '1';
+        }
+		cnt--;
+		a = a/2 ;
+	}
+	return tmp;
 }
 
 static void biasConfigSend(sshsNode node, caerModuleData moduleData, struct caer_dynapse_info *devInfo) {
