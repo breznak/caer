@@ -66,6 +66,9 @@
 #ifdef ENABLE_VISUALIZER
 #include "modules/visualizer/visualizer.h"
 #endif
+#ifdef ENABLE_INFOFILTER
+#include "modules/infofilter/infofilter.h"
+#endif
 
 #ifdef ENABLE_IMAGEGENERATOR
 #include "modules/imagegenerator/imagegenerator.h"
@@ -143,6 +146,10 @@ static bool mainloop_1(void) {
 
 	frame = (caerFrameEventPacket) caerEventPacketContainerFindEventPacketByType(container, FRAME_EVENT);
 	imu = (caerIMU6EventPacket) caerEventPacketContainerFindEventPacketByType(container, IMU6_EVENT);
+#endif
+
+#ifdef ENABLE_INFOFILTER
+	caerInfoFilter(78, container);
 #endif
 
 	// Filters process event packets: for example to suppress certain events,
