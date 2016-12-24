@@ -12,7 +12,6 @@ struct INFilter_state {
 	unsigned long seconds;
 	unsigned long minutes;
 	unsigned long hours;
-	unsigned long time_in_micros;
 	unsigned long started;
 	ALLEGRO_DISPLAY *display;
 	ALLEGRO_FONT *font;
@@ -43,7 +42,9 @@ static bool caerInfoFilterInit(caerModuleData moduleData) {
 	INFilterState state = moduleData->moduleState;
 
 	state->minutes = 0;
-	state->time_in_micros = 0;
+	state->seconds = 0;
+	state->hours = 0;
+	state->microseconds = 0;
 	state->started = -1;
 
 	state->display = NULL;
@@ -95,7 +96,7 @@ static void caerInfoFilterRun(caerModuleData moduleData, size_t argsNumber, va_l
 	if(state->started == -1){
 		state->started = ts;
 	}
-	unsigned long current =  (state->time_in_micros + ts) - state->started;
+	unsigned long current =  ts - state->started;
 	state->microseconds = current - (state->minutes*60)*1e6 - state->seconds*1e6;
 	state->minutes = (current / 60e6);
 	state->seconds = ( ((int)current % (int)60e6) / 1e6);
@@ -128,7 +129,9 @@ static void caerInfoFilterReset(caerModuleData moduleData, uint16_t resetCallSou
 	INFilterState state = moduleData->moduleState;
 
 	state->minutes = 0;
-	state->time_in_micros = 0;
+	state->seconds = 0;
+	state->hours = 0;
+	state->microseconds = 0;
 	state->started = -1;
 
 }
