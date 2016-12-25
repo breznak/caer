@@ -19,6 +19,7 @@ struct INFilter_state {
 	ALLEGRO_EVENT_QUEUE *event_queue;
 	ALLEGRO_EVENT event;
 	char * txt_string;
+	sshsNode fileInputConfigNode;
 };
 
 typedef struct INFilter_state *INFilterState;
@@ -32,13 +33,13 @@ static struct caer_module_functions caerInfoFilterFunctions = { .moduleInit =
 	&caerInfoFilterInit, .moduleRun = &caerInfoFilterRun, .moduleExit = &caerInfoFilterExit, .moduleReset =
 	&caerInfoFilterReset };
 
-void caerInfoFilter(uint16_t moduleID, caerEventPacketContainer container) {
+void caerInfoFilter(uint16_t moduleID, caerEventPacketContainer container, uint16_t fileInputID) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "InfoFilter", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}
 
-	caerModuleSM(&caerInfoFilterFunctions, moduleData, sizeof(struct INFilter_state), 1, container );
+	caerModuleSM(&caerInfoFilterFunctions, moduleData, sizeof(struct INFilter_state), 2, container, fileInputID );
 }
 
 static bool caerInfoFilterInit(caerModuleData moduleData) {
@@ -53,24 +54,24 @@ static bool caerInfoFilterInit(caerModuleData moduleData) {
 	state->display = NULL;
 
 	if(!al_init()) {
-	  fprintf(stderr, "failed to initialize allegro!\n");
-	  return -1;
+	  caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "failed to initialize allegro!\n");
+	  exit(EXIT_FAILURE);
 	}
 
 	state->display = al_create_display(BITMAP_SIZE_X, BITMAP_SIZE_Y);
 	if(!state->display) {
-	  fprintf(stderr, "failed to create display!\n");
-	  return -1;
+	  caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "failed to create display!\n");
+	  exit(EXIT_FAILURE);
 	}
 
 	// Now load addons: primitives to draw, fonts (and TTF) to write text.
 	if (al_init_primitives_addon()) {
 		// Successfully initialized Allegro primitives addon.
-		caerLog(CAER_LOG_DEBUG, "Visualizer", "Allegro primitives addon initialized successfully.");
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Allegro primitives addon initialized successfully.");
 	}
 	else {
 		// Failed to initialize Allegro primitives addon.
-		caerLog(CAER_LOG_EMERGENCY, "Visualizer", "Failed to initialize Allegro primitives addon.");
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Visualizer", "Failed to initialize Allegro primitives addon.");
 		exit(EXIT_FAILURE);
 	}
 
@@ -78,11 +79,11 @@ static bool caerInfoFilterInit(caerModuleData moduleData) {
 
 	if (al_init_ttf_addon()) {
 		// Successfully initialized Allegro TTF addon.
-		caerLog(CAER_LOG_DEBUG, "Visualizer", "Allegro TTF addon initialized successfully.");
+		caerLog(CAER_LOG_DEBUG,  moduleData->moduleSubSystemString, "Allegro TTF addon initialized successfully.");
 	}
 	else {
 		// Failed to initialize Allegro TTF addon.
-		caerLog(CAER_LOG_EMERGENCY, "Visualizer", "Failed to initialize Allegro TTF addon.");
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,"Failed to initialize Allegro TTF addon.");
 		exit(EXIT_FAILURE);
 	}
 
@@ -127,6 +128,8 @@ static bool caerInfoFilterInit(caerModuleData moduleData) {
 	}
 	al_register_event_source(state->event_queue, al_get_mouse_event_source());
 
+	state->fileInputConfigNode = NULL;
+
 	// Nothing that can fail here.
 	return (true);
 }
@@ -136,13 +139,74 @@ static void caerInfoFilterRun(caerModuleData moduleData, size_t argsNumber, va_l
 
 	// Interpret variable arguments (same as above in main function).
 	caerEventPacketContainer container = va_arg(args, caerEventPacketContainer);
+	uint16_t fileInputID = va_arg(args, int);
+
+	INFilterState state = moduleData->moduleState;
+
+	if(fileInputID != NULL){
+		state->fileInputConfigNode = caerMainloopGetSourceNode(U16T(fileInputID));
+	}
+	int size = (int) round(BITMAP_SIZE_X / NUM_BUTTONS);
+	bool get_mouse = al_get_next_event(state->event_queue, &state->event);
+	if (get_mouse) {
+		// mouse pressed
+		if(state->event.type == ALLEGRO_EVENT_MOUSE_BUTTON_DOWN){
+			//caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString,
+			//		"Mouse position: (%d, %d)\n", state->event.mouse.x, state->event.mouse.y);
+			// buttons area
+			if(state->event.mouse.y > (BITMAP_SIZE_Y - BUTTONS_SIZE)){
+				// determines which button has been pressed
+				//caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString,
+				//	"Button pressed position: (%d, %d)\n", state->event.mouse.x, state->event.mouse.y);
+				int button_number = (int) ((int) state->event.mouse.x / (int) size);
+				switch(button_number){
+					case 0:
+						caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Play!");
+#ifdef ENABLE_FILE_INPUT
+						if(state->fileInputConfigNode != NULL){
+							sshsNodePutBool(state->fileInputConfigNode, "pause", false);
+						}
+#else
+						caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString,
+								"Not in file input mode! Impossible to Play the stream.");
+#endif
+						break;
+					case 1:
+						caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Rewind");
+						break;
+					case 2:
+						caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Forward");
+						break;
+					case 3:
+						caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Pause");
+#ifdef ENABLE_FILE_INPUT
+						if(state->fileInputConfigNode != NULL){
+							sshsNodePutBool(state->fileInputConfigNode, "pause", true);
+						}
+#else
+						caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString,
+								"Not in file input mode! Impossible to Pause the stream.");
+#endif
+						break;
+					case 4:
+						caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Rewind from start");
+						break;
+					case 5:
+						caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Start Recording");
+						break;
+					case 6:
+						caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Stop Recording");
+						break;
+				}
+
+			}
+		}
+	}
 
 	if(container == NULL){
 		//nothing to do
 		return;
 	}
-
-	INFilterState state = moduleData->moduleState;
 
 	int ts = caerEventPacketContainerGetHighestEventTimestamp(container);
 	caerEventPacketHeaderGetEventSource(container);
@@ -167,56 +231,15 @@ static void caerInfoFilterRun(caerModuleData moduleData, size_t argsNumber, va_l
 	/* timer */
 	al_draw_text(state->font, al_map_rgb(0,0,0), BITMAP_SIZE_X/2, (BITMAP_SIZE_Y/4),ALLEGRO_ALIGN_CENTRE, state->txt_string);
 
-	//al_draw_rectangle(0.0, 0.0, 10.0, 10.0, al_map_rgb(0,0,0), 10.0);
-	int size = (int) round(BITMAP_SIZE_X / NUM_BUTTONS);
-	al_put_pixel(0,(BITMAP_SIZE_Y - BUTTONS_SIZE),al_map_rgb(255,0,0));
+	/*al_put_pixel(0,(BITMAP_SIZE_Y - BUTTONS_SIZE),al_map_rgb(255,0,0));
 	al_put_pixel(size,(BITMAP_SIZE_Y - BUTTONS_SIZE),al_map_rgb(255,0,0));
 	al_put_pixel(size*2,(BITMAP_SIZE_Y - BUTTONS_SIZE),al_map_rgb(255,0,0));
 	al_put_pixel(size*3,(BITMAP_SIZE_Y - BUTTONS_SIZE),al_map_rgb(255,0,0));
 	al_put_pixel(size*4,(BITMAP_SIZE_Y - BUTTONS_SIZE),al_map_rgb(255,0,0));
 	al_put_pixel(size*5,(BITMAP_SIZE_Y - BUTTONS_SIZE),al_map_rgb(255,0,0));
 	al_put_pixel(size*6,(BITMAP_SIZE_Y - BUTTONS_SIZE),al_map_rgb(255,0,0));
-	al_put_pixel(size*7,(BITMAP_SIZE_Y - BUTTONS_SIZE),al_map_rgb(255,0,0));
+	al_put_pixel(size*7,(BITMAP_SIZE_Y - BUTTONS_SIZE),al_map_rgb(255,0,0));*/
 
-	bool get_mouse = al_get_next_event(state->event_queue, &state->event);
-	if (get_mouse) {
-		// mouse pressed
-		if(state->event.type == ALLEGRO_EVENT_MOUSE_BUTTON_DOWN){
-			//caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString,
-			//		"Mouse position: (%d, %d)\n", state->event.mouse.x, state->event.mouse.y);
-			// buttons area
-			if(state->event.mouse.y > (BITMAP_SIZE_Y - BUTTONS_SIZE)){
-				// determines which button has been pressed
-				//caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString,
-				//	"Button pressed position: (%d, %d)\n", state->event.mouse.x, state->event.mouse.y);
-				int button_number = (int) ((int) state->event.mouse.x / (int) size);
-				switch(button_number){
-					case 0:
-						caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Play!");
-						break;
-					case 1:
-						caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Rewind");
-						break;
-					case 2:
-						caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Forward");
-						break;
-					case 3:
-						caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Pause");
-						break;
-					case 4:
-						caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Rewind from start");
-						break;
-					case 5:
-						caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Start Recording");
-						break;
-					case 6:
-						caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString, "Stop Recording");
-						break;
-				}
-
-			}
-		}
-	}
 	al_flip_display();
 	al_clear_to_color(al_map_rgb(0,0,0));
 }

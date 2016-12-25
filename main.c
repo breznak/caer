@@ -149,7 +149,7 @@ static bool mainloop_1(void) {
 #endif
 
 #ifdef ENABLE_INFOFILTER
-	caerInfoFilter(78, container);
+	caerInfoFilter(78, container, 10);
 #endif
 
 	// Filters process event packets: for example to suppress certain events,

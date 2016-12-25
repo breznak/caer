@@ -26,6 +26,6 @@
 #define BUTTONS_SIZE 40
 #define NUM_BUTTONS 7
 
-void caerInfoFilter(uint16_t moduleID, caerEventPacketContainer container);
+void caerInfoFilter(uint16_t moduleID, caerEventPacketContainer container, uint16_t fileInputID);
 
 #endif /* INFOFILTER_H_ */
