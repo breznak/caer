@@ -20,6 +20,11 @@
 #include <allegro5/allegro_ttf.h>
 #include <allegro5/allegro_image.h>
 
+#ifdef HAVE_PTHREADS
+#include "ext/c11threads_posix.h"
+#endif
+#include <stdatomic.h>
+
 #define TXTLEN 2048
 #define BITMAP_SIZE_X 320
 #define BITMAP_SIZE_Y 240
