@@ -18,8 +18,13 @@
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_font.h>
 #include <allegro5/allegro_ttf.h>
+#include <allegro5/allegro_image.h>
 
 #define TXTLEN 2048
+#define BITMAP_SIZE_X 320
+#define BITMAP_SIZE_Y 240
+#define BUTTONS_SIZE 40
+#define NUM_BUTTONS 7
 
 void caerInfoFilter(uint16_t moduleID, caerEventPacketContainer container);
 
