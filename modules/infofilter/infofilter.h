@@ -33,6 +33,6 @@
 #define TIME_REMOVE 0.3
 #define CHANGE_FACTOR 20	// change factor % (plus or minus of actual value)
 
-void caerInfoFilter(uint16_t moduleID, caerEventPacketContainer container, uint16_t fileInputID);
+void caerInfoFilter(uint16_t moduleID, caerEventPacketContainer container, uint16_t fileInputID, uint16_t fileOutputID);
 
 #endif /* INFOFILTER_H_ */
