@@ -29,7 +29,9 @@
 #define BITMAP_SIZE_X 320
 #define BITMAP_SIZE_Y 240
 #define BUTTONS_SIZE 40
-#define NUM_BUTTONS 7
+#define NUM_BUTTONS 8
+#define TIME_REMOVE 0.3
+#define CHANGE_FACTOR 20	// change factor % (plus or minus of actual value)
 
 void caerInfoFilter(uint16_t moduleID, caerEventPacketContainer container, uint16_t fileInputID);
 

@@ -97,7 +97,7 @@ static bool caerInfoFilterInit(caerModuleData moduleData) {
 		exit(EXIT_FAILURE);
 	}
 
-	state->font = al_load_ttf_font("modules/infofilter/whitrabt.ttf",32,0 );
+	state->font = al_load_ttf_font("modules/infofilter/fonts/whitrabt.ttf",32,0 );
 
 	if (!state->font){
 	  caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Could not load 'whitrabt.ttf'.\n");
@@ -108,12 +108,8 @@ static bool caerInfoFilterInit(caerModuleData moduleData) {
 
 	al_set_new_display_refresh_rate(60.0);
 
-	// Set correct names.
-	al_set_org_name("iniLabs");
-	al_set_app_name("infoFilter");
-
 	//state->bitmap = al_create_bitmap(BITMAP_SIZE_X, BITMAP_SIZE_Y);
-	state->bitmap = al_load_bitmap("modules/infofilter/info_caer_320x240.png");
+	state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240.png");
 	if(!state->bitmap) {
 	      fprintf(stderr, "failed to create bitmap!\n");
 	  	  al_destroy_bitmap(state->bitmap);
@@ -150,65 +146,134 @@ static bool caerInfoFilterInit(caerModuleData moduleData) {
 int eventCheckerThread(void *stateInfo) {
 	INFilterState state = stateInfo;
 
-	//if (stateInfo == NULL) {
-	//	return (thrd_error);
-	//}
+	if (stateInfo == NULL) {
+		return (thrd_error);
+	}
+
+	float seconds = 0.0f;
+	bool pressed = false;
+	int last_state = -1;
+
+	clock_t start;
+	clock_t end;
+	end = clock();
+	start = clock();
+
+	//check startup status
+#ifdef ENABLE_FILE_INPUT
+	bool paused = false;
+	if(state->fileInputConfigNode != NULL){
+		paused = sshsNodeGetBool(state->fileInputConfigNode, "pause");
+	}
+	if(paused){
+		state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_pause.png");
+	}
+#endif
 	thrd_set_name("eventCheckerThread");
 	while (atomic_load_explicit(&state->running, memory_order_relaxed)) {
-		//caerVisualizerUpdateScreen(state);
-		//caerLog(CAER_LOG_NOTICE, "tt",  "from the thread\n");
-		int size = (int) round(BITMAP_SIZE_X / NUM_BUTTONS);
+
+		// check time from last button press... if passed put default skin
+		end = clock();
+		seconds = (float)(end - start) / CLOCKS_PER_SEC;
+		// if it is not paused (==1)
+		//  	or recording (== 6)
+		// then remove the contour after time t
+		if( (seconds >= TIME_REMOVE) && pressed && (last_state != 1) && (last_state != 6)){
+			state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240.png");
+			pressed = false;
+		}
+
+		// check pressed button
+ 		int size = (int) round(BITMAP_SIZE_X / NUM_BUTTONS);
 		bool get_mouse = al_get_next_event(state->event_queue, &state->event);
 		if (get_mouse) {
 			HandleEvent:
 			// mouse pressed
 			if(state->event.type == ALLEGRO_EVENT_MOUSE_BUTTON_DOWN){
-				//caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString,
-				//		"Mouse position: (%d, %d)\n", state->event.mouse.x, state->event.mouse.y);
-				// buttons area
 				if(state->event.mouse.y > (BITMAP_SIZE_Y - BUTTONS_SIZE)){
 					// determines which button has been pressed
-					//caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString,
-					//	"Button pressed position: (%d, %d)\n", state->event.mouse.x, state->event.mouse.y);
 					int button_number = (int) ((int) state->event.mouse.x / (int) size);
+					last_state = button_number;
 					switch(button_number){
 						case 0:
+							start = clock();
+							pressed = true;
 							caerLog(CAER_LOG_INFO, "InfoThread", "Play!");
-	#ifdef ENABLE_FILE_INPUT
+#ifdef ENABLE_FILE_INPUT
 							if(state->fileInputConfigNode != NULL){
 								sshsNodePutBool(state->fileInputConfigNode, "pause", false);
 							}
-	#else
+							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_play.png");
+#else
 							caerLog(CAER_LOG_WARNING, "InfoThread",
 									"Not in file input mode! Impossible to Play the stream.");
-	#endif
+#endif
 							break;
 						case 1:
-							caerLog(CAER_LOG_INFO, "InfoThread", "Rewind");
-							break;
-						case 2:
-							caerLog(CAER_LOG_INFO, "InfoThread", "Forward");
-							break;
-						case 3:
-							caerLog(CAER_LOG_INFO, "InfoThread", "Pause");
-	#ifdef ENABLE_FILE_INPUT
+							start = clock();
+							pressed = true;
+#ifdef ENABLE_FILE_INPUT
 							if(state->fileInputConfigNode != NULL){
 								sshsNodePutBool(state->fileInputConfigNode, "pause", true);
 							}
-							//al_wait_for_event(state->event_queue, &state->event); // play or else
-							//goto HandleEvent;
-	#else
+							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_pause.png");
+#else
 							caerLog(CAER_LOG_WARNING, "InfoThread",
-									"Not in file input mode! Impossible to Pause the stream.");
-	#endif
+								"Not in file input mode! Impossible to Pause the stream.");
+#endif
+							break;
+						case 2:
+							start = clock();
+							pressed = true;
+							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_rewind.png");
+							caerLog(CAER_LOG_INFO, "InfoThread", "Rewind");
+							break;
+						case 3:
+							start = clock();
+							pressed = true;
+#ifdef ENABLE_FILE_INPUT
+							if(state->fileInputConfigNode != NULL){
+								int current_packet_int = sshsNodeGetInt(state->fileInputConfigNode, "PacketContainerInterval");
+								current_packet_int -= (int)((current_packet_int/100)*CHANGE_FACTOR);
+								sshsNodePutInt(state->fileInputConfigNode, "PacketContainerInterval", current_packet_int);
+							}
+							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_slow_motion.png");
+#else
+							caerLog(CAER_LOG_WARNING, "InfoThread",
+								"Not in file input mode! Impossible to Slow Motion the stream.");
+#endif
 							break;
 						case 4:
-							caerLog(CAER_LOG_INFO, "InfoThread", "Rewind from start");
+							start = clock();
+							pressed = true;
+#ifdef ENABLE_FILE_INPUT
+							if(state->fileInputConfigNode != NULL){
+								int current_packet_int = sshsNodeGetInt(state->fileInputConfigNode, "PacketContainerInterval");
+								current_packet_int += (int)((current_packet_int/100)*CHANGE_FACTOR);
+								sshsNodePutInt(state->fileInputConfigNode, "PacketContainerInterval", current_packet_int);
+							}
+							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_forward.png");
+#else
+							caerLog(CAER_LOG_WARNING, "InfoThread",
+								"Not in file input mode! Impossible to Fast Forward the stream.");
+#endif
+							caerLog(CAER_LOG_INFO, "InfoThread", "Forward");
 							break;
 						case 5:
-							caerLog(CAER_LOG_INFO, "InfoThread", "Start Recording");
+							start = clock();
+							pressed = true;
+							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_rewind_start.png");
+							caerLog(CAER_LOG_INFO, "InfoThread", "Rewind from start");
 							break;
 						case 6:
+							start = clock();
+							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_rec.png");
+							caerLog(CAER_LOG_INFO, "InfoThread", "Start Recording");
+							break;
+						case 7:
+							start = clock();
+							pressed = true;
+							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_stop.png");
 							caerLog(CAER_LOG_INFO, "InfoThread", "Stop Recording");
 							break;
 					}
@@ -226,7 +291,7 @@ int eventCheckerThread(void *stateInfo) {
 		al_draw_bitmap(state->bitmap, 0, 0, 0);
 
 		/* timer */
-		al_draw_text(state->font, al_map_rgb(0,0,0), BITMAP_SIZE_X/2, (BITMAP_SIZE_Y/4),ALLEGRO_ALIGN_CENTRE, state->txt_string);
+		al_draw_text(state->font, al_map_rgb(0,0,0), BITMAP_SIZE_X/2, (BITMAP_SIZE_Y-(size*2)),ALLEGRO_ALIGN_CENTRE, state->txt_string);
 
 		al_flip_display();
 		al_clear_to_color(al_map_rgb(0,0,0));
@@ -257,12 +322,17 @@ static void caerInfoFilterRun(caerModuleData moduleData, size_t argsNumber, va_l
 
 	INFilterState state = moduleData->moduleState;
 
+	if(state->fileInputConfigNode == NULL){
+		atomic_store(&state->fileInputID, fileInputID);
+		if(atomic_load(&state->fileInputID) != NULL){
+			state->fileInputConfigNode = caerMainloopGetSourceNode(U16T(atomic_load(&state->fileInputID)));
+		}
+	}
+
 	if(container == NULL){
 		//nothing to do
 		return;
 	}
-
-	atomic_store(&state->fileInputID, fileInputID);
 
 	int ts = caerEventPacketContainerGetHighestEventTimestamp(container);
 	caerEventPacketHeaderGetEventSource(container);
@@ -278,10 +348,6 @@ static void caerInfoFilterRun(caerModuleData moduleData, size_t argsNumber, va_l
 	atomic_store(&state->seconds, ( ((int)current % (int)60e6) / 1e6));
 	atomic_store(&state->hours, ( ((int)current % (int)60e6) / 1e6) / 1e6);
 
-	if(atomic_load(&state->fileInputID) != NULL){
-		state->fileInputConfigNode = caerMainloopGetSourceNode(U16T(atomic_load(&state->fileInputID)));
-	}
-
 }
 
 static void caerInfoFilterExit(caerModuleData moduleData) {
@@ -291,6 +357,10 @@ static void caerInfoFilterExit(caerModuleData moduleData) {
 
 	// free display stuff is done in the thread exit
 	atomic_store(&state->running, false);
+
+	// wait for thread to finish
+	pthread_join(state->eventChecker, NULL);
+
 	// string free
 	free(state->txt_string);
 }
