@@ -26,7 +26,7 @@
 #include <stdatomic.h>
 
 #define TXTLEN 2048
-#define BITMAP_SIZE_X 320
+#define BITMAP_SIZE_X 320	// skin parameters, they depend on bitmap.. see skin/*.png
 #define BITMAP_SIZE_Y 240
 #define BUTTONS_SIZE 40
 #define NUM_BUTTONS 8
