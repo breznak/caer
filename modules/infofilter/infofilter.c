@@ -218,7 +218,7 @@ int eventCheckerThread(void *stateInfo) {
 							}
 							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_play.png");
 #else
-							caerLog(CAER_LOG_WARNING, "InfoThread",
+							caerLog(CAER_LOG_ERROR, "InfoThread",
 									"Not in file input mode! Impossible to Play the stream.");
 #endif
 							break;
@@ -231,7 +231,7 @@ int eventCheckerThread(void *stateInfo) {
 							}
 							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_pause.png");
 #else
-							caerLog(CAER_LOG_WARNING, "InfoThread",
+							caerLog(CAER_LOG_ERROR, "InfoThread",
 								"Not in file input mode! Impossible to Pause the stream.");
 #endif
 							break;
@@ -252,7 +252,7 @@ int eventCheckerThread(void *stateInfo) {
 							}
 							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_slow_motion.png");
 #else
-							caerLog(CAER_LOG_WARNING, "InfoThread",
+							caerLog(CAER_LOG_ERROR, "InfoThread",
 								"Not in file input mode! Impossible to Slow Motion the stream.");
 #endif
 							break;
@@ -267,7 +267,7 @@ int eventCheckerThread(void *stateInfo) {
 							}
 							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_forward.png");
 #else
-							caerLog(CAER_LOG_WARNING, "InfoThread",
+							caerLog(CAER_LOG_ERROR, "InfoThread",
 								"Not in file input mode! Impossible to Fast Forward the stream.");
 #endif
 							caerLog(CAER_LOG_INFO, "InfoThread", "Forward");
@@ -282,7 +282,7 @@ int eventCheckerThread(void *stateInfo) {
 							}
 							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_rewind_start.png");
 #else
-							caerLog(CAER_LOG_WARNING, "InfoThread",
+							caerLog(CAER_LOG_ERROR, "InfoThread",
 								"Not in file input mode! Impossible to Rewind from start.");
 #endif
 							caerLog(CAER_LOG_INFO, "InfoThread", "Rewind from start");
@@ -297,7 +297,7 @@ int eventCheckerThread(void *stateInfo) {
 							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_rec.png");
 							caerLog(CAER_LOG_INFO, "InfoThread", "Start Recording");
 #else
-							caerLog(CAER_LOG_WARNING, "InfoThread",
+							caerLog(CAER_LOG_ERROR, "InfoThread",
 									"Not in file input mode! Impossible to Record the stream, please enable FILE_OUTPUT module.");
 #endif
 							break;
@@ -311,7 +311,7 @@ int eventCheckerThread(void *stateInfo) {
 							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_stop.png");
 							caerLog(CAER_LOG_INFO, "InfoThread", "Start Recording");
 #else
-							caerLog(CAER_LOG_WARNING, "InfoThread",
+							caerLog(CAER_LOG_ERROR, "InfoThread",
 									"Not in file input mode! Impossible to Stop the recording, please enable FILE_OUTPUT module.");
 #endif
 							caerLog(CAER_LOG_INFO, "InfoThread", "Stop Recording");
