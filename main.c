@@ -149,7 +149,13 @@ static bool mainloop_1(void) {
 #endif
 
 #ifdef ENABLE_INFOFILTER
-	caerInfoFilter(78, container, 10, 7); // id container file_input_id file_output_id
+#if defined(ENABLE_FILE_INPUT) && defined(ENABLE_FILE_OUTPUT)
+	caerInfoFilter(78, container, 10, 7);
+#elif defined(ENABLE_FILE_INPUT) && !defined(ENABLE_FILE_OUTPUT)
+	caerInfoFilter(78, container, 10, NULL);
+#elif !defined(ENABLE_FILE_INPUT) && defined(ENABLE_FILE_OUTPUT)
+	caerInfoFilter(78, container, NULL, 7);
+#endif
 #endif
 
 	// Filters process event packets: for example to suppress certain events,
@@ -285,6 +291,7 @@ static bool mainloop_1(void) {
 }
 
 int main(int argc, char **argv) {
+
 	// Set thread name.
 	thrd_set_name("Main");
 
