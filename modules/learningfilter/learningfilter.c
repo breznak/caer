@@ -90,6 +90,7 @@ static void GetRand1DBinaryArray(int64_t *binaryArray, int64_t Range, int64_t Ca
 static bool ResetBiases(caerModuleData moduleData, int16_t eventSourceID);
 static bool EnableStimuliGen(caerModuleData moduleData, int16_t eventSourceID, int32_t pattern);
 static bool DisableStimuliGen(caerModuleData moduleData, int16_t eventSourceID);
+static bool SetInputLayerCam(caerModuleData moduleData, int16_t eventSourceID);
 static bool ClearAllCam(caerModuleData moduleData, int16_t eventSourceID);
 static void setBiasBits(caerModuleData moduleData, int16_t eventSourceID, uint32_t chipId, uint32_t coreId, const char *biasName_t,
 		uint8_t coarseValue, uint16_t fineValue, const char *lowHigh, const char *npBias);
@@ -379,7 +380,7 @@ static void caerLearningFilterRun(caerModuleData moduleData, size_t argsNumber, 
 			stimulating = 1;
 		} */
 		if (abs(time_count - time_count_last) >= 1) {
-			stimuliPattern = (stimuliPattern + 1) % 3 + 4;
+			stimuliPattern = (stimuliPattern + 1) % 3 + 7; //4 for one2one source address; 7 for single source address
 			EnableStimuliGen(moduleData, eventSourceID, stimuliPattern); //4 //stimuliPattern
 			time_count_last = time_count;
 		}
@@ -814,6 +815,7 @@ bool ResetNetwork(caerModuleData moduleData, int16_t eventSourceID)
 	SetTimer();
 
 	ClearAllCam(moduleData, eventSourceID); //only for 1st chip
+	SetInputLayerCam(moduleData, eventSourceID);
 
 	LFilterState state = moduleData->moduleState;
 	int8_t exType = state->resetExType; //initial synapse type fast or slow
@@ -893,16 +895,16 @@ bool ResetNetwork(caerModuleData moduleData, int16_t eventSourceID)
 		output_layer2[neuronId] = chipId << NEURON_CHIPID_SHIFT | coreId << NEURON_COREID_SHIFT | neuronId;
 	}
 
-	//stimuli to input
 	int preNeuronId;
 	int postNeuronId;
 	int randNumCount;
-	for (preNeuronId = 0; preNeuronId < INPUT_N; preNeuronId++)
+	//stimuli to input
+/*	for (preNeuronId = 0; preNeuronId < INPUT_N; preNeuronId++)
 		for (postNeuronId = 0; postNeuronId < INPUT_N; postNeuronId++) {
 			if (preNeuronId == postNeuronId) {
 				BuildSynapse(moduleData, eventSourceID, stimuli_layer[preNeuronId], input_layer[postNeuronId], 2, EXTERNAL_REAL_SYNAPSE); //exType
 			}
-		}
+		} */
 	//input to feature1
 	for (postNeuronId = 0; postNeuronId < FEATURE1_N*FEATURE1_LAYERS_N; postNeuronId++) { //FEATURE1_N*FEATURE1_LAYERS_N //first sweep POST, then PRE
 		//generate random binary number 1D array
@@ -1282,6 +1284,21 @@ bool DisableStimuliGen(caerModuleData moduleData, int16_t eventSourceID) {
 //	sshsNodePutShort(spikeNode, "dataSizeX", DYNAPSE_X4BOARD_NEUX);
 	sshsNodePutBool(spikeNode, "running", true);
 	sshsNodePutBool(spikeNode, "doStim", false);
+	return (true);
+}
+
+bool SetInputLayerCam(caerModuleData moduleData, int16_t eventSourceID) {
+	LFilterState state = moduleData->moduleState;
+
+	// --- start  usb handle / from spike event source id
+	state->eventSourceModuleState = caerMainloopGetSourceState(U16T(eventSourceID));
+	state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(eventSourceID));
+	// --- end usb handle
+
+	sshsNode deviceConfigNodeMain = sshsGetRelativeNode(state->eventSourceConfigNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
+	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNodeMain, "spikeGen/");
+	sshsNodePutBool(spikeNode, "running", true);
+	sshsNodePutBool(spikeNode, "setCamSingle", true);
 	return (true);
 }
 
