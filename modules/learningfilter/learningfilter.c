@@ -67,8 +67,9 @@ typedef struct LFilter_memory LFilterMemory; // *LFilterMemory
 
 static LFilterMemory memory;
 static int8_t reseted = 0;
+static int8_t stimulating = 0;
 static int64_t time_count = 0;
-static int64_t time_count_last = 0;
+static int64_t time_count_last = 0; //-1; //0;
 static int32_t stimuliPattern = 0;
 static struct itimerval oldtv;
 
@@ -77,7 +78,7 @@ static void caerLearningFilterRun(caerModuleData moduleData, size_t argsNumber, 
 static void caerLearningFilterConfig(caerModuleData moduleData);
 static void caerLearningFilterExit(caerModuleData moduleData);
 static void caerLearningFilterReset(caerModuleData moduleData, uint16_t resetCallSourceID);
-static void ModifyForwardSynapse(caerModuleData moduleData, int16_t eventSourceID, int64_t preNeuronAddr, int64_t postNeuronAddr, double deltaWeight, caerFrameEventPacket *synapseplot);
+static void ModifyForwardSynapse(caerModuleData moduleData, int16_t eventSourceID, int64_t preNeuronAddr, int64_t postNeuronAddr, double deltaWeight, caerFrameEventPacket *synapseplot, int32_t stimuliPattern);
 static void ModifyBackwardSynapse(caerModuleData moduleData, int16_t eventSourceID, int64_t preNeuronAddr, int64_t postNeuronAddr, double deltaWeight, caerFrameEventPacket *synapseplot);
 static bool ResetNetwork(caerModuleData moduleData, int16_t eventSourceID);
 static bool BuildSynapse(caerModuleData moduleData, int16_t eventSourceID, uint32_t neuron_addr1, uint32_t neuron_addr2, int16_t type, int8_t real_virtual_tag);
@@ -284,12 +285,12 @@ static void caerLearningFilterRun(caerModuleData moduleData, size_t argsNumber, 
 
 	caerLearningFilterConfig(moduleData); // Update parameters
 	int64_t neuronAddr = 0;
-
+/*
 	if (state->reset == 1) {
 		if (reseted == 0) {
 			ResetNetwork(moduleData, eventSourceID);
 			printf("\nNetwork reseted \n");
-			int64_t i, j, ys, row_id, col_id, feature_id;
+			int64_t i, j, ys, row_id, col_id, feature_id; */
 /*			double warrayW[sizeX][sizeY];
 			for (i = 0; i < sizeX; i++)
 				for (j = 0; j < sizeY; j++)
@@ -324,7 +325,7 @@ static void caerLearningFilterRun(caerModuleData moduleData, size_t argsNumber, 
 				caerFrameEventSetLengthXLengthYChannelNumber(singleplotW, sizeX, sizeY, 3, *weightplot); //add info to the frame
 				caerFrameEventValidate(singleplotW, *weightplot); //validate frame
 			} */
-			int warrayS[sizeX][sizeY];
+/*			int warrayS[sizeX][sizeY];
 			for (i = 0; i < sizeX; i++)
 				for (j = 0; j < sizeY; j++)
 					warrayS[i][j] = 0;
@@ -363,6 +364,28 @@ static void caerLearningFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		}
 	} else {
 		reseted = 0;
+	} */
+
+	if (state->stimulate == true) { //run when there is a spike
+/*		if (stimulating == 1 && abs(time_count - time_count_last) >= 5) {
+			DisableStimuliGen(moduleData, eventSourceID); //EnableStimuliGen(moduleData, eventSourceID, 1); //DisableStimuliGen(moduleData, eventSourceID);
+			time_count_last = time_count;
+			stimulating = 0;
+		}
+		else if (stimulating == 0 && abs(time_count - time_count_last) >= 1) {
+			stimuliPattern = (stimuliPattern + 1) % 3 + 4;
+			EnableStimuliGen(moduleData, eventSourceID, stimuliPattern); //4 //stimuliPattern
+			time_count_last = time_count;
+			stimulating = 1;
+		} */
+		if (abs(time_count - time_count_last) >= 1) {
+			stimuliPattern = (stimuliPattern + 1) % 3 + 4;
+			EnableStimuliGen(moduleData, eventSourceID, stimuliPattern); //4 //stimuliPattern
+			time_count_last = time_count;
+		}
+	}
+	else {
+		DisableStimuliGen(moduleData, eventSourceID);
 	}
 
 	CAER_SPIKE_ITERATOR_VALID_START(spike) // Iterate over events and update weight
@@ -413,49 +436,8 @@ static void caerLearningFilterRun(caerModuleData moduleData, size_t argsNumber, 
 
 				if (deltaTime < MAXIMUM_CONSIDERED_SPIKE_DELAY) {
 					double deltaWeight = deltaWeights[DELTA_WEIGHT_LUT_LENGTH-deltaTime];
-/*					if (*weightplot != NULL) {
-						caerFrameEvent singleplotW = caerFrameEventPacketGetEvent(*weightplot, 0);
-						if (memory.connectionMap->buffer2d[preSpikeAddr-MEMORY_NEURON_ADDR_OFFSET][postSpikeAddr-MEMORY_NEURON_ADDR_OFFSET] == 1) {
-							double new_weight = memory.weightMap->buffer2d[preSpikeAddr-MEMORY_NEURON_ADDR_OFFSET][postSpikeAddr-MEMORY_NEURON_ADDR_OFFSET] + deltaWeight * state->learningRate;
-							colW  = GetColourW(new_weight, (double) VMIN, (double) VMAX);
-							i = preSpikeAddr-MEMORY_NEURON_ADDR_OFFSET;
-							j = (postSpikeAddr-MEMORY_NEURON_ADDR_OFFSET)%TOTAL_NEURON_NUM_ON_CHIP;
-							feature_id = (int)(j/FEATURE1_N);
-							row_id_t = FILTER1_L * (int)((j%FEATURE1_N)/FEATURE1_W) + (int)(i/INPUT_W) - (int)((j%FEATURE1_N)/FEATURE1_W);
-							row_id = (feature_id >> 1)*FILTER1_L*FEATURE1_L + row_id_t;
-							col_id_t = FILTER1_W * ((j%FEATURE1_N)%FEATURE1_W) + i % INPUT_W - (j%FEATURE1_N)%FEATURE1_W;
-							col_id = (feature_id & 0x1)*FILTER1_W*FEATURE1_W + col_id_t;
-							counterW = (uint32_t) ((row_id * VISUALIZER_WIDTH) + col_id) * 3;
-							singleplotW->pixels[counterW] = colW.r;
-							singleplotW->pixels[counterW + 1] = colW.g;
-							singleplotW->pixels[counterW + 2] = colW.b;
-						}
-						int64_t preSpikeAddr_t = preSpikeAddr;
-						int64_t postSpikeAddr_t = postSpikeAddr;
-						preSpikeAddr = postSpikeAddr_t;
-						postSpikeAddr = preSpikeAddr_t;
-						if (memory.connectionMap->buffer2d[preSpikeAddr-MEMORY_NEURON_ADDR_OFFSET][postSpikeAddr-MEMORY_NEURON_ADDR_OFFSET] == 1) {
-							double new_weight = memory.weightMap->buffer2d[preSpikeAddr-MEMORY_NEURON_ADDR_OFFSET][postSpikeAddr-MEMORY_NEURON_ADDR_OFFSET] - deltaWeight * state->learningRate;
-							colW  = GetColourW(new_weight, (double) VMIN, (double) VMAX);
-							i = preSpikeAddr-MEMORY_NEURON_ADDR_OFFSET;
-							j = (postSpikeAddr-MEMORY_NEURON_ADDR_OFFSET)%TOTAL_NEURON_NUM_ON_CHIP;
-							feature_id = (int)(j/FEATURE1_N);
-							row_id_t = FILTER1_L * (int)((j%FEATURE1_N)/FEATURE1_W) + (int)(i/INPUT_W) - (int)((j%FEATURE1_N)/FEATURE1_W);
-							row_id = (feature_id >> 1)*FILTER1_L*FEATURE1_L + row_id_t;
-							col_id_t = FILTER1_W * ((j%FEATURE1_N)%FEATURE1_W) + i % INPUT_W - (j%FEATURE1_N)%FEATURE1_W;
-							col_id = (feature_id & 0x1)*FILTER1_W*FEATURE1_W + col_id_t;
-							counterW = (uint32_t) ((row_id * VISUALIZER_WIDTH) + col_id) * 3;
-							singleplotW->pixels[counterW] = colW.r;
-							singleplotW->pixels[counterW + 1] = colW.g;
-							singleplotW->pixels[counterW + 2] = colW.b;
-						}
-					} */
-//					caerFrameEvent singleplotS;
-//					if (*synapseplot != NULL) {
-//						singleplotS = caerFrameEventPacketGetEvent(*synapseplot, 0);
-//					}
 					if (memory.connectionMap->buffer2d[preSpikeAddr-MEMORY_NEURON_ADDR_OFFSET][postSpikeAddr-MEMORY_NEURON_ADDR_OFFSET] == 1) {
-						ModifyForwardSynapse(moduleData, eventSourceID, preSpikeAddr, postSpikeAddr, deltaWeight, synapseplot);
+						ModifyForwardSynapse(moduleData, eventSourceID, preSpikeAddr, postSpikeAddr, deltaWeight, synapseplot, stimuliPattern);
 					}
 					if (memory.connectionMap->buffer2d[preSpikeAddr-MEMORY_NEURON_ADDR_OFFSET][postSpikeAddr-MEMORY_NEURON_ADDR_OFFSET] == 1) {
 						ModifyBackwardSynapse(moduleData, eventSourceID, preSpikeAddr, postSpikeAddr, deltaWeight, synapseplot);
@@ -472,23 +454,9 @@ static void caerLearningFilterRun(caerModuleData moduleData, size_t argsNumber, 
 
 	CAER_SPIKE_ITERATOR_VALID_END
 
-	if (state->stimulate == true) {
-		if (time_count > time_count_last + 5) {
-			DisableStimuliGen(moduleData, eventSourceID);
-			time_count_last = time_count;
-		}
-
-		if (time_count > time_count_last + 1) {
-			stimuliPattern = (stimuliPattern + 1) % 3 + 4;
-			EnableStimuliGen(moduleData, eventSourceID, stimuliPattern); //4 //stimuliPattern
-			time_count_last = time_count;
-		}
-	} else {
-		DisableStimuliGen(moduleData, eventSourceID);
-	}
 }
 
-void ModifyForwardSynapse(caerModuleData moduleData, int16_t eventSourceID, int64_t preSpikeAddr, int64_t postSpikeAddr, double deltaWeight, caerFrameEventPacket *synapseplot) {
+void ModifyForwardSynapse(caerModuleData moduleData, int16_t eventSourceID, int64_t preSpikeAddr, int64_t postSpikeAddr, double deltaWeight, caerFrameEventPacket *synapseplot, int32_t stimuliPattern) {
 
 	LFilterState state = moduleData->moduleState;
 
@@ -640,7 +608,9 @@ void ModifyForwardSynapse(caerModuleData moduleData, int16_t eventSourceID, int6
 				if (slowFound == 1) {
 					synapseUpgrade = 1;
 					synapseType = EXCITATORY_FAST_SYNAPSE_ID;
+					DisableStimuliGen(moduleData, eventSourceID);
 					WriteCam(moduleData, eventSourceID, (uint32_t) preNeuronAddr, (uint32_t) postNeuronAddr, camId, synapseType);
+					EnableStimuliGen(moduleData, eventSourceID, stimuliPattern);
 					new_synapse_add = current_synapse + (EXCITATORY_FAST_SYNAPSE_ID - EXCITATORY_SLOW_SYNAPSE_ID);
 					memory.synapseMap->buffer2d[preNeuronAddr-MEMORY_NEURON_ADDR_OFFSET][postNeuronAddr-MEMORY_NEURON_ADDR_OFFSET] = new_synapse_add;
 					memory.CamMapContentType->buffer2d[postNeuronAddr-MEMORY_NEURON_ADDR_OFFSET][camId] = EXCITATORY_FAST_SYNAPSE_ID;
@@ -651,7 +621,9 @@ void ModifyForwardSynapse(caerModuleData moduleData, int16_t eventSourceID, int6
 					synapseUpgrade = 1;
 					synapseType = EXCITATORY_SLOW_SYNAPSE_ID;
 //					camId = (uint32_t) memory.connectionCamMap->buffer2d[min-MEMORY_NEURON_ADDR_OFFSET][postNeuronAddr-MEMORY_NEURON_ADDR_OFFSET]; //replace the CAM of MIN by the strengthened one
+					DisableStimuliGen(moduleData, eventSourceID);
 					WriteCam(moduleData, eventSourceID, (uint32_t) preNeuronAddr, (uint32_t) postNeuronAddr, camId, synapseType);
+					EnableStimuliGen(moduleData, eventSourceID, stimuliPattern);
 					new_synapse_add = current_synapse + EXCITATORY_SLOW_SYNAPSE_ID;
 					new_synapse_sub = memory.synapseMap->buffer2d[min-MEMORY_NEURON_ADDR_OFFSET][postNeuronAddr-MEMORY_NEURON_ADDR_OFFSET] - replaced_synapse;
 					memory.synapseMap->buffer2d[preNeuronAddr-MEMORY_NEURON_ADDR_OFFSET][postNeuronAddr-MEMORY_NEURON_ADDR_OFFSET] = new_synapse_add;
@@ -711,6 +683,43 @@ void ModifyForwardSynapse(caerModuleData moduleData, int16_t eventSourceID, int6
 			}
 		}
 	}
+	/*					if (*weightplot != NULL) {
+							caerFrameEvent singleplotW = caerFrameEventPacketGetEvent(*weightplot, 0);
+							if (memory.connectionMap->buffer2d[preSpikeAddr-MEMORY_NEURON_ADDR_OFFSET][postSpikeAddr-MEMORY_NEURON_ADDR_OFFSET] == 1) {
+								double new_weight = memory.weightMap->buffer2d[preSpikeAddr-MEMORY_NEURON_ADDR_OFFSET][postSpikeAddr-MEMORY_NEURON_ADDR_OFFSET] + deltaWeight * state->learningRate;
+								colW  = GetColourW(new_weight, (double) VMIN, (double) VMAX);
+								i = preSpikeAddr-MEMORY_NEURON_ADDR_OFFSET;
+								j = (postSpikeAddr-MEMORY_NEURON_ADDR_OFFSET)%TOTAL_NEURON_NUM_ON_CHIP;
+								feature_id = (int)(j/FEATURE1_N);
+								row_id_t = FILTER1_L * (int)((j%FEATURE1_N)/FEATURE1_W) + (int)(i/INPUT_W) - (int)((j%FEATURE1_N)/FEATURE1_W);
+								row_id = (feature_id >> 1)*FILTER1_L*FEATURE1_L + row_id_t;
+								col_id_t = FILTER1_W * ((j%FEATURE1_N)%FEATURE1_W) + i % INPUT_W - (j%FEATURE1_N)%FEATURE1_W;
+								col_id = (feature_id & 0x1)*FILTER1_W*FEATURE1_W + col_id_t;
+								counterW = (uint32_t) ((row_id * VISUALIZER_WIDTH) + col_id) * 3;
+								singleplotW->pixels[counterW] = colW.r;
+								singleplotW->pixels[counterW + 1] = colW.g;
+								singleplotW->pixels[counterW + 2] = colW.b;
+							}
+							int64_t preSpikeAddr_t = preSpikeAddr;
+							int64_t postSpikeAddr_t = postSpikeAddr;
+							preSpikeAddr = postSpikeAddr_t;
+							postSpikeAddr = preSpikeAddr_t;
+							if (memory.connectionMap->buffer2d[preSpikeAddr-MEMORY_NEURON_ADDR_OFFSET][postSpikeAddr-MEMORY_NEURON_ADDR_OFFSET] == 1) {
+								double new_weight = memory.weightMap->buffer2d[preSpikeAddr-MEMORY_NEURON_ADDR_OFFSET][postSpikeAddr-MEMORY_NEURON_ADDR_OFFSET] - deltaWeight * state->learningRate;
+								colW  = GetColourW(new_weight, (double) VMIN, (double) VMAX);
+								i = preSpikeAddr-MEMORY_NEURON_ADDR_OFFSET;
+								j = (postSpikeAddr-MEMORY_NEURON_ADDR_OFFSET)%TOTAL_NEURON_NUM_ON_CHIP;
+								feature_id = (int)(j/FEATURE1_N);
+								row_id_t = FILTER1_L * (int)((j%FEATURE1_N)/FEATURE1_W) + (int)(i/INPUT_W) - (int)((j%FEATURE1_N)/FEATURE1_W);
+								row_id = (feature_id >> 1)*FILTER1_L*FEATURE1_L + row_id_t;
+								col_id_t = FILTER1_W * ((j%FEATURE1_N)%FEATURE1_W) + i % INPUT_W - (j%FEATURE1_N)%FEATURE1_W;
+								col_id = (feature_id & 0x1)*FILTER1_W*FEATURE1_W + col_id_t;
+								counterW = (uint32_t) ((row_id * VISUALIZER_WIDTH) + col_id) * 3;
+								singleplotW->pixels[counterW] = colW.r;
+								singleplotW->pixels[counterW + 1] = colW.g;
+								singleplotW->pixels[counterW + 2] = colW.b;
+							}
+						} */
 }
 
 void ModifyBackwardSynapse(caerModuleData moduleData, int16_t eventSourceID, int64_t preSpikeAddr, int64_t postSpikeAddr, double deltaWeight, caerFrameEventPacket *synapseplot) {
@@ -1023,6 +1032,7 @@ bool ResetNetwork(caerModuleData moduleData, int16_t eventSourceID)
 
 //	ResetBiases(moduleData, eventSourceID);
 //	EnableStimuliGen(moduleData, eventSourceID, 4);
+//	stimulating = 1;
 
 	return (true);
 }
@@ -1117,7 +1127,8 @@ bool WriteCam(caerModuleData moduleData, int16_t eventSourceID, uint32_t preNeur
 		chipId = DYNAPSE_CONFIG_DYNAPSE_U2;
 	else if (chipId_t == 4)
 		chipId = DYNAPSE_CONFIG_DYNAPSE_U3;
-	uint32_t ei, fs;
+	uint32_t ei = 0;
+	uint32_t fs = 0;
     uint32_t address = preNeuronAddr & NEURON_ADDRESS_BITS;
     uint32_t source_core = (preNeuronAddr & NEURON_COREID_BITS) >> NEURON_COREID_SHIFT;
     if (synapseType > 0) //if it is EX synapse
@@ -1227,10 +1238,10 @@ bool ClearAllCam(caerModuleData moduleData, int16_t eventSourceID) {
 	uint32_t neuronId, camId;
 	for (neuronId = 0; neuronId < 32 * 32; neuronId++) {
 		for (camId = 0; camId < 64; camId++) {
+			WriteCam(moduleData, eventSourceID, 0, 0 << 10 | neuronId, camId, 0); //1 2 3 4
 			WriteCam(moduleData, eventSourceID, 0, 1 << 10 | neuronId, camId, 0);
 			WriteCam(moduleData, eventSourceID, 0, 2 << 10 | neuronId, camId, 0);
 			WriteCam(moduleData, eventSourceID, 0, 3 << 10 | neuronId, camId, 0);
-			WriteCam(moduleData, eventSourceID, 0, 4 << 10 | neuronId, camId, 0);
 		}
 	}
 	return (true);
@@ -1527,6 +1538,32 @@ bool ResetBiases(caerModuleData moduleData, int16_t eventSourceID) {
 					setBiasBits(moduleData, eventSourceID, chipId, coreId, "PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "NBias");
 					setBiasBits(moduleData, eventSourceID, chipId, coreId, "PULSE_PWLK_P", 3, 50, "HighBias", "PBias");
 					setBiasBits(moduleData, eventSourceID, chipId, coreId, "R2R_P", 4, 85, "HighBias", "PBias");
+				} else if (coreId == 3) {
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias", "NBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_AHTHR_N", 7, 0, "HighBias", "NBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_AHW_P", 7, 0, "HighBias", "PBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_BUF_P", 3, 80, "HighBias", "PBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_CASC_N", 7, 0, "HighBias", "NBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_DC_P", 7, 0, "HighBias", "PBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_NMDA_N", 7, 0, "HighBias", "NBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_RFR_N", 5, 255, "HighBias", "NBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_TAU1_N", 4, 200, "LowBias", "NBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_TAU2_N", 6, 15, "HighBias", "NBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_THR_N", 3, 40, "HighBias", "NBias"); //2, 40
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "NPDPIE_TAU_F_P", 6, 105, "HighBias", "PBias"); //105
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "NPDPIE_TAU_S_P", 7, 40, "HighBias", "NBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "NPDPIE_THR_F_P", 0, 220, "HighBias", "PBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "NPDPIE_THR_S_P", 7, 0, "HighBias", "PBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "NPDPII_TAU_F_P", 7, 40, "HighBias", "NBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "NPDPII_TAU_S_P", 7, 40, "HighBias", "NBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "NPDPII_THR_F_P", 7, 40, "HighBias", "PBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "NPDPII_THR_S_P", 7, 40, "HighBias", "PBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 76, "HighBias", "NBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "NBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "NBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "NBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "PULSE_PWLK_P", 3, 50, "HighBias", "PBias");
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "R2R_P", 4, 85, "HighBias", "PBias");
 				} else {
 					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias", "NBias");
 					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_AHTHR_N", 7, 0, "HighBias", "NBias");
@@ -1593,7 +1630,7 @@ bool ResetBiases(caerModuleData moduleData, int16_t eventSourceID) {
 					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_RFR_N", 5, 255, "HighBias", "NBias");
 					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_TAU1_N", 4, 200, "LowBias", "NBias");
 					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_TAU2_N", 6, 15, "HighBias", "NBias");
-					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_THR_N", 3, 40, "HighBias", "NBias"); //3, 150 //4, 40
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_THR_N", 2, 40, "HighBias", "NBias"); //3, 150 //4, 40
 					setBiasBits(moduleData, eventSourceID, chipId, coreId, "NPDPIE_TAU_F_P", 6, 200, "HighBias", "PBias"); //105
 					setBiasBits(moduleData, eventSourceID, chipId, coreId, "NPDPIE_TAU_S_P", 6, 200, "HighBias", "PBias");
 					setBiasBits(moduleData, eventSourceID, chipId, coreId, "NPDPIE_THR_F_P", 0, 220, "HighBias", "PBias");
@@ -1619,7 +1656,7 @@ bool ResetBiases(caerModuleData moduleData, int16_t eventSourceID) {
 					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_RFR_N", 5, 255, "HighBias", "NBias");
 					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_TAU1_N", 4, 200, "LowBias", "NBias");
 					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_TAU2_N", 6, 15, "HighBias", "NBias");
-					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_THR_N", 3, 40, "HighBias", "NBias"); //3, 150 //4, 40
+					setBiasBits(moduleData, eventSourceID, chipId, coreId, "IF_THR_N", 2, 40, "HighBias", "NBias"); //3, 150 //4, 40
 					setBiasBits(moduleData, eventSourceID, chipId, coreId, "NPDPIE_TAU_F_P", 6, 200, "HighBias", "PBias"); //105
 					setBiasBits(moduleData, eventSourceID, chipId, coreId, "NPDPIE_TAU_S_P", 6, 200, "HighBias", "PBias");
 					setBiasBits(moduleData, eventSourceID, chipId, coreId, "NPDPIE_THR_F_P", 0, 220, "HighBias", "PBias");

@@ -27,6 +27,7 @@ struct gen_spike_state {
 	atomic_bool setCam;
 	atomic_bool clearCam;
 	atomic_bool clearAllCam;
+	atomic_bool loadDefaultBiases;
 	atomic_bool done;
 	atomic_bool started;
 	thrd_t spikeGenThread;

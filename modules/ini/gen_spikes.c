@@ -381,7 +381,7 @@ void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCH
 		for (rowId = 0; rowId < DYNAPSE_CONFIG_XCHIPSIZE; rowId++)
 			for (colId = 0; colId < DYNAPSE_CONFIG_YCHIPSIZE; colId++) {
 				valueSent = value2DArray[rowId][colId];
-				if (valueSent != 0) {
+				if (valueSent != 0 && ((valueSent >> 18) & 0x3ff) != 0) {
 					caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP,
 							DYNAPSE_CONFIG_CHIP_CONTENT, valueSent);
 				}
@@ -461,7 +461,7 @@ void WriteCam(void *spikeGenState, uint32_t preNeuronAddr,
 	uint32_t synapse_row = camId;
 	uint32_t row = neuron_row << 6 | synapse_row;
 	uint32_t column = postNeuronAddr & 0xf;
-	ei << 29 | fs << 28 | address << 20 | source_core << 18 | 1 << 17
+	bits = ei << 29 | fs << 28 | address << 20 | source_core << 18 | 1 << 17
 			| coreId << 15 | row << 5 | column;
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP,
 			DYNAPSE_CONFIG_CHIP_CONTENT, bits);

@@ -422,8 +422,8 @@ static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_att
 		sshsNode grandparent = sshsNodeGetParent(parent);
 		const char *nodeGrandParent = sshsNodeGetName(grandparent);
 		uint32_t value = generateCoarseFineBiasParent(node, nodeName);
-		printf("\nnodename %s parent %s nodeGrandParent %s\n", nodeName,
-				nodeParent, nodeGrandParent);
+//		printf("\nnodename %s parent %s nodeGrandParent %s\n", nodeName,
+//				nodeParent, nodeGrandParent);
 
 		if (caerStrEquals(nodeGrandParent, "DYNAPSE_CONFIG_DYNAPSE_U0")) {
 			int retval = caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
@@ -463,7 +463,7 @@ static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_att
 		}
 
 		// finally send configuration via USB
-		printf("%s\n", int2bin(value));
+//		printf("%s\n", int2bin(value));
 		int retval = caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
 		DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, value);
 		if (retval == false) {
