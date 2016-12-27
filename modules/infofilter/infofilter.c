@@ -110,8 +110,13 @@ static bool caerInfoFilterInit(caerModuleData moduleData) {
 
 	al_set_new_display_refresh_rate(60.0);
 
-	//state->bitmap = al_create_bitmap(BITMAP_SIZE_X, BITMAP_SIZE_Y);
+#if defined(ENABLE_FILE_INPUT) && defined(ENABLE_FILE_OUTPUT)
 	state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240.png");
+#elif defined(ENABLE_FILE_INPUT) && !defined(ENABLE_FILE_OUTPUT)
+	state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_input.png");
+#elif !defined(ENABLE_FILE_INPUT) && defined(ENABLE_FILE_OUTPUT)
+	state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_live.png");
+#endif
 	if(!state->bitmap) {
 	      fprintf(stderr, "failed to create bitmap!\n");
 	  	  al_destroy_bitmap(state->bitmap);
@@ -163,7 +168,7 @@ int eventCheckerThread(void *stateInfo) {
 	start = clock();
 
 	//check startup status
-#ifdef ENABLE_FILE_INPUT
+#if defined(ENABLE_FILE_INPUT)
 	bool paused = false;
 	if(state->fileInputConfigNode != NULL){
 		paused = sshsNodeGetBool(state->fileInputConfigNode, "pause");
@@ -172,13 +177,34 @@ int eventCheckerThread(void *stateInfo) {
 		state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_pause.png");
 	}
 #endif
-#ifdef ENABLE_FILE_OUTPUT
+#if defined(ENABLE_FILE_OUTPUT)
 	bool recording = false;
 	if(state->fileOutputConfigNode != NULL){
 		recording = sshsNodeGetBool(state->fileOutputConfigNode, "running");
 	}
 	if(recording){
 		state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_rec.png");
+	}
+#endif
+#if !defined(ENABLE_FILE_OUTPUT) && defined(ENABLE_FILE_INPUT)
+	paused = false;
+	if(state->fileInputConfigNode != NULL){
+		paused = sshsNodeGetBool(state->fileInputConfigNode, "pause");
+	}
+	if(paused){
+		state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_input_pause.png");
+	}else{
+		state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_input.png");
+	}
+#elif defined(ENABLE_FILE_OUTPUT) && !defined(ENABLE_FILE_INPUT)
+	recording = false;
+	if(state->fileOutputConfigNode != NULL){
+		recording = sshsNodeGetBool(state->fileOutputConfigNode, "running");
+	}
+	if(recording){
+		state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_live_rec.png");
+	}else{
+		state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_live.png");
 	}
 #endif
 	thrd_set_name("eventCheckerThread");
@@ -191,10 +217,15 @@ int eventCheckerThread(void *stateInfo) {
 		//  	or recording (== 6)
 		// then remove the contour after time t
 		if( (seconds >= TIME_REMOVE) && pressed && (last_state != 1) && (last_state != 6)){
+#if defined(ENABLE_FILE_INPUT) && defined(ENABLE_FILE_OUTPUT)
 			state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240.png");
+#elif defined(ENABLE_FILE_INPUT) && !defined(ENABLE_FILE_OUTPUT)
+			state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_input.png");
+#elif defined(ENABLE_FILE_OUTPUT) && !defined(ENABLE_FILE_INPUT)
+			state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_live.png");
+#endif
 			pressed = false;
 		}
-
 		// check pressed button
  		int size = (int) round(BITMAP_SIZE_X / NUM_BUTTONS);
 		bool get_mouse = al_get_next_event(state->event_queue, &state->event);
@@ -207,104 +238,119 @@ int eventCheckerThread(void *stateInfo) {
 					int button_number = (int) ((int) state->event.mouse.x / (int) size);
 					last_state = button_number;
 					switch(button_number){
+#if defined(ENABLE_FILE_INPUT)
 						case 0:
 							start = clock();
 							pressed = true;
 							caerLog(CAER_LOG_INFO, "InfoThread", "Play!");
-#ifdef ENABLE_FILE_INPUT
 							if(state->fileInputConfigNode != NULL){
 								sshsNodePutBool(state->fileInputConfigNode, "pause", false);
 								sshsNodePutBool(state->fileInputConfigNode, "running", true);
 							}
+#if defined(ENABLE_FILE_OUTPUT)
 							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_play.png");
 #else
-							caerLog(CAER_LOG_ERROR, "InfoThread",
-									"Not in file input mode! Impossible to Play the stream.");
+							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_input_play.png");
 #endif
 							break;
 						case 1:
 							start = clock();
 							pressed = true;
-#ifdef ENABLE_FILE_INPUT
 							if(state->fileInputConfigNode != NULL){
 								sshsNodePutBool(state->fileInputConfigNode, "pause", true);
 							}
+#if defined(ENABLE_FILE_OUTPUT)
 							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_pause.png");
 #else
-							caerLog(CAER_LOG_ERROR, "InfoThread",
-								"Not in file input mode! Impossible to Pause the stream.");
+							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_input_pause.png");
 #endif
 							break;
 						case 2:
 							start = clock();
 							pressed = true;
+#if defined(ENABLE_FILE_OUTPUT)
 							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_rewind.png");
+#else
+							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_input_rewind.png");
+#endif
 							caerLog(CAER_LOG_INFO, "InfoThread", "Rewind");
 							break;
 						case 3:
 							start = clock();
 							pressed = true;
-#ifdef ENABLE_FILE_INPUT
 							if(state->fileInputConfigNode != NULL){
 								int current_packet_int = sshsNodeGetInt(state->fileInputConfigNode, "PacketContainerInterval");
 								current_packet_int -= (int)((current_packet_int/100)*CHANGE_FACTOR);
 								sshsNodePutInt(state->fileInputConfigNode, "PacketContainerInterval", current_packet_int);
 							}
+#if defined(ENABLE_FILE_OUTPUT)
 							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_slow_motion.png");
 #else
-							caerLog(CAER_LOG_ERROR, "InfoThread",
-								"Not in file input mode! Impossible to Slow Motion the stream.");
+							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_input_slow_motion.png");
 #endif
 							break;
 						case 4:
 							start = clock();
 							pressed = true;
-#ifdef ENABLE_FILE_INPUT
 							if(state->fileInputConfigNode != NULL){
 								int current_packet_int = sshsNodeGetInt(state->fileInputConfigNode, "PacketContainerInterval");
 								current_packet_int += (int)((current_packet_int/100)*CHANGE_FACTOR);
 								sshsNodePutInt(state->fileInputConfigNode, "PacketContainerInterval", current_packet_int);
 							}
+#if defined(ENABLE_FILE_OUTPUT)
 							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_forward.png");
 #else
-							caerLog(CAER_LOG_ERROR, "InfoThread",
-								"Not in file input mode! Impossible to Fast Forward the stream.");
+							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_input_forward.png");
 #endif
 							caerLog(CAER_LOG_INFO, "InfoThread", "Forward");
 							break;
 						case 5:
 							start = clock();
 							pressed = true;
-#ifdef ENABLE_FILE_INPUT
 							if(state->fileInputConfigNode != NULL){
 								sshsNodePutBool(state->fileInputConfigNode, "running", false);
 								//sshsNodePutBool(state->fileInputConfigNode, "running", true);
 							}
+#if defined(ENABLE_FILE_OUTPUT)
 							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_rewind_start.png");
 #else
-							caerLog(CAER_LOG_ERROR, "InfoThread",
-								"Not in file input mode! Impossible to Rewind from start.");
+							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_input_rewind_start.png");
 #endif
 							caerLog(CAER_LOG_INFO, "InfoThread", "Rewind from start");
 							break;
+#endif
 						case 6:
 							start = clock();
+#if  defined(ENABLE_FILE_OUTPUT) && defined(ENABLE_FILE_INPUT)
 							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_rec.png");
-#ifdef ENABLE_FILE_OUTPUT
 							if(state->fileOutputConfigNode != NULL){
 								sshsNodePutBool(state->fileOutputConfigNode, "running", true);
 							}
 							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_rec.png");
 							caerLog(CAER_LOG_INFO, "InfoThread", "Start Recording");
-#else
-							caerLog(CAER_LOG_ERROR, "InfoThread",
-									"Not in file input mode! Impossible to Record the stream, please enable FILE_OUTPUT module.");
+#elif defined(ENABLE_FILE_OUTPUT) && !defined(ENABLE_FILE_INPUT)
+							atomic_store(&state->microseconds, 0);
+							atomic_store(&state->minutes, 0);
+							atomic_store(&state->seconds, 0);
+							atomic_store(&state->hours, 0);
+							atomic_store(&state->started, -1);
+							if(state->fileOutputConfigNode != NULL){
+								sshsNodePutBool(state->fileOutputConfigNode, "running", true);
+							}
+							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_live_rec.png");
+							caerLog(CAER_LOG_INFO, "InfoThread", "Start Recording");
 #endif
 							break;
 						case 7:
 							start = clock();
 							pressed = true;
-#ifdef ENABLE_FILE_OUTPUT
+#if defined(ENABLE_FILE_OUTPUT) && !defined(ENABLE_FILE_INPUT)
+							if(state->fileOutputConfigNode != NULL){
+								sshsNodePutBool(state->fileOutputConfigNode, "running", false);
+							}
+							state->bitmap = al_load_bitmap("modules/infofilter/skin/info_caer_320x240_live_stop.png");
+							caerLog(CAER_LOG_INFO, "InfoThread", "Start Recording");
+#elif defined(ENABLE_FILE_OUTPUT) && defined(ENABLE_FILE_INPUT)
 							if(state->fileOutputConfigNode != NULL){
 								sshsNodePutBool(state->fileOutputConfigNode, "running", false);
 							}
@@ -364,16 +410,20 @@ static void caerInfoFilterRun(caerModuleData moduleData, size_t argsNumber, va_l
 	INFilterState state = moduleData->moduleState;
 
 	if(state->fileInputConfigNode == NULL){
-		atomic_store(&state->fileInputID, fileInputID);
-		if(atomic_load(&state->fileInputID) != NULL){
-			state->fileInputConfigNode = caerMainloopGetSourceNode(U16T(atomic_load(&state->fileInputID)));
+		if(fileInputID != NULL){
+			atomic_store(&state->fileInputID, fileInputID);
+			if(atomic_load(&state->fileInputID) != NULL){
+				state->fileInputConfigNode = caerMainloopGetSourceNode(U16T(atomic_load(&state->fileInputID)));
+			}
 		}
 	}
 
 	if(state->fileOutputConfigNode == NULL){
-		atomic_store(&state->fileOutputID, fileOutputID);
-		if(atomic_load(&state->fileOutputID) != NULL){
-			state->fileOutputConfigNode = caerMainloopGetSourceNode(U16T(atomic_load(&state->fileOutputID)));
+		if(fileOutputID != NULL){
+			atomic_store(&state->fileOutputID, fileOutputID);
+			if(atomic_load(&state->fileOutputID) != NULL){
+				state->fileOutputConfigNode = caerMainloopGetSourceNode(U16T(atomic_load(&state->fileOutputID)));
+			}
 		}
 	}
 
