@@ -152,6 +152,10 @@ static bool mainloop_1(void) {
 	imu = (caerIMU6EventPacket) caerEventPacketContainerFindEventPacketByType(container, IMU6_EVENT);
 #endif
 
+	// Filter that adds buttons and timer for recording data
+	// or playing a recording file. It implements fast forward and 
+	// slow motion buttons, as well as play again from start.
+	// It is a very basic camera interface (320x240)
 #ifdef ENABLE_INFOFILTER
 #if defined(ENABLE_FILE_INPUT) && defined(ENABLE_FILE_OUTPUT)
 	caerInfoFilter(78, container, 10, 7);
