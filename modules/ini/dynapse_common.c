@@ -1,4 +1,9 @@
 #include "dynapse_common.h"
+#include "base/mainloop.h"
+#include "base/module.h"
+#include "ext/buffers.h"
+#include "libcaer/devices/dynapse.h"
+#include "ext/colorjet/colorjet.h"
 
 static uint32_t convertBias(const char *biasName, const char* lowhi, const char*cl, const char*sex, uint8_t enal,
 	uint16_t fineValue, uint8_t coarseValue, uint8_t special);
@@ -20,6 +25,34 @@ static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_att
 static void updateLowPowerBiases(caerModuleData moduleData, struct caer_dynapse_info *devInfo, int chipid);
 static void updateSilentBiases(caerModuleData moduleData, struct caer_dynapse_info *devInfo, int chipid);
 static char *int2bin(int a);
+static bool EnableStimuliGen(caerModuleData moduleData, int16_t eventSourceID);
+static bool DisableStimuliGen(caerModuleData moduleData, int16_t eventSourceID);
+
+bool EnableStimuliGen(caerModuleData moduleData, int16_t eventSourceID) {
+//	sshsNode eventSourceConfigNode = caerMainloopGetSourceNode(U16T(eventSourceID));
+//	sshsNode deviceConfigNodeMain = sshsGetRelativeNode(eventSourceConfigNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
+//	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNodeMain, "spikeGen/");
+
+	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
+	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNode, "spikeGen/");
+
+//	sshsNodePutBool(spikeNode, "running", true);
+	sshsNodePutBool(spikeNode, "doStimPrimitiveBias", true);
+	return (true);
+}
+
+bool DisableStimuliGen(caerModuleData moduleData, int16_t eventSourceID) {
+//	sshsNode eventSourceConfigNode = caerMainloopGetSourceNode(U16T(eventSourceID));
+//	sshsNode deviceConfigNodeMain = sshsGetRelativeNode(eventSourceConfigNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
+//	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNodeMain, "spikeGen/");
+
+	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
+	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNode, "spikeGen/");
+
+//	sshsNodePutBool(spikeNode, "running", true);
+	sshsNodePutBool(spikeNode, "doStimPrimitiveBias", false);
+	return (true);
+}
 
 const char *chipIDToName(int16_t chipID, bool withEndSlash) {
 	switch (chipID) {
@@ -208,7 +241,7 @@ static void spikeConfigListener(sshsNode node, void *userData, enum sshs_node_at
 	caerInputDynapseState state = userData;
 
 	if (event == SSHS_ATTRIBUTE_MODIFIED) {
-		if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "doStim")) {
+		if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "doStim")) { // && caerStrEquals(changeKey, "doStimBias")
 			//atomic_load(&state->genSpikeState.doStim);
 			if (changeValue.boolean) {
 				caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation started.\n");
@@ -239,11 +272,20 @@ static void spikeConfigListener(sshsNode node, void *userData, enum sshs_node_at
 		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "setCam")) {
 			atomic_store(&state->genSpikeState.setCam, changeValue.boolean);
 		}
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "setCamSingle")) {
+			atomic_store(&state->genSpikeState.setCamSingle, changeValue.boolean);
+		}
 		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "clearCam")) {
 			atomic_store(&state->genSpikeState.clearCam, changeValue.boolean);
 		}
 		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "clearAllCam")) {
 			atomic_store(&state->genSpikeState.clearAllCam, changeValue.boolean);
+		}
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "doStimPrimitiveBias")) {
+			atomic_store(&state->genSpikeState.doStimPrimitiveBias, changeValue.boolean);
+		}
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "doStimPrimitiveCam")) {
+			atomic_store(&state->genSpikeState.doStimPrimitiveCam, changeValue.boolean);
 		}
 		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "loadDefaultBiases")) {
 			atomic_store(&state->genSpikeState.loadDefaultBiases, changeValue.boolean);
@@ -425,6 +467,8 @@ static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_att
 //		printf("\nnodename %s parent %s nodeGrandParent %s\n", nodeName,
 //				nodeParent, nodeGrandParent);
 
+		DisableStimuliGen(moduleData, 1);
+
 		if (caerStrEquals(nodeGrandParent, "DYNAPSE_CONFIG_DYNAPSE_U0")) {
 			int retval = caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
 			DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
@@ -466,6 +510,9 @@ static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_att
 //		printf("%s\n", int2bin(value));
 		int retval = caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
 		DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, value);
+
+		EnableStimuliGen(moduleData, 1);
+
 		if (retval == false) {
 			caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString, "failed to set bias");
 		}

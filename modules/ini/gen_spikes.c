@@ -58,6 +58,7 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNodeMain, "spikeGen/");
 
 	sshsNodePutBoolIfAbsent(spikeNode, "doStim", false); //false
+//	sshsNodePutBoolIfAbsent(spikeNode, "doStimBias", true); //false
 
 	sshsNodePutIntIfAbsent(spikeNode, "stim_type", U8T(STIM_REGULAR)); //STIM_REGULAR
 	atomic_store(&state->genSpikeState.stim_type,
@@ -94,6 +95,14 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(spikeNode, "clearAllCam", false); //1 //false
 	atomic_store(&state->genSpikeState.clearAllCam,
 			sshsNodeGetBool(spikeNode, "clearAllCam"));
+
+	sshsNodePutBoolIfAbsent(spikeNode, "doStimPrimitiveBias", true); //false
+	atomic_store(&state->genSpikeState.doStimPrimitiveBias,
+			sshsNodeGetBool(spikeNode, "doStimPrimitiveBias"));
+
+	sshsNodePutBoolIfAbsent(spikeNode, "doStimPrimitiveCam", true); //false
+	atomic_store(&state->genSpikeState.doStimPrimitiveCam,
+			sshsNodeGetBool(spikeNode, "doStimPrimitiveCam"));
 
 	sshsNodePutBoolIfAbsent(spikeNode, "loadDefaultBiases", false); //1 //false
 	atomic_store(&state->genSpikeState.loadDefaultBiases,
@@ -471,12 +480,13 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 	if (!atomic_load(&state->genSpikeState.done)) {
 		nanosleep(&tim, NULL);
 		// send spikes
-		caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP,
-				DYNAPSE_CONFIG_CHIP_ID,
-				atomic_load(&state->genSpikeState.chip_id));
-		//send the spike
-		caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, valueSent);
-
+		if (atomic_load(&state->genSpikeState.doStimPrimitiveBias) == true && atomic_load(&state->genSpikeState.doStimPrimitiveCam) == true) {
+			caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP,
+					DYNAPSE_CONFIG_CHIP_ID,
+					atomic_load(&state->genSpikeState.chip_id));
+			//send the spike
+			caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, valueSent);
+		}
 		caerLog(CAER_LOG_NOTICE, "spikeGen", "sending spikes %d \n", valueSent);
 	}
 }

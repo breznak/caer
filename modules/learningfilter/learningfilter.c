@@ -90,6 +90,8 @@ static void GetRand1DBinaryArray(int64_t *binaryArray, int64_t Range, int64_t Ca
 static bool ResetBiases(caerModuleData moduleData, int16_t eventSourceID);
 static bool EnableStimuliGen(caerModuleData moduleData, int16_t eventSourceID, int32_t pattern);
 static bool DisableStimuliGen(caerModuleData moduleData, int16_t eventSourceID);
+static bool EnableStimuliGenPrimitiveCam(caerModuleData moduleData, int16_t eventSourceID);
+static bool DisableStimuliGenPrimitiveCam(caerModuleData moduleData, int16_t eventSourceID);
 static bool SetInputLayerCam(caerModuleData moduleData, int16_t eventSourceID);
 static bool ClearAllCam(caerModuleData moduleData, int16_t eventSourceID);
 static void setBiasBits(caerModuleData moduleData, int16_t eventSourceID, uint32_t chipId, uint32_t coreId, const char *biasName_t,
@@ -609,9 +611,9 @@ void ModifyForwardSynapse(caerModuleData moduleData, int16_t eventSourceID, int6
 				if (slowFound == 1) {
 					synapseUpgrade = 1;
 					synapseType = EXCITATORY_FAST_SYNAPSE_ID;
-					DisableStimuliGen(moduleData, eventSourceID);
+					DisableStimuliGenPrimitiveCam(moduleData, eventSourceID);
 					WriteCam(moduleData, eventSourceID, (uint32_t) preNeuronAddr, (uint32_t) postNeuronAddr, camId, synapseType);
-					EnableStimuliGen(moduleData, eventSourceID, stimuliPattern);
+					EnableStimuliGenPrimitiveCam(moduleData, eventSourceID);
 					new_synapse_add = current_synapse + (EXCITATORY_FAST_SYNAPSE_ID - EXCITATORY_SLOW_SYNAPSE_ID);
 					memory.synapseMap->buffer2d[preNeuronAddr-MEMORY_NEURON_ADDR_OFFSET][postNeuronAddr-MEMORY_NEURON_ADDR_OFFSET] = new_synapse_add;
 					memory.CamMapContentType->buffer2d[postNeuronAddr-MEMORY_NEURON_ADDR_OFFSET][camId] = EXCITATORY_FAST_SYNAPSE_ID;
@@ -622,9 +624,9 @@ void ModifyForwardSynapse(caerModuleData moduleData, int16_t eventSourceID, int6
 					synapseUpgrade = 1;
 					synapseType = EXCITATORY_SLOW_SYNAPSE_ID;
 //					camId = (uint32_t) memory.connectionCamMap->buffer2d[min-MEMORY_NEURON_ADDR_OFFSET][postNeuronAddr-MEMORY_NEURON_ADDR_OFFSET]; //replace the CAM of MIN by the strengthened one
-					DisableStimuliGen(moduleData, eventSourceID);
+					DisableStimuliGenPrimitiveCam(moduleData, eventSourceID);
 					WriteCam(moduleData, eventSourceID, (uint32_t) preNeuronAddr, (uint32_t) postNeuronAddr, camId, synapseType);
-					EnableStimuliGen(moduleData, eventSourceID, stimuliPattern);
+					EnableStimuliGenPrimitiveCam(moduleData, eventSourceID);
 					new_synapse_add = current_synapse + EXCITATORY_SLOW_SYNAPSE_ID;
 					new_synapse_sub = memory.synapseMap->buffer2d[min-MEMORY_NEURON_ADDR_OFFSET][postNeuronAddr-MEMORY_NEURON_ADDR_OFFSET] - replaced_synapse;
 					memory.synapseMap->buffer2d[preNeuronAddr-MEMORY_NEURON_ADDR_OFFSET][postNeuronAddr-MEMORY_NEURON_ADDR_OFFSET] = new_synapse_add;
@@ -928,14 +930,14 @@ bool ResetNetwork(caerModuleData moduleData, int16_t eventSourceID)
 		}
 	}
 	//feature1 to feature1
-/*	for (preNeuronId = 0; preNeuronId < FEATURE1_N*FEATURE1_LAYERS_N; preNeuronId++)
+	for (preNeuronId = 0; preNeuronId < FEATURE1_N*FEATURE1_LAYERS_N; preNeuronId++)
 		for (postNeuronId = 0; postNeuronId < FEATURE1_N*FEATURE1_LAYERS_N; postNeuronId++) {
 			if ((int)(preNeuronId/FEATURE1_N)!=(int)(postNeuronId/FEATURE1_N) && (preNeuronId%FEATURE1_N)==(postNeuronId%FEATURE1_N)) {
 				BuildSynapse(moduleData, eventSourceID, feature_layer1[preNeuronId], feature_layer1[postNeuronId], (int16_t) (-1 * inType), REAL_SYNAPSE);
 			}
 		}
 	//feature1 to pooling1
-	for (preNeuronId = 0; preNeuronId < FEATURE1_N*FEATURE1_LAYERS_N; preNeuronId++)
+/*	for (preNeuronId = 0; preNeuronId < FEATURE1_N*FEATURE1_LAYERS_N; preNeuronId++)
 		for (postNeuronId = 0; postNeuronId < POOLING1_N*POOLING1_LAYERS_N; postNeuronId++) {
 			if ((int)((int)((preNeuronId%FEATURE1_N)/FEATURE1_L)/(int)(FEATURE1_L/POOLING1_L)) == (int)((postNeuronId%POOLING1_N)/POOLING1_L)
 					&& (int)(((preNeuronId%FEATURE1_N)%FEATURE1_W)/(int)(FEATURE1_W/POOLING1_W)) == (postNeuronId%POOLING1_N)%POOLING1_W) {
@@ -1284,6 +1286,30 @@ bool DisableStimuliGen(caerModuleData moduleData, int16_t eventSourceID) {
 //	sshsNodePutShort(spikeNode, "dataSizeX", DYNAPSE_X4BOARD_NEUX);
 	sshsNodePutBool(spikeNode, "running", true);
 	sshsNodePutBool(spikeNode, "doStim", false);
+	return (true);
+}
+
+bool EnableStimuliGenPrimitiveCam(caerModuleData moduleData, int16_t eventSourceID) {
+	LFilterState state = moduleData->moduleState;
+
+	state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(eventSourceID));
+
+	sshsNode deviceConfigNodeMain = sshsGetRelativeNode(state->eventSourceConfigNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
+	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNodeMain, "spikeGen/");
+
+	sshsNodePutBool(spikeNode, "doStimPrimitiveCam", true);
+	return (true);
+}
+
+bool DisableStimuliGenPrimitiveCam(caerModuleData moduleData, int16_t eventSourceID) {
+	LFilterState state = moduleData->moduleState;
+
+	state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(eventSourceID));
+
+	sshsNode deviceConfigNodeMain = sshsGetRelativeNode(state->eventSourceConfigNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
+	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNodeMain, "spikeGen/");
+
+	sshsNodePutBool(spikeNode, "doStimPrimitiveCam", false);
 	return (true);
 }
 
