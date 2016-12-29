@@ -20,9 +20,11 @@
 //for configuring the deep spiking neural network on chip
 #define MEMORY_NEURON_ADDR_OFFSET 1024
 
+#define TOTAL_NEURON_NUM_IN_CORE 256
 #define TOTAL_NEURON_NUM_ON_CHIP 1024
 #define TOTAL_NEURON_NUM_ON_BOARD (TOTAL_NEURON_NUM_ON_CHIP * 4)
 #define TOTAL_CAM_NUM 64
+#define TOTAL_CAM_NUM_LEARNING 63 //60
 #define TOTAL_SRAM_NUM 4
 #define MAXIMUM_FILTER_SIZE 17*17
 #define FILTER_MAP_SIZE_WIDTH 1
