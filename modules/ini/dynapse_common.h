@@ -24,7 +24,9 @@ struct gen_spike_state {
 	atomic_int_fast32_t stim_std;				//
 	atomic_int_fast32_t stim_duration;
 	atomic_bool repeat;
+	atomic_bool teaching;
 	atomic_bool sendTeachingStimuli;
+	atomic_bool sendInhibitoryStimuli;
 	atomic_bool setCam;
 	atomic_bool setCamSingle;
 	atomic_bool clearCam;

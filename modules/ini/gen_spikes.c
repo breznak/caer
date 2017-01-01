@@ -80,9 +80,17 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 	atomic_store(&state->genSpikeState.repeat,
 			sshsNodeGetBool(spikeNode, "repeat"));
 
+	sshsNodePutBoolIfAbsent(spikeNode, "teaching", true);
+	atomic_store(&state->genSpikeState.teaching,
+			sshsNodeGetBool(spikeNode, "teaching"));
+
 	sshsNodePutBoolIfAbsent(spikeNode, "sendTeachingStimuli", true);
 	atomic_store(&state->genSpikeState.sendTeachingStimuli,
 			sshsNodeGetBool(spikeNode, "sendTeachingStimuli"));
+
+	sshsNodePutBoolIfAbsent(spikeNode, "sendInhibitoryStimuli", false);
+	atomic_store(&state->genSpikeState.sendInhibitoryStimuli,
+			sshsNodeGetBool(spikeNode, "sendInhibitoryStimuli"));
 
 	sshsNodePutBoolIfAbsent(spikeNode, "setCam", false); //1 //false
 	atomic_store(&state->genSpikeState.setCam,
@@ -451,7 +459,7 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 	}
 
 	//generate chip command for stimulating
-	uint32_t valueSent, valueSentTeaching, valueSentTeachingControl;
+	uint32_t valueSent, valueSentTeaching, valueSentTeachingControl, valueSentInhibitory, valueSentInhibitoryControl;
 	valueSent = 0xf | 0 << 16 | 0 << 17 | 1 << 13 |
 			(sourceAddress & 0xff) << 20 | ((sourceAddress & 0x300) >> 8) << 18 |
 			atomic_load(&state->genSpikeState.dx) << 4 |
@@ -468,6 +476,20 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 
 	valueSentTeachingControl = 0x8 | 0 << 16 | 0 << 17 | 1 << 13 |
 			((sourceAddress & 0xff)-1) << 20 | 0x3 << 18 |
+			atomic_load(&state->genSpikeState.dx) << 4 |
+			atomic_load(&state->genSpikeState.sx) << 6 |
+			1 << 7 |
+			1 << 9;
+
+	valueSentInhibitory = 0x8 | 0 << 16 | 0 << 17 | 1 << 13 |
+			3 << 20 | 0x3 << 18 |
+			atomic_load(&state->genSpikeState.dx) << 4 |
+			atomic_load(&state->genSpikeState.sx) << 6 |
+			atomic_load(&state->genSpikeState.dy) << 7 |
+			atomic_load(&state->genSpikeState.sy) << 9; //((sourceAddress & 0x300) >> 8) << 18
+
+	valueSentInhibitoryControl = 0x8 | 0 << 16 | 0 << 17 | 1 << 13 |
+			3 << 20 | 0x3 << 18 |
 			atomic_load(&state->genSpikeState.dx) << 4 |
 			atomic_load(&state->genSpikeState.sx) << 6 |
 			1 << 7 |
@@ -504,12 +526,19 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 					atomic_load(&state->genSpikeState.chip_id));
 			//send the spike
 			caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, valueSent);
-			if (atomic_load(&state->genSpikeState.sendTeachingStimuli) == true) {
+			if (atomic_load(&state->genSpikeState.teaching) == true && atomic_load(&state->genSpikeState.sendTeachingStimuli) == true) {
 				caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP,
 						DYNAPSE_CONFIG_CHIP_ID,
 						DYNAPSE_CONFIG_DYNAPSE_U2);
 				caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, valueSentTeaching);
 				caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, valueSentTeachingControl);
+			}
+			if (atomic_load(&state->genSpikeState.sendInhibitoryStimuli) == true) { //atomic_load(&state->genSpikeState.teaching) == true &&
+				caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP,
+						DYNAPSE_CONFIG_CHIP_ID,
+						DYNAPSE_CONFIG_DYNAPSE_U2);
+				caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, valueSentInhibitory);
+				caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, valueSentInhibitoryControl);
 			}
 		}
 		caerLog(CAER_LOG_NOTICE, "spikeGen", "sending spikes %d \n", valueSent);
@@ -789,4 +818,3 @@ void setBiasBits(void *spikeGenState, uint32_t chipId, uint32_t coreId, const ch
 
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, bits);
 }
-

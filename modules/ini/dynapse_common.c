@@ -269,8 +269,14 @@ static void spikeConfigListener(sshsNode node, void *userData, enum sshs_node_at
 		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "repeat")) {
 			atomic_store(&state->genSpikeState.repeat, changeValue.boolean);
 		}
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "teaching")) {
+			atomic_store(&state->genSpikeState.teaching, changeValue.boolean);
+		}
 		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "sendTeachingStimuli")) {
 			atomic_store(&state->genSpikeState.sendTeachingStimuli, changeValue.boolean);
+		}
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "sendInhibitoryStimuli")) {
+			atomic_store(&state->genSpikeState.sendInhibitoryStimuli, changeValue.boolean);
 		}
 		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "setCam")) {
 			atomic_store(&state->genSpikeState.setCam, changeValue.boolean);
