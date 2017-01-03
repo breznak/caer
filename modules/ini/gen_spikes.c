@@ -11,6 +11,7 @@
 
 #include "main.h"
 #include "dynapse_common.h"
+#include "base/mainloop.h"
 #include <libcaer/events/packetContainer.h>
 #include <libcaer/events/spike.h>
 
@@ -23,7 +24,7 @@
 #define STIM_PATTERNA_SINGLE   7
 #define STIM_PATTERNB_SINGLE   8
 #define STIM_PATTERNC_SINGLE   9
-
+#define STIM_PATTERND_SINGLE   10
 
 bool caerGenSpikeInit(caerModuleData moduleData);
 void caerGenSpikeExit(caerModuleData moduleData);
@@ -293,11 +294,11 @@ int spikeGenThread(void *spikeGenState) {
 			uint32_t sourceAddress = 3;
 			spiketrainPatSingle(state, sourceAddress);
 		}
-/*		else if (state->genSpikeState.stim_type == STIM_PATTERND_SINGLE) {
+		else if (state->genSpikeState.stim_type == STIM_PATTERND_SINGLE) {
 			//generate pattern D
 			uint32_t sourceAddress = 4;
 			spiketrainPatSingle(state, sourceAddress);
-		} */
+		}
 
 	}
 
@@ -382,7 +383,7 @@ void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCH
 	if (atomic_load(&state->genSpikeState.stim_avr) > 0) {
 		tim.tv_nsec = 1000000000L / atomic_load(&state->genSpikeState.stim_avr);
 	} else {
-		tim.tv_nsec = 1000000000L;
+		tim.tv_nsec = 1000000000L; //1000000000L;
 	}
 
 	//generate chip command for stimulating
@@ -472,7 +473,7 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 			atomic_load(&state->genSpikeState.sx) << 6 |
 			atomic_load(&state->genSpikeState.dy) << 7 |
 			atomic_load(&state->genSpikeState.sy) << 9;
-
+/*
 	if ((sourceAddress & 0xff) == 1) {
 		source_address = 0;
 	} else if ((sourceAddress & 0xff) == 2) {
@@ -480,8 +481,8 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 	} else if ((sourceAddress & 0xff) == 3) {
 		source_address = 12;
 	}
-
-/*	if ((sourceAddress & 0xff) == 1) {
+*/
+	if ((sourceAddress & 0xff) == 1) {
 		source_address = 0;
 	} else if ((sourceAddress & 0xff) == 2) {
 		source_address = 4;
@@ -489,7 +490,7 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 		source_address = 8;
 	} else if ((sourceAddress & 0xff) == 4) {
 		source_address = 12;
-	} */
+	}
 
 	valueSentTeaching = 0x8 | 0 << 16 | 0 << 17 | 1 << 13 |
 			source_address << 20 | 0x3 << 18 |
@@ -498,7 +499,7 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 			atomic_load(&state->genSpikeState.dy) << 7 |
 			atomic_load(&state->genSpikeState.sy) << 9; //((sourceAddress & 0x300) >> 8) << 18
 
-	valueSentTeachingControl = 0x8 | 0 << 16 | 0 << 17 | 1 << 13 |
+	valueSentTeachingControl = 0xc | 0 << 16 | 0 << 17 | 1 << 13 |
 			source_address << 20 | 0x3 << 18 |
 			atomic_load(&state->genSpikeState.dx) << 4 |
 			atomic_load(&state->genSpikeState.sx) << 6 |
@@ -512,7 +513,7 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 			atomic_load(&state->genSpikeState.dy) << 7 |
 			atomic_load(&state->genSpikeState.sy) << 9; //((sourceAddress & 0x300) >> 8) << 18
 
-	valueSentInhibitoryControl = 0x8 | 0 << 16 | 0 << 17 | 1 << 13 |
+	valueSentInhibitoryControl = 0xc | 0 << 16 | 0 << 17 | 1 << 13 |
 			3 << 20 | 0x3 << 18 |
 			atomic_load(&state->genSpikeState.dx) << 4 |
 			atomic_load(&state->genSpikeState.sx) << 6 |
@@ -813,10 +814,18 @@ void setBiasBits(void *spikeGenState, uint32_t chipId, uint32_t coreId, const ch
 	if (spikeGenState == NULL) {
 		return;
 	}
-	caerInputDynapseState stateSource = caerMainloopGetSourceState(U16T(1));
+
+	caerInputDynapseState state = spikeGenState;
+	caerDeviceHandle usb_handle = (caerDeviceHandle) state->deviceState;
+
+	int sourceId = 1;
+	caerInputDynapseState stateSource = caerMainloopGetSourceState(U16T(sourceId));
 	struct caer_dynapse_info dynapse_info = caerDynapseInfoGet(stateSource->deviceState);
 
-	caerDeviceHandle usb_handle = stateSource->deviceState;
+	caerLog(CAER_LOG_NOTICE , "spikeGen" , "HERE");
+	caerLog(CAER_LOG_NOTICE, "spikeGen", "%s --- ID: %d, Master: %d,  Logic: %d,  ChipID: %d.\n",
+		dynapse_info.deviceString, dynapse_info.deviceID, dynapse_info.deviceIsMaster, dynapse_info.logicVersion,
+		dynapse_info.chipID);
 
     size_t biasNameLength = strlen(biasName_t);
     char biasName[biasNameLength+3];
@@ -837,7 +846,7 @@ void setBiasBits(void *spikeGenState, uint32_t chipId, uint32_t coreId, const ch
 		biasName[3+i] = biasName_t[i];
 	}
 
-	uint32_t bits = generatesBitsCoarseFineBiasSetting(caerMainloopGetSourceNode(U16T(1)), &dynapse_info,
+	uint32_t bits = generatesBitsCoarseFineBiasSetting(caerMainloopGetSourceNode(U16T(sourceId)), &dynapse_info,
 			biasName, coarseValue, fineValue, lowHigh, "Normal", npBias, true, chipId);
 
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, bits);
