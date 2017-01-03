@@ -293,6 +293,11 @@ int spikeGenThread(void *spikeGenState) {
 			uint32_t sourceAddress = 3;
 			spiketrainPatSingle(state, sourceAddress);
 		}
+/*		else if (state->genSpikeState.stim_type == STIM_PATTERND_SINGLE) {
+			//generate pattern D
+			uint32_t sourceAddress = 4;
+			spiketrainPatSingle(state, sourceAddress);
+		} */
 
 	}
 
@@ -460,6 +465,7 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 
 	//generate chip command for stimulating
 	uint32_t valueSent, valueSentTeaching, valueSentTeachingControl, valueSentInhibitory, valueSentInhibitoryControl;
+	uint32_t source_address;
 	valueSent = 0xf | 0 << 16 | 0 << 17 | 1 << 13 |
 			(sourceAddress & 0xff) << 20 | ((sourceAddress & 0x300) >> 8) << 18 |
 			atomic_load(&state->genSpikeState.dx) << 4 |
@@ -467,15 +473,33 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 			atomic_load(&state->genSpikeState.dy) << 7 |
 			atomic_load(&state->genSpikeState.sy) << 9;
 
+	if ((sourceAddress & 0xff) == 1) {
+		source_address = 0;
+	} else if ((sourceAddress & 0xff) == 2) {
+		source_address = 6;
+	} else if ((sourceAddress & 0xff) == 3) {
+		source_address = 12;
+	}
+
+/*	if ((sourceAddress & 0xff) == 1) {
+		source_address = 0;
+	} else if ((sourceAddress & 0xff) == 2) {
+		source_address = 4;
+	} else if ((sourceAddress & 0xff) == 3) {
+		source_address = 8;
+	} else if ((sourceAddress & 0xff) == 4) {
+		source_address = 12;
+	} */
+
 	valueSentTeaching = 0x8 | 0 << 16 | 0 << 17 | 1 << 13 |
-			((sourceAddress & 0xff)-1) << 20 | 0x3 << 18 |
+			source_address << 20 | 0x3 << 18 |
 			atomic_load(&state->genSpikeState.dx) << 4 |
 			atomic_load(&state->genSpikeState.sx) << 6 |
 			atomic_load(&state->genSpikeState.dy) << 7 |
 			atomic_load(&state->genSpikeState.sy) << 9; //((sourceAddress & 0x300) >> 8) << 18
 
 	valueSentTeachingControl = 0x8 | 0 << 16 | 0 << 17 | 1 << 13 |
-			((sourceAddress & 0xff)-1) << 20 | 0x3 << 18 |
+			source_address << 20 | 0x3 << 18 |
 			atomic_load(&state->genSpikeState.dx) << 4 |
 			atomic_load(&state->genSpikeState.sx) << 6 |
 			1 << 7 |
