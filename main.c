@@ -92,7 +92,7 @@ static bool mainloop_1(void) {
 	caerSpecialEventPacket special = NULL;
 	caerPolarityEventPacket polarity = NULL;
 
-#if defined(ENABLE_FILE_INPUT) && (defined(DAVISFX2) || defined(DAVISFX3))
+#if (defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT)) && (defined(DAVISFX2) || defined(DAVISFX3))
 #error "Only one input mode can be enabled: please choose DAVISFX2/3 or ENABLE_FILE_INPUT"
 #endif
 
