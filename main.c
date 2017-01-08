@@ -69,18 +69,8 @@ static bool mainloop_1(void);
 
 #ifdef ENABLE_LEARNINGFILTER
 	// create frame for displaying weight and synapse
-	caerFrameEventPacket weightplotfeatureA = NULL;
-	caerFrameEventPacket synapseplotfeatureA = NULL;
-	caerFrameEventPacket weightplotpoolingA = NULL;
-	caerFrameEventPacket synapseplotpoolingA = NULL;
-	caerFrameEventPacket weightplotfeatureB = NULL;
-	caerFrameEventPacket synapseplotfeatureB = NULL;
-	caerFrameEventPacket weightplotpoolingB = NULL;
-	caerFrameEventPacket synapseplotpoolingB = NULL;
-	caerFrameEventPacket weightplotoutputA = NULL;
-	caerFrameEventPacket synapseplotoutputA = NULL;
-	caerFrameEventPacket weightplotoutputB = NULL;
-	caerFrameEventPacket synapseplotoutputB = NULL;
+	caerFrameEventPacket weightplotfeature = NULL;
+	caerFrameEventPacket synapseplotfeature = NULL;
 #endif
 
 static bool mainloop_1(void) {
@@ -132,12 +122,7 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_LEARNINGFILTER
 //#ifdef DYNAPSEFX2
-	caerLearningFilter(5, 1, spike, &weightplotfeatureA, &synapseplotfeatureA,
-									&weightplotpoolingA, &synapseplotpoolingA,
-									&weightplotfeatureB, &synapseplotfeatureB,
-									&weightplotpoolingB, &synapseplotpoolingB,
-									&weightplotoutputA, &synapseplotoutputA,
-									&weightplotoutputB, &synapseplotoutputB);
+	caerLearningFilter(5, 1, spike, &weightplotfeature, &synapseplotfeature);
 //#endif
 #endif
 
@@ -152,18 +137,8 @@ static bool mainloop_1(void) {
 	caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
 #endif
 #ifdef ENABLE_LEARNINGFILTER
-	caerVisualizer(66, "WeightFeatureA", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) weightplotfeatureA);
-	caerVisualizer(67, "SynapseFeatureA", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplotfeatureA);
-	caerVisualizer(68, "WeightPoolingA", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) weightplotpoolingA);
-	caerVisualizer(69, "SynapsePoolingA", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplotpoolingA);
-	caerVisualizer(70, "WeightFeatureB", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) weightplotfeatureB);
-	caerVisualizer(71, "SynapseFeatureB", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplotfeatureB);
-	caerVisualizer(72, "WeightPoolingB", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) weightplotpoolingB);
-	caerVisualizer(73, "SynapsePoolingB", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplotpoolingB);
-	caerVisualizer(74, "WeightOutputA", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) weightplotoutputA);
-	caerVisualizer(75, "SynapseOutputA", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplotoutputA);
-	caerVisualizer(76, "WeightOutputB", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) weightplotoutputB);
-	caerVisualizer(77, "SynapseOutputB", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplotoutputB);
+	caerVisualizer(66, "WeightFeature", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) weightplotfeature);
+	caerVisualizer(67, "SynapseFeature", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplotfeature);
 #endif
 #endif
 

@@ -58,8 +58,8 @@
 #define FEATURE1_LAYERS_N 3
 #define FEATURE1_CAM_INHIBITORY_N (FEATURE1_LAYERS_N - 1)
 
-#define VISUALIZER_HEIGHT_FEATURE (FILTER1_L * FEATURE1_L * (4/2)) //FEATURE1_LAYERS_N
-#define VISUALIZER_WIDTH_FEATURE (FILTER1_W * FEATURE1_W * (4/2)) //FEATURE1_LAYERS_N
+#define VISUALIZER_HEIGHT_FEATURE (FILTER1_L * FEATURE1_L * (4/2))+32*2-2 //FEATURE1_LAYERS_N
+#define VISUALIZER_WIDTH_FEATURE (FILTER1_W * FEATURE1_W * (4/2))+32*2-2 //FEATURE1_LAYERS_N
 
 #define VISUALIZER_HEIGHT_OUTPUT (FEATURE1_L * FEATURE1_LAYERS_N) //FEATURE1_LAYERS_N
 #define VISUALIZER_WIDTH_OUTPUT (FEATURE1_W * OUTPUT2_N) //FEATURE1_LAYERS_N
@@ -86,7 +86,7 @@
 #define POOLING2_CAM_INHIBITORY_N (POOLING2_LAYERS_N - 1)
 
 #define OUTPUT1_N 512
-#define OUTPUT2_N 4 //3 //4
+#define OUTPUT2_N 3 //3 or 4
 
 //for encoding the chip input commands
 #define CXQ_PROGRAM (1 << 17) // (0x80 << 10)
@@ -166,11 +166,6 @@
 #include <libcaer/events/frame.h> //display
 
 void caerLearningFilter(uint16_t moduleID, int16_t eventSourceID, caerSpikeEventPacket spike,
-		caerFrameEventPacket *weightplotfeatureA, caerFrameEventPacket *synapseplotfeatureA,
-		caerFrameEventPacket *weightplotpoolingA, caerFrameEventPacket *synapseplotpoolingA,
-		caerFrameEventPacket *weightplotfeatureB, caerFrameEventPacket *synapseplotfeatureB,
-		caerFrameEventPacket *weightplotpoolingB, caerFrameEventPacket *synapseplotpoolingB,
-		caerFrameEventPacket *weightplotoutputA, caerFrameEventPacket *synapseplotoutputA,
-		caerFrameEventPacket *weightplotoutputB, caerFrameEventPacket *synapseplotoutputB);
+		caerFrameEventPacket *weightplotfeature, caerFrameEventPacket *synapseplotfeature);
 
 #endif /* LEARNINGFILTER_H_ */

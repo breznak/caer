@@ -43,11 +43,12 @@ void setBiasBits(void *spikeGenState, uint32_t chipId, uint32_t coreId, const ch
 		uint8_t coarseValue, uint16_t fineValue, const char *lowHigh, const char *npBias);
 
 struct timespec tstart = { 0, 0 }, tend = { 0, 0 };
-static int CamSeted = 0; //static bool CamSeted = false;
+static int CamSeted = 0;
 static int CamSetedSingle = 0;
-static int CamCleared = 0; //static bool CamCleared = false;
+static int CamCleared = 0;
 static int CamAllCleared = 0;
 static int BiasesLoaded = 0;
+static int pattern_number = 3; //3 or 4
 
 bool caerGenSpikeInit(caerModuleData moduleData) {
 
@@ -473,23 +474,25 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 			atomic_load(&state->genSpikeState.sx) << 6 |
 			atomic_load(&state->genSpikeState.dy) << 7 |
 			atomic_load(&state->genSpikeState.sy) << 9;
-/*
-	if ((sourceAddress & 0xff) == 1) {
-		source_address = 0;
-	} else if ((sourceAddress & 0xff) == 2) {
-		source_address = 6;
-	} else if ((sourceAddress & 0xff) == 3) {
-		source_address = 12;
-	}
-*/
-	if ((sourceAddress & 0xff) == 1) {
-		source_address = 0;
-	} else if ((sourceAddress & 0xff) == 2) {
-		source_address = 4;
-	} else if ((sourceAddress & 0xff) == 3) {
-		source_address = 8;
-	} else if ((sourceAddress & 0xff) == 4) {
-		source_address = 12;
+
+	if (pattern_number == 3) {
+		if ((sourceAddress & 0xff) == 1) {
+			source_address = 0;
+		} else if ((sourceAddress & 0xff) == 2) {
+			source_address = 4;
+		} else if ((sourceAddress & 0xff) == 3) {
+			source_address = 8;
+		}
+	} else if (pattern_number == 4) {
+		if ((sourceAddress & 0xff) == 1) {
+			source_address = 0;
+		} else if ((sourceAddress & 0xff) == 2) {
+			source_address = 4;
+		} else if ((sourceAddress & 0xff) == 3) {
+			source_address = 8;
+		} else if ((sourceAddress & 0xff) == 4) {
+			source_address = 12;
+		}
 	}
 
 	valueSentTeaching = 0x8 | 0 << 16 | 0 << 17 | 1 << 13 |
