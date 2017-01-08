@@ -86,7 +86,7 @@
 #define POOLING2_CAM_INHIBITORY_N (POOLING2_LAYERS_N - 1)
 
 #define OUTPUT1_N 512
-#define OUTPUT2_N 3 //3 or 4
+#define OUTPUT2_N 4 //3 or 4
 
 //for encoding the chip input commands
 #define CXQ_PROGRAM (1 << 17) // (0x80 << 10)

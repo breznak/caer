@@ -78,7 +78,7 @@ static int time_count_last = 0;
 static int32_t stimuliPattern = 0;
 static struct itimerval oldtv;
 static int stimdisabled = 0;
-static int pattern_number = 3; //3 or 4
+static int pattern_number = 4; //3 or 4
 
 static bool caerLearningFilterInit(caerModuleData moduleData); //It may not run at the beginning of the experiment ????????????
 static void caerLearningFilterRun(caerModuleData moduleData, size_t argsNumber, va_list args);

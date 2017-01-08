@@ -48,7 +48,7 @@ static int CamSetedSingle = 0;
 static int CamCleared = 0;
 static int CamAllCleared = 0;
 static int BiasesLoaded = 0;
-static int pattern_number = 3; //3 or 4
+static int pattern_number = 4; //3 or 4
 
 bool caerGenSpikeInit(caerModuleData moduleData) {
 
