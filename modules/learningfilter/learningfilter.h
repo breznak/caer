@@ -8,20 +8,23 @@
 
 //for visualizer
 #define VMIN 0
-#define VMAX 10
+#define VMAX 20
 
-#define DELTA_WEIGHT_LUT_LENGTH 80
+#define DELTA_WEIGHT_LUT_LENGTH 80 //800 //80
+#define SYNAPSE_UPGRADE_THRESHOLD_LUT_LENGTH 128 //800 //80
 #define SPIKE_QUEUE_LENGTH 500
 #define SPIKE_QUEUE_WIDTH 2
-#define MAXIMUM_CONSIDERED_SPIKE_DELAY 80 //???what is the unit of timestamp???
-#define MINIMUM_CONSIDERED_SPIKE_NUM 10
+#define MAXIMUM_CONSIDERED_SPIKE_DELAY 800 //80 //???what is the unit of timestamp???
+#define MINIMUM_CONSIDERED_SPIKE_NUM 100 //10
 
 //for configuring the deep spiking neural network on chip
 #define MEMORY_NEURON_ADDR_OFFSET 1024
 
+#define TOTAL_NEURON_NUM_IN_CORE 256
 #define TOTAL_NEURON_NUM_ON_CHIP 1024
 #define TOTAL_NEURON_NUM_ON_BOARD (TOTAL_NEURON_NUM_ON_CHIP * 4)
 #define TOTAL_CAM_NUM 64
+#define TOTAL_CAM_NUM_LEARNING 63 //60
 #define TOTAL_SRAM_NUM 4
 #define MAXIMUM_FILTER_SIZE 17*17
 #define FILTER_MAP_SIZE_WIDTH 1
@@ -52,11 +55,14 @@
 #define FEATURE1_L 16
 #define FEATURE1_W 16
 #define FEATURE1_N (FEATURE1_L * FEATURE1_W)
-#define FEATURE1_LAYERS_N 4
+#define FEATURE1_LAYERS_N 3
 #define FEATURE1_CAM_INHIBITORY_N (FEATURE1_LAYERS_N - 1)
 
-#define VISUALIZER_HEIGHT (FILTER1_L * FEATURE1_L * (FEATURE1_LAYERS_N/2))
-#define VISUALIZER_WIDTH (FILTER1_W * FEATURE1_W * (FEATURE1_LAYERS_N/2))
+#define VISUALIZER_HEIGHT_FEATURE (FILTER1_L * FEATURE1_L * (4/2))+32*2-2 //FEATURE1_LAYERS_N
+#define VISUALIZER_WIDTH_FEATURE (FILTER1_W * FEATURE1_W * (4/2))+32*2-2 //FEATURE1_LAYERS_N
+
+#define VISUALIZER_HEIGHT_OUTPUT (FEATURE1_L * FEATURE1_LAYERS_N) //FEATURE1_LAYERS_N
+#define VISUALIZER_WIDTH_OUTPUT (FEATURE1_W * OUTPUT2_N) //FEATURE1_LAYERS_N
 
 #define POOLING1_L 8
 #define POOLING1_W 8
@@ -66,21 +72,21 @@
 
 #define FILTER2_L 5
 #define FILTER2_W 5
-#define FILTER2_N (FILTER1_L * FILTER1_W)
+#define FILTER2_N (FILTER2_L * FILTER2_W)
 #define FEATURE2_L 4
 #define FEATURE2_W 4
-#define FEATURE2_N (FEATURE1_L * FEATURE1_W)
-#define FEATURE2_LAYERS_N 16
+#define FEATURE2_N (FEATURE2_L * FEATURE2_W)
+#define FEATURE2_LAYERS_N 32
 #define FEATURE2_CAM_INHIBITORY_N (FEATURE2_LAYERS_N - 1)
 
-#define POOLING2_L 4
-#define POOLING2_W 4
+#define POOLING2_L 2
+#define POOLING2_W 2
 #define POOLING2_N (POOLING2_L*POOLING2_W)
-#define POOLING2_LAYERS_N 16
+#define POOLING2_LAYERS_N 32
 #define POOLING2_CAM_INHIBITORY_N (POOLING2_LAYERS_N - 1)
 
-#define OUTPUT1_N 256
-#define OUTPUT2_N 256
+#define OUTPUT1_N 512
+#define OUTPUT2_N 4 //3 or 4
 
 //for encoding the chip input commands
 #define CXQ_PROGRAM (1 << 17) // (0x80 << 10)
@@ -159,6 +165,7 @@
 #include <libcaer/events/spike.h>
 #include <libcaer/events/frame.h> //display
 
-void caerLearningFilter(uint16_t moduleID, int16_t eventSourceID, caerSpikeEventPacket spike, caerFrameEventPacket *weightplot, caerFrameEventPacket *synapseplot);
+void caerLearningFilter(uint16_t moduleID, int16_t eventSourceID, caerSpikeEventPacket spike,
+		caerFrameEventPacket *weightplotfeature, caerFrameEventPacket *synapseplotfeature);
 
 #endif /* LEARNINGFILTER_H_ */
