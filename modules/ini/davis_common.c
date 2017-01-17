@@ -371,6 +371,8 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 			// Slow down pixels for big 640x480 array, to avoid overwhelming the AER bus.
 			createCoarseFineBiasSetting(biasNode, "PrBp", 2, 3, true, "P", "Normal");
 			createCoarseFineBiasSetting(biasNode, "PrSFBp", 1, 1, true, "P", "Normal");
+			createCoarseFineBiasSetting(biasNode, "OnBn", 150, 4, true, "N", "Normal");
+			createCoarseFineBiasSetting(biasNode, "OffBn", 1, 4, true, "N", "Normal");
 		}
 
 		createVDACBiasSetting(biasNode, "ApsOverflowLevel", 27, 6);
@@ -396,9 +398,9 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 		createCoarseFineBiasSetting(biasNode, "DiffBn", 4, 39, true, "N", "Normal");
 		createCoarseFineBiasSetting(biasNode, "OnBn", 5, 255, true, "N", "Normal");
 		createCoarseFineBiasSetting(biasNode, "OffBn", 4, 1, true, "N", "Normal");
-		createCoarseFineBiasSetting(biasNode, "PixInvBn", 5, 129, true, "N", "Normal");
 		createCoarseFineBiasSetting(biasNode, "PrBp", 2, 58, true, "P", "Normal");
 		createCoarseFineBiasSetting(biasNode, "PrSFBp", 1, 16, true, "P", "Normal");
+		createCoarseFineBiasSetting(biasNode, "PixInvBn", 5, 129, true, "N", "Normal");
 		createCoarseFineBiasSetting(biasNode, "RefrBp", 4, 25, true, "P", "Normal");
 		createCoarseFineBiasSetting(biasNode, "ReadoutBufBp", 6, 20, true, "P", "Normal");
 		createCoarseFineBiasSetting(biasNode, "ApsROSFBn", 6, 219, true, "N", "Normal");
