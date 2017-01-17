@@ -63,6 +63,10 @@
 #include <libcaer/events/frame.h>
 #endif
 
+#ifdef ENABLE_INFOFILTER
+#include "modules/infofilter/infofilter.h"
+#endif
+
 // Common filters support.
 
 static bool mainloop_1(void);
@@ -146,11 +150,31 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_VISUALIZER
 	caerVisualizer(64, "Spike", &caerVisualizerRendererSpikeEvents, NULL, (caerEventPacketHeader) spike);
 #ifdef ENABLE_MEANRATEFILTER
-	caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
+	if(freqplot != NULL){
+		caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
+	}
 #endif
 #ifdef ENABLE_LEARNINGFILTER
-	caerVisualizer(66, "Weight", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) weightplot);
-	caerVisualizer(67, "Synapse", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplot);
+	if(weightplot != NULL){
+		caerVisualizer(66, "Weight", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) weightplot);
+	}
+	if(synapseplot != NULL){
+		caerVisualizer(67, "Synapse", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplot);
+	}
+#endif
+#endif
+
+	// Filter that adds buttons and timer for recording data
+	// or playing a recording file. It implements fast forward and
+	// slow motion buttons, as well as play again from start.
+	// It is a very basic  interface (320x240)
+#ifdef ENABLE_INFOFILTER
+#if defined(ENABLE_FILE_INPUT) && defined(ENABLE_FILE_OUTPUT)
+	caerInfoFilter(78, container, 10, 7);
+#elif defined(ENABLE_FILE_INPUT) && !defined(ENABLE_FILE_OUTPUT)
+	caerInfoFilter(78, container, 10, NULL);
+#elif !defined(ENABLE_FILE_INPUT) && defined(ENABLE_FILE_OUTPUT)
+	caerInfoFilter(78, container, NULL, 7);
 #endif
 #endif
 
@@ -172,6 +196,11 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_MEANRATEFILTER
 	free(freqplot);
+#endif
+
+#ifdef ENABLE_LEARNINGFILTER
+	free(weightplot);
+	free(synapseplot);
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.
