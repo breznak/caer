@@ -166,7 +166,6 @@ static bool mainloop_1(void) {
 	free(freqplot);
 #endif
 
-
 	return (true); // If false is returned, processing of this loop stops.
 }
 
