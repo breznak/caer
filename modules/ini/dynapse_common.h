@@ -51,6 +51,7 @@ struct gen_spike_state {
 
 struct caer_input_dynapse_state {
 	caerDeviceHandle deviceState;
+	sshsNode eventSourceConfigNode;
 	struct gen_spike_state genSpikeState;
 };
 

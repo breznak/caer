@@ -2165,6 +2165,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	caerInputDynapseState state = moduleData->moduleState;
 
 	state->deviceState = caerDeviceOpen(1, CAER_DEVICE_DYNAPSE, 0, 0, NULL);
+	state->eventSourceConfigNode = moduleData->moduleNode;
 
 	free(serialNumber);
 
