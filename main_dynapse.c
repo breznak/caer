@@ -59,10 +59,6 @@
 #include "modules/monitorneufilter/monitorneufilter.h"
 #endif
 
-#ifdef ENABLE_LEARNINGFILTER
-#include <libcaer/events/frame.h>
-#endif
-
 #ifdef ENABLE_INFOFILTER
 #include "modules/infofilter/infofilter.h"
 #endif
@@ -88,13 +84,6 @@ static bool mainloop_1(void) {
 	// We search for them by type here, because input modules may not have all or any of them.
 	spike = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
 	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
-
-#ifdef ENABLE_LEARNINGFILTER
-	// create frame for displaying weight and synapse
-	caerFrameEventPacket weightplot = NULL;
-	caerFrameEventPacket synapseplot = NULL;
-#endif
-
 #endif
 
 #ifdef ENABLE_FILE_INPUT //should be 0 for experiment
@@ -102,13 +91,6 @@ static bool mainloop_1(void) {
 	// We search for them by type here, because input modules may not have all or any of them.
 	spike = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
 	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
-
-#ifdef ENABLE_LEARNINGFILTER
-	// create frame for displaying weight and synapse
-	caerFrameEventPacket weightplot = NULL;
-	caerFrameEventPacket synapseplot = NULL;
-#endif
-
 #endif
 
 #ifdef ENABLE_NETWORK_INPUT
@@ -136,12 +118,6 @@ static bool mainloop_1(void) {
 	caerPixelMatrixFilter(11, spike);
 #endif
 
-#ifdef ENABLE_LEARNINGFILTER
-#ifdef DYNAPSEFX2
-	caerLearningFilter(5, 1, spike, &weightplot, &synapseplot);
-#endif
-#endif
-
 #ifdef ENABLE_MONITORNEUFILTER
 	caerMonitorNeuFilter(6, 1);
 #endif
@@ -152,14 +128,6 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_MEANRATEFILTER
 	if(freqplot != NULL){
 		caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
-	}
-#endif
-#ifdef ENABLE_LEARNINGFILTER
-	if(weightplot != NULL){
-		caerVisualizer(66, "Weight", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) weightplot);
-	}
-	if(synapseplot != NULL){
-		caerVisualizer(67, "Synapse", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplot);
 	}
 #endif
 #endif
@@ -198,10 +166,6 @@ static bool mainloop_1(void) {
 	free(freqplot);
 #endif
 
-#ifdef ENABLE_LEARNINGFILTER
-	free(weightplot);
-	free(synapseplot);
-#endif
 
 	return (true); // If false is returned, processing of this loop stops.
 }
