@@ -37,7 +37,6 @@ static void caerMeanRateFilterConfig(caerModuleData moduleData);
 static void caerMeanRateFilterExit(caerModuleData moduleData);
 static void caerMeanRateFilterReset(caerModuleData moduleData, uint16_t resetCallSourceID);
 static bool allocateFrequencyMap(MRFilterState state, int16_t sourceID);
-static bool allocateTimestampMap(MRFilterState state, int16_t sourceID);
 static bool allocateSpikeCountMap(MRFilterState state, int16_t sourceID);
 
 static struct caer_module_functions caerMeanRateFilterFunctions = { .moduleInit =
@@ -95,7 +94,6 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	}
 
 	MRFilterState state = moduleData->moduleState;
-
 
 	// If the map is not allocated yet, do it.
 	if (state->frequencyMap == NULL) {
@@ -411,7 +409,6 @@ static bool allocateSpikeCountMap(MRFilterState state, int16_t sourceID) {
 		}
 	}
 
-	// TODO: size the map differently if subSampleBy is set!
 	return (true);
 }
 
@@ -438,7 +435,6 @@ static bool allocateFrequencyMap(MRFilterState state, int16_t sourceID) {
 		}
 	}
 
-	// TODO: size the map differently if subSampleBy is set!
 	return (true);
 }
 

@@ -24,9 +24,16 @@ struct gen_spike_state {
 	atomic_int_fast32_t stim_std;				//
 	atomic_int_fast32_t stim_duration;
 	atomic_bool repeat;
+	atomic_bool teaching;
+	atomic_bool sendTeachingStimuli;
+	atomic_bool sendInhibitoryStimuli;
 	atomic_bool setCam;
+	atomic_bool setCamSingle;
 	atomic_bool clearCam;
 	atomic_bool clearAllCam;
+	atomic_bool doStimPrimitiveBias;
+	atomic_bool doStimPrimitiveCam;
+	atomic_bool loadDefaultBiases;
 	atomic_bool done;
 	atomic_bool started;
 	thrd_t spikeGenThread;
@@ -44,6 +51,7 @@ struct gen_spike_state {
 
 struct caer_input_dynapse_state {
 	caerDeviceHandle deviceState;
+	sshsNode eventSourceConfigNode;
 	struct gen_spike_state genSpikeState;
 };
 

@@ -163,7 +163,7 @@ static bool mainloop_1(void) {
 #endif
 
 	// Filter that adds buttons and timer for recording data
-	// or playing a recording file. It implements fast forward and 
+	// or playing a recording file. It implements fast forward and
 	// slow motion buttons, as well as play again from start.
 	// It is a very basic camera interface (320x240)
 #ifdef ENABLE_INFOFILTER
