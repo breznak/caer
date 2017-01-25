@@ -12,8 +12,8 @@ MyCaffe* newMyCaffe() {
 
 void MyCaffe_file_set(MyCaffe* v, int * i, int size, double *b, double thr,
 		bool printoutputs, caerFrameEvent *single_frame,
-		bool showactivations) {
-	v->file_set(i, size, b, thr, printoutputs, single_frame, showactivations);
+		bool showactivations, bool norminput) {
+	v->file_set(i, size, b, thr, printoutputs, single_frame, showactivations, norminput);
 }
 
 void MyCaffe_init_network(MyCaffe *v) {

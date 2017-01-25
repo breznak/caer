@@ -8,7 +8,7 @@ using namespace caffe;
 using std::string;
 
 void MyCaffe::file_set(int * i, int size, double *b, double thr,
-		bool printoutputs, caerFrameEvent *single_frame, bool showactivations) {
+		bool printoutputs, caerFrameEvent *single_frame, bool showactivations, bool norminput) {
 
 	for (size_t x = 0; x < size; x++) {
 		for (size_t y = 0; y < size; y++) {
@@ -22,7 +22,9 @@ void MyCaffe::file_set(int * i, int size, double *b, double thr,
 	cv::Mat img = cv::Mat(size, size, CV_8UC1, i);
 	cv::Mat img2;
 	img.convertTo(img2, CV_32FC1);
-	img2 = img2 * 0.00390625; // normalize 0,255 to 1
+	if(norminput){
+		img2 = img2 * 0.00390625; // normalize 0,255 to 1
+	}
 
 	//std::cout << std::endl << "Width : " << img2.size().width << std::endl;
 	//std::cout << "Height: " << img2.size().height << std::endl;

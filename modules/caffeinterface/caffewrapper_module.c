@@ -12,6 +12,7 @@ struct caffewrapper_state {
 	double detThreshold;
 	bool doPrintOutputs;
 	bool doShowActivations;
+	bool doNormInputImages;
 	struct MyCaffe* cpp_class; //pointer to cpp_class_object
 };
 
@@ -55,6 +56,9 @@ static bool caerCaffeWrapperInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doShowActivations", false);
 	state->doShowActivations = sshsNodeGetBool(moduleData->moduleNode,
 			"doShowActivations");
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doNormInputImages", false);
+	state->doNormInputImages = sshsNodeGetBool(moduleData->moduleNode,
+				"doNormInputImages");
 
 	//Initializing caffe network..
 	state->cpp_class = newMyCaffe();
@@ -87,6 +91,8 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber,
 			"doPrintOutputs");
 	state->doShowActivations = sshsNodeGetBool(moduleData->moduleNode,
 			"doShowActivations");
+	state->doNormInputImages = sshsNodeGetBool(moduleData->moduleNode,
+			"doNormInputImages");
 
 	//allocate single frame
 	int frame_x = sizeDisplay;
@@ -111,7 +117,7 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber,
 				MyCaffe_file_set(state->cpp_class, hist, size,
 						&classificationResults, state->detThreshold,
 						state->doPrintOutputs, &single_frame,
-						state->doShowActivations);
+						state->doShowActivations, state->doNormInputImages);
 		// validate frame
 		if (single_frame != NULL) {
 			caerFrameEventValidate(single_frame, *networkActivity);

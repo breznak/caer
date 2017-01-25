@@ -16,7 +16,7 @@ MyCaffe* newMyCaffe();
 
 void MyCaffe_file_set(MyCaffe* v, int * i, int size, double *b, double thr,
 					bool printoutputs, caerFrameEvent *single_frame,
-						bool showactivations);
+						bool showactivations, bool norminput);
 
 char * MyCaffe_file_get(MyCaffe* v);
 
