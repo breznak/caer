@@ -16,6 +16,9 @@ ADD_SUBDIRECTORY(meanratefilter)
 ADD_SUBDIRECTORY(monitorneufilter)
 ADD_SUBDIRECTORY(nullhopinterface)
 ADD_SUBDIRECTORY(infofilter)
+ADD_SUBDIRECTORY(surveillance)
+ADD_SUBDIRECTORY(mediantracker)
+ADD_SUBDIRECTORY(meanfilter)
 #ADD_SUBDIRECTORY(pixelmatrix)
 
 # Support private modules that don't get considered for commit,
