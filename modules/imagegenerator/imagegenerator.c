@@ -22,28 +22,14 @@
 #include <libcaer/events/polarity.h>
 
 struct imagegenerator_state {
-	uint32_t *eventRenderer;
-	int16_t eventRendererSizeX;
-	int16_t eventRendererSizeY;
-	struct caer_statistics_state eventStatistics;
 	bool rectifyPolarities;
 	int colorscale;
 	//image matrix
 	int64_t **ImageMap;
 	int32_t numSpikes; // after how many spikes will we generate an image
 	int32_t spikeCounter; // actual number of spikes seen so far, in range [0, numSpikes]
-	int32_t counterImg; // how many spikeImages did we produce so far
-	int32_t counterTxt;
-	int32_t counterFrame; // how many frames did we see so far
 	int16_t sizeX;
 	int16_t sizeY;
-	// frame
-	uint16_t *frameRenderer;
-	int32_t frameRendererSizeX;
-	int32_t frameRendererSizeY;
-	int32_t frameRendererPositionX;
-	int32_t frameRendererPositionY;
-	enum caer_frame_event_color_channels frameChannels;
 };
 
 typedef struct imagegenerator_state *imagegeneratorState;
@@ -93,8 +79,8 @@ static bool caerImageGeneratorInit(caerModuleData moduleData) {
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode,
 			"sourceInfo/");
 	if (!sshsNodeAttributeExists(sourceInfoNode, "dvsSizeX", SSHS_SHORT)) {
-		sshsNodePutShortIfAbsent(moduleData->moduleNode, "dvsSizeX", 240);
-		sshsNodePutShortIfAbsent(moduleData->moduleNode, "dvsSizeY", 180);
+		sshsNodePutShortIfAbsent(moduleData->moduleNode, "dvsSizeX", CAMERA_X);
+		sshsNodePutShortIfAbsent(moduleData->moduleNode, "dvsSizeY", CAMERA_Y);
 	}
 
 	state->ImageMap = NULL;
@@ -104,12 +90,6 @@ static bool caerImageGeneratorInit(caerModuleData moduleData) {
 
 static void caerImageGeneratorExit(caerModuleData moduleData) {
 	imagegeneratorState state = moduleData->moduleState;
-
-	// Ensure render maps are freed.
-	if (state->eventRenderer != NULL) {
-		free(state->eventRenderer);
-		state->eventRenderer = NULL;
-	}
 
 }
 
@@ -200,7 +180,6 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 	haveimg[0] = false;
 
 	// Only process packets with content.
-	// what if content is not a polarity event?
 	if (polarity == NULL) {
 		return;
 	}
@@ -226,8 +205,8 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 
 	if (polarity != NULL) {
 
-		float cam_sizeX = 240.f;//#sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-		float cam_sizeY = 180.f;//#sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
+		float cam_sizeX = CAMERA_X;//#sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
+		float cam_sizeY = CAMERA_Y;//#sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
 		float res_x = CLASSIFY_IMG_SIZE / cam_sizeX;
 		float res_y = CLASSIFY_IMG_SIZE / cam_sizeY;
@@ -343,9 +322,6 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 				}
 				state->spikeCounter = 0;
 
-				// free chunks of memory
-				state->frameRenderer = NULL;
-
 			}
 		} //CAER_POLARITY_ITERATOR_VALID_END
 		free(onlyvalid);
@@ -433,9 +409,6 @@ static bool allocateImageMapSubsampled(imagegeneratorState state,
 
 	// Init counters
 	state->spikeCounter = 0;
-	state->counterImg = 0;
-	state->counterTxt = 0;
-	state->counterFrame = 0;
 
 	return (true);
 }

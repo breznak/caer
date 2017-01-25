@@ -52,7 +52,7 @@ static bool caerCaffeWrapperInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doPrintOutputs", false);
 	state->doPrintOutputs = sshsNodeGetBool(moduleData->moduleNode,
 			"doPrintOutputs");
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doShowActivations", true);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doShowActivations", false);
 	state->doShowActivations = sshsNodeGetBool(moduleData->moduleNode,
 			"doShowActivations");
 
@@ -89,15 +89,15 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber,
 			"doShowActivations");
 
 	//allocate single frame
-	int32_t frame_x = sizeDisplay;
-	int32_t frame_y = sizeDisplay;
+	int frame_x = sizeDisplay;
+	int frame_y = sizeDisplay;
 
 	// set source info for this module if not yet defined
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode,
 			"sourceInfo/");
 	if (!sshsNodeAttributeExists(sourceInfoNode, "visualizerSizeX", SSHS_SHORT)) {
-		sshsNodePutShort(sourceInfoNode, "visualizerSizeX", frame_x);
-		sshsNodePutShort(sourceInfoNode, "visualizerSizeY", frame_y);
+		sshsNodePutShort(sourceInfoNode, "visualizerSizeX", (uint16_t)frame_x);
+		sshsNodePutShort(sourceInfoNode, "visualizerSizeY", (uint16_t)frame_y);
 	}
 
 	*networkActivity = caerFrameEventPacketAllocate(1,

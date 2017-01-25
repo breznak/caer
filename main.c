@@ -72,8 +72,8 @@
 
 #ifdef ENABLE_IMAGEGENERATOR
 #include "modules/imagegenerator/imagegenerator.h"
-#define CLASSIFYSIZE 64
-#define DISPLAYIMGSIZE 256
+#define CLASSIFYSIZE 36
+#define DISPLAYIMGSIZE 36
 #endif
 #ifdef ENABLE_CAFFEINTERFACE
 #define CAFFEVISUALIZERSIZE 1024

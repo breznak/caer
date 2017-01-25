@@ -24,6 +24,11 @@ void MyCaffe::file_set(int * i, int size, double *b, double thr,
 	img.convertTo(img2, CV_32FC1);
 	img2 = img2 * 0.00390625; // normalize 0,255 to 1
 
+	//std::cout << std::endl << "Width : " << img2.size().width << std::endl;
+	//std::cout << "Height: " << img2.size().height << std::endl;
+	//std::cout << "Channels: " <<img2.channels() << std::endl;
+
+
 	CHECK(!img.empty()) << "Unable to decode image " << file_i;
 	std::vector<Prediction> predictions = MyCaffe::Classify(img2, 5,
 			single_frame, showactivations);
@@ -41,14 +46,10 @@ void MyCaffe::file_set(int * i, int size, double *b, double thr,
 
 void MyCaffe::init_network() {
 
-	string model_file = NET_MODEL
-	;
-	string trained_file = NET_WEIGHTS
-	;
-	string mean_file = NET_MEAN
-	;
-	string label_file = NET_VAL
-	;
+	string model_file = NET_MODEL;
+	string trained_file = NET_WEIGHTS;
+	string mean_file = NET_MEAN;
+	string label_file = NET_VAL;
 	MyCaffe::Classifier(model_file, trained_file, mean_file, label_file);
 
 	return;
@@ -61,6 +62,9 @@ void MyCaffe::Classifier(const string& model_file, const string& trained_file,
 	Caffe::set_mode(Caffe::CPU);
 #else
 	Caffe::set_mode(Caffe::GPU);
+	//int current_device;
+	//CUDA_CHECK(cudaGetDevice(&current_device));
+
 #endif
 
 	/* Load the network. */
@@ -390,6 +394,11 @@ void MyCaffe::Preprocess(const cv::Mat& img,
 	cv::Mat sample_normalized;
 	mean_ = cv::Mat::zeros(1, 1, CV_64F); //TODO remove, compute mean_ from mean_file and adapt size for subtraction.
 	//std::cout << " Preprocess: mean_size " << mean_.size() << std::endl;
+	//std::cout << " num_channels_:  " << num_channels_ << std::endl;
+	//std::cout << "input_channels->at(0).data" << reinterpret_cast<float*>(input_channels->at(0).data) << 
+	//		"or " << net_->input_blobs()[0]->gpu_data() << std::endl;
+	
+	//std::cout << " sample_resized " << sample_resized.size() << std::endl;
 
 	cv::subtract(sample_float, mean_, sample_normalized);
 
