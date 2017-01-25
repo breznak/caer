@@ -7,41 +7,51 @@
 using namespace caffe;
 using std::string;
 
-void MyCaffe::file_set(int * i, int size, double *b, double thr,
+void MyCaffe::file_set(int * inim, int size, char *b, double thr,
 		bool printoutputs, caerFrameEvent *single_frame, bool showactivations, bool norminput) {
 
 	for (size_t x = 0; x < size; x++) {
 		for (size_t y = 0; y < size; y++) {
 			int linindex = x * size + y;
-			if (i[linindex] == 256) {
-				i[linindex] = 255; // [0,255] is png
+			if (inim[linindex] == 256) {
+				inim[linindex] = 255; // [0,255] is png
 			}
 		}
 	}
 
-	cv::Mat img = cv::Mat(size, size, CV_8UC1, i);
+	cv::Mat img = cv::Mat(size, size, CV_8UC1, &inim[0]);
 	cv::Mat img2;
 	img.convertTo(img2, CV_32FC1);
 	if(norminput){
 		img2 = img2 * 0.00390625; // normalize 0,255 to 1
 	}
 
-	//std::cout << std::endl << "Width : " << img2.size().width << std::endl;
-	//std::cout << "Height: " << img2.size().height << std::endl;
-	//std::cout << "Channels: " <<img2.channels() << std::endl;
-
-
 	CHECK(!img.empty()) << "Unable to decode image " << file_i;
 	std::vector<Prediction> predictions = MyCaffe::Classify(img2, 5,
 			single_frame, showactivations);
 
 	/* Print the top N predictions. */
+	Prediction p;
 	for (size_t i = 0; i < predictions.size(); ++i) {
-		Prediction p = predictions[i];
+		p = predictions[i];
+		if(i == 0){
+			std::strcpy(b,p.first.c_str());
+		}
 		if (printoutputs) {
 			std::cout << "\n" << std::fixed << std::setprecision(4) << p.second
 					<< " - \"" << p.first << "\"" << std::endl;
 		}
+	}
+
+	cv::putText(img2, p.first.c_str(), cv::Point(2,10), CV_FONT_HERSHEY_PLAIN, 0.6, cv::Scalar(255));
+
+	img2.convertTo(img2, CV_8UC1);
+	for (int j = 0; j < size; j++) {
+	    for (int i = 0; i < size; i++) {
+	        uchar& uxy = img2.at<uchar>(j, i);
+	        int color = (int) uxy;
+	        inim[j*size + i] = color;
+	    }
 	}
 
 }

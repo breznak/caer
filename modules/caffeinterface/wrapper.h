@@ -14,7 +14,7 @@ typedef struct MyCaffe MyCaffe;
 
 MyCaffe* newMyCaffe();
 
-void MyCaffe_file_set(MyCaffe* v, int * i, int size, double *b, double thr,
+void MyCaffe_file_set(MyCaffe* v, int * i, int size, char *b, double thr,
 					bool printoutputs, caerFrameEvent *single_frame,
 						bool showactivations, bool norminput);
 

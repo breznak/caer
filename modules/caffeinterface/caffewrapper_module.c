@@ -78,7 +78,7 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber,
 
 	int * hist = va_arg(args, int *);
 	int size = va_arg(args, int);
-	double *classificationResults = va_arg(args, double*);
+	char *classificationResults = va_arg(args, char*);
 	caerFrameEventPacket *networkActivity = va_arg(args, caerFrameEventPacket*);
 	int sizeDisplay = va_arg(args, int);
 
@@ -115,7 +115,7 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber,
 		caerFrameEventSetLengthXLengthYChannelNumber(single_frame, frame_x,
 				frame_y, 1, *networkActivity); // to do remove hard coded size
 				MyCaffe_file_set(state->cpp_class, hist, size,
-						&classificationResults, state->detThreshold,
+						classificationResults, state->detThreshold,
 						state->doPrintOutputs, &single_frame,
 						state->doShowActivations, state->doNormInputImages);
 		// validate frame

@@ -326,6 +326,35 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 
 }
 
+void caerImageGeneratorAddText(uint16_t moduleID, int * hist_packet,
+		caerFrameEventPacket *imagegeneratorFrame, int size, char * classification_results){
+
+	caerModuleData moduleData = caerMainloopFindModule(moduleID,
+			"ImageGenerator", CAER_MODULE_PROCESSOR);
+
+	// put info into frame
+	if (*imagegeneratorFrame != NULL) {
+		caerFrameEvent singleplot = caerFrameEventPacketGetEvent(
+				*imagegeneratorFrame, 0);
+
+		uint32_t counter = 0;
+		for (size_t x = 0; x < size; x++) {
+			for (size_t y = 0; y < size; y++) {
+				int linindex = x * size + y;
+				singleplot->pixels[counter] = (uint16_t) ((int) (hist_packet[linindex]) * 255); // red
+				singleplot->pixels[counter + 1] = (uint16_t) ((int) (hist_packet[linindex]) * 255); // green
+				singleplot->pixels[counter + 2] = (uint16_t) ((int) (hist_packet[linindex]) * 255); // blue
+				counter += 3;
+			}
+		}
+		//add info to the frame
+		caerFrameEventSetLengthXLengthYChannelNumber(singleplot, size, size, 3,
+				*imagegeneratorFrame);
+	}
+
+}
+
+
 void caerImageGeneratorMakeFrame(uint16_t moduleID, int * hist_packet,
 		caerFrameEventPacket *imagegeneratorFrame, int size) {
 
