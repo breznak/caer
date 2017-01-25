@@ -76,13 +76,6 @@ static bool caerImageGeneratorInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "colorscale", 200);
 	state->colorscale = sshsNodeGetInt(moduleData->moduleNode, "colorscale");
 
-	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode,
-			"sourceInfo/");
-	if (!sshsNodeAttributeExists(sourceInfoNode, "dvsSizeX", SSHS_SHORT)) {
-		sshsNodePutShortIfAbsent(moduleData->moduleNode, "dvsSizeX", CAMERA_X);
-		sshsNodePutShortIfAbsent(moduleData->moduleNode, "dvsSizeY", CAMERA_Y);
-	}
-
 	state->ImageMap = NULL;
 
 	return (true);
@@ -90,7 +83,7 @@ static bool caerImageGeneratorInit(caerModuleData moduleData) {
 
 static void caerImageGeneratorExit(caerModuleData moduleData) {
 	imagegeneratorState state = moduleData->moduleState;
-
+	return;
 }
 
 //This function implement 3sigma normalization and converts the image in nullhop format
@@ -184,11 +177,15 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 		return;
 	}
 
+	int16_t sourceID = caerEventPacketHeaderGetEventSource(&polarity->packetHeader);
+	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
+	if (!sshsNodeAttributeExists(sourceInfoNode, "dvsSizeX", SSHS_SHORT)) {
+		sshsNodePutShortIfAbsent(moduleData->moduleNode, "dvsSizeX", sshsNodeGetShort(sourceInfoNode, "dvsSizeX"));
+		sshsNodePutShortIfAbsent(moduleData->moduleNode, "dvsSizeY", sshsNodeGetShort(sourceInfoNode, "dvsSizeY"));
+	}
+
 	//update module state
 	imagegeneratorState state = moduleData->moduleState;
-
-	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode,
-			"sourceInfo/");
 
 	/* **** SPIKE SECTION START *** */
 	// If the map is not allocated yet, do it.
@@ -205,8 +202,8 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 
 	if (polarity != NULL) {
 
-		float cam_sizeX = CAMERA_X;//#sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-		float cam_sizeY = CAMERA_Y;//#sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
+		float cam_sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
+		float cam_sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
 		float res_x = CLASSIFY_IMG_SIZE / cam_sizeX;
 		float res_y = CLASSIFY_IMG_SIZE / cam_sizeY;

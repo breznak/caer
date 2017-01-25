@@ -955,21 +955,21 @@ void ResetBiases(void *spikeGenState) {
 					"HighBias", "PBias");
 			setBiasBits(state, chipId, coreId, "NPDPIE_THR_S_P", 7, 0,
 					"HighBias", "PBias");
-			setBiasBits(state, chipId, coreId, "NPDPII_TAU_F_P", 7, 40,
+			setBiasBits(state, chipId, coreId, "NPDPII_TAU_F_P", 6, 150,
 					"HighBias", "NBias");
 			setBiasBits(state, chipId, coreId, "NPDPII_TAU_S_P", 7, 40,
 					"HighBias", "NBias");
-			setBiasBits(state, chipId, coreId, "NPDPII_THR_F_P", 7, 40,
+			setBiasBits(state, chipId, coreId, "NPDPII_THR_F_P", 0, 220,
 					"HighBias", "PBias");
-			setBiasBits(state, chipId, coreId, "NPDPII_THR_S_P", 7, 40,
+			setBiasBits(state, chipId, coreId, "NPDPII_THR_S_P", 7, 0,
 					"HighBias", "PBias");
 			setBiasBits(state, chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 250,
 					"HighBias", "NBias");
-			setBiasBits(state, chipId, coreId, "PS_WEIGHT_EXC_S_N", 7, 1,
+			setBiasBits(state, chipId, coreId, "PS_WEIGHT_EXC_S_N", 1, 250,
 					"HighBias", "NBias");
-			setBiasBits(state, chipId, coreId, "PS_WEIGHT_INH_F_N", 7, 1,
+			setBiasBits(state, chipId, coreId, "PS_WEIGHT_INH_F_N", 0, 250,
 					"HighBias", "NBias");
-			setBiasBits(state, chipId, coreId, "PS_WEIGHT_INH_S_N", 7, 1,
+			setBiasBits(state, chipId, coreId, "PS_WEIGHT_INH_S_N", 1, 250,
 					"HighBias", "NBias");
 			setBiasBits(state, chipId, coreId, "PULSE_PWLK_P", 3, 50,
 					"HighBias", "PBias");
