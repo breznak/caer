@@ -179,10 +179,10 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 
 	int16_t sourceID = caerEventPacketHeaderGetEventSource(&polarity->packetHeader);
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
-	if (!sshsNodeAttributeExists(sourceInfoNode, "dvsSizeX", SSHS_SHORT)) {
+	/*if (!sshsNodeAttributeExists(sourceInfoNode, "dvsSizeX", SSHS_SHORT)) {
 		sshsNodePutShortIfAbsent(moduleData->moduleNode, "dvsSizeX", sshsNodeGetShort(sourceInfoNode, "dvsSizeX"));
 		sshsNodePutShortIfAbsent(moduleData->moduleNode, "dvsSizeY", sshsNodeGetShort(sourceInfoNode, "dvsSizeY"));
-	}
+	}*/
 
 	//update module state
 	imagegeneratorState state = moduleData->moduleState;

@@ -24,7 +24,7 @@ static float visualThrehold = 40;
 static int maxClusterNum = 5;
 static int currentClusterNum = 0;
 static int clusterMassDecay = 10000;
-static int defaultClusterRadius = 25;
+static int defaultClusterRadius = 70;
 static double mixingFactor = 0.01;
 static float massForVisible = 40;
 static int TimeStep = 100;
@@ -98,9 +98,10 @@ static bool caerSurveillanceInit(caerModuleData moduleData) {
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
+	sshsNode sourceInfoNodeCA = caerMainloopGetSourceInfo(1);  // TODO !!! -> remove hard CODED moduleID
 	if (!sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SSHS_SHORT)) { //to do for visualizer change name of field to a more generic one
-		sshsNodePutShort(sourceInfoNode, "dataSizeX", 240);
-		sshsNodePutShort(sourceInfoNode, "dataSizeY", 180);
+		sshsNodePutShort(sourceInfoNode, "dataSizeX", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeX"));
+		sshsNodePutShort(sourceInfoNode, "dataSizeY", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeX"));
 	}
 
 	// initialize all cluster as empty
