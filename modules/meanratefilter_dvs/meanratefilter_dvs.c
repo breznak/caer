@@ -119,6 +119,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	if(state->eventSourceModuleState == NULL || state->eventSourceConfigNode == NULL){
 		return;
 	}
+
 	caerInputDVSState stateSource = state->eventSourceModuleState;
 	if(stateSource->deviceState == NULL){
 		return;
