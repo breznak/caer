@@ -15,7 +15,7 @@
 
 #ifdef DVS128
 #else
-	#error "MEANRATEFILTER_DVS ONLY works for DVS128. TODO: extend stateSource with deviceState for FX2/FX3 based camera."
+	#error "MEANRATEFILTER_DVS ONLY works for DVS128. TODO: extend stateSource with deviceState for DAVIS and advanced prototype sensors."
 #endif
 
 void caerMeanRateFilterDVS(uint16_t moduleID, int16_t eventSourceID, caerPolarityEventPacket polarity, caerFrameEventPacket *freqplot);
