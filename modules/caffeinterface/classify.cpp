@@ -19,7 +19,17 @@ void MyCaffe::file_set(int * inim, int size, char *b, double thr,
 		}
 	}
 
-	cv::Mat img = cv::Mat(size, size, CV_8UC1, &inim[0]);
+	// Loading img
+	cv::Mat img = cv::Mat(size, size, CV_8UC1);
+	for(size_t i=0; i<size; i++)
+	{
+		for(size_t j=0; j<size; j++)
+		{
+			img.data[i*size+j] = inim[i*size+j];
+		}
+	}
+
+	// Convert img to float for Caffe
 	cv::Mat img2;
 	img.convertTo(img2, CV_32FC1);
 	if(norminput){
@@ -43,16 +53,16 @@ void MyCaffe::file_set(int * inim, int size, char *b, double thr,
 		}
 	}
 
-	cv::putText(img2, p.first.c_str(), cv::Point(2,10), CV_FONT_HERSHEY_PLAIN, 0.6, cv::Scalar(255));
-
-	img2.convertTo(img2, CV_8UC1);
+	cv::putText(img, p.first.c_str(), cv::Point(2,10), CV_FONT_HERSHEY_PLAIN, 0.6, cv::Scalar(255));
 	for (int j = 0; j < size; j++) {
 	    for (int i = 0; i < size; i++) {
-	        uchar& uxy = img2.at<uchar>(j, i);
+	        uchar& uxy = img.at<uchar>(j, i);
 	        int color = (int) uxy;
 	        inim[j*size + i] = color;
 	    }
 	}
+	//cv::imshow("debug",255.*img);
+	//cv::waitKey(1);
 
 }
 
@@ -64,6 +74,7 @@ void MyCaffe::init_network() {
 	string label_file = NET_VAL;
 	MyCaffe::Classifier(model_file, trained_file, mean_file, label_file);
 
+	//cv::namedWindow("debug",0);
 	return;
 
 }
