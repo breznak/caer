@@ -56,9 +56,9 @@ void MyCaffe::file_set(int * inim, int size, char *b, double thr,
 	cv::putText(img, p.first.c_str(), cv::Point(2,10), CV_FONT_HERSHEY_PLAIN, 0.6, cv::Scalar(255));
 	for (int j = 0; j < size; j++) {
 	    for (int i = 0; i < size; i++) {
-	        uchar& uxy = img.at<uchar>(j, i);
+	        uchar& uxy = img.at<uchar>(i, j);
 	        int color = (int) uxy;
-	        inim[j*size + i] = color;
+	        inim[i*size + j] = color;
 	    }
 	}
 	//cv::imshow("debug",255.*img);

@@ -78,7 +78,10 @@
 #ifdef ENABLE_MEANFILTER
 #include "modules/meanfilter/meanfilter.h"
 #endif
-
+#ifdef ENABLE_MEANRATEFILTER_DVS
+#include <libcaer/events/frame.h>
+#include "modules/meanratefilter_dvs/meanratefilter_dvs.h"
+#endif
 
 #ifdef ENABLE_IMAGEGENERATOR
 #include "modules/imagegenerator/imagegenerator.h"
@@ -207,6 +210,17 @@ static bool mainloop_1(void) {
 	caerMeanfilterFilter(14, polarity, &meanFrame);
 #endif
 
+	// Filter that track one object by using the median position information
+#ifdef ENABLE_MEANRATEFILTER_DVS
+	caerFrameEventPacket freqplot = NULL;
+#ifdef DVS128
+	caerMeanRateFilterDVS(15, 1, polarity, &freqplot);
+#endif
+#ifdef ENABLE_FILE_INPUT
+	caerMeanRateFilterDVS(15, 10, polarity, &freqplot);
+#endif
+#endif
+
 	// Enable APS frame image enhancements.
 #ifdef ENABLE_FRAMEENHANCER
 	frame = caerFrameEnhancer(4, frame);
@@ -228,6 +242,11 @@ static bool mainloop_1(void) {
 #if defined(DAVISFX2) || defined(DAVISFX3)
 	caerVisualizer(61, "Frame", &caerVisualizerRendererFrameEvents, visualizerEventHandler, (caerEventPacketHeader) frame);
 	caerVisualizer(62, "IMU6", &caerVisualizerRendererIMU6Events, visualizerEventHandler, (caerEventPacketHeader) imu);
+#endif
+#ifdef ENABLE_MEANRATEFILTER_DVS
+	if(freqplot != NULL){
+	caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
+	}
 #endif
 	//caerVisualizerMulti(68, "PolarityAndFrame", &caerVisualizerMultiRendererPolarityAndFrameEvents, visualizerEventHandler, container);
 #endif
@@ -352,6 +371,10 @@ static bool mainloop_1(void) {
 
 #if defined(ENABLE_MEANFILTER) && defined(ENABLE_VISUALIZER)
 	free(meanFrame);
+#endif
+
+#ifdef ENABLE_MEANRATEFILTER_DVS
+	free(freqplot);
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.
