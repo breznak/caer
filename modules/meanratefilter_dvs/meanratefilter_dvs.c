@@ -9,8 +9,9 @@
 #include "base/mainloop.h"
 #include "base/module.h"
 #include "ext/buffers.h"
-#include "libcaer/devices/dvs128.h"
 #include "ext/colorjet/colorjet.h"
+
+struct timespec tstart = { 0, 0 }, tend = { 0, 0 };
 
 struct MRFilter_state {
 	sshsNode eventSourceModuleState;
@@ -25,7 +26,7 @@ struct MRFilter_state {
 	double measureStartedAt;
 	bool startedMeas;
 	bool doSetFreq;
-	struct timespec tstart;			//struct is defined in gen_spike.c
+	struct timespec tstart;
 	struct timespec tend;
 };
 
@@ -54,10 +55,10 @@ void caerMeanRateFilterDVS(uint16_t moduleID,  int16_t eventSourceID, caerPolari
 }
 
 static bool caerMeanRateFilterInit(caerModuleData moduleData) {
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "colorscaleMax", 500);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "colorscaleMax", 150);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "colorscaleMin", 0);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "targetFreq", 100);
-	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "measureMinTime", 3.0);
+	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "measureMinTime", 0.3);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doSetFreq", false);
 
 	MRFilterState state = moduleData->moduleState;
@@ -88,6 +89,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	int16_t eventSourceID = va_arg(args, int);
 	caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
 	caerFrameEventPacket *freqplot = va_arg(args, caerFrameEventPacket*);
+
 
 	// Only process packets with content.
 	if (polarity == NULL) {
@@ -120,11 +122,19 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		return;
 	}
 
+#if defined(DVS128)
 	caerInputDVSState stateSource = state->eventSourceModuleState;
+#else
+	caerInputDAVISState stateSource = state->eventSourceModuleState;
+#endif
 	if(stateSource->deviceState == NULL){
 		return;
 	}
+#if defined(DVS128)
 	struct caer_dvs128_info dev_info = caerDVS128InfoGet(stateSource->deviceState);
+#else
+	struct caer_davis_info dev_info = caerDavisInfoGet(stateSource->deviceState);
+#endif
 	// --- end usb handle
 
 	// if not measuring, let's start
@@ -177,7 +187,6 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 
 		// Update value into maps 
 		state->spikeCountMap->buffer2d[x][y] += 1;
-
 	CAER_POLARITY_ITERATOR_VALID_END
 
 
@@ -189,7 +198,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		uint32_t counter = 0;
 		for (size_t x = 0; x < sizeX; x++) {
 			for (size_t y = 0; y < sizeY; y++) {
-				COLOUR col  = GetColour((double) state->frequencyMap->buffer2d[y][x], state->colorscaleMin, state->colorscaleMax);
+				COLOUR col  = GetColour((double) state->frequencyMap->buffer2d[x][y], state->colorscaleMin, state->colorscaleMax);
 				singleplot->pixels[counter] = (uint16_t) ( (int)(col.r*65535));			// red
 				singleplot->pixels[counter + 1] = (uint16_t) ( (int)(col.g*65535));		// green
 				singleplot->pixels[counter + 2] = (uint16_t) ( (int)(col.b*65535) );		// blue

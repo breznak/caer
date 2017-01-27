@@ -213,9 +213,7 @@ static bool mainloop_1(void) {
 	// Filter that track one object by using the median position information
 #ifdef ENABLE_MEANRATEFILTER_DVS
 	caerFrameEventPacket freqplot = NULL;
-#ifdef DVS128
 	caerMeanRateFilterDVS(15, 1, polarity, &freqplot);
-#endif
 #ifdef ENABLE_FILE_INPUT
 	caerMeanRateFilterDVS(15, 10, polarity, &freqplot);
 #endif
@@ -245,7 +243,7 @@ static bool mainloop_1(void) {
 #endif
 #ifdef ENABLE_MEANRATEFILTER_DVS
 	if(freqplot != NULL){
-	caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
+		caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
 	}
 #endif
 	//caerVisualizerMulti(68, "PolarityAndFrame", &caerVisualizerMultiRendererPolarityAndFrameEvents, visualizerEventHandler, container);
