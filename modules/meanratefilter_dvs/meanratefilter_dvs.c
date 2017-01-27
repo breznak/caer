@@ -11,8 +11,6 @@
 #include "ext/buffers.h"
 #include "ext/colorjet/colorjet.h"
 
-struct timespec tstart = { 0, 0 }, tend = { 0, 0 };
-
 struct MRFilter_state {
 	sshsNode eventSourceModuleState;
 	sshsNode eventSourceConfigNode;
@@ -195,6 +193,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	if (*freqplot != NULL) {
 		caerFrameEvent singleplot = caerFrameEventPacketGetEvent(*freqplot, 0);
 
+#ifdef DVS128
 		uint32_t counter = 0;
 		for (size_t x = 0; x < sizeX; x++) {
 			for (size_t y = 0; y < sizeY; y++) {
@@ -205,6 +204,18 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 				counter += 3;
 			}
 		}
+#else
+		uint32_t counter = 0;
+		for (size_t x = 0; x < sizeY; x++) {
+			for (size_t y = 0; y < sizeX; y++) {
+				COLOUR col  = GetColour((double) state->frequencyMap->buffer2d[y][x], state->colorscaleMin, state->colorscaleMax);
+				singleplot->pixels[counter] = (uint16_t) ( (int)(col.r*65535));			// red
+				singleplot->pixels[counter + 1] = (uint16_t) ( (int)(col.g*65535));		// green
+				singleplot->pixels[counter + 2] = (uint16_t) ( (int)(col.b*65535) );		// blue
+				counter += 3;
+			}
+		}
+#endif
 
 		//add info to the frame
 		caerFrameEventSetLengthXLengthYChannelNumber(singleplot, sizeX, sizeY, 3, *freqplot);
