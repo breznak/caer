@@ -197,7 +197,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		uint32_t counter = 0;
 		for (size_t x = 0; x < sizeX; x++) {
 			for (size_t y = 0; y < sizeY; y++) {
-				COLOUR col  = GetColour((double) state->frequencyMap->buffer2d[x][y], state->colorscaleMin, state->colorscaleMax);
+				COLOUR col  = GetColour((double) state->frequencyMap->buffer2d[y][x], state->colorscaleMin, state->colorscaleMax);
 				singleplot->pixels[counter] = (uint16_t) ( (int)(col.r*65535));			// red
 				singleplot->pixels[counter + 1] = (uint16_t) ( (int)(col.g*65535));		// green
 				singleplot->pixels[counter + 2] = (uint16_t) ( (int)(col.b*65535) );		// blue

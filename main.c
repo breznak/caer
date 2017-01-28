@@ -243,7 +243,7 @@ static bool mainloop_1(void) {
 #endif
 #ifdef ENABLE_MEANRATEFILTER_DVS
 	if(freqplot != NULL){
-		caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
+		caerVisualizer(70, "MeanRateFrequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
 	}
 #endif
 	//caerVisualizerMulti(68, "PolarityAndFrame", &caerVisualizerMultiRendererPolarityAndFrameEvents, visualizerEventHandler, container);
