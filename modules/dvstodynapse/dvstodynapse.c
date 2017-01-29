@@ -10,7 +10,6 @@
 #include "libcaer/devices/dynapse.h"
 #include "ext/buffers.h"
 
-
 struct DvsToDynapse_state {
 	sshsNode eventSourceModuleState;
 	sshsNode eventSourceConfigNode;
@@ -93,7 +92,6 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 	if(stateSource->deviceState == NULL){
 		return;
 	}
-	//struct caer_dynapse_info dynapse_info = caerDynapseInfoGet(stateSource->deviceState);
 	// --- end usb handle
 
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(caerEventPacketHeaderGetEventSource(&polarity->packetHeader));
@@ -105,8 +103,6 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 
 	// if mapping is on
 	if(state->doMapping){
-		//caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Do Mapping...");
-
 		// If the map is not allocated yet, do it.
 		if (state->DownsampledMap == NULL) {
 			if (!allocateDownsampledMap(state, caerEventPacketHeaderGetEventSource(&polarity->packetHeader))) {
@@ -115,14 +111,20 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 				return;
 			}
 		}
-		// select chip
-		caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, state->chipId);
-
+		// select destination chip
+		if(     state->chipId == DYNAPSE_CONFIG_DYNAPSE_U0 ||
+				state->chipId == DYNAPSE_CONFIG_DYNAPSE_U1 ||
+				state->chipId == DYNAPSE_CONFIG_DYNAPSE_U2 ||
+				state->chipId == DYNAPSE_CONFIG_DYNAPSE_U3){
+			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, state->chipId);
+		}else{
+			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Chip Id selected is non valid, please select one of 0,4,8,12\n");
+		}
 		// prepare packet that will be transferred via USB
 		// Iterate over all DVS events
 		int32_t numSpikes = caerEventPacketHeaderGetEventNumber(&polarity->packetHeader);
 
-		//caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "numSpike...");
+		// reset previous map downsampled
 		for(size_t i=0; i<DYNAPSE_CONFIG_XCHIPSIZE; i++){
 			for(size_t j=0; j<DYNAPSE_CONFIG_YCHIPSIZE; j++){
 				state->DownsampledMap->buffer2d[i][j] = 0;
@@ -145,7 +147,6 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 			if(new_y >= DYNAPSE_CONFIG_YCHIPSIZE){
 				new_y = 31;
 			}
-			//caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "new_x %d - new_y %d\n", new_x, new_y);
 			// only positives spikes, bandwidth reduction
 			if(pol_pol == 1){
 				state->DownsampledMap->buffer2d[new_x][new_y] += 1;
@@ -155,13 +156,9 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 		CAER_POLARITY_ITERATOR_VALID_END
 
 		// prepare data for usb transfer
-		uint32_t bits[numSpikes]; // = calloc(numSpikes, sizeof (uint8_t));
-		for(size_t i=0; i<numSpikes ; i++){
-			bits[i]=0;
-		}
+		uint32_t bits[numSpikes];
 		uint32_t numConfig = 0;
 		uint32_t idxConfig = 0;
-		//caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "thresholding...");
 		bool dataReady = false;
 
 		//only let pass above the state->threshold
@@ -225,9 +222,16 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 						sx = 0;
 						sy = 1;
 					}
-					int core_d = 0;
+					int core_d;
+					if(     state->chipId == DYNAPSE_CONFIG_DYNAPSE_U0 ||
+									state->chipId == DYNAPSE_CONFIG_DYNAPSE_U1 ||
+									state->chipId == DYNAPSE_CONFIG_DYNAPSE_U2 ||
+									state->chipId == DYNAPSE_CONFIG_DYNAPSE_U3){
+						core_d = state->chipId;
+					}else{
+						core_d = 0;
+					}
 					int core_s = core_dest;
-
 					int address = nx*sqrt(DYNAPSE_CONFIG_NUMNEURONS_CORE)+ny;
 					uint32_t value = core_d | 0 << 16
 							| 0 << 17 | 1 << 13 |
@@ -247,7 +251,6 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 
 		// we got data
 		if(dataReady){
-			//caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "sending data numConfig %d ...", numConfig);
 			// send data with libusb host transfer in packet
 			if(!caerDynapseSendDataToUSB(stateSource->deviceState, bits, numConfig)){
 				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
@@ -274,7 +277,6 @@ static void caerDvsToDynapseExit(caerModuleData moduleData) {
 	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
 	DvsToDynapseState state = moduleData->moduleState;
-
 	// Ensure maps are freed.
 	simple2DBufferFreeLong(state->DownsampledMap);
 
@@ -282,8 +284,6 @@ static void caerDvsToDynapseExit(caerModuleData moduleData) {
 
 static void caerDvsToDynapseReset(caerModuleData moduleData, uint16_t resetCallSourceID) {
 	UNUSED_ARGUMENT(resetCallSourceID);
-
-	DvsToDynapseState state = moduleData->moduleState;
 
 }
 
