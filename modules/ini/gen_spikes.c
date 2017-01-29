@@ -396,7 +396,6 @@ void spiketrainReg(void *spikeGenState) {
 		caerDeviceConfigSet((caerDeviceHandle) state->deviceState,
 		DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, value); //usb_handle
 		//caerLog(CAER_LOG_NOTICE, "spikeGen", "sending spikes %d \n", value);
-
 	}
 
 }
