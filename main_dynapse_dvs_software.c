@@ -5,11 +5,13 @@
  *      Author: federico.corradi@inilabs.com
  *
  *  Compile & run:
- *  $ cd caer/
- *  $ rm -rf CMakeFiles CMakeCache.txt
- *  $ cmake -DCMAKE_BUILD_TYPE=Debug -DDYNAPSEFX2=1 -DENABLE_STATISTICS=1 -DENABLE_VISUALIZER=1 -DENABLE_MEANRATEFILTER=1 -DENABLE_MONITORNEUFILTER=1 -DENABLE_FILE_OUTPUT=0 .
- *  $ make
- *  $ ./caer-bin
+ *
+ *  rm -rf CMakeFiles CMakeCache.txt
+ *  cp main_dynapse_dvs_software.c main.c
+ *  cmake -DCMAKE_BUILD_TYPE=Debug -DDYNAPSEFX2=1 -DDVS128=1 -DENABLE_STATISTICS=1 \
+ *  -DENABLE_VISUALIZER=1 -DENABLE_MEANRATEFILTER=1 -DENABLE_FILE_OUTPUT=1 -DENABLE_MONITORNEUFILTER=1 \
+ *   -DENABLE_INFOFILTER=0 -DENABLE_DVSTODYNAPSE=1 .
+ *   make -j 4
  */
 
 #include "main.h"
