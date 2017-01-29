@@ -4,6 +4,9 @@
  *  Created on: Jan 2017
  *      Author: federico.corradi@inilabs.com
  *
+ * 	This example program shows how to connect a DVS128 or DAVISFX2/FX3 camera
+ * 	to the DYNAP-SE Board using a software mapping
+ *
  *  Compile & run:
  *
  *  rm -rf CMakeFiles CMakeCache.txt
