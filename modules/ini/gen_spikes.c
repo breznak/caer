@@ -37,12 +37,10 @@ void SetCam(void *spikeGenState);
 void SetCamSingle(void *spikeGenState);
 void ClearCam(void *spikeGenState);
 void ClearAllCam(void *spikeGenState);
-void WriteCam(void *spikeGenState, uint32_t preNeuronAddr,
-		uint32_t postNeuronAddr, uint32_t camId, int16_t synapseType);
 void ResetBiases(void *spikeGenState);
-void setBiasBits(void *spikeGenState, uint32_t chipId, uint32_t coreId,
-		const char *biasName_t, uint8_t coarseValue, uint16_t fineValue,
-		const char *lowHigh, const char *npBias);
+//void setBiasBits(void *spikeGenState, uint32_t chipId, uint32_t coreId,
+//		const char *biasName_t, uint8_t coarseValue, uint16_t fineValue,
+//		const char *lowHigh, const char *npBias);
 
 struct timespec tstart = { 0, 0 }, tend = { 0, 0 };
 static int CamSeted = 0;
@@ -623,7 +621,8 @@ void SetCam(void *spikeGenState) {
 	for (neuronId = 0;
 			neuronId < DYNAPSE_CONFIG_XCHIPSIZE * DYNAPSE_CONFIG_YCHIPSIZE;
 			neuronId++) {
-		WriteCam(state, neuronId, neuronId, 0, 3);
+		//WriteCam(state, neuronId, neuronId, 0, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
+		caerDynapseWriteCam(state->deviceState, neuronId, neuronId, 0, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
 	}
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "CAM programmed successfully.");
 
@@ -713,29 +712,34 @@ void SetCamSingle(void *spikeGenState) {
 		for (colId = 0; colId < DYNAPSE_CONFIG_YCHIPSIZE; colId++) {
 			neuronId = ((rowId & 0X10) >> 4) << 9 | ((colId & 0X10) >> 4) << 8
 					| (rowId & 0xf) << 4 | colId & 0xf;
-			if (spikePatternA[rowId][colId] == 1)
-				WriteCam(state, 1, neuronId, 0, 3);
-			if (spikePatternB[rowId][colId] == 1)
-				WriteCam(state, 2, neuronId, 1, 3);
-			if (spikePatternC[rowId][colId] == 1)
-				WriteCam(state, 3, neuronId, 2, 3);
+			if (spikePatternA[rowId][colId] == 1){
+				caerDynapseWriteCam(state->deviceState, 1, neuronId, 0, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
+			}
+			if (spikePatternB[rowId][colId] == 1){
+				//WriteCam(state, 2, neuronId, 1, 3);
+				caerDynapseWriteCam(state->deviceState, 2, neuronId, 1, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
+			}
+			if (spikePatternC[rowId][colId] == 1){
+				//WriteCam(state, 3, neuronId, 2, 3);
+				caerDynapseWriteCam(state->deviceState, 3, neuronId, 2, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
+			}
 		}
 	}
 
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
 	DYNAPSE_CONFIG_DYNAPSE_U2); //4, the third chip
 	neuronId = 3 << 8 | 0;
-	WriteCam(state, 1, neuronId, 61, 3);
-	WriteCam(state, 2, neuronId, 62, 1);
-	WriteCam(state, 3, neuronId, 63, 1);
+	caerDynapseWriteCam(state->deviceState, 1, neuronId, 61, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
+	caerDynapseWriteCam(state->deviceState, 2, neuronId, 62, 1);
+	caerDynapseWriteCam(state->deviceState, 3, neuronId, 63, 1);
 	neuronId = 3 << 8 | 1;
-	WriteCam(state, 1, neuronId, 61, 1);
-	WriteCam(state, 2, neuronId, 62, 3);
-	WriteCam(state, 3, neuronId, 63, 1);
+	caerDynapseWriteCam(state->deviceState, 1, neuronId, 61, 1);
+	caerDynapseWriteCam(state->deviceState, 2, neuronId, 62, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
+	caerDynapseWriteCam(state->deviceState, 3, neuronId, 63, 1);
 	neuronId = 3 << 8 | 2;
-	WriteCam(state, 1, neuronId, 61, 1);
-	WriteCam(state, 2, neuronId, 62, 1);
-	WriteCam(state, 3, neuronId, 63, 3);
+	caerDynapseWriteCam(state->deviceState, 1, neuronId, 61, 1);
+	caerDynapseWriteCam(state->deviceState, 2, neuronId, 62, 1);
+	caerDynapseWriteCam(state->deviceState, 3, neuronId, 63, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
 
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "CAM programmed successfully.");
 
@@ -779,7 +783,8 @@ void ClearCam(void *spikeGenState) {
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "Started clearing cam...");
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "please wait...");
 	for (neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS; neuronId++) {
-		WriteCam(state, 0, neuronId, 0, 0);
+		//WriteCam(state, 0, neuronId, 0, 0);
+		caerDynapseWriteCam(state->deviceState, 0, neuronId, 0, 0);
 	}
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "Done, CAM cleared successfully.");
 	atomic_store(&state->genSpikeState.clearCam, false);
@@ -820,11 +825,20 @@ void ClearAllCam(void *spikeGenState) {
 	caerDeviceHandle usb_handle = (caerDeviceHandle) state->deviceState;
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
 			atomic_load(&state->genSpikeState.chip_id));
-	uint32_t neuronId, camId;
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "Started clearing cam..");
-	for (neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS; neuronId++) {
-		for (camId = 0; camId < DYNAPSE_X4BOARD_NEUX; camId++) {
-			WriteCam(state, 0, neuronId, camId, 0);
+	uint32_t bits[DYNAPSE_CONFIG_NUMNEURONS*DYNAPSE_X4BOARD_NEUX];
+	uint32_t numConfig = -1;
+	for (size_t neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS; neuronId++) {
+		numConfig = -1;
+		for (size_t camId = 0; camId < DYNAPSE_X4BOARD_NEUX; camId++) {
+			numConfig++;
+			bits[numConfig]=caerDynapseWriteCamBits(0, neuronId, camId, 0);
+		}
+		// send data with libusb host transfer in packet
+		if(!caerDynapseSendDataToUSB(usb_handle, bits, numConfig)){
+			caerLog(CAER_LOG_ERROR, "spikeGen",
+					"USB transfer failed, maybe you have tried to send too many data: numConfig is %d, "
+					"however maxnumConfig %d", numConfig, DYNAPSE_MAX_USER_USB_PACKET_SIZE);
 		}
 	}
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "CAM cleared successfully.");
@@ -858,30 +872,6 @@ void ClearAllCam(void *spikeGenState) {
 
 }
 
-void WriteCam(void *spikeGenState, uint32_t preNeuronAddr,
-		uint32_t postNeuronAddr, uint32_t camId, int16_t synapseType) {
-	if (spikeGenState == NULL) {
-		return;
-	}
-	caerInputDynapseState state = spikeGenState;
-	caerDeviceHandle usb_handle = (caerDeviceHandle) state->deviceState;
-
-	uint32_t bits;
-	uint32_t ei = (synapseType & 0x2) >> 1;
-	uint32_t fs = synapseType & 0x1;
-	uint32_t address = preNeuronAddr & 0xff;
-	uint32_t source_core = (preNeuronAddr & 0x300) >> 8;
-	uint32_t coreId = (postNeuronAddr & 0x300) >> 8;
-	uint32_t neuron_row = (postNeuronAddr & 0xf0) >> 4;
-	uint32_t synapse_row = camId;
-	uint32_t row = neuron_row << 6 | synapse_row;
-	uint32_t column = postNeuronAddr & 0xf;
-	bits = ei << 29 | fs << 28 | address << 20 | source_core << 18 | 1 << 17
-			| coreId << 15 | row << 5 | column;
-	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP,
-	DYNAPSE_CONFIG_CHIP_CONTENT, bits);
-}
-
 void ResetBiases(void *spikeGenState) {
 
 	caerLog(CAER_LOG_NOTICE, "loadDefaultBiases", "started...");
@@ -911,68 +901,55 @@ void ResetBiases(void *spikeGenState) {
 		DYNAPSE_CONFIG_CHIP_ID, chipId);
 
 		for (coreId = 0; coreId < 4; coreId++) {
-			/*if(chipId_t == 0 && coreId == 0){
-			 setBiasBits(state, chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias", "NBias");
-			 setBiasBits(state, chipId, coreId, "IF_AHTHR_N", 7, 1, "HighBias", "NBias");
-			 setBiasBits(state, chipId, coreId, "IF_AHW_P", 7, 1, "HighBias", "PBias");
-			 setBiasBits(state, chipId, coreId, "IF_BUF_P", 3, 80, "HighBias", "PBias");
-			 setBiasBits(state, chipId, coreId, "IF_CASC_N", 7, 1, "HighBias", "NBias");
-			 setBiasBits(state, chipId, coreId, "IF_DC_P", 5, 2, "HighBias", "PBias");
-			 setBiasBits(state, chipId, coreId, "IF_NMDA_N", 7, 1, "HighBias", "NBias");
-			 setBiasBits(state, chipId, coreId, "IF_RFR_N", 2, 180, "HighBias", "NBias");
-			 setBiasBits(state, chipId, coreId, "IF_TAU1_N", 6, 8, "LowBias", "NBias");
-			 setBiasBits(state, chipId, coreId, "IF_TAU2_N", 6, 15, "HighBias", "NBias");
-			 setBiasBits(state, chipId, coreId, "IF_THR_N", 3, 50, "HighBias", "NBias");
-			 }else if(chipId_t == 0 && coreId == 1){*/
-			setBiasBits(state, chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias",
+			caerDynapseSetBiasBits(state, chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias",
 					"NBias");
-			setBiasBits(state, chipId, coreId, "IF_AHTHR_N", 7, 1, "HighBias",
+			caerDynapseSetBiasBits(state, chipId, coreId, "IF_AHTHR_N", 7, 1, "HighBias",
 					"NBias");
-			setBiasBits(state, chipId, coreId, "IF_AHW_P", 7, 1, "HighBias",
+			caerDynapseSetBiasBits(state, chipId, coreId, "IF_AHW_P", 7, 1, "HighBias",
 					"PBias");
-			setBiasBits(state, chipId, coreId, "IF_BUF_P", 3, 80, "HighBias",
+			caerDynapseSetBiasBits(state, chipId, coreId, "IF_BUF_P", 3, 80, "HighBias",
 					"PBias");
-			setBiasBits(state, chipId, coreId, "IF_CASC_N", 7, 1, "HighBias",
+			caerDynapseSetBiasBits(state, chipId, coreId, "IF_CASC_N", 7, 1, "HighBias",
 					"NBias");
-			setBiasBits(state, chipId, coreId, "IF_DC_P", 5, 2, "HighBias",
+			caerDynapseSetBiasBits(state, chipId, coreId, "IF_DC_P", 5, 2, "HighBias",
 					"PBias");
-			setBiasBits(state, chipId, coreId, "IF_NMDA_N", 7, 1, "HighBias",
+			caerDynapseSetBiasBits(state, chipId, coreId, "IF_NMDA_N", 7, 1, "HighBias",
 					"NBias");
-			setBiasBits(state, chipId, coreId, "IF_RFR_N", 2, 180, "HighBias",
+			caerDynapseSetBiasBits(state, chipId, coreId, "IF_RFR_N", 2, 180, "HighBias",
 					"NBias");
-			setBiasBits(state, chipId, coreId, "IF_TAU1_N", 4, 255, "LowBias",
+			caerDynapseSetBiasBits(state, chipId, coreId, "IF_TAU1_N", 4, 255, "LowBias",
 					"NBias");
-			setBiasBits(state, chipId, coreId, "IF_TAU2_N", 6, 15, "HighBias",
+			caerDynapseSetBiasBits(state, chipId, coreId, "IF_TAU2_N", 6, 15, "HighBias",
 					"NBias");
-			setBiasBits(state, chipId, coreId, "IF_THR_N", 2, 180, "HighBias",
+			caerDynapseSetBiasBits(state, chipId, coreId, "IF_THR_N", 2, 180, "HighBias",
 					"NBias");
-			setBiasBits(state, chipId, coreId, "NPDPIE_TAU_F_P", 6, 150,
+			caerDynapseSetBiasBits(state, chipId, coreId, "NPDPIE_TAU_F_P", 6, 150,
 					"HighBias", "PBias");
-			setBiasBits(state, chipId, coreId, "NPDPIE_TAU_S_P", 7, 40,
+			caerDynapseSetBiasBits(state, chipId, coreId, "NPDPIE_TAU_S_P", 7, 40,
 					"HighBias", "NBias");
-			setBiasBits(state, chipId, coreId, "NPDPIE_THR_F_P", 0, 220,
+			caerDynapseSetBiasBits(state, chipId, coreId, "NPDPIE_THR_F_P", 0, 220,
 					"HighBias", "PBias");
-			setBiasBits(state, chipId, coreId, "NPDPIE_THR_S_P", 7, 0,
+			caerDynapseSetBiasBits(state, chipId, coreId, "NPDPIE_THR_S_P", 7, 0,
 					"HighBias", "PBias");
-			setBiasBits(state, chipId, coreId, "NPDPII_TAU_F_P", 6, 150,
+			caerDynapseSetBiasBits(state, chipId, coreId, "NPDPII_TAU_F_P", 6, 150,
 					"HighBias", "NBias");
-			setBiasBits(state, chipId, coreId, "NPDPII_TAU_S_P", 7, 40,
+			caerDynapseSetBiasBits(state, chipId, coreId, "NPDPII_TAU_S_P", 7, 40,
 					"HighBias", "NBias");
-			setBiasBits(state, chipId, coreId, "NPDPII_THR_F_P", 0, 220,
+			caerDynapseSetBiasBits(state, chipId, coreId, "NPDPII_THR_F_P", 0, 220,
 					"HighBias", "PBias");
-			setBiasBits(state, chipId, coreId, "NPDPII_THR_S_P", 7, 0,
+			caerDynapseSetBiasBits(state, chipId, coreId, "NPDPII_THR_S_P", 7, 0,
 					"HighBias", "PBias");
-			setBiasBits(state, chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 250,
+			caerDynapseSetBiasBits(state, chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 250,
 					"HighBias", "NBias");
-			setBiasBits(state, chipId, coreId, "PS_WEIGHT_EXC_S_N", 1, 250,
+			caerDynapseSetBiasBits(state, chipId, coreId, "PS_WEIGHT_EXC_S_N", 1, 250,
 					"HighBias", "NBias");
-			setBiasBits(state, chipId, coreId, "PS_WEIGHT_INH_F_N", 0, 250,
+			caerDynapseSetBiasBits(state, chipId, coreId, "PS_WEIGHT_INH_F_N", 0, 250,
 					"HighBias", "NBias");
-			setBiasBits(state, chipId, coreId, "PS_WEIGHT_INH_S_N", 1, 250,
+			caerDynapseSetBiasBits(state, chipId, coreId, "PS_WEIGHT_INH_S_N", 1, 250,
 					"HighBias", "NBias");
-			setBiasBits(state, chipId, coreId, "PULSE_PWLK_P", 3, 50,
+			caerDynapseSetBiasBits(state, chipId, coreId, "PULSE_PWLK_P", 3, 50,
 					"HighBias", "PBias");
-			setBiasBits(state, chipId, coreId, "R2R_P", 4, 85, "HighBias",
+			caerDynapseSetBiasBits(state, chipId, coreId, "R2R_P", 4, 85, "HighBias",
 					"PBias");
 		}
 	}
@@ -1005,42 +982,3 @@ void ResetBiases(void *spikeGenState) {
 
 }
 
-void setBiasBits(void *spikeGenState, uint32_t chipId, uint32_t coreId,
-		const char *biasName_t, uint8_t coarseValue, uint16_t fineValue,
-		const char *lowHigh, const char *npBias) {
-
-	if (spikeGenState == NULL) {
-		return;
-	}
-
-	caerInputDynapseState state = spikeGenState;
-	caerDeviceHandle usb_handle = (caerDeviceHandle) state->deviceState;
-	struct caer_dynapse_info dynapse_info = caerDynapseInfoGet(
-			state->deviceState);
-
-	size_t biasNameLength = strlen(biasName_t);
-	char biasName[biasNameLength + 3];
-
-	biasName[0] = 'C';
-	if (coreId == 0)
-		biasName[1] = '0';
-	else if (coreId == 1)
-		biasName[1] = '1';
-	else if (coreId == 2)
-		biasName[1] = '2';
-	else if (coreId == 3)
-		biasName[1] = '3';
-	biasName[2] = '_';
-
-	uint32_t i;
-	for (i = 0; i < biasNameLength + 3; i++) {
-		biasName[3 + i] = biasName_t[i];
-	}
-
-	uint32_t bits = generatesBitsCoarseFineBiasSetting(
-			state->eventSourceConfigNode, &dynapse_info, biasName, coarseValue,
-			fineValue, lowHigh, "Normal", npBias, true, chipId);
-
-	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP,
-	DYNAPSE_CONFIG_CHIP_CONTENT, bits);
-}

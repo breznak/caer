@@ -43,6 +43,9 @@ static void updateSilentBiases(caerModuleData moduleData,
 static char *int2bin(int a);
 static bool EnableStimuliGen(caerModuleData moduleData, int16_t eventSourceID);
 static bool DisableStimuliGen(caerModuleData moduleData, int16_t eventSourceID);
+bool caerDynapseSetBiasBits(void* spikeGenState, uint32_t chipId, uint32_t coreId, const char *biasName_t,
+	uint8_t coarseValue, uint16_t fineValue, const char *lowHigh, const char *npBias);
+
 
 bool EnableStimuliGen(caerModuleData moduleData, int16_t eventSourceID) {
 	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode,
@@ -2619,3 +2622,44 @@ void caerInputDYNAPSERun(caerModuleData moduleData, size_t argsNumber,
 	}
 }
 
+bool caerDynapseSetBiasBits(void* spikeGenState, uint32_t chipId, uint32_t coreId,
+	const char *biasName_t, uint8_t coarseValue, uint16_t fineValue, const char *lowHigh, const char *npBias){
+
+	caerInputDynapseState state = spikeGenState;
+	caerDeviceHandle usb_handle = (caerDeviceHandle) state->deviceState;
+	struct caer_dynapse_info dynapse_info = caerDynapseInfoGet(
+			state->deviceState);
+
+	// Check if the pointer is valid.
+	if (state->deviceState == NULL) {
+		struct caer_dynapse_info emptyInfo = { 0, .deviceString = NULL };
+		return (false);
+	}
+
+	size_t biasNameLength = strlen(biasName_t);
+	char biasName[biasNameLength + 3];
+
+	biasName[0] = 'C';
+	if (coreId == 0)
+		biasName[1] = '0';
+	else if (coreId == 1)
+		biasName[1] = '1';
+	else if (coreId == 2)
+		biasName[1] = '2';
+	else if (coreId == 3)
+		biasName[1] = '3';
+	biasName[2] = '_';
+
+	uint32_t i;
+	for (i = 0; i < biasNameLength + 3; i++) {
+		biasName[3 + i] = biasName_t[i];
+	}
+
+	uint32_t bits = generatesBitsCoarseFineBiasSetting(
+			state->eventSourceConfigNode, &dynapse_info, biasName, coarseValue,
+			fineValue, lowHigh, "Normal", npBias, true, chipId);
+
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_CONTENT, bits);
+
+	return(true);
+}
