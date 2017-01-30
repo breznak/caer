@@ -285,15 +285,15 @@ int spikeGenThread(void *spikeGenState) {
 			//generate pattern B
 			uint32_t spikePatternB[DYNAPSE_CONFIG_XCHIPSIZE][DYNAPSE_CONFIG_YCHIPSIZE];
 			int64_t rowId, colId;
-			int64_t num = DYNAPSE_CONFIG_CAMNUM;
+			int64_t num = DYNAPSE_CONFIG_CAMCOL;
 			for (rowId = -num; rowId < num; rowId++) {
 				for (colId = -num; colId < num; colId++) {
 					if (abs((int) rowId) + abs((int) colId) == num) // Change this condition >= <=
-						spikePatternB[rowId + DYNAPSE_CONFIG_CAMNUM][colId
-								+ DYNAPSE_CONFIG_CAMNUM] = 1;
+						spikePatternB[rowId + DYNAPSE_CONFIG_CAMCOL][colId
+								+ DYNAPSE_CONFIG_CAMCOL] = 1;
 					else
-						spikePatternB[rowId + DYNAPSE_CONFIG_CAMNUM][colId
-								+ DYNAPSE_CONFIG_CAMNUM] = 0;
+						spikePatternB[rowId + DYNAPSE_CONFIG_CAMCOL][colId
+								+ DYNAPSE_CONFIG_CAMCOL] = 0;
 				}
 			}
 			spiketrainPat(state, spikePatternB);
@@ -301,15 +301,15 @@ int spikeGenThread(void *spikeGenState) {
 			//generate pattern C
 			uint32_t spikePatternC[DYNAPSE_CONFIG_XCHIPSIZE][DYNAPSE_CONFIG_YCHIPSIZE];
 			int64_t rowId, colId;
-			int64_t num = DYNAPSE_CONFIG_CAMNUM;
+			int64_t num = DYNAPSE_CONFIG_CAMCOL;
 			for (rowId = -num; rowId < num; rowId++) {
 				for (colId = -num; colId < num; colId++) {
 					if (abs((int) rowId) == abs((int) colId)) // Change this condition
-						spikePatternC[rowId + DYNAPSE_CONFIG_CAMNUM][colId
-								+ DYNAPSE_CONFIG_CAMNUM] = 1;
+						spikePatternC[rowId + DYNAPSE_CONFIG_CAMCOL][colId
+								+ DYNAPSE_CONFIG_CAMCOL] = 1;
 					else
-						spikePatternC[rowId + DYNAPSE_CONFIG_CAMNUM][colId
-								+ DYNAPSE_CONFIG_CAMNUM] = 0;
+						spikePatternC[rowId + DYNAPSE_CONFIG_CAMCOL][colId
+								+ DYNAPSE_CONFIG_CAMCOL] = 0;
 				}
 			}
 			spiketrainPat(state, spikePatternC);
@@ -621,7 +621,6 @@ void SetCam(void *spikeGenState) {
 	for (neuronId = 0;
 			neuronId < DYNAPSE_CONFIG_XCHIPSIZE * DYNAPSE_CONFIG_YCHIPSIZE;
 			neuronId++) {
-		//WriteCam(state, neuronId, neuronId, 0, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
 		caerDynapseWriteCam(state->deviceState, neuronId, neuronId, 0, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
 	}
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "CAM programmed successfully.");
@@ -664,7 +663,7 @@ void SetCamSingle(void *spikeGenState) {
 			atomic_load(&state->genSpikeState.chip_id)); //0
 
 	int64_t rowId, colId;
-	int64_t num = DYNAPSE_CONFIG_CAMNUM;
+	int64_t num = DYNAPSE_CONFIG_CAMCOL;
 	// generate pattern A
 	uint32_t spikePatternA[DYNAPSE_CONFIG_XCHIPSIZE][DYNAPSE_CONFIG_YCHIPSIZE];
 	int cx, cy, r;
@@ -686,11 +685,11 @@ void SetCamSingle(void *spikeGenState) {
 	for (rowId = -num; rowId < num; rowId++) {
 		for (colId = -num; colId < num; colId++) {
 			if (abs((int) rowId) + abs((int) colId) == num) // Change this condition >= <=
-				spikePatternB[rowId + DYNAPSE_CONFIG_CAMNUM][colId
-						+ DYNAPSE_CONFIG_CAMNUM] = 1;
+				spikePatternB[rowId + DYNAPSE_CONFIG_CAMCOL][colId
+						+ DYNAPSE_CONFIG_CAMCOL] = 1;
 			else
-				spikePatternB[rowId + DYNAPSE_CONFIG_CAMNUM][colId
-						+ DYNAPSE_CONFIG_CAMNUM] = 0;
+				spikePatternB[rowId + DYNAPSE_CONFIG_CAMCOL][colId
+						+ DYNAPSE_CONFIG_CAMCOL] = 0;
 		}
 	}
 
@@ -698,11 +697,11 @@ void SetCamSingle(void *spikeGenState) {
 	for (rowId = -num; rowId < num; rowId++) {
 		for (colId = -num; colId < num; colId++) {
 			if (abs((int) rowId) == abs((int) colId)) // Change this condition
-				spikePatternC[rowId + DYNAPSE_CONFIG_CAMNUM][colId
-						+ DYNAPSE_CONFIG_CAMNUM] = 1;
+				spikePatternC[rowId + DYNAPSE_CONFIG_CAMCOL][colId
+						+ DYNAPSE_CONFIG_CAMCOL] = 1;
 			else
-				spikePatternC[rowId + DYNAPSE_CONFIG_CAMNUM][colId
-						+ DYNAPSE_CONFIG_CAMNUM] = 0;
+				spikePatternC[rowId + DYNAPSE_CONFIG_CAMCOL][colId
+						+ DYNAPSE_CONFIG_CAMCOL] = 0;
 		}
 	}
 
@@ -832,7 +831,7 @@ void ClearAllCam(void *spikeGenState) {
 		numConfig = -1;
 		for (size_t camId = 0; camId < DYNAPSE_X4BOARD_NEUX; camId++) {
 			numConfig++;
-			bits[numConfig]=caerDynapseWriteCamBits(0, neuronId, camId, 0);
+			bits[numConfig]=caerDynapseGenerateCamBits(0, neuronId, camId, 0);
 		}
 		// send data with libusb host transfer in packet
 		if(!caerDynapseSendDataToUSB(usb_handle, bits, numConfig)){

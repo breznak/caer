@@ -14,9 +14,11 @@ struct DvsToDynapse_state {
 	sshsNode eventSourceModuleState;
 	sshsNode eventSourceConfigNode;
 	bool doMapping;
-	int chipId;
+	uint16_t chipId;						//U0->0,U1->8,U2->4,U3->12
 	simple2DBufferLong DownsampledMap;
-	int threshold;	//after which we send spikes out
+	int threshold;							//after which we send spikes out
+	bool programCam;
+	bool programBiases;
 };
 
 typedef struct DvsToDynapse_state *DvsToDynapseState;
@@ -63,6 +65,8 @@ static bool caerDvsToDynapseInit(caerModuleData moduleData) {
 	state->chipId = sshsNodeGetInt(moduleData->moduleNode, "chipId");
 	state->threshold = sshsNodeGetInt(moduleData->moduleNode, "threshold");
 	state->DownsampledMap = NULL;
+	state->programCam = true;
+	state->programBiases = true;
 	// Nothing that can fail here.
 	return (true);
 }
@@ -94,6 +98,14 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 	}
 	// --- end usb handle
 
+	// program destination cam if necessary
+	if(state->programCam){
+		programMapInCam(stateSource, state);
+	}
+	// program destination biases if necessary
+	if(state->programBiases){
+		programBiases(stateSource, state);
+	}
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(caerEventPacketHeaderGetEventSource(&polarity->packetHeader));
 	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
 	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
@@ -241,7 +253,6 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 							sx << 6 |
 							dy << 7 |
 							sy << 9;
-
 					bits[numConfig] = value;
 					numConfig++;
 					dataReady = true;
@@ -267,7 +278,13 @@ static void caerDvsToDynapseConfig(caerModuleData moduleData) {
 
 	DvsToDynapseState state = moduleData->moduleState;
 	state->doMapping = sshsNodeGetBool(moduleData->moduleNode, "doMapping");
-	state->chipId = sshsNodeGetInt(moduleData->moduleNode, "chipId");
+	uint16_t new_chip_id = sshsNodeGetInt(moduleData->moduleNode, "chipId");
+	// if destionation chip id changed, we need to program the cam
+	if(new_chip_id != state->chipId){
+		state->chipId = new_chip_id;
+		state->programCam = true;
+		state->programBiases = true;
+	}
 	state->threshold = sshsNodeGetInt(moduleData->moduleNode, "threshold");
 
 }
@@ -313,4 +330,55 @@ static bool allocateDownsampledMap(DvsToDynapseState state, int16_t sourceID) {
 	return (true);
 }
 
+/* program destinatio cam addresses 64 - synapses per input -*/
+void programMapInCam(caerInputDynapseState state, DvsToDynapseState stateMod) {
+	if (state == NULL) {
+		return;
+	}
+	caerDeviceHandle usb_handle = (caerDeviceHandle) state->deviceState;
+	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, stateMod->chipId); //U0->0,U1->8,U2->4,U3->12
+	uint32_t neuronId, camId;
+	uint32_t bits[DYNAPSE_CONFIG_NUMNEURONS_CORE*DYNAPSE_CONFIG_NUMCAM];
+	uint32_t numConfig = -1;
+	caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "Started programming cam..");
+	for (neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS_CORE; neuronId++) {
+		numConfig = -1;
+		for (camId = 0; camId < DYNAPSE_CONFIG_NUMCAM; camId++) {
+			numConfig++;
+			bits[numConfig]=caerDynapseGenerateCamBits(neuronId, neuronId, camId, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
+		}
+		// send data with libusb host transfer in packet
+		if(!caerDynapseSendDataToUSB(usb_handle, bits, numConfig)){
+			caerLog(CAER_LOG_ERROR, "DvsToDynapse", "USB transfer failed, ");
+		}
+	}
+	caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "CAM programmed successfully.");
+	stateMod->programCam = false;
+}
 
+void programBiases(caerInputDynapseState state, DvsToDynapseState stateMod) {
+	if (state == NULL) {
+		return;
+	}
+	caerDeviceHandle usb_handle = (caerDeviceHandle) state->deviceState;
+	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, stateMod->chipId); //U0->0,U1->8,U2->4,U3->12
+	// set biases for all cores
+	for (size_t coreId = 0; coreId < 4; coreId++) {
+		// soma
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias", "NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_AHTHR_N", 7, 1, "HighBias", "NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_AHW_P", 7, 1, "HighBias", "PBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_BUF_P", 3, 80, "HighBias", "PBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_DC_P", 5, 2, "HighBias", "PBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_RFR_N", 2, 180, "HighBias", "NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_TAU1_N", 4, 255, "LowBias", "NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_THR_N", 2, 180, "HighBias", "NBias");
+		//synapses
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPIE_TAU_F_P", 6, 150, "HighBias", "PBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPIE_THR_F_P", 0, 220, "HighBias", "PBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 250, "HighBias", "NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "PULSE_PWLK_P", 3, 50, "HighBias", "PBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "R2R_P", 4, 85, "HighBias", "PBias");
+	}
+	stateMod->programBiases = false;
+}
