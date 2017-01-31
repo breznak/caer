@@ -47,10 +47,6 @@
 #ifdef ENABLE_FILE_INPUT
 #include "modules/misc/in/file.h"
 #endif
-#ifdef ENABLE_NETWORK_INPUT
-#include "modules/misc/in/net_tcp.h"
-#include "modules/misc/in/unix_socket.h"
-#endif
 
 #ifdef ENABLE_FILE_OUTPUT
 #include "modules/misc/out/file.h"
@@ -90,7 +86,6 @@
 #ifdef ENABLE_BAFILTER
 #include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
 #endif
-// Common filters support.
 
 static bool mainloop_1(void);
 
@@ -114,17 +109,15 @@ static bool mainloop_1(void) {
 	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
 #endif
 
-#ifdef ENABLE_FILE_INPUT //should be 0 for experiment
+#ifdef ENABLE_FILE_INPUT
+	caerSpecialEventPacket special_cam = NULL;
+	caerPolarityEventPacket polarity_cam = NULL;
+
 	container = caerInputFile(10);
 	// We search for them by type here, because input modules may not have all or any of them.
-	spike = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
-	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
+	polarity_cam = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container, POLARITY_EVENT);
+	special_cam = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
 #endif
-
-#ifdef ENABLE_NETWORK_INPUT
-	container = caerInputNetTCP(11);
-#endif
-
 
 #ifdef DVS128
 	container_cam = caerInputDVS128(100);
@@ -179,13 +172,10 @@ static bool mainloop_1(void) {
 #endif
 
 #ifdef ENABLE_MEANRATEFILTER
-	// create frame for displaying frequencoes
+	// create frame for displaying frequencies
 	caerFrameEventPacket freqplot = NULL;
 #ifdef DYNAPSEFX2
 	caerMeanRateFilter(4, 1, spike, &freqplot);
-#endif
-#ifdef ENABLE_FILE_INPUT
-	caerMeanRateFilter(4, 10, spike, &freqplot);
 #endif
 #endif
 
@@ -201,7 +191,7 @@ static bool mainloop_1(void) {
 		caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
 	}
 #endif
-#if defined(DAVISFX2) || defined(DAVISFX3) || defined(DVS128)
+#if defined(DAVISFX2) || defined(DAVISFX3) || defined(DVS128) || defined(ENABLE_FILE_INPUT)
 	caerVisualizer(66, "Polarity", &caerVisualizerRendererPolarityEvents, NULL, (caerEventPacketHeader) polarity_cam);
 #endif
 #endif
