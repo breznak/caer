@@ -12,7 +12,7 @@
 #include "ext/colorjet/colorjet.h"
 
 struct MRFilter_state {
-	sshsNode eventSourceModuleState;
+	caerDeviceHandle eventSourceDeviceHandle;
 	sshsNode eventSourceConfigNode;
 	simple2DBufferFloat frequencyMap;
 	simple2DBufferLong spikeCountMap;
@@ -38,25 +38,26 @@ static void caerMeanRateFilterReset(caerModuleData moduleData, uint16_t resetCal
 static bool allocateFrequencyMap(MRFilterState state, int16_t sourceID);
 static bool allocateSpikeCountMap(MRFilterState state, int16_t sourceID);
 
-static struct caer_module_functions caerMeanRateFilterFunctions = { .moduleInit =
-	&caerMeanRateFilterInit, .moduleRun = &caerMeanRateFilterRun, .moduleConfig =
-	&caerMeanRateFilterConfig, .moduleExit = &caerMeanRateFilterExit, .moduleReset =
-	&caerMeanRateFilterReset };
+static struct caer_module_functions caerMeanRateFilterFunctions = { .moduleInit = &caerMeanRateFilterInit, .moduleRun =
+	&caerMeanRateFilterRun, .moduleConfig = &caerMeanRateFilterConfig, .moduleExit = &caerMeanRateFilterExit,
+	.moduleReset = &caerMeanRateFilterReset };
 
-void caerMeanRateFilterDVS(uint16_t moduleID,  int16_t eventSourceID, caerPolarityEventPacket polarity, caerFrameEventPacket *freqplot) {
+void caerMeanRateFilterDVS(uint16_t moduleID, int16_t eventSourceID, caerPolarityEventPacket polarity,
+	caerFrameEventPacket *freqplot) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "MeanRateFilterDVS", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}
 
-	caerModuleSM(&caerMeanRateFilterFunctions, moduleData, sizeof(struct MRFilter_state), 3, eventSourceID, polarity, freqplot);
+	caerModuleSM(&caerMeanRateFilterFunctions, moduleData, sizeof(struct MRFilter_state), 3, eventSourceID, polarity,
+		freqplot);
 }
 
 static bool caerMeanRateFilterInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "colorscaleMax", 150);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "colorscaleMin", 0);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "targetFreq", 100);
-	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "measureMinTime", 0.3);
+	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "measureMinTime", 0.3f);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doSetFreq", false);
 
 	MRFilterState state = moduleData->moduleState;
@@ -88,7 +89,6 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
 	caerFrameEventPacket *freqplot = va_arg(args, caerFrameEventPacket*);
 
-
 	// Only process packets with content.
 	if (polarity == NULL) {
 		return;
@@ -114,29 +114,21 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	}
 
 	// --- start  usb handle / from spike event source id
-	state->eventSourceModuleState = caerMainloopGetSourceState(U16T(eventSourceID));
+	state->eventSourceDeviceHandle = caerMainloopGetSourceState(U16T(eventSourceID));
 	state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(eventSourceID));
-	if(state->eventSourceModuleState == NULL || state->eventSourceConfigNode == NULL){
+	if (state->eventSourceDeviceHandle == NULL || state->eventSourceConfigNode == NULL) {
 		return;
 	}
 
 #if defined(DVS128)
-	caerInputDVSState stateSource = state->eventSourceModuleState;
+	struct caer_dvs128_info dev_info = caerDVS128InfoGet(state->eventSourceDeviceHandle);
 #else
-	caerInputDAVISState stateSource = state->eventSourceModuleState;
-#endif
-	if(stateSource->deviceState == NULL){
-		return;
-	}
-#if defined(DVS128)
-	struct caer_dvs128_info dev_info = caerDVS128InfoGet(stateSource->deviceState);
-#else
-	struct caer_davis_info dev_info = caerDavisInfoGet(stateSource->deviceState);
+	struct caer_davis_info dev_info = caerDavisInfoGet(state->eventSourceDeviceHandle);
 #endif
 	// --- end usb handle
 
 	// if not measuring, let's start
-	if( state->startedMeas == false ){
+	if (state->startedMeas == false) {
 		clock_gettime(CLOCK_MONOTONIC, &state->tstart);
 		state->measureStartedAt = (double) state->tstart.tv_sec + 1.0e-9 * state->tstart.tv_nsec;
 		state->startedMeas = true;
@@ -151,7 +143,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	clock_gettime(CLOCK_MONOTONIC, &state->tend);
 	double now = ((double) state->tend.tv_sec + 1.0e-9 * state->tend.tv_nsec);
 	// if we measured for enough time..
-	if( state->measureMinTime <= (now - state->measureStartedAt) ){
+	if (state->measureMinTime <= (now - state->measureStartedAt)) {
 
 		//caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "\nfreq measurement completed.\n");
 		state->startedMeas = false;
@@ -159,8 +151,9 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		//update frequencyMap
 		for (size_t x = 0; x < sizeX; x++) {
 			for (size_t y = 0; y < sizeY; y++) {
-				if(state->measureMinTime > 0){
-					state->frequencyMap->buffer2d[x][y] = (float)state->spikeCountMap->buffer2d[x][y]/(float)state->measureMinTime;
+				if (state->measureMinTime > 0) {
+					state->frequencyMap->buffer2d[x][y] = (float) state->spikeCountMap->buffer2d[x][y]
+						/ (float) state->measureMinTime;
 				}
 				//reset
 				state->spikeCountMap->buffer2d[x][y] = 0;
@@ -168,7 +161,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		}
 
 		// set the biases if asked
-		if(state->doSetFreq){
+		if (state->doSetFreq) {
 
 		}
 	}
@@ -178,7 +171,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 
 	// Iterate over events and update frequency
 	CAER_POLARITY_ITERATOR_VALID_START(polarity)
-		// Get values on which to operate.
+	// Get values on which to operate.
 		int64_t ts = caerPolarityEventGetTimestamp64(caerPolarityIteratorElement, polarity);
 		uint16_t x = caerPolarityEventGetX(caerPolarityIteratorElement);
 		uint16_t y = caerPolarityEventGetY(caerPolarityIteratorElement);
@@ -186,7 +179,6 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		// Update value into maps 
 		state->spikeCountMap->buffer2d[x][y] += 1;
 	CAER_POLARITY_ITERATOR_VALID_END
-
 
 	// put info into frame
 	*freqplot = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, sizeX, sizeY, 3);
@@ -197,10 +189,10 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		uint32_t counter = 0;
 		for (size_t x = 0; x < sizeX; x++) {
 			for (size_t y = 0; y < sizeY; y++) {
-				COLOUR col  = GetColour((double) state->frequencyMap->buffer2d[y][x], state->colorscaleMin, state->colorscaleMax);
+				COLOUR col = GetColour((double) state->frequencyMap->buffer2d[y][x], state->colorscaleMin, state->colorscaleMax);
 				singleplot->pixels[counter] = (uint16_t) ( (int)(col.r*65535));			// red
-				singleplot->pixels[counter + 1] = (uint16_t) ( (int)(col.g*65535));		// green
-				singleplot->pixels[counter + 2] = (uint16_t) ( (int)(col.b*65535) );		// blue
+				singleplot->pixels[counter + 1] = (uint16_t) ( (int)(col.g*65535));// green
+				singleplot->pixels[counter + 2] = (uint16_t) ( (int)(col.b*65535) );// blue
 				counter += 3;
 			}
 		}
@@ -208,10 +200,11 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		uint32_t counter = 0;
 		for (size_t x = 0; x < sizeY; x++) {
 			for (size_t y = 0; y < sizeX; y++) {
-				COLOUR col  = GetColour((double) state->frequencyMap->buffer2d[y][x], state->colorscaleMin, state->colorscaleMax);
-				singleplot->pixels[counter] = (uint16_t) ( (int)(col.r*65535));			// red
-				singleplot->pixels[counter + 1] = (uint16_t) ( (int)(col.g*65535));		// green
-				singleplot->pixels[counter + 2] = (uint16_t) ( (int)(col.b*65535) );		// blue
+				COLOUR col = GetColour((double) state->frequencyMap->buffer2d[y][x], state->colorscaleMin,
+					state->colorscaleMax);
+				singleplot->pixels[counter] = (uint16_t) ((int) (col.r * 65535));			// red
+				singleplot->pixels[counter + 1] = (uint16_t) ((int) (col.g * 65535));		// green
+				singleplot->pixels[counter + 2] = (uint16_t) ((int) (col.b * 65535));		// blue
 				counter += 3;
 			}
 		}
@@ -276,8 +269,8 @@ static bool allocateSpikeCountMap(MRFilterState state, int16_t sourceID) {
 		return (false);
 	}
 
-	for(size_t x=0; x<sizeX; x++){
-		for(size_t y=0; y<sizeY; y++){
+	for (size_t x = 0; x < sizeX; x++) {
+		for (size_t y = 0; y < sizeY; y++) {
 			state->spikeCountMap->buffer2d[x][y] = 0; // init to zero
 		}
 	}
@@ -302,8 +295,8 @@ static bool allocateFrequencyMap(MRFilterState state, int16_t sourceID) {
 		return (false);
 	}
 
-	for(size_t x=0; x<sizeX; x++){
-		for(size_t y=0; y<sizeY; y++){
+	for (size_t x = 0; x < sizeX; x++) {
+		for (size_t y = 0; y < sizeY; y++) {
 			state->frequencyMap->buffer2d[x][y] = 0.0f; // init to zero
 		}
 	}
