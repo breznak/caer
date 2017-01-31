@@ -433,8 +433,9 @@ void spiketrainPat(void *spikeGenState,
 						atomic_load(&state->genSpikeState.sx) << 6 |
 						atomic_load(&state->genSpikeState.dy) << 7 |
 						atomic_load(&state->genSpikeState.sy) << 9;
-			else
+			else{
 				value = 0;
+			}
 			value2DArray[rowId][colId] = value;
 		}
 
@@ -472,9 +473,9 @@ void spiketrainPat(void *spikeGenState,
 				if (valueSent != 0 && ((valueSent >> 18) & 0x3ff) != 0) {
 					caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP,
 					DYNAPSE_CONFIG_CHIP_CONTENT, valueSent);
+					caerLog(CAER_LOG_NOTICE, "spikeGen", "sending spikes %d \n", valueSent);
 				}
 			}
-		//caerLog(CAER_LOG_NOTICE, "spikeGen", "sending spikes %d \n", value);
 	}
 
 }
@@ -826,7 +827,7 @@ void ClearAllCam(void *spikeGenState) {
 			atomic_load(&state->genSpikeState.chip_id));
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "Started clearing cam..");
 	uint32_t bits[DYNAPSE_CONFIG_NUMNEURONS*DYNAPSE_X4BOARD_NEUX];
-	uint32_t numConfig = -1;
+	int numConfig = -1;
 	for (size_t neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS; neuronId++) {
 		numConfig = -1;
 		for (size_t camId = 0; camId < DYNAPSE_X4BOARD_NEUX; camId++) {
@@ -835,9 +836,7 @@ void ClearAllCam(void *spikeGenState) {
 		}
 		// send data with libusb host transfer in packet
 		if(!caerDynapseSendDataToUSB(usb_handle, bits, numConfig)){
-			caerLog(CAER_LOG_ERROR, "spikeGen",
-					"USB transfer failed, maybe you have tried to send too many data: numConfig is %d, "
-					"however maxnumConfig %d", numConfig, DYNAPSE_MAX_USER_USB_PACKET_SIZE);
+			caerLog(CAER_LOG_ERROR, "spikeGen","USB transfer failed");
 		}
 	}
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "CAM cleared successfully.");
@@ -953,7 +952,7 @@ void ResetBiases(void *spikeGenState) {
 		}
 	}
 
-	// set back clearAllCam to false
+	// set back loadBiases to false
 	size_t biasNodesLength = 0;
 	sshsNode *biasNodesU0 = sshsNodeGetChildren(state->eventSourceConfigNode,
 			&biasNodesLength);
