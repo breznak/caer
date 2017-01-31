@@ -18,7 +18,7 @@ caerEventPacketContainer caerInputDAVISFX2(uint16_t moduleID) {
 
 	caerEventPacketContainer result = NULL;
 
-	caerModuleSM(&caerInputDAVISFX2Functions, moduleData, sizeof(struct caer_input_davis_state), 1, &result);
+	caerModuleSM(&caerInputDAVISFX2Functions, moduleData, 0, 1, &result);
 
 	return (result);
 }
