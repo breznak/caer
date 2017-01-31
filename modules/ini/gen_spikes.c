@@ -473,7 +473,7 @@ void spiketrainPat(void *spikeGenState,
 				if (valueSent != 0 && ((valueSent >> 18) & 0x3ff) != 0) {
 					caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP,
 					DYNAPSE_CONFIG_CHIP_CONTENT, valueSent);
-					caerLog(CAER_LOG_NOTICE, "spikeGen", "sending spikes %d \n", valueSent);
+					//caerLog(CAER_LOG_NOTICE, "spikeGen", "sending spikes %d \n", valueSent);
 				}
 			}
 	}

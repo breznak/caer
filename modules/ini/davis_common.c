@@ -371,7 +371,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 			// Slow down pixels for big 640x480 array, to avoid overwhelming the AER bus.
 			createCoarseFineBiasSetting(biasNode, "PrBp", 2, 3, true, "P", "Normal");
 			createCoarseFineBiasSetting(biasNode, "PrSFBp", 1, 1, true, "P", "Normal");
-			createCoarseFineBiasSetting(biasNode, "OnBn", 150, 4, true, "N", "Normal");
+			createCoarseFineBiasSetting(biasNode, "OnBn", 4, 150, true, "N", "Normal");
 			createCoarseFineBiasSetting(biasNode, "OffBn", 1, 4, true, "N", "Normal");
 		}
 

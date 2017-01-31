@@ -87,6 +87,9 @@
 #include "modules/dvstodynapse/dvstodynapse.h"
 #endif
 
+#ifdef ENABLE_BAFILTER
+#include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
+#endif
 // Common filters support.
 
 static bool mainloop_1(void);
@@ -154,6 +157,13 @@ static bool mainloop_1(void) {
 
 	frame_cam = (caerFrameEventPacket) caerEventPacketContainerGetEventPacket(container_cam, FRAME_EVENT);
 	imu_cam = (caerIMU6EventPacket) caerEventPacketContainerGetEventPacket(container_cam, IMU6_EVENT);
+#endif
+
+	// Filters process event packets: for example to suppress certain events,
+	// like with the Background Activity Filter, which suppresses events that
+	// look to be uncorrelated with real scene changes (noise reduction).
+#ifdef ENABLE_BAFILTER
+	caerBackgroundActivityFilter(12, polarity_cam);
 #endif
 
 	// Fitler that maps polarity dvs events as spiking inputs of the dynapse processor

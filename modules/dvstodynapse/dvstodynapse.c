@@ -52,7 +52,7 @@ void caerDvsToDynapse(uint16_t moduleID,  int16_t eventSourceID, caerSpikeEventP
 static bool caerDvsToDynapseInit(caerModuleData moduleData) {
 
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doMapping", false);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "chipId", DYNAPSE_CONFIG_DYNAPSE_U0); // 0,4,8,12
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "chipId", DYNAPSE_CONFIG_DYNAPSE_U3); // 0,4,8,12
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "threshold", 10);
 	sshsNodePutBool(moduleData->moduleNode, "programCamAllChips", false);
 	sshsNodePutBool(moduleData->moduleNode, "singleChipMode", true);
@@ -75,6 +75,7 @@ static bool caerDvsToDynapseInit(caerModuleData moduleData) {
 	state->singleChipMode = sshsNodeGetBool(moduleData->moduleNode, "singleChipMode"); // true at startup
 	state->DownsampledMap = NULL;
 	state->programBiases = true;
+	state->programCam = true;
 	//state->programFourChips = false;
 	// Nothing that can fail here.
 	return (true);
@@ -120,15 +121,12 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 		programMapInAllCam(stateSource, state);
 		sshsNodePutBool(moduleData->moduleNode, "programCamAllChips", false);
 
-		uint32_t allChips[4] = {DYNAPSE_CONFIG_DYNAPSE_U0,DYNAPSE_CONFIG_DYNAPSE_U1,
+		uint16_t allChips[4] = {DYNAPSE_CONFIG_DYNAPSE_U0,DYNAPSE_CONFIG_DYNAPSE_U1,
 											DYNAPSE_CONFIG_DYNAPSE_U2,DYNAPSE_CONFIG_DYNAPSE_U3};
 
 		for(size_t this_chip=0; this_chip < 4; this_chip++){
 			state->chipId = allChips[this_chip];
-			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP,
-					DYNAPSE_CONFIG_CHIP_ID, state->chipId); //U0->0,U1->8,U2->4,U3->12
 			programBiases(stateSource, state);
-
 		}
 	}
 
@@ -260,10 +258,6 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 															0 << 6 |
 															0 << 7 |
 															0 << 9;
-															/*dx << 4 |
-															sx << 6 |
-															dy << 7 |
-															sy << 9;*/
 
 							bits[numConfig] = value;
 							numConfig++;
@@ -285,13 +279,13 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 							chip_dest = DYNAPSE_CONFIG_DYNAPSE_U0;
 						}else if(i >= DYNAPSE_CONFIG_XCHIPSIZE &&
 								j < DYNAPSE_CONFIG_YCHIPSIZE ){
-							chip_dest = DYNAPSE_CONFIG_DYNAPSE_U2;
+							chip_dest = DYNAPSE_CONFIG_DYNAPSE_U1;
 						}else if(i >= DYNAPSE_CONFIG_XCHIPSIZE &&
 								j >= DYNAPSE_CONFIG_YCHIPSIZE ){
 							chip_dest = DYNAPSE_CONFIG_DYNAPSE_U3;
 						}else if(i < DYNAPSE_CONFIG_XCHIPSIZE &&
 								j >= DYNAPSE_CONFIG_YCHIPSIZE ){
-							chip_dest = DYNAPSE_CONFIG_DYNAPSE_U1;
+							chip_dest = DYNAPSE_CONFIG_DYNAPSE_U2;
 						}
 						// core selection
 						int core_dest = 0;
@@ -309,7 +303,7 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 									j >= 16 ){
 								core_dest = 1;
 							}
-						}else if(chip_dest == DYNAPSE_CONFIG_DYNAPSE_U1){
+						}else if(chip_dest == DYNAPSE_CONFIG_DYNAPSE_U2){
 							if(i < 16 &&
 									j < 16*3 ){
 								core_dest = 0;
@@ -323,7 +317,7 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 									j >= 16*3 ){
 								core_dest = 1;
 							}
-						}else if(chip_dest == DYNAPSE_CONFIG_DYNAPSE_U2){
+						}else if(chip_dest == DYNAPSE_CONFIG_DYNAPSE_U3){
 							if(i < 16*3 &&
 									j < 16 ){
 								core_dest = 0;
@@ -353,11 +347,11 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 							}
 						}
 						// adjusts coordinates for chips
-						if(chip_dest == DYNAPSE_CONFIG_DYNAPSE_U1 ||
+						if(chip_dest == DYNAPSE_CONFIG_DYNAPSE_U2 ||
 								chip_dest == DYNAPSE_CONFIG_DYNAPSE_U3){
 							ny = ny - 32 ;
 						}
-						if(chip_dest == DYNAPSE_CONFIG_DYNAPSE_U2 ||
+						if(chip_dest == DYNAPSE_CONFIG_DYNAPSE_U1 ||
 								chip_dest == DYNAPSE_CONFIG_DYNAPSE_U3){
 							nx = nx - 32 ;
 						}
@@ -382,10 +376,6 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 														0 << 6 |
 														0 << 7 |
 														0 << 9;
-														/*dx << 4 |
-														sx << 6 |
-														dy << 7 |
-														sy << 9;*/
 
 						if(chip_dest == DYNAPSE_CONFIG_DYNAPSE_U0){
 							bits_chipU0[numConfig_chipU0] = value;
@@ -615,56 +605,31 @@ void programBiases(caerInputDynapseState state, DvsToDynapseState stateMod) {
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, stateMod->chipId); //U0->0,U1->8,U2->4,U3->12
 	// set biases for all cores
 	for (size_t coreId = 0; coreId < 4; coreId++) {
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias",
-				"NBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_AHTHR_N", 7, 1, "HighBias",
-				"NBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_AHW_P", 7, 1, "HighBias",
-				"PBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_BUF_P", 3, 80, "HighBias",
-				"PBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_CASC_N", 7, 1, "HighBias",
-				"NBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_DC_P", 5, 2, "HighBias",
-				"PBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_NMDA_N", 7, 1, "HighBias",
-				"NBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_RFR_N", 2, 180, "HighBias",
-				"NBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_TAU1_N", 4, 255, "LowBias",
-				"NBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_TAU2_N", 6, 15, "HighBias",
-				"NBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_THR_N", 2, 180, "HighBias",
-				"NBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPIE_TAU_F_P", 6, 150,
-				"HighBias", "PBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPIE_TAU_S_P", 7, 40,
-				"HighBias", "NBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPIE_THR_F_P", 0, 220,
-				"HighBias", "PBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPIE_THR_S_P", 7, 0,
-				"HighBias", "PBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPII_TAU_F_P", 6, 150,
-				"HighBias", "NBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPII_TAU_S_P", 7, 40,
-				"HighBias", "NBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPII_THR_F_P", 0, 220,
-				"HighBias", "PBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPII_THR_S_P", 7, 0,
-				"HighBias", "PBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 250,
-				"HighBias", "NBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "PS_WEIGHT_EXC_S_N", 1, 250,
-				"HighBias", "NBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "PS_WEIGHT_INH_F_N", 0, 250,
-				"HighBias", "NBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "PS_WEIGHT_INH_S_N", 1, 250,
-				"HighBias", "NBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "PULSE_PWLK_P", 3, 50,
-				"HighBias", "PBias");
-		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "R2R_P", 4, 85, "HighBias",
-				"PBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias","NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_AHTHR_N", 7, 1, "HighBias","NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_AHW_P", 7, 1, "HighBias","PBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_BUF_P", 3, 80, "HighBias","PBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_CASC_N", 7, 1, "HighBias","NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_DC_P", 5, 2, "HighBias","PBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_NMDA_N", 7, 1, "HighBias","NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_RFR_N", 2, 180, "HighBias","NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_TAU1_N", 4, 255, "LowBias","NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_TAU2_N", 6, 15, "LowBias","NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "IF_THR_N", 2, 180, "HighBias","NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPIE_TAU_F_P", 6, 150,"HighBias", "PBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPIE_TAU_S_P", 7, 40,"HighBias", "NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPIE_THR_F_P", 0, 220,"HighBias", "PBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPIE_THR_S_P", 7, 0,"HighBias", "PBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPII_TAU_F_P", 6, 150,"HighBias", "NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPII_TAU_S_P", 7, 40,"HighBias", "NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPII_THR_F_P", 0, 220,"HighBias", "PBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "NPDPII_THR_S_P", 7, 0,"HighBias", "PBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 250,"HighBias", "NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "PS_WEIGHT_EXC_S_N", 1, 250,"HighBias", "NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "PS_WEIGHT_INH_F_N", 0, 250,"HighBias", "NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "PS_WEIGHT_INH_S_N", 1, 250,"HighBias", "NBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "PULSE_PWLK_P", 3, 50,"HighBias", "PBias");
+		caerDynapseSetBiasBits(state, stateMod->chipId, coreId, "R2R_P", 4, 85, "HighBias","PBias");
 	}
 	stateMod->programBiases = false;
 }
