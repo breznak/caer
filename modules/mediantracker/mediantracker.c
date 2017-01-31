@@ -25,8 +25,10 @@ struct MTFilter_state {
 	int prevlastts;
 	float radius;
 	float numStdDevsForBoundingBox;
-	float alpha;
+	int tauUs;
 };
+
+static const int TICK_PER_MS = 1000;
 
 typedef struct MTFilter_state *MTFilterState;
 
@@ -50,7 +52,7 @@ void caerMediantrackerFilter(uint16_t moduleID, caerPolarityEventPacket polarity
 }
 
 static bool caerMediantrackerInit(caerModuleData moduleData) {
-	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "alpha", 0.00004f);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "tauUs", 25);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "numStdDevsForBoundingBox", 1.0f);
 
 	MTFilterState state = moduleData->moduleState;
@@ -66,7 +68,7 @@ static bool caerMediantrackerInit(caerModuleData moduleData) {
 	state->prevlastts = 0;
 	state->numStdDevsForBoundingBox = sshsNodeGetFloat(moduleData->moduleNode, "numStdDevsForBoundingBox");
 	state->radius = 10.0f;
-	state->alpha = sshsNodeGetFloat(moduleData->moduleNode, "alpha");
+	state->tauUs = sshsNodeGetInt(moduleData->moduleNode, "tauUs");
 
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
@@ -133,7 +135,7 @@ static void caerMediantrackerRun(caerModuleData moduleData, size_t argsNumber, v
 		y = (float) (((float) ys[index / 2 - 1] + ys[index / 2]) / 2.0f);
 	}
 
-	float fac = state->alpha * (float) state->dt;
+	float fac = (float) state->dt / (float) state->tauUs / (float)TICK_PER_MS;
 	if (fac > 1)
 		fac = 1;
 	state->xmedian = state->xmedian + (x - state->xmedian) * fac;
@@ -175,7 +177,7 @@ static void caerMediantrackerRun(caerModuleData moduleData, size_t argsNumber, v
 	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
 	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
-	*frame = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, sizeX, sizeY, 1);
+	*frame = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, sizeX, sizeY, 3);
 	if (*frame != NULL) {
 		caerFrameEvent singleplot = caerFrameEventPacketGetEvent(*frame, 0);
 		uint32_t counter = 0;
@@ -184,43 +186,47 @@ static void caerMediantrackerRun(caerModuleData moduleData, size_t argsNumber, v
 				if ((xx == (int) state->xmedian && yy == (int) state->ymedian)
 					|| (xx == (int) (state->xmedian + state->xstd * state->numStdDevsForBoundingBox)
 						&& yy <= (state->ymedian + state->ystd * state->numStdDevsForBoundingBox)
-						&& yy >= (state->ymedian - state->ystd * state->numStdDevsForBoundingBox)
+						&& yy >= (state->ymedian - state->ystd * state->numStdDevsForBoundingBox))
 						|| (xx == (int) (state->xmedian - state->xstd * state->numStdDevsForBoundingBox)
 							&& yy <= (state->ymedian + state->ystd * state->numStdDevsForBoundingBox)
-							&& yy >= (state->ymedian - state->ystd * state->numStdDevsForBoundingBox)
+							&& yy >= (state->ymedian - state->ystd * state->numStdDevsForBoundingBox))
 							|| (yy == (int) (state->ymedian + state->ystd * state->numStdDevsForBoundingBox)
 								&& xx <= (state->xmedian + state->xstd * state->numStdDevsForBoundingBox)
-								&& xx >= (state->xmedian - state->xstd * state->numStdDevsForBoundingBox)
+								&& xx >= (state->xmedian - state->xstd * state->numStdDevsForBoundingBox))
 								|| (yy == (int) (state->ymedian - state->ystd * state->numStdDevsForBoundingBox)
 									&& xx <= (state->xmedian + state->xstd * state->numStdDevsForBoundingBox)
-									&& xx >= (state->xmedian - state->xstd * state->numStdDevsForBoundingBox)))))) {
-					singleplot->pixels[counter] = (uint16_t) ((int) 65000);		// red
-					//singleplot->pixels[counter + 1] = (uint16_t) ((int) 1);		// green
-					//singleplot->pixels[counter + 2] = (uint16_t) ((int) 1);		// blue
+									&& xx >= (state->xmedian - state->xstd * state->numStdDevsForBoundingBox))) {
+					singleplot->pixels[counter] = (uint16_t) ((int) 1);		// red
+					singleplot->pixels[counter + 1] = (uint16_t) ((int) 1);		// green
+					singleplot->pixels[counter + 2] = (uint16_t) ((int) 65000);		// blue
 				}
 				else {
-					singleplot->pixels[counter] = (uint16_t) ((int) 50);			// red
-					//singleplot->pixels[counter + 1] = (uint16_t) ((int) 1);		// green
-					//singleplot->pixels[counter + 2] = (uint16_t) ((int) 65000);	// blue
+					singleplot->pixels[counter] = (uint16_t) ((int) 1);			// red
+					singleplot->pixels[counter + 1] = (uint16_t) ((int) 1);		// green
+					singleplot->pixels[counter + 2] = (uint16_t) ((int) 1);	// blue
 				}
-				counter += 1;
+				counter += 3;
 			}
 		}
 		//add info to the frame
-		caerFrameEventSetLengthXLengthYChannelNumber(singleplot, sizeX, sizeY, 1, *frame);
+		caerFrameEventSetLengthXLengthYChannelNumber(singleplot, sizeX, sizeY, 3, *frame);
 		//validate frame
 		caerFrameEventValidate(singleplot, *frame);
 
 		CAER_POLARITY_ITERATOR_VALID_START(polarity)
-			int x = caerPolarityEventGetX(caerPolarityIteratorElement);
-			int y = caerPolarityEventGetY(caerPolarityIteratorElement);
+			int xxx = caerPolarityEventGetX(caerPolarityIteratorElement);
+			int yyy = caerPolarityEventGetY(caerPolarityIteratorElement);
 			int pol = caerPolarityEventGetPolarity(caerPolarityIteratorElement);
-			int address = y * sizeX + x;
+			int address = 3 * (yyy * sizeX + xxx);
 			if (pol == 0) {
-				singleplot->pixels[address] = 35000;
+				singleplot->pixels[address] = 65000; // red
+				singleplot->pixels[address + 1] = 1; // green
+				singleplot->pixels[address + 2] = 1; // blue
 			}
 			else {
-				singleplot->pixels[address] = 15000;
+				singleplot->pixels[address] = 1; // red
+				singleplot->pixels[address + 1] = 65000; // green
+				singleplot->pixels[address + 2] = 1; // blue
 			}
 		CAER_POLARITY_ITERATOR_VALID_END
 
@@ -231,7 +237,7 @@ static void caerMediantrackerConfig(caerModuleData moduleData) {
 	caerModuleConfigUpdateReset(moduleData);
 
 	MTFilterState state = moduleData->moduleState;
-	state->alpha = sshsNodeGetFloat(moduleData->moduleNode, "alpha");
+	state->tauUs = sshsNodeGetInt(moduleData->moduleNode, "tauUs");
 	state->numStdDevsForBoundingBox = sshsNodeGetFloat(moduleData->moduleNode, "numStdDevsForBoundingBox");
 
 }
