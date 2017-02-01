@@ -13,6 +13,6 @@
 #include <libcaer/events/spike.h>
 #include <libcaer/events/frame.h> //display
 
-void caerMeanRateFilter(uint16_t moduleID, int16_t eventSourceID, caerSpikeEventPacket spike, caerFrameEventPacket *freqplot);
+void caerMeanRateFilter(uint16_t moduleID, caerSpikeEventPacket spike, caerFrameEventPacket *freqplot);
 
 #endif /* MEANRATEFILTER_H_ */

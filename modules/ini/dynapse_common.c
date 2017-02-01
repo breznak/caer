@@ -5,31 +5,6 @@
 #include "libcaer/devices/dynapse.h"
 #include "ext/colorjet/colorjet.h"
 
-static uint32_t convertBias(const char *biasName, const char* lowhi, const char*cl, const char*sex, uint8_t enal,
-	uint16_t fineValue, uint8_t coarseValue, uint8_t special);
-static uint32_t generateCoarseFineBiasParent(sshsNode biasNode, const char *biasName);
-static uint32_t generateCoarseFineBias(sshsNode biasNode);
-static void systemConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
-	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
-static void usbConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
-	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
-static void spikeConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
-	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
-static void sramConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
-	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
-static void camConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
-	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
-static void usbConfigSend(sshsNode node, caerModuleData moduleData);
-static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
-	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
-static void updateLowPowerBiases(caerModuleData moduleData, int chipid);
-static void updateSilentBiases(caerModuleData moduleData, int chipid);
-static char *int2bin(int a);
-static bool EnableStimuliGen(caerModuleData moduleData);
-static bool DisableStimuliGen(caerModuleData moduleData, int16_t eventSourceID);
-bool caerDynapseSetBiasBits(void* spikeGenState, uint32_t chipId, uint32_t coreId, const char *biasName_t,
-	uint8_t coarseValue, uint16_t fineValue, const char *lowHigh, const char *npBias);
-
 bool EnableStimuliGen(caerModuleData moduleData) {
 	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
 	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNode, "spikeGen/");
@@ -1349,7 +1324,7 @@ static uint32_t generateCoarseFineBiasParent(sshsNode biasNode, const char * bia
 	return (generateCoarseFineBias(biasNode));
 }
 
-static uint32_t generateCoarseFineBias(sshsNode biasNode) {
+uint32_t generateCoarseFineBias(sshsNode biasNode) {
 
 	char *biasName = sshsNodeGetName(biasNode);
 
@@ -1759,17 +1734,16 @@ void caerInputDYNAPSERun(caerModuleData moduleData, size_t argsNumber, va_list a
 	}
 }
 
-bool caerDynapseSetBiasBits(void* spikeGenState, uint32_t chipId, uint32_t coreId, const char *biasName_t,
+void caerDynapseSetBias(caerInputDynapseState state, uint32_t chipId, uint32_t coreId, const char *biasName_t,
 	uint8_t coarseValue, uint16_t fineValue, const char *lowHigh, const char *npBias) {
 
-	caerInputDynapseState state = spikeGenState;
 	caerDeviceHandle usb_handle = (caerDeviceHandle) state->deviceState;
 	struct caer_dynapse_info dynapse_info = caerDynapseInfoGet(state->deviceState);
 
 	// Check if the pointer is valid.
 	if (state->deviceState == NULL) {
 		struct caer_dynapse_info emptyInfo = { 0, .deviceString = NULL };
-		return (false);
+		return;
 	}
 
 	size_t biasNameLength = strlen(biasName_t);
@@ -1796,5 +1770,5 @@ bool caerDynapseSetBiasBits(void* spikeGenState, uint32_t chipId, uint32_t coreI
 
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, bits);
 
-	return (true);
+	return;
 }

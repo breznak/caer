@@ -14,6 +14,6 @@
 #include <libcaer/events/spike.h>
 #include <libcaer/events/polarity.h>
 
-void caerDvsToDynapse(uint16_t moduleID, int16_t eventSourceID, caerSpikeEventPacket spike, caerPolarityEventPacket polarity);
+void caerDvsToDynapse(uint16_t moduleID, caerSpikeEventPacket spike, caerPolarityEventPacket polarity);
 
 #endif /* DVSTODYNAPSE_H_ */

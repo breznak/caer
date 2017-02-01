@@ -120,7 +120,7 @@ static bool mainloop_1(void) {
 #endif
 
 #ifdef DVS128
-	container_cam = caerInputDVS128(100);
+	container_cam = caerInputDVS128(10);
 
 	caerSpecialEventPacket special_cam = NULL;
 	caerPolarityEventPacket polarity_cam = NULL;
@@ -131,10 +131,10 @@ static bool mainloop_1(void) {
 #endif
 
 #ifdef DAVISFX2
-	container_cam = caerInputDAVISFX2(100);
+	container_cam = caerInputDAVISFX2(10);
 #endif
 #ifdef DAVISFX3
-	container_cam = caerInputDAVISFX3(100);
+	container_cam = caerInputDAVISFX3(10);
 #endif
 #if defined(DAVISFX2) || defined(DAVISFX3)
 	caerSpecialEventPacket special_cam = NULL;
@@ -162,7 +162,7 @@ static bool mainloop_1(void) {
 	// Fitler that maps polarity dvs events as spiking inputs of the dynapse processor
 	// It is a software mapper
 #ifdef ENABLE_DVSTODYNAPSE
-	caerDvsToDynapse(5, 1, spike, polarity_cam);
+	caerDvsToDynapse(5, spike, polarity_cam);
 #endif
 
 	// Filters can also extract information from event packets: for example
@@ -175,7 +175,7 @@ static bool mainloop_1(void) {
 	// create frame for displaying frequencies
 	caerFrameEventPacket freqplot = NULL;
 #ifdef DYNAPSEFX2
-	caerMeanRateFilter(4, 1, spike, &freqplot);
+	caerMeanRateFilter(4, spike, &freqplot);
 #endif
 #endif
 

@@ -13,7 +13,7 @@
 #include "ext/colorjet/colorjet.h"
 
 struct MRFilter_state {
-	sshsNode eventSourceModuleState;
+	caerInputDynapseState eventSourceModuleState;
 	sshsNode eventSourceConfigNode;
 	simple2DBufferFloat frequencyMap;
 	simple2DBufferLong spikeCountMap;
@@ -21,7 +21,7 @@ struct MRFilter_state {
 	int32_t colorscaleMax;
 	int32_t colorscaleMin;
 	float targetFreq;
-	double measureMinTime;
+	float measureMinTime;
 	double measureStartedAt;
 	bool startedMeas;
 	bool doSetFreq;
@@ -44,13 +44,13 @@ static struct caer_module_functions caerMeanRateFilterFunctions = { .moduleInit 
 	&caerMeanRateFilterConfig, .moduleExit = &caerMeanRateFilterExit, .moduleReset =
 	&caerMeanRateFilterReset };
 
-void caerMeanRateFilter(uint16_t moduleID,  int16_t eventSourceID, caerSpikeEventPacket spike, caerFrameEventPacket *freqplot) {
+void caerMeanRateFilter(uint16_t moduleID,  caerSpikeEventPacket spike, caerFrameEventPacket *freqplot) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "MeanRate", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}
 
-	caerModuleSM(&caerMeanRateFilterFunctions, moduleData, sizeof(struct MRFilter_state), 3, eventSourceID, spike, freqplot);
+	caerModuleSM(&caerMeanRateFilterFunctions, moduleData, sizeof(struct MRFilter_state), 2, spike, freqplot);
 }
 
 static bool caerMeanRateFilterInit(caerModuleData moduleData) {
@@ -73,7 +73,7 @@ static bool caerMeanRateFilterInit(caerModuleData moduleData) {
 
 	// internals
 	state->startedMeas = false;
-	state->measureStartedAt = 0.0f;
+	state->measureStartedAt = 0.0;
 	state->measureMinTime = sshsNodeGetFloat(moduleData->moduleNode, "measureMinTime");
 
 	// Nothing that can fail here.
@@ -84,7 +84,6 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	UNUSED_ARGUMENT(argsNumber);
 
 	// Interpret variable arguments (same as above in main function).
-	int16_t eventSourceID = va_arg(args, int);
 	caerSpikeEventPacket spike = va_arg(args, caerSpikeEventPacket);
 	caerFrameEventPacket *freqplot = va_arg(args, caerFrameEventPacket*);
 
@@ -95,6 +94,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 
 	MRFilterState state = moduleData->moduleState;
 
+	int eventSourceID = caerEventPacketHeaderGetEventSource(&spike->packetHeader);
 	// If the map is not allocated yet, do it.
 	if (state->frequencyMap == NULL) {
 		if (!allocateFrequencyMap(state, caerEventPacketHeaderGetEventSource(&spike->packetHeader))) {
@@ -122,7 +122,6 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	if(stateSource->deviceState == NULL){
 		return;
 	}
-	struct caer_dynapse_info dynapse_info = caerDynapseInfoGet(stateSource->deviceState);
 	// --- end usb handle
 
 	// if not measuring, let's start
@@ -132,7 +131,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		state->startedMeas = true;
 	}
 
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(caerEventPacketHeaderGetEventSource(&spike->packetHeader));
+	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t)caerEventPacketHeaderGetEventSource(&spike->packetHeader));
 
 	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dataSizeX");
 	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dataSizeY");
@@ -141,14 +140,14 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	clock_gettime(CLOCK_MONOTONIC, &state->tend);
 	double now = ((double) state->tend.tv_sec + 1.0e-9 * state->tend.tv_nsec);
 	// if we measured for enough time..
-	if( state->measureMinTime <= (now - state->measureStartedAt) ){
+	if( (double) state->measureMinTime <= (double) (now - state->measureStartedAt) ){
 
 		//caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "\nfreq measurement completed.\n");
 		state->startedMeas = false;
 
 		//update frequencyMap
-		for (size_t x = 0; x < sizeX; x++) {
-			for (size_t y = 0; y < sizeY; y++) {
+		for (int16_t x = 0; x < sizeX; x++) {
+			for (int16_t y = 0; y < sizeY; y++) {
 				if(state->measureMinTime > 0){
 					state->frequencyMap->buffer2d[x][y] = (float)state->spikeCountMap->buffer2d[x][y]/(float)state->measureMinTime;
 				}
@@ -197,16 +196,16 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 					}
 					caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
 							"\nmean[%d][%d] = %f Hz var[%d][%d] = %f  max_freq %f\n",
-							corex, corey, mean[corex][corey], corex, corey, var[corex][corey], max_freq);
+							(int) corex, (int) corey, (double)mean[corex][corey], (int) corex, (int) corey, (double) var[corex][corey], (double) max_freq);
 				}
 			}
 
 			// now decide how to change the bias setting
-			for(size_t corex=0; corex<DYNAPSE_X4BOARD_COREX; corex++){
-				for(size_t corey=0; corey<DYNAPSE_X4BOARD_COREY; corey++){
+			for(uint32_t corex=0; corex<DYNAPSE_X4BOARD_COREX; corex++){
+				for(uint32_t corey=0; corey<DYNAPSE_X4BOARD_COREY; corey++){
 
-					int chipid;
-					int coreid;
+					uint32_t chipid = 0;
+					uint32_t coreid = 0;
 
 					// which chip/core should we address ?
 					if(corex < 2 && corey < 2 ){
@@ -225,10 +224,10 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 
 					caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
 						"\nmean[%d][%d] = %f Hz var[%d][%d] = %f chipid = %d coreid %d\n",
-						corex, corey, mean[corex][corey], corex, corey, var[corex][corey], chipid, coreid);
+						(int) corex, (int) corey, (double)mean[corex][corey], (int) corex, (int) corey, (double) var[corex][corey], chipid, coreid);
 
 					// current dc settings
-					sshsNode chipNode = sshsGetRelativeNode(state->eventSourceConfigNode,chipIDToName(chipid, true));
+					sshsNode chipNode = sshsGetRelativeNode(state->eventSourceConfigNode,chipIDToName((int16_t)chipid, true));
 				    sshsNode biasNode = sshsGetRelativeNode(chipNode, "bias/");
 
 				    // select right bias name
@@ -253,8 +252,8 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 					sshsNode biasConfigNode = sshsGetRelativeNode(biasNode, biasNameFull);
 
 					// Read current coarse and fine settings.
-					uint8_t coarseValue = sshsNodeGetByte(biasConfigNode, "coarseValue");
-					uint16_t fineValue = sshsNodeGetShort(biasConfigNode, "fineValue");
+					uint8_t coarseValue = (uint8_t) sshsNodeGetByte(biasConfigNode, "coarseValue");
+					uint16_t fineValue =  (uint16_t) sshsNodeGetShort(biasConfigNode, "fineValue");
 
 					caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
 											"\n BIAS %s coarse %d fine %d\n",
@@ -266,12 +265,12 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 					if( (state->targetFreq - mean[corex][corey]) > 0 ){
 						// we need to increase freq.. increase fine
 						if(fineValue < (255-step)){
-							fineValue = fineValue + step;
+							fineValue = (ushort) fineValue + (ushort) step;
 							changed = true;
 						}else{
 							// if we did not reach the max value
 							if(coarseValue != 0){
-								fineValue = step;
+								fineValue = (ushort) step;
 								coarseValue += -1; // coarse 0 is max 7 is min
 								changed = true;
 							}else{
@@ -282,12 +281,12 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 					}else if( (state->targetFreq - mean[corex][corey]) < 0){
 						// we need to reduce freq
 						if( (fineValue - step) > 0){
-							fineValue = fineValue - step;
+							fineValue = (ushort) fineValue - (ushort) step;
 							changed = true;
 						}else{
 							// if we did not reach the max value
 							if(coarseValue != 7){
-								fineValue = step;
+								fineValue = (ushort) step;
 								coarseValue += +1; // coarse 0 is max 7 is min
 								changed = true;
 							}else{
@@ -298,7 +297,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 					}
 					if(changed){
 						//generate bits to send
-						uint32_t bits = generatesBitsCoarseFineBiasSetting(state->eventSourceConfigNode,
+						uint32_t bits = (uint32_t) generatesBitsCoarseFineBiasSetting(state->eventSourceConfigNode,
 								biasName, coarseValue, fineValue, "HighBias", "Normal", "PBias", true, chipid);
 						//send bits to the usb
 						caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, chipid);
@@ -318,7 +317,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	// Iterate over events and update frequency
 	CAER_SPIKE_ITERATOR_VALID_START(spike)
 		// Get values on which to operate.
-		int64_t ts = caerSpikeEventGetTimestamp64(caerSpikeIteratorElement, spike);
+		//int64_t ts = caerSpikeEventGetTimestamp64(caerSpikeIteratorElement, spike);
 		uint16_t x = caerSpikeEventGetX(caerSpikeIteratorElement);
 		uint16_t y = caerSpikeEventGetY(caerSpikeIteratorElement);
 
@@ -334,8 +333,8 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		caerFrameEvent singleplot = caerFrameEventPacketGetEvent(*freqplot, 0);
 
 		uint32_t counter = 0;
-		for (size_t x = 0; x < sizeX; x++) {
-			for (size_t y = 0; y < sizeY; y++) {
+		for (int16_t x = 0; x < sizeX; x++) {
+			for (int16_t y = 0; y < sizeY; y++) {
 				COLOUR col  = GetColour((double) state->frequencyMap->buffer2d[y][x], state->colorscaleMin, state->colorscaleMax);
 				singleplot->pixels[counter] = (uint16_t) ( (int)(col.r*65535));			// red
 				singleplot->pixels[counter + 1] = (uint16_t) ( (int)(col.g*65535));		// green
@@ -403,8 +402,8 @@ static bool allocateSpikeCountMap(MRFilterState state, int16_t sourceID) {
 		return (false);
 	}
 
-	for(size_t x=0; x<sizeX; x++){
-		for(size_t y=0; y<sizeY; y++){
+	for(int16_t x=0; x<sizeX; x++){
+		for(int16_t y=0; y<sizeY; y++){
 			state->spikeCountMap->buffer2d[x][y] = 0; // init to zero
 		}
 	}
@@ -429,8 +428,8 @@ static bool allocateFrequencyMap(MRFilterState state, int16_t sourceID) {
 		return (false);
 	}
 
-	for(size_t x=0; x<sizeX; x++){
-		for(size_t y=0; y<sizeY; y++){
+	for(int16_t x=0; x<sizeX; x++){
+		for(int16_t y=0; y<sizeY; y++){
 			state->frequencyMap->buffer2d[x][y] = 0.0f; // init to zero
 		}
 	}
