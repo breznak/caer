@@ -301,6 +301,10 @@ static bool parseNetworkHeader(inputCommonState state) {
 	sshsNodePutShort(state->sourceInfoNode, "dvsSizeY", 180);
 	sshsNodePutShort(state->sourceInfoNode, "apsSizeX", 240);
 	sshsNodePutShort(state->sourceInfoNode, "apsSizeY", 180);
+	sshsNodePutShort(state->sourceInfoNode, "dataSizeX", 240);
+	sshsNodePutShort(state->sourceInfoNode, "dataSizeY", 180);
+	sshsNodePutShort(state->sourceInfoNode, "visualizerSizeX", 240);
+	sshsNodePutShort(state->sourceInfoNode, "visualizerSizeY", 180);
 
 	// TODO: Network: add sourceString.
 
