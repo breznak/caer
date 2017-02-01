@@ -213,9 +213,9 @@ static bool mainloop_1(void) {
 	// Filter that track one object by using the median position information
 #ifdef ENABLE_MEANRATEFILTER_DVS
 	caerFrameEventPacket freqplot = NULL;
-	caerMeanRateFilterDVS(15, 1, polarity, &freqplot);
+	caerMeanRateFilterDVS(15, polarity, &freqplot);
 #ifdef ENABLE_FILE_INPUT
-	caerMeanRateFilterDVS(15, 10, polarity, &freqplot);
+	caerMeanRateFilterDVS(15, polarity, &freqplot);
 #endif
 #endif
 

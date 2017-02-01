@@ -22,8 +22,6 @@ typedef struct path {
 	struct path * next;
 }Path;
 
-
-
 typedef struct cluster {
 	float location_x;
 	float location_y;
@@ -72,11 +70,6 @@ typedef struct cluster {
 	//int64_t startVisibleTime;
 } Cluster;
 
-
-
-
-
-
 struct SVFilter_state {
 	Cluster clusterList[10];
 	int currentClusterNum;
@@ -93,8 +86,8 @@ static const float ASPECT_RATIO_MIN_DYNAMIC_ANGLE_ENABLED = 0.5f;
 static const float AVERAGE_VELOCITY_MIXING_FACTOR = 0.001f;
 
 
-static float thresholdMassForVisibleCluster = 30;
-static int maxClusterNum = 3;
+static float thresholdMassForVisibleCluster = 300;
+static int maxClusterNum = 10;
 static int clusterMassDecayTauUs = 10000;
 static float defaultClusterRadius = 25.0f;
 static float mixingFactor = 0.005f;
@@ -109,10 +102,10 @@ static bool useVelocity = false;
 static float thresholdVelocityForVisibleCluster = 0.0f;
 
 //static bool useEllipticalClusters = false;
-static bool dynamicSizeEnabled = false;
-static bool dynamicAspectRatioEnabled = false;
+static bool dynamicSizeEnabled = true;
+static bool dynamicAspectRatioEnabled = true;
 static bool dynamicAngleEnabled = false;
-static bool pathsEnabled = true;
+static bool pathsEnabled = false;
 static int pathLength = 100;
 //static bool colorClustersDifferentlyEnabled = false;
 //static bool useOnePolarityOnlyEnabled = false;
@@ -139,17 +132,11 @@ static float velocityTauMs = 100.0f;
 static bool dontMergeEver = false;
 static bool angleFollowsVelocity = false;
 
-
 static float initialAngle = 0.0f;
 static int clusterCounter = 0;
 
 static float averageVelocityPPT_x = 0.0f;
 static float averageVelocityPPT_y = 0.0f;
-
-
-
-
-
 
 typedef struct SVFilter_state *SVFilterState;
 
@@ -271,12 +258,6 @@ static bool caerSurveillanceInit(caerModuleData moduleData) {
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
-	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
-	if (!sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SSHS_SHORT)) { //to do for visualizer change name of field to a more generic one
-		sshsNodePutShort(sourceInfoNode, "dataSizeX", 240);
-		sshsNodePutShort(sourceInfoNode, "dataSizeY", 180);
-	}
-
 	// Nothing that can fail here.
 	return (true);
 }
@@ -289,13 +270,16 @@ static void caerSurveillanceRun(caerModuleData moduleData, size_t argsNumber, va
 
 	SVFilterState state = moduleData->moduleState;
 
-	//sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(caerEventPacketHeaderGetEventSource(&polarity->packetHeader)));
-	//int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-	//int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
-	int16_t sizeX = 240;
-	int16_t sizeY = 180;
+	int sourceID = caerEventPacketHeaderGetEventSource(&polarity->packetHeader);
+	sshsNode sourceInfoNodeCA = caerMainloopGetSourceInfo(sourceID);
+	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
+	if (!sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SSHS_SHORT)) { //to do for visualizer change name of field to a more generic one
+		sshsNodePutShort(sourceInfoNode, "dataSizeX", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeX"));
+		sshsNodePutShort(sourceInfoNode, "dataSizeY", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeY"));
+	}
 
-
+	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dataSizeX");
+	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dataSizeY");
 
 	 //Only process packets with content.
 	if (polarity == NULL) {
@@ -307,9 +291,9 @@ static void caerSurveillanceRun(caerModuleData moduleData, size_t argsNumber, va
 		state->clusterList[i].lastPacketLocation_y = state->clusterList[i].location_y;
 	}
 
-
 	//Iterate over events and filter out ones that are not supported by other
-//	//events within a certain region in the specified timeframe.
+	//
+	//events within a certain region in the specified timeframe.
 	CAER_POLARITY_ITERATOR_VALID_START(polarity)
 
 	// Get values on which to operate.
@@ -375,14 +359,14 @@ static void caerSurveillanceRun(caerModuleData moduleData, size_t argsNumber, va
 			int pol = caerPolarityEventGetPolarity(caerPolarityIteratorElement);
 			int address = 3 * (yyy * sizeX + xxx);
 			if (pol == 0) {
-				singleplot->pixels[address] = 65000; // red
-				singleplot->pixels[address + 1] = 1; // green
-				singleplot->pixels[address + 2] = 1; // blue
+				singleplot->pixels[address] = 0; // red
+				singleplot->pixels[address + 1] = 65000; // green
+				singleplot->pixels[address + 2] = 0; // blue
 			}
 			else {
-				singleplot->pixels[address] = 1; // red
+				singleplot->pixels[address] = 0; // red
 				singleplot->pixels[address + 1] = 65000; // green
-				singleplot->pixels[address + 2] = 1; // blue
+				singleplot->pixels[address + 2] = 0; // blue
 			}
 		CAER_POLARITY_ITERATOR_VALID_END
 
@@ -1138,8 +1122,8 @@ static void drawCluster(caerFrameEvent singleplot, Cluster *c, int sizeX, int si
 					 (y == (int)(c->location_y + c->radius_y) && x <= (c->location_x + c->radius_x) && x >= (c->location_x - c->radius_x)) ||
 					 (y == (int)(c->location_y - c->radius_y) && x <= (c->location_x + c->radius_x) && x >= (c->location_x - c->radius_x)) )
 				{
-					singleplot->pixels[counter] = (uint16_t) ( (int) 1);			// red
-					singleplot->pixels[counter + 1] = (uint16_t) ( (int) 1);		// green
+					singleplot->pixels[counter] = (uint16_t) ( (int) 65000);			// red
+					singleplot->pixels[counter + 1] = (uint16_t) ( (int) 65000);		// green
 					singleplot->pixels[counter + 2] = (uint16_t) ( (int) 65000);	// blue
 				}
 				counter += 3;

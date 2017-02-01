@@ -42,15 +42,13 @@ static struct caer_module_functions caerMeanRateFilterFunctions = { .moduleInit 
 	&caerMeanRateFilterRun, .moduleConfig = &caerMeanRateFilterConfig, .moduleExit = &caerMeanRateFilterExit,
 	.moduleReset = &caerMeanRateFilterReset };
 
-void caerMeanRateFilterDVS(uint16_t moduleID, int16_t eventSourceID, caerPolarityEventPacket polarity,
-	caerFrameEventPacket *freqplot) {
+void caerMeanRateFilterDVS(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket *freqplot) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "MeanRateFilterDVS", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}
 
-	caerModuleSM(&caerMeanRateFilterFunctions, moduleData, sizeof(struct MRFilter_state), 3, eventSourceID, polarity,
-		freqplot);
+	caerModuleSM(&caerMeanRateFilterFunctions, moduleData, sizeof(struct MRFilter_state), 2, polarity, freqplot);
 }
 
 static bool caerMeanRateFilterInit(caerModuleData moduleData) {
@@ -65,13 +63,6 @@ static bool caerMeanRateFilterInit(caerModuleData moduleData) {
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
-	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
-	sshsNode sourceInfoNodeCA = caerMainloopGetSourceInfo(1);  // TODO !!! -> remove hard CODED moduleID
-	if (!sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SSHS_SHORT)) { //to do for visualizer change name of field to a more generic one
-		sshsNodePutShort(sourceInfoNode, "dataSizeX", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeX"));
-		sshsNodePutShort(sourceInfoNode, "dataSizeY", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeY"));
-	}
-
 	// internals
 	state->startedMeas = false;
 	state->measureStartedAt = 0.0f;
@@ -85,7 +76,6 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	UNUSED_ARGUMENT(argsNumber);
 
 	// Interpret variable arguments (same as above in main function).
-	int16_t eventSourceID = va_arg(args, int);
 	caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
 	caerFrameEventPacket *freqplot = va_arg(args, caerFrameEventPacket*);
 
@@ -95,6 +85,14 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	}
 
 	MRFilterState state = moduleData->moduleState;
+
+	int sourceID = caerEventPacketHeaderGetEventSource(&polarity->packetHeader);
+	sshsNode sourceInfoNodeCA = caerMainloopGetSourceInfo(sourceID);
+	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
+	if (!sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SSHS_SHORT)) { //to do for visualizer change name of field to a more generic one
+		sshsNodePutShort(sourceInfoNode, "dataSizeX", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeX"));
+		sshsNodePutShort(sourceInfoNode, "dataSizeY", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeY"));
+	}
 
 	// If the map is not allocated yet, do it.
 	if (state->frequencyMap == NULL) {
@@ -113,20 +111,6 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		}
 	}
 
-	// --- start  usb handle / from spike event source id
-	state->eventSourceDeviceHandle = caerMainloopGetSourceState(U16T(eventSourceID));
-	state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(eventSourceID));
-	if (state->eventSourceDeviceHandle == NULL || state->eventSourceConfigNode == NULL) {
-		return;
-	}
-
-#if defined(DVS128)
-	struct caer_dvs128_info dev_info = caerDVS128InfoGet(state->eventSourceDeviceHandle);
-#else
-	struct caer_davis_info dev_info = caerDavisInfoGet(state->eventSourceDeviceHandle);
-#endif
-	// --- end usb handle
-
 	// if not measuring, let's start
 	if (state->startedMeas == false) {
 		clock_gettime(CLOCK_MONOTONIC, &state->tstart);
@@ -134,7 +118,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 		state->startedMeas = true;
 	}
 
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(caerEventPacketHeaderGetEventSource(&polarity->packetHeader));
+	//sshsNode sourceInfoNode = caerMainloopGetSourceInfo(caerEventPacketHeaderGetEventSource(&polarity->packetHeader));
 
 	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dataSizeX");
 	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dataSizeY");

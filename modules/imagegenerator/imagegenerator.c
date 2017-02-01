@@ -177,12 +177,13 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 		return;
 	}
 
-	int16_t sourceID = caerEventPacketHeaderGetEventSource(&polarity->packetHeader);
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
-	/*if (!sshsNodeAttributeExists(sourceInfoNode, "dvsSizeX", SSHS_SHORT)) {
-		sshsNodePutShortIfAbsent(moduleData->moduleNode, "dvsSizeX", sshsNodeGetShort(sourceInfoNode, "dvsSizeX"));
-		sshsNodePutShortIfAbsent(moduleData->moduleNode, "dvsSizeY", sshsNodeGetShort(sourceInfoNode, "dvsSizeY"));
-	}*/
+	int sourceID = caerEventPacketHeaderGetEventSource(&polarity->packetHeader);
+	sshsNode sourceInfoNodeCA = caerMainloopGetSourceInfo(sourceID);
+	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
+	if (!sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SSHS_SHORT)) { //to do for visualizer change name of field to a more generic one
+		sshsNodePutShort(sourceInfoNode, "dataSizeX", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeX"));
+		sshsNodePutShort(sourceInfoNode, "dataSizeY", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeY"));
+	}
 
 	//update module state
 	imagegeneratorState state = moduleData->moduleState;
@@ -202,8 +203,8 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 
 	if (polarity != NULL) {
 
-		float cam_sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-		float cam_sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
+		float cam_sizeX = sshsNodeGetShort(sourceInfoNode, "dataSizeX");
+		float cam_sizeY = sshsNodeGetShort(sourceInfoNode, "dataSizeY");
 
 		float res_x = CLASSIFY_IMG_SIZE / cam_sizeX;
 		float res_y = CLASSIFY_IMG_SIZE / cam_sizeY;

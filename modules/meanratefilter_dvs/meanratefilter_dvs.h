@@ -14,6 +14,6 @@
 #include <libcaer/events/polarity.h>
 #include <libcaer/events/frame.h> //display
 
-void caerMeanRateFilterDVS(uint16_t moduleID, int16_t eventSourceID, caerPolarityEventPacket polarity, caerFrameEventPacket *freqplot);
+void caerMeanRateFilterDVS(uint16_t moduleID,  caerPolarityEventPacket polarity, caerFrameEventPacket *freqplot);
 
 #endif /* MEANRATEFILTERDVS_H_ */

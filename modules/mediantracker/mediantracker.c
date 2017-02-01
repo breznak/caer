@@ -73,13 +73,6 @@ static bool caerMediantrackerInit(caerModuleData moduleData) {
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
-	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
-	sshsNode sourceInfoNodeCA = caerMainloopGetSourceInfo(1);  // TODO !!! -> remove hard CODED moduleID
-	if (!sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SSHS_SHORT)) { //to do for visualizer change name of field to a more generic one
-		sshsNodePutShort(sourceInfoNode, "dataSizeX", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeX"));
-		sshsNodePutShort(sourceInfoNode, "dataSizeY", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeY"));
-	}
-
 	// Nothing that can fail here.
 	return (true);
 }
@@ -96,6 +89,17 @@ static void caerMediantrackerRun(caerModuleData moduleData, size_t argsNumber, v
 	}
 
 	MTFilterState state = moduleData->moduleState;
+
+	int sourceID = caerEventPacketHeaderGetEventSource(&polarity->packetHeader);
+	sshsNode sourceInfoNodeCA = caerMainloopGetSourceInfo(sourceID);
+	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
+	if (!sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SSHS_SHORT)) { //to do for visualizer change name of field to a more generic one
+		sshsNodePutShort(sourceInfoNode, "dataSizeX", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeX"));
+		sshsNodePutShort(sourceInfoNode, "dataSizeY", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeY"));
+	}
+
+	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dataSizeX");
+	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dataSizeY");
 
 	// get the size of the packet
 	int n = caerEventPacketHeaderGetEventNumber(&polarity->packetHeader);
@@ -170,12 +174,6 @@ static void caerMediantrackerRun(caerModuleData moduleData, size_t argsNumber, v
 	}
 	state->xstd = state->xstd + ((float) sqrt(xvar) - state->xstd) * fac;
 	state->ystd = state->ystd + ((float) sqrt(yvar) - state->ystd) * fac;
-
-	// plot
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(
-		U16T(caerEventPacketHeaderGetEventSource(&polarity->packetHeader)));
-	int16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
 	*frame = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, sizeX, sizeY, 3);
 	if (*frame != NULL) {
