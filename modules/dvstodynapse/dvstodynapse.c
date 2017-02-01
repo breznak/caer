@@ -14,7 +14,7 @@ struct DvsToDynapse_state {
 	caerInputDynapseState eventSourceModuleState;
 	sshsNode eventSourceConfigNode;
 	bool doMapping;
-	uint16_t chipId;						//U0->0,U1->8,U2->4,U3->12
+	int chipId;						//U0->0,U1->8,U2->4,U3->12
 	simple2DBufferLong DownsampledMap;
 	int threshold;							//after which we send spikes out
 	bool programCam;
@@ -22,6 +22,7 @@ struct DvsToDynapse_state {
 	bool programCamAllChips;
 	bool singleChipMode;
 	bool programConvolutionMapping;
+	bool enableMapping;
 };
 
 typedef struct DvsToDynapse_state *DvsToDynapseState;
@@ -34,7 +35,7 @@ static void caerDvsToDynapseReset(caerModuleData moduleData, uint16_t resetCallS
 static bool allocateDownsampledMap(DvsToDynapseState state, int16_t sourceID);
 void programBiasesDvsToDynapse(caerInputDynapseState state, DvsToDynapseState stateMod);
 void programMapInCam(caerInputDynapseState state, DvsToDynapseState stateMod);
-void programMapInAllCam(caerInputDynapseState state, DvsToDynapseState stateMod);
+//void programMapInAllCam(caerInputDynapseState state, DvsToDynapseState stateMod);
 void programConvolutionMappingSram(caerInputDynapseState state, DvsToDynapseState stateMod, caerModuleData module);
 
 static struct caer_module_functions caerDvsToDynapseFunctions = { .moduleInit =
@@ -57,7 +58,7 @@ static bool caerDvsToDynapseInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "chipId", DYNAPSE_CONFIG_DYNAPSE_U3); // 0,4,8,12
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "threshold", 10);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "programCamAllChips", true);
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "singleChipMode", true);
+	//sshsNodePutBoolIfAbsent(moduleData->moduleNode, "singleChipMode", true);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "programConvolutionMapping", true);
 	// set default values
 	sshsNodePutBool(moduleData->moduleNode, "programCamAllChips", true);
@@ -79,11 +80,12 @@ static bool caerDvsToDynapseInit(caerModuleData moduleData) {
 	state->chipId = (uint16_t) sshsNodeGetInt(moduleData->moduleNode, "chipId");
 	state->threshold = sshsNodeGetInt(moduleData->moduleNode, "threshold");
 	state->programCamAllChips = sshsNodeGetBool(moduleData->moduleNode, "programCamAllChips"); // false at startup
-	state->singleChipMode = sshsNodeGetBool(moduleData->moduleNode, "singleChipMode"); // true at startup
+	state->singleChipMode = true;//sshsNodeGetBool(moduleData->moduleNode, "singleChipMode"); // true at startup
 	state->DownsampledMap = NULL;
 	state->programBiases = true;
 	state->programCam = true;
 	state->programConvolutionMapping = sshsNodeGetBool(moduleData->moduleNode, "programConvolutionMapping"); // true at startup
+	state->enableMapping = false;
 
 	// Nothing that can fail here.
 	return (true);
@@ -126,15 +128,21 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 	}
 	// program as destination all chips in board
 	if(state->programCamAllChips){
-		programMapInAllCam(stateSource, state);
-		sshsNodePutBool(moduleData->moduleNode, "programCamAllChips", false);
 
-		uint16_t allChips[4] = {DYNAPSE_CONFIG_DYNAPSE_U0,DYNAPSE_CONFIG_DYNAPSE_U1,DYNAPSE_CONFIG_DYNAPSE_U2,DYNAPSE_CONFIG_DYNAPSE_U3};
-
-		for(size_t this_chip=0; this_chip < 4; this_chip++){
+		uint32_t allChips[3] = {DYNAPSE_CONFIG_DYNAPSE_U1,DYNAPSE_CONFIG_DYNAPSE_U2,DYNAPSE_CONFIG_DYNAPSE_U3};
+		for(size_t this_chip=0; this_chip < 3; this_chip++){
 			state->chipId = allChips[this_chip];
+			sshsNodePutInt(moduleData->moduleNode, "chipId", allChips[this_chip]);
+			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Programming chip id %d,", state->chipId);
+			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, state->chipId);
+			programMapInCam(stateSource, state);
 			programBiasesDvsToDynapse(stateSource, state);
 		}
+		sshsNodePutBool(moduleData->moduleNode, "programCamAllChips", false);
+		state->programCamAllChips = false;
+		programConvolutionMappingSram(stateSource, state, moduleData);
+		// now switch on mapping
+		state->enableMapping = true;
 	}
 	// program convolution mapping
 	// we map 8x8 kernels to chip U1, Chip U2
@@ -411,7 +419,6 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 														0 << 7 |
 														0 << 9;
 
-
 						if(numConfig_chipU0+1 >= DYNAPSE_MAX_USER_USB_PACKET_SIZE ||
 							numConfig_chipU1+1 >= DYNAPSE_MAX_USER_USB_PACKET_SIZE ||
 							numConfig_chipU2+1 >= DYNAPSE_MAX_USER_USB_PACKET_SIZE ||
@@ -539,6 +546,10 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 		}
 	}
 
+	if(state->enableMapping){
+		sshsNodePutBool(moduleData->moduleNode, "doMapping", true);
+		state->doMapping = true;
+	}
 }
 
 static void caerDvsToDynapseConfig(caerModuleData moduleData) {
@@ -555,7 +566,6 @@ static void caerDvsToDynapseConfig(caerModuleData moduleData) {
 	}
 	state->threshold = sshsNodeGetInt(moduleData->moduleNode, "threshold");
 	state->programCamAllChips = sshsNodeGetBool(moduleData->moduleNode, "programCamAllChips");
-	state->programCamAllChips = sshsNodeGetBool(moduleData->moduleNode, "programCamAllChips");
 	state->programConvolutionMapping =  sshsNodeGetBool(moduleData->moduleNode, "programConvolutionMapping");
 
 	// here the user needs to make sure to program all cams
@@ -568,6 +578,9 @@ static void caerDvsToDynapseExit(caerModuleData moduleData) {
 	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
 	DvsToDynapseState state = moduleData->moduleState;
+	//disable mapping
+	sshsNodePutBool(moduleData->moduleNode, "doMapping", false);
+	state->doMapping = false;
 	// Ensure maps are freed.
 	simple2DBufferFreeLong(state->DownsampledMap);
 
@@ -604,45 +617,6 @@ static bool allocateDownsampledMap(DvsToDynapseState state, int16_t sourceID) {
 	return (true);
 }
 
-/* program destination cam addresses 64 - synapses per input -*/
-void programMapInAllCam(caerInputDynapseState state, DvsToDynapseState stateMod) {
-	if (state == NULL) {
-		return;
-	}
-	uint32_t allChipsInBoards[4] = {DYNAPSE_CONFIG_DYNAPSE_U0,DYNAPSE_CONFIG_DYNAPSE_U1,
-									DYNAPSE_CONFIG_DYNAPSE_U2,DYNAPSE_CONFIG_DYNAPSE_U3};
-	caerDeviceHandle usb_handle = (caerDeviceHandle) state->deviceState;
-
-	for(size_t this_chip=0; this_chip < 4; this_chip++){
-		//stateMod->chipId = allChipsInBoards[this_chip];
-		caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, allChipsInBoards[this_chip]); //U0->0,U1->8,U2->4,U3->12
-		uint32_t neuronId, camId;
-		uint32_t bits[DYNAPSE_MAX_USER_USB_PACKET_SIZE];
-		uint32_t numConfig = -1;
-		caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "Started programming cam chipId %d.", allChipsInBoards[this_chip]);
-		for (size_t neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS; neuronId++) {
-			numConfig = -1;
-			for (size_t camId = 0; camId < DYNAPSE_CONFIG_NUMCAM; camId++) {
-				numConfig++;
-				bits[numConfig]=caerDynapseGenerateCamBits(0, neuronId, camId, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
-			}
-			// send data with libusb host transfer in packet
-			if(!caerDynapseSendDataToUSB(usb_handle, bits, numConfig)){
-				caerLog(CAER_LOG_ERROR, "DvsToDynapse", "USB transfer failed.");
-			}
-		}
-		caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, allChipsInBoards[this_chip]);
-		for (neuronId = 0;
-				neuronId < DYNAPSE_CONFIG_XCHIPSIZE * DYNAPSE_CONFIG_YCHIPSIZE;
-				neuronId++) {
-			caerDynapseWriteCam(state->deviceState, neuronId, neuronId, 0, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
-		}
-		caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "CAM programmed successfully, chipId %d..", allChipsInBoards[this_chip]);
-	}
-
-	stateMod->programCam = false;
-}
-
 /* program SRAM cam - to map to convolutions -*/
 void programConvolutionMappingSram(caerInputDynapseState state, DvsToDynapseState stateMod, caerModuleData moduleD) {
 
@@ -654,8 +628,8 @@ void programConvolutionMappingSram(caerInputDynapseState state, DvsToDynapseStat
 		// proceed with the mapping
 		// init sram_id = 1;
 
-		uint32_t bits[DYNAPSE_MAX_USER_USB_PACKET_SIZE];
-		uint32_t numConfig = -1;
+		int bits[DYNAPSE_MAX_USER_USB_PACKET_SIZE];
+		int numConfig = -1;
 		caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "Mapping convolutions started..");
 		for(size_t sramId=1; sramId < 3; sramId++){
 			for(size_t neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS_CORE; neuronId++){
@@ -699,7 +673,7 @@ void programConvolutionMappingSram(caerInputDynapseState state, DvsToDynapseStat
 		}
 		caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "Mapping convolutions done");
 		sshsNodePutBool(moduleD->moduleNode, "programConvolutionMapping", false);
-		stateMod->programConvolutionMapping = false;
+		stateMod->programConvolutionMapping = sshsNodeGetBool(moduleD->moduleNode, "programConvolutionMapping");
 	}
 }
 
@@ -710,15 +684,15 @@ void programMapInCam(caerInputDynapseState state, DvsToDynapseState stateMod) {
 	}
 	caerDeviceHandle usb_handle = (caerDeviceHandle) state->deviceState;
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, stateMod->chipId); //U0->0,U1->8,U2->4,U3->12
-	uint32_t neuronId;
-	uint32_t bits[DYNAPSE_MAX_USER_USB_PACKET_SIZE];
-	uint32_t numConfig = -1;
+	int neuronId;
+	int bits[DYNAPSE_MAX_USER_USB_PACKET_SIZE];
+	int numConfig = -1;
 	caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "Started cleaning cam..");
 	for (size_t neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS; neuronId++) {
 		numConfig = -1;
 		for (size_t camId = 0; camId < DYNAPSE_CONFIG_NUMCAM; camId++) {
 			numConfig++;
-			bits[numConfig]=caerDynapseGenerateCamBits(0, neuronId, camId, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
+			bits[numConfig]= (int) caerDynapseGenerateCamBits(0, neuronId, camId, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
 		}
 		// send data with libusb host transfer in packet
 		if(!caerDynapseSendDataToUSB(usb_handle, bits, numConfig)){
@@ -732,7 +706,7 @@ void programMapInCam(caerInputDynapseState state, DvsToDynapseState stateMod) {
 	for (neuronId = 0;
 			neuronId < DYNAPSE_CONFIG_XCHIPSIZE * DYNAPSE_CONFIG_YCHIPSIZE;
 			neuronId++) {
-		caerDynapseWriteCam(state->deviceState, neuronId, neuronId, 0, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
+		caerDynapseWriteCam(usb_handle, neuronId, neuronId, 0, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
 	}
 	caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "CAM programmed successfully.");
 
