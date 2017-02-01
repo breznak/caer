@@ -22,8 +22,8 @@ static void camConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 static void usbConfigSend(sshsNode node, caerModuleData moduleData);
 static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);
-static void updateLowPowerBiases(caerModuleData moduleData, struct caer_dynapse_info *devInfo, int chipid);
-static void updateSilentBiases(caerModuleData moduleData, struct caer_dynapse_info *devInfo, int chipid);
+static void updateLowPowerBiases(caerModuleData moduleData, int chipid);
+static void updateSilentBiases(caerModuleData moduleData, int chipid);
 static char *int2bin(int a);
 static bool EnableStimuliGen(caerModuleData moduleData);
 static bool DisableStimuliGen(caerModuleData moduleData, int16_t eventSourceID);
@@ -346,7 +346,7 @@ static void usbConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 	}
 }
 
-uint32_t generatesBitsCoarseFineBiasSetting(sshsNode node, struct caer_dynapse_info *devInfo, const char *biasName,
+uint32_t generatesBitsCoarseFineBiasSetting(sshsNode node, const char *biasName,
 	uint8_t coarseValue, uint16_t fineValue, const char *hlbias, const char *currentLevel, const char *sex,
 	bool enabled, int chipid) {
 
@@ -382,7 +382,7 @@ uint32_t generatesBitsCoarseFineBiasSetting(sshsNode node, struct caer_dynapse_i
 
 }
 
-static void updateCoarseFineBiasSetting(caerModuleData moduleData, struct caer_dynapse_info *devInfo,
+static void updateCoarseFineBiasSetting(caerModuleData moduleData,
 	const char *biasName, uint8_t coarseValue, uint16_t fineValue, const char *hlbias, const char *currentLevel,
 	const char *sex, bool enabled, int chipid) {
 
@@ -515,247 +515,247 @@ static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_att
 
 }
 
-static void updateLowPowerBiases(caerModuleData moduleData, struct caer_dynapse_info *dynapse_info, int chipid) {
+static void updateLowPowerBiases(caerModuleData moduleData, int chipid) {
 
 	// now set default low power biases
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_BUF_P", 3, 80, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_RFR_N", 3, 3, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_NMDA_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_DC_P", 3, 60, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_TAU1_N", 5, 10, "LowBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_TAU2_N", 6, 100, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_THR_N", 3, 30, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_AHW_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_AHTAU_N", 7, 35, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_AHTHR_N", 7, 0, "HighBias", "Normal", "NBias", true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_CASC_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_PULSE_PWLK_P", 3, 106, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_PS_WEIGHT_EXC_F_N", 15, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_NPDPII_TAU_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_NPDPII_THR_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_NPDPII_THR_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_NPDPII_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_NPDPIE_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_NPDPIE_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_NPDPIE_TAU_F_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_NPDPIE_TAU_F_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_NPDPIE_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_R2R_P", 4, 85, "HighBias", "Normal", "PBias", true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_BUF_P", 3, 80, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_RFR_N", 3, 3, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_NMDA_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_DC_P", 3, 60, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_TAU1_N", 5, 10, "LowBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_TAU2_N", 6, 100, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_THR_N", 3, 30, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_AHW_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_AHTAU_N", 7, 35, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_AHTHR_N", 7, 0, "HighBias", "Normal", "NBias", true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_CASC_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_PULSE_PWLK_P", 3, 106, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_PS_WEIGHT_EXC_F_N", 15, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_NPDPII_TAU_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_NPDPII_THR_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_NPDPII_THR_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_NPDPII_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_NPDPIE_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_NPDPIE_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_NPDPIE_TAU_F_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_NPDPIE_TAU_F_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_NPDPIE_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_R2R_P", 4, 85, "HighBias", "Normal", "PBias", true, chipid);
 
 	// core 1
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_BUF_P", 3, 80, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_RFR_N", 3, 3, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_NMDA_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_DC_P", 3, 60, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_TAU1_N", 5, 10, "LowBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_TAU2_N", 6, 100, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_THR_N", 3, 30, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_AHW_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_AHTAU_N", 7, 35, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_AHTHR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_CASC_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_PULSE_PWLK_P", 3, 106, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_PS_WEIGHT_EXC_F_N", 15, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_NPDPII_TAU_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_NPDPII_THR_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_NPDPII_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_NPDPIE_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_NPDPIE_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_NPDPIE_TAU_F_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_NPDPIE_TAU_F_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_NPDPIE_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_R2R_P", 4, 85, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_BUF_P", 3, 80, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_RFR_N", 3, 3, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_NMDA_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_DC_P", 3, 60, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_TAU1_N", 5, 10, "LowBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_TAU2_N", 6, 100, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_THR_N", 3, 30, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_AHW_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_AHTAU_N", 7, 35, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_AHTHR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_CASC_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_PULSE_PWLK_P", 3, 106, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_PS_WEIGHT_EXC_F_N", 15, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_NPDPII_TAU_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_NPDPII_THR_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_NPDPII_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_NPDPIE_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_NPDPIE_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_NPDPIE_TAU_F_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_NPDPIE_TAU_F_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_NPDPIE_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_R2R_P", 4, 85, "HighBias", "Normal", "PBias", true,chipid);
 
 	// core 2
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_BUF_P", 3, 80, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_RFR_N", 3, 3, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_NMDA_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_DC_P", 3, 60, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_TAU1_N", 5, 10, "LowBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_TAU2_N", 6, 100, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_THR_N", 3, 30, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_AHW_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_AHTAU_N", 7, 35, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_AHTHR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_CASC_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_PULSE_PWLK_P", 3, 106, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_PS_WEIGHT_EXC_F_N", 15, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_NPDPII_TAU_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_NPDPII_THR_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_NPDPII_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_NPDPIE_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_NPDPIE_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_NPDPIE_TAU_F_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_NPDPIE_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_R2R_P", 4, 85, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_BUF_P", 3, 80, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_RFR_N", 3, 3, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_NMDA_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_DC_P", 3, 60, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_TAU1_N", 5, 10, "LowBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_TAU2_N", 6, 100, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_THR_N", 3, 30, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_AHW_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_AHTAU_N", 7, 35, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_AHTHR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_CASC_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_PULSE_PWLK_P", 3, 106, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_PS_WEIGHT_EXC_F_N", 15, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_NPDPII_TAU_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_NPDPII_THR_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_NPDPII_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_NPDPIE_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_NPDPIE_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_NPDPIE_TAU_F_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_NPDPIE_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_R2R_P", 4, 85, "HighBias", "Normal", "PBias", true,chipid);
 
 	// core 3
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_BUF_P", 3, 80, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_RFR_N", 3, 3, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_NMDA_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_DC_P", 2, 30, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_TAU1_N", 5, 10, "LowBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_TAU2_N", 6, 100, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_THR_N", 3, 30, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_AHW_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_AHTAU_N", 7, 35, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_AHTHR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_CASC_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_PULSE_PWLK_P", 3, 106, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_NPDPII_TAU_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_NPDPII_THR_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_NPDPII_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_NPDPIE_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_NPDPIE_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_NPDPIE_TAU_F_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_NPDPIE_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_R2R_P", 4, 85, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_BUF_P", 3, 80, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_RFR_N", 3, 3, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_NMDA_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_DC_P", 2, 30, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_TAU1_N", 5, 10, "LowBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_TAU2_N", 6, 100, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_THR_N", 3, 30, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_AHW_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_AHTAU_N", 7, 35, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_AHTHR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_CASC_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_PULSE_PWLK_P", 3, 106, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_NPDPII_TAU_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_NPDPII_THR_S_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_NPDPII_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_NPDPIE_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_NPDPIE_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_NPDPIE_TAU_F_P", 7, 40, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_NPDPIE_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_R2R_P", 4, 85, "HighBias", "Normal", "PBias", true,chipid);
 
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "D_BUFFER", 1, 2, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "D_SSP", 0, 7, "HighBias", "Normal", "PBias", true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "D_SSN", 0, 15, "HighBias", "Normal", "PBias", true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "U_BUFFER", 1, 2, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "U_SSP", 0, 7, "HighBias", "Normal", "PBias", true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "U_SSN", 0, 15, "HighBias", "Normal", "PBias", true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "D_BUFFER", 1, 2, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "D_SSP", 0, 7, "HighBias", "Normal", "PBias", true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "D_SSN", 0, 15, "HighBias", "Normal", "PBias", true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "U_BUFFER", 1, 2, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "U_SSP", 0, 7, "HighBias", "Normal", "PBias", true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "U_SSN", 0, 15, "HighBias", "Normal", "PBias", true, chipid);
 
 }
 
-static void updateSilentBiases(caerModuleData moduleData, struct caer_dynapse_info *dynapse_info, int chipid) {
+static void updateSilentBiases(caerModuleData moduleData, int chipid) {
 
 	// make chip silent while programming AER
 	// core 0
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_BUF_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_RFR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_NMDA_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_DC_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_TAU1_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_TAU2_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_THR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_AHW_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_AHTAU_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_AHTHR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_IF_CASC_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_PULSE_PWLK_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_NPDPII_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_NPDPII_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_NPDPIE_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_NPDPIE_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_NPDPIE_TAU_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_NPDPIE_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C0_R2R_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_BUF_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_RFR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_NMDA_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_DC_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_TAU1_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_TAU2_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_THR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_AHW_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_AHTAU_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_AHTHR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_IF_CASC_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_PULSE_PWLK_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_NPDPII_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_NPDPII_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_NPDPIE_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_NPDPIE_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_NPDPIE_TAU_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_NPDPIE_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C0_R2R_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
 
 	// core 1
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_BUF_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_RFR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_NMDA_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_DC_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_TAU1_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_TAU2_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_THR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_AHW_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_AHTAU_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_AHTHR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_IF_CASC_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_PULSE_PWLK_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_NPDPII_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_NPDPII_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_NPDPIE_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_NPDPIE_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_NPDPIE_TAU_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_NPDPIE_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C1_R2R_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_BUF_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_RFR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_NMDA_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_DC_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_TAU1_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_TAU2_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_THR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_AHW_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_AHTAU_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_AHTHR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_IF_CASC_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_PULSE_PWLK_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_NPDPII_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_NPDPII_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_NPDPIE_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_NPDPIE_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_NPDPIE_TAU_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_NPDPIE_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C1_R2R_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
 
 	// core 2
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_BUF_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_RFR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_NMDA_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_DC_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_TAU1_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_TAU2_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_THR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_AHW_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_AHTAU_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_AHTHR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_IF_CASC_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_PULSE_PWLK_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_NPDPII_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_NPDPII_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_NPDPIE_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_NPDPIE_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_NPDPIE_TAU_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_NPDPIE_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C2_R2R_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_BUF_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_RFR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_NMDA_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_DC_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_TAU1_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_TAU2_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_THR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_AHW_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_AHTAU_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_AHTHR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_IF_CASC_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_PULSE_PWLK_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_NPDPII_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_NPDPII_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_NPDPIE_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_NPDPIE_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_NPDPIE_TAU_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_NPDPIE_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C2_R2R_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
 
 	// core 3
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_BUF_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_RFR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_NMDA_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_DC_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_TAU1_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_TAU2_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_THR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_AHW_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_AHTAU_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_AHTHR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_IF_CASC_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_PULSE_PWLK_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_NPDPII_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_NPDPII_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_NPDPIE_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_NPDPIE_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_NPDPIE_TAU_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_NPDPIE_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "C3_R2R_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_BUF_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_RFR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_NMDA_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_DC_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_TAU1_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_TAU2_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_THR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_AHW_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_AHTAU_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_AHTHR_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_IF_CASC_N", 7, 0, "HighBias", "Normal", "NBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_PULSE_PWLK_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_PS_WEIGHT_INH_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_PS_WEIGHT_EXC_S_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_PS_WEIGHT_EXC_F_N", 7, 0, "HighBias", "Normal", "NBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_NPDPII_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_NPDPII_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_NPDPII_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_NPDPIE_TAU_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_NPDPIE_THR_S_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_NPDPIE_TAU_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_NPDPIE_THR_F_P", 7, 0, "HighBias", "Normal", "PBias",true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "C3_R2R_P", 7, 0, "HighBias", "Normal", "PBias", true,chipid);
 
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "D_BUFFER", 1, 2, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "D_SSP", 0, 7, "HighBias", "Normal", "PBias", true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "D_SSN", 0, 15, "HighBias", "Normal", "PBias", true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "U_BUFFER", 1, 2, "HighBias", "Normal", "PBias", true,chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "U_SSP", 0, 7, "HighBias", "Normal", "PBias", true, chipid);
-	updateCoarseFineBiasSetting(moduleData, dynapse_info, "U_SSN", 0, 15, "HighBias", "Normal", "PBias", true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "D_BUFFER", 1, 2, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "D_SSP", 0, 7, "HighBias", "Normal", "PBias", true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "D_SSN", 0, 15, "HighBias", "Normal", "PBias", true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "U_BUFFER", 1, 2, "HighBias", "Normal", "PBias", true,chipid);
+	updateCoarseFineBiasSetting(moduleData, "U_SSP", 0, 7, "HighBias", "Normal", "PBias", true, chipid);
+	updateCoarseFineBiasSetting(moduleData, "U_SSN", 0, 15, "HighBias", "Normal", "PBias", true, chipid);
 
 }
 
-static void createDefaultConfiguration(caerModuleData moduleData, struct caer_dynapse_info *devInfo, int chipid) {
+static void createDefaultConfiguration(caerModuleData moduleData, int chipid) {
 
 	// Device related configuration has its own sub-node..
 	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(chipid, true));
@@ -1458,20 +1458,20 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_REQ_EXTENSION, 30);
 
 	// Create default settings and send them to the devices.
-	createDefaultConfiguration(moduleData, &dynapse_info,DYNAPSE_CONFIG_DYNAPSE_U0);
-	createDefaultConfiguration(moduleData, &dynapse_info,DYNAPSE_CONFIG_DYNAPSE_U1);
-	createDefaultConfiguration(moduleData, &dynapse_info,DYNAPSE_CONFIG_DYNAPSE_U2);
-	createDefaultConfiguration(moduleData, &dynapse_info,DYNAPSE_CONFIG_DYNAPSE_U3);
+	createDefaultConfiguration(moduleData, DYNAPSE_CONFIG_DYNAPSE_U0);
+	createDefaultConfiguration(moduleData, DYNAPSE_CONFIG_DYNAPSE_U1);
+	createDefaultConfiguration(moduleData, DYNAPSE_CONFIG_DYNAPSE_U2);
+	createDefaultConfiguration(moduleData, DYNAPSE_CONFIG_DYNAPSE_U3);
 
 	// Update silent biases
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
-	updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U0);
+	updateSilentBiases(moduleData,  DYNAPSE_CONFIG_DYNAPSE_U0);
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
-	updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U1);
+	updateSilentBiases(moduleData, DYNAPSE_CONFIG_DYNAPSE_U1);
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U2);
+	updateSilentBiases(moduleData, DYNAPSE_CONFIG_DYNAPSE_U2);
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
-	updateSilentBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U3);
+	updateSilentBiases(moduleData,  DYNAPSE_CONFIG_DYNAPSE_U3);
 
 	// Clear SRAM --> DYNAPSE_CONFIG_DYNAPSE_U0
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Clearing SRAM ...\n");
@@ -1527,16 +1527,16 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 
 	//  DYNAPSE_CONFIG_DYNAPSE_U0
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
-	updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U0);
+	updateLowPowerBiases(moduleData, DYNAPSE_CONFIG_DYNAPSE_U0);
 	//  DYNAPSE_CONFIG_DYNAPSE_U1
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
-	updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U1);
+	updateLowPowerBiases(moduleData, DYNAPSE_CONFIG_DYNAPSE_U1);
 	// DYNAPSE_CONFIG_DYNAPSE_U2
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
-	updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U2);
+	updateLowPowerBiases(moduleData, DYNAPSE_CONFIG_DYNAPSE_U2);
 	// DYNAPSE_CONFIG_DYNAPSE_U3
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
-	updateLowPowerBiases(moduleData, &dynapse_info, DYNAPSE_CONFIG_DYNAPSE_U3);
+	updateLowPowerBiases(moduleData, DYNAPSE_CONFIG_DYNAPSE_U3);
 
 	// Configure SRAM for Monitoring--> DYNAPSE_CONFIG_DYNAPSE_U0
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Default SRAM ...\n");
@@ -1791,7 +1791,7 @@ bool caerDynapseSetBiasBits(void* spikeGenState, uint32_t chipId, uint32_t coreI
 		biasName[3 + i] = biasName_t[i];
 	}
 
-	uint32_t bits = generatesBitsCoarseFineBiasSetting(state->eventSourceConfigNode, &dynapse_info, biasName,
+	uint32_t bits = generatesBitsCoarseFineBiasSetting(state->eventSourceConfigNode, biasName,
 		coarseValue, fineValue, lowHigh, "Normal", npBias, true, chipId);
 
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, bits);

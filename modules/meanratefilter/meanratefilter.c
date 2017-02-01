@@ -298,7 +298,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 					}
 					if(changed){
 						//generate bits to send
-						uint32_t bits = generatesBitsCoarseFineBiasSetting(state->eventSourceConfigNode, &dynapse_info,
+						uint32_t bits = generatesBitsCoarseFineBiasSetting(state->eventSourceConfigNode,
 								biasName, coarseValue, fineValue, "HighBias", "Normal", "PBias", true, chipid);
 						//send bits to the usb
 						caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, chipid);
