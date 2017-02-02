@@ -69,8 +69,8 @@
 #ifdef ENABLE_INFOFILTER
 #include "modules/infofilter/infofilter.h"
 #endif
-#ifdef ENABLE_SURVEILLANCE
-#include "modules/surveillance/surveillance.h"
+#ifdef ENABLE_RECTANGULARTRACKER
+#include "modules/rectangulartracker/rectangulartracker.h"
 #endif
 #ifdef ENABLE_MEDIANTRACKER
 #include "modules/mediantracker/mediantracker.h"
@@ -192,11 +192,10 @@ static bool mainloop_1(void) {
 	caerStatistics(3, (caerEventPacketHeader) polarity, 1000);
 #endif
 
-	// Filter that counts number of people in an environment
-	// the envoironment has to have a door.. etc..
-#ifdef ENABLE_SURVEILLANCE
-	caerFrameEventPacket clusterFrame = NULL;
-	caerSurveillanceFilter(12, polarity, &clusterFrame);
+	// Filters that track multiple objects by using rectangular clusters
+#ifdef ENABLE_RECTANGULARTRACKER
+	caerFrameEventPacket rectangularFrame = NULL;
+	caerRectangulartrackerFilter(12, polarity, &rectangularFrame);
 #endif
 
 	// Filter that track one object by using the median position information
@@ -335,8 +334,8 @@ static bool mainloop_1(void) {
 #endif
 #endif
 
-#if defined(ENABLE_SURVEILLANCE) && defined (ENABLE_VISUALIZER)
-	caerVisualizer(67, "ImageClusters", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) clusterFrame);
+#if defined(ENABLE_RECTANGULARTRACKER) && defined (ENABLE_VISUALIZER)
+	caerVisualizer(67, "ImageClusters", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) rectangularFrame);
 #endif
 
 #if defined(ENABLE_MEDIANTRACKER) && defined (ENABLE_VISUALIZER)
@@ -359,8 +358,8 @@ static bool mainloop_1(void) {
 #endif
 #endif
 
-#if defined(ENABLE_SURVEILLANCE) && defined(ENABLE_VISUALIZER)
-	free(clusterFrame);
+#if defined(ENABLE_RECTANGULARTRACKER) && defined(ENABLE_VISUALIZER)
+	free(rectangularFrame);
 #endif
 
 #if defined(ENABLE_MEDIANTRACKER) && defined(ENABLE_VISUALIZER)
