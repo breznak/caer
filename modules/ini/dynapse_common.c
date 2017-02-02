@@ -1626,10 +1626,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	}
 
 	//spike Generator Node
-	sshsNode deviceConfigNodeMain = sshsGetRelativeNode(moduleData->moduleNode,
-		chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
-
-	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNodeMain, "spikeGen/");
+	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNode, "spikeGen/");
 	sshsNodeAddAttributeListener(spikeNode, state, &spikeConfigListener);
 	caerGenSpikeInit(moduleData); // init module and start thread
 
@@ -1687,16 +1684,79 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 }
 
 void caerInputDYNAPSEExit(caerModuleData moduleData) {
-// Device related configuration has its own sub-node.
-	struct caer_dynapse_info devInfo = caerDynapseInfoGet(
-		((caerInputDynapseState) moduleData->moduleState)->deviceState);
-	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode,
+
+	// Device related configuration has its own sub-node.
+	struct caer_dynapse_info devInfo = caerDynapseInfoGet(((caerInputDynapseState) moduleData->moduleState)->deviceState);
+	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
+
+	// Remove listener, which can reference invalid memory in userData.
+	sshsNode chipNode = sshsGetRelativeNode(deviceConfigNode, "chip/");
+	sshsNodeRemoveAttributeListener(chipNode, moduleData, &chipConfigListener);
+
+	sshsNode usbNode = sshsGetRelativeNode(deviceConfigNode, "usb/");
+	sshsNodeRemoveAttributeListener(usbNode, moduleData, &usbConfigListener);
+
+	sshsNode sysNode = sshsGetRelativeNode(moduleData->moduleNode, "system/");
+	sshsNodeRemoveAttributeListener(sysNode, moduleData, &systemConfigListener);
+
+	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNode, "spikeGen/");
+	sshsNodeRemoveAttributeListener(spikeNode, moduleData, &spikeConfigListener);
+
+	// Remove USB config listener for biases
+	//DYNAPSE_CONFIG_DYNAPSE_U0
+	sshsNode deviceConfigNodeU0 = sshsGetRelativeNode(moduleData->moduleNode,
+		chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U3, true));
+	sshsNode biasNodeU0 = sshsGetRelativeNode(deviceConfigNodeU0, "bias/");
+	size_t biasNodesLength = 0;
+	sshsNode *biasNodesU0 = sshsNodeGetChildren(biasNodeU0, &biasNodesLength);
+	if (biasNodesU0 != NULL) {
+		for (size_t i = 0; i < biasNodesLength; i++) {
+			// Add listener for this particular bias.
+			sshsNodeRemoveAttributeListener(biasNodesU0[i], moduleData, &biasConfigListener);
+		}
+		free(biasNodesU0);
+	}
+	//DYNAPSE_CONFIG_DYNAPSE_U1
+	sshsNode deviceConfigNodeU1 = sshsGetRelativeNode(moduleData->moduleNode,
+		chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U1, true));
+	sshsNode biasNodeU1 = sshsGetRelativeNode(deviceConfigNodeU1, "bias/");
+	biasNodesLength = 0;
+	sshsNode *biasNodesU1 = sshsNodeGetChildren(biasNodeU1, &biasNodesLength);
+	if (biasNodesU1 != NULL) {
+		for (size_t i = 0; i < biasNodesLength; i++) {
+			// Add listener for this particular bias.
+			sshsNodeRemoveAttributeListener(biasNodesU1[i], moduleData, &biasConfigListener);
+		}
+		free(biasNodesU1);
+	}
+	//DYNAPSE_CONFIG_DYNAPSE_U2
+	sshsNode deviceConfigNodeU2 = sshsGetRelativeNode(moduleData->moduleNode,
 		chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U2, true));
-
+	sshsNode biasNodeU2 = sshsGetRelativeNode(deviceConfigNodeU2, "bias/");
+	 biasNodesLength = 0;
+	sshsNode *biasNodesU2 = sshsNodeGetChildren(biasNodeU2, &biasNodesLength);
+	if (biasNodesU2 != NULL) {
+		for (size_t i = 0; i < biasNodesLength; i++) {
+			// Add listener for this particular bias.
+			sshsNodeRemoveAttributeListener(biasNodesU2[i], moduleData, &biasConfigListener);
+		}
+		free(biasNodesU2);
+	}
+	//DYNAPSE_CONFIG_DYNAPSE_U3
+	sshsNode deviceConfigNodeU3 = sshsGetRelativeNode(moduleData->moduleNode,
+		chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U3, true));
+	sshsNode biasNodeU3 = sshsGetRelativeNode(deviceConfigNodeU3, "bias/");
+	 biasNodesLength = 0;
+	sshsNode *biasNodesU3 = sshsNodeGetChildren(biasNodeU3, &biasNodesLength);
+	if (biasNodesU3 != NULL) {
+		for (size_t i = 0; i < biasNodesLength; i++) {
+			// Add listener for this particular bias.
+			sshsNodeRemoveAttributeListener(biasNodesU3[i], moduleData, &biasConfigListener);
+		}
+		free(biasNodesU3);
+	}
 	caerDeviceDataStop(((caerInputDynapseState) moduleData->moduleState)->deviceState);
-
 	caerDeviceClose((caerDeviceHandle *) &moduleData->moduleState);
-
 	if (sshsNodeGetBool(moduleData->moduleNode, "autoRestart")) {
 		// Prime input module again so that it will try to restart if new devices detected.
 		sshsNodePutBool(moduleData->moduleNode, "running", true);
