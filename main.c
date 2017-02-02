@@ -75,9 +75,6 @@
 #ifdef ENABLE_MEDIANTRACKER
 #include "modules/mediantracker/mediantracker.h"
 #endif
-#ifdef ENABLE_MEANFILTER
-#include "modules/meanfilter/meanfilter.h"
-#endif
 #ifdef ENABLE_MEANRATEFILTER_DVS
 #include <libcaer/events/frame.h>
 #include "modules/meanratefilter_dvs/meanratefilter_dvs.h"
@@ -202,11 +199,6 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_MEDIANTRACKER
 	caerFrameEventPacket medianFrame = NULL;
 	caerMediantrackerFilter(13, polarity, &medianFrame);
-#endif
-
-#ifdef ENABLE_MEANFILTER
-	caerFrameEventPacket meanFrame = NULL;
-	caerMeanfilterFilter(14, polarity, &meanFrame);
 #endif
 
 	// Filter that track one object by using the median position information
@@ -342,10 +334,6 @@ static bool mainloop_1(void) {
 	caerVisualizer(68, "ImageMedian", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) medianFrame);
 #endif
 
-#if defined(ENABLE_MEANFILTER) && defined (ENABLE_VISUALIZER)
-	caerVisualizer(69, "ImageMean", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) meanFrame);
-#endif
-
 #ifdef ENABLE_IMAGEGENERATOR
 	free(classifyhist);
 	free(haveimage);
@@ -364,10 +352,6 @@ static bool mainloop_1(void) {
 
 #if defined(ENABLE_MEDIANTRACKER) && defined(ENABLE_VISUALIZER)
 	free(medianFrame);
-#endif
-
-#if defined(ENABLE_MEANFILTER) && defined(ENABLE_VISUALIZER)
-	free(meanFrame);
 #endif
 
 #ifdef ENABLE_MEANRATEFILTER_DVS

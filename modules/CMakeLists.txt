@@ -19,7 +19,6 @@ ADD_SUBDIRECTORY(nullhopinterface)
 ADD_SUBDIRECTORY(infofilter)
 ADD_SUBDIRECTORY(rectangulartracker)
 ADD_SUBDIRECTORY(mediantracker)
-ADD_SUBDIRECTORY(meanfilter)
 ADD_SUBDIRECTORY(dvstodynapse)
 #ADD_SUBDIRECTORY(pixelmatrix)
 
