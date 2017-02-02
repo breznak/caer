@@ -69,14 +69,11 @@
 #ifdef ENABLE_INFOFILTER
 #include "modules/infofilter/infofilter.h"
 #endif
-#ifdef ENABLE_SURVEILLANCE
-#include "modules/surveillance/surveillance.h"
+#ifdef ENABLE_RECTANGULARTRACKER
+#include "modules/rectangulartracker/rectangulartracker.h"
 #endif
 #ifdef ENABLE_MEDIANTRACKER
 #include "modules/mediantracker/mediantracker.h"
-#endif
-#ifdef ENABLE_MEANFILTER
-#include "modules/meanfilter/meanfilter.h"
 #endif
 #ifdef ENABLE_MEANRATEFILTER_DVS
 #include <libcaer/events/frame.h>
@@ -192,22 +189,16 @@ static bool mainloop_1(void) {
 	caerStatistics(3, (caerEventPacketHeader) polarity, 1000);
 #endif
 
-	// Filter that counts number of people in an environment
-	// the envoironment has to have a door.. etc..
-#ifdef ENABLE_SURVEILLANCE
-	caerFrameEventPacket clusterFrame = NULL;
-	caerSurveillanceFilter(12, polarity, &clusterFrame);
+	// Filters that track multiple objects by using rectangular clusters
+#ifdef ENABLE_RECTANGULARTRACKER
+	caerFrameEventPacket rectangularFrame = NULL;
+	caerRectangulartrackerFilter(12, polarity, &rectangularFrame);
 #endif
 
 	// Filter that track one object by using the median position information
 #ifdef ENABLE_MEDIANTRACKER
 	caerFrameEventPacket medianFrame = NULL;
 	caerMediantrackerFilter(13, polarity, &medianFrame);
-#endif
-
-#ifdef ENABLE_MEANFILTER
-	caerFrameEventPacket meanFrame = NULL;
-	caerMeanfilterFilter(14, polarity, &meanFrame);
 #endif
 
 	// Filter that track one object by using the median position information
@@ -335,16 +326,12 @@ static bool mainloop_1(void) {
 #endif
 #endif
 
-#if defined(ENABLE_SURVEILLANCE) && defined (ENABLE_VISUALIZER)
-	caerVisualizer(67, "ImageClusters", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) clusterFrame);
+#if defined(ENABLE_RECTANGULARTRACKER) && defined (ENABLE_VISUALIZER)
+	caerVisualizer(67, "ImageClusters", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) rectangularFrame);
 #endif
 
 #if defined(ENABLE_MEDIANTRACKER) && defined (ENABLE_VISUALIZER)
 	caerVisualizer(68, "ImageMedian", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) medianFrame);
-#endif
-
-#if defined(ENABLE_MEANFILTER) && defined (ENABLE_VISUALIZER)
-	caerVisualizer(69, "ImageMean", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) meanFrame);
 #endif
 
 #ifdef ENABLE_IMAGEGENERATOR
@@ -359,16 +346,12 @@ static bool mainloop_1(void) {
 #endif
 #endif
 
-#if defined(ENABLE_SURVEILLANCE) && defined(ENABLE_VISUALIZER)
-	free(clusterFrame);
+#if defined(ENABLE_RECTANGULARTRACKER) && defined(ENABLE_VISUALIZER)
+	free(rectangularFrame);
 #endif
 
 #if defined(ENABLE_MEDIANTRACKER) && defined(ENABLE_VISUALIZER)
 	free(medianFrame);
-#endif
-
-#if defined(ENABLE_MEANFILTER) && defined(ENABLE_VISUALIZER)
-	free(meanFrame);
 #endif
 
 #ifdef ENABLE_MEANRATEFILTER_DVS
