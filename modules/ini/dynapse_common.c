@@ -1185,21 +1185,27 @@ static uint32_t convertBias(const char *biasName, const char* lowhi, const char*
 
 	uint8_t lws, ssx, cls;
 	if (caerStrEquals(lowhi, "HighBias")) {
+	    //"HighBias": 1,
 		lws = 1;
 	}
 	else {
+		//"LowBias": 0,
 		lws = 0;
 	}
 	if (caerStrEquals(sex, "NBias")) {
+        //"NBias": 1,
 		ssx = 1;
 	}
 	else {
+		//  "PBias": 0,
 		ssx = 0;
 	}
 	if (caerStrEquals(cl, "Normal")) {
+        //"Normal": 1,
 		cls = 1;
 	}
 	else {
+        //"CascodeBias": 0,
 		cls = 0;
 	}
 
@@ -1208,9 +1214,11 @@ static uint32_t convertBias(const char *biasName, const char* lowhi, const char*
 
 	/*end names*/
 	if (enal == 1) {
+       // "BiasEnable": 1,
 		confbits = lws << 3 | cls << 2 | ssx << 1 | 1;
 	}
 	else {
+		// "BiasDisable": 0,
 		confbits = lws << 3 | cls << 2 | ssx << 1;
 	}
 
