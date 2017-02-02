@@ -625,21 +625,21 @@ void programConvolutionMappingSram(caerInputDynapseState state, DvsToDynapseStat
 		int numConfig = -1;
 		caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "Mapping convolutions started..");
 		for(int sramId=1; sramId < 3; sramId++){
+			numConfig = -1;
 			for(int neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS_CORE; neuronId++){
-				numConfig = -1;
-				for(int coreId = 0; coreId < DYNAPSE_CONFIG_NUMCORES; coreId++){
+				for(int coreId = 0; coreId < DYNAPSE_CONFIG_NUMCORES; ++coreId){
 					numConfig++;
 					uint8_t dx = 0;
 					uint8_t sx = 0;
 					uint8_t dy = 0;
 					uint8_t sy = 0;
 					uint16_t destinationcoreId;
-					if(sramId == 1){
+					if(sramId == 2){
 						dx = 0;
 						sx = 0;
 						dy = 1;//1;
 						sy = 0;
-					}else if(sramId == 2){
+					}else if(sramId == 1){
 						dx = 1;//1;
 						sx = 1;//1;
 						dy = 0;
@@ -652,16 +652,17 @@ void programConvolutionMappingSram(caerInputDynapseState state, DvsToDynapseStat
 					}else if(coreId == 2){
 						destinationcoreId = 4;
 					}else if(coreId == 3){
-						destinationcoreId = 8;
+						destinationcoreId = 7;
 					}
-					bits[numConfig] = neuronId << 7 | sramId << 5 | coreId << 15 | 1 << 17 | 1 << 4
+					int cc = coreId;
+					bits[numConfig] = neuronId << 7 | sramId << 5 | cc << 15 | 1 << 17 | 1 << 4
 							| destinationcoreId << 18 | sy << 27 | dy << 25 |  dx << 22 | sx << 24 |
-							coreId << 28;
+							cc << 28;
 				}
-				// send data with libusb host transfer in packet
-				if(!caerDynapseSendDataToUSB(usb_handle, bits, numConfig)){
-					caerLog(CAER_LOG_ERROR, "DvsToDynapse", "USB transfer failed while programming SRAM for chip DYNAPSE_U3");
-				}
+			}
+			// send data with libusb host transfer in packet
+			if(!caerDynapseSendDataToUSB(usb_handle, bits, numConfig)){
+				caerLog(CAER_LOG_ERROR, "DvsToDynapse", "USB transfer failed while programming SRAM for chip DYNAPSE_U3");
 			}
 		}
 		caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "Mapping convolutions done");
@@ -680,7 +681,7 @@ void programMapInCam(caerInputDynapseState state, DvsToDynapseState stateMod) {
 	uint32_t neuronId;
 	int bits[DYNAPSE_MAX_USER_USB_PACKET_SIZE];
 	int numConfig = -1;
-	caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "Started cleaning cam..");
+	/*caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "Started cleaning cam..");
 	for (uint32_t neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS; neuronId++) {
 		numConfig = -1;
 		for (uint32_t camId = 0; camId < DYNAPSE_CONFIG_NUMCAM; camId++) {
@@ -692,14 +693,22 @@ void programMapInCam(caerInputDynapseState state, DvsToDynapseState stateMod) {
 			caerLog(CAER_LOG_ERROR, "DvsToDynapse", "USB transfer failed");
 		}
 	}
-	caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "CAM cleaned successfully.");
-
+	caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "CAM cleaned successfully.");*/
+	// now fill it with content
 	caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "Programming CAM content...");
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,  (uint32_t) stateMod->chipId);
 	for (neuronId = 0;
 			neuronId < DYNAPSE_CONFIG_XCHIPSIZE * DYNAPSE_CONFIG_YCHIPSIZE;
 			neuronId++) {
-		caerDynapseWriteCam(usb_handle, neuronId, neuronId, 0, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
+		numConfig = -1;
+		for(size_t camId=0; camId < 64; camId++){
+			numConfig++;
+			bits[numConfig]= (int) caerDynapseGenerateCamBits(neuronId, neuronId, camId, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
+		}
+		// send data with libusb host transfer in packet
+		if(!caerDynapseSendDataToUSB(usb_handle, bits, numConfig)){
+			caerLog(CAER_LOG_ERROR, "DvsToDynapse", "USB transfer failed");
+		}
 	}
 	caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "CAM programmed successfully.");
 
@@ -727,13 +736,13 @@ void programBiasesDvsToDynapse(caerInputDynapseState state, DvsToDynapseState st
 		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_THR_N", 2, 180, "HighBias","NBias");
 		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_TAU_F_P", 6, 150,"HighBias", "PBias");
 		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_TAU_S_P", 7, 40,"HighBias", "NBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_THR_F_P", 0, 220,"HighBias", "PBias");
+		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_THR_F_P", 4, 220,"HighBias", "PBias");
 		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_THR_S_P", 7, 0,"HighBias", "PBias");
 		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_TAU_F_P", 6, 150,"HighBias", "NBias");
 		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_TAU_S_P", 7, 40,"HighBias", "NBias");
 		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_THR_F_P", 0, 220,"HighBias", "PBias");
 		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_THR_S_P", 7, 0,"HighBias", "PBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 250,"HighBias", "NBias");
+		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 70,"HighBias", "NBias");
 		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_S_N", 1, 250,"HighBias", "NBias");
 		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_INH_F_N", 0, 250,"HighBias", "NBias");
 		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_INH_S_N", 1, 250,"HighBias", "NBias");
