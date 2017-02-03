@@ -652,7 +652,7 @@ void programConvolutionMappingSram(caerInputDynapseState state, DvsToDynapseStat
 					}else if(coreId == 2){
 						destinationcoreId = 4;
 					}else if(coreId == 3){
-						destinationcoreId = 7;
+						destinationcoreId = 8;
 					}
 					int cc = coreId;
 					bits[numConfig] = neuronId << 7 | sramId << 5 | cc << 15 | 1 << 17 | 1 << 4
@@ -681,35 +681,38 @@ void programMapInCam(caerInputDynapseState state, DvsToDynapseState stateMod) {
 	uint32_t neuronId;
 	int bits[DYNAPSE_MAX_USER_USB_PACKET_SIZE];
 	int numConfig = -1;
-	/*caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "Started cleaning cam..");
-	for (uint32_t neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS; neuronId++) {
-		numConfig = -1;
-		for (uint32_t camId = 0; camId < DYNAPSE_CONFIG_NUMCAM; camId++) {
-			numConfig++;
-			bits[numConfig]= (int) caerDynapseGenerateCamBits(0, neuronId, camId, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
-		}
-		// send data with libusb host transfer in packet
-		if(!caerDynapseSendDataToUSB(usb_handle, bits, numConfig)){
-			caerLog(CAER_LOG_ERROR, "DvsToDynapse", "USB transfer failed");
-		}
-	}
-	caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "CAM cleaned successfully.");*/
 	// now fill it with content
 	caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "Programming CAM content...");
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,  (uint32_t) stateMod->chipId);
-	for (neuronId = 0;
+	/*for (neuronId = 0;
 			neuronId < DYNAPSE_CONFIG_XCHIPSIZE * DYNAPSE_CONFIG_YCHIPSIZE;
-			neuronId++) {
-		numConfig = -1;
-		for(size_t camId=0; camId < 64; camId++){
-			numConfig++;
-			bits[numConfig]= (int) caerDynapseGenerateCamBits(neuronId, neuronId, camId, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
-		}
-		// send data with libusb host transfer in packet
-		if(!caerDynapseSendDataToUSB(usb_handle, bits, numConfig)){
-			caerLog(CAER_LOG_ERROR, "DvsToDynapse", "USB transfer failed");
+			neuronId++) {*/
+	for(size_t coreId=0; coreId < 4; coreId++){
+		for(size_t neuronId=0; neuronId < 256; neuronId++){
+			numConfig = -1;
+			for(size_t camId=0; camId < 64; camId++){
+				numConfig++;
+				uint32_t ei = 1;
+				uint32_t fs = 1;
+				uint32_t address = neuronId;
+				uint32_t source_core = coreId;
+				uint32_t neuron_row = (neuronId & 0xf0) >> 4;
+				uint32_t synapse_row = camId;
+				uint32_t row = neuron_row << 6 | synapse_row;
+				uint32_t column = neuronId & 0xf;
+				bits[numConfig]= ei << 29 | fs << 28 | address << 20 | source_core << 18 | 1 << 17
+					| coreId << 15 | row << 5 | column;
+				if(coreId == 3){
+					//caerLog(CAER_LOG_ERROR, "DvsToDynapse", "bits[numConfig] %d\n", bits[numConfig]);
+				}
+			}
+			// send data with libusb host transfer in packet
+			if(!caerDynapseSendDataToUSB(usb_handle, bits, numConfig)){
+				caerLog(CAER_LOG_ERROR, "DvsToDynapse", "USB transfer failed");
+			}
 		}
 	}
+	//}
 	caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "CAM programmed successfully.");
 
 	stateMod->programCam = false;
