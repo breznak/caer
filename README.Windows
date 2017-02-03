@@ -10,6 +10,8 @@ the MSYS2 shell, while to build code, use the MinGW32/64 shells!
 1) Install the MSYS2 environment, the MinGW64 compiler and libcaer and all its
 dependencies as described in detail in libcaer's 'README.Windows'.
 
+=== The following happens in the MSYS2 shell! ===
+
 2) Install the required dependencies: pacman -S mingw-w64-x86_64-libuv
 
 3) Install any additional dependencies as required: pacman -S <pkg-name>
@@ -31,6 +33,8 @@ dependencies as described in detail in libcaer's 'README.Windows'.
 5) Place the cAER source in a location easily accessible to MSYS2. We usually
 put the source code into 'C:\msys64\home\caer\' and use TortoiseGit
 (https://tortoisegit.org/) or git from the MSYS2 shell (pacman -S git) to get it.
+
+=== The following happens in the MinGW32/64 build shell! ===
 
 6) Switch to the cAER checkout directory: cd /home/caer/
 
