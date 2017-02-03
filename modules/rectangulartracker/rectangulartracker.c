@@ -80,6 +80,7 @@ struct RTFilter_state {
 	int maxClusterNum;
 	float defaultClusterRadius;
 	bool showPaths;
+	bool forceBoundary;
 };
 
 // constants
@@ -138,7 +139,6 @@ static float averageVelocityPPT_x = 0.0f;
 static float averageVelocityPPT_y = 0.0f;
 
 
-
 typedef struct RTFilter_state *RTFilterState;
 
 static bool caerRectangulartrackerInit(caerModuleData moduleData);
@@ -181,11 +181,9 @@ static void removeLastPath(Path * head);
 static void addPath(Path ** head, float x, float y, int64_t t, int events);
 static void updateVelocity(Cluster *c, float thresholdMassForVisibleCluster);
 static void updateClusterPaths(caerModuleData moduleData, int64_t ts);
-static float getDXl(Cluster *c);
-static float getDXs(Cluster *c);
-static float getDYl(Cluster *c);
-static float getDYs(Cluster *c);
-static void drawCluster(caerFrameEvent singleplot, Cluster *c, int sizeX, int sizeY, bool showPaths);
+static void drawCluster(caerFrameEvent singleplot, Cluster *c, int sizeX, int sizeY, bool showPaths, bool forceBoundary);
+static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, float y2, int sizeX, int sizeY);
+static void drawpath(caerFrameEvent singleplot, Path *path, int sizeX);
 
 
 static struct caer_module_functions caerRectangulartrackerFunctions = { .moduleInit = &caerRectangulartrackerInit, .moduleRun = &caerRectangulartrackerRun, .moduleConfig = &caerRectangulartrackerConfig, .moduleExit = &caerRectangulartrackerExit, .moduleReset = &caerRectangulartrackerReset };
@@ -205,9 +203,10 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "dynamicAngleEnabled", false);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "pathsEnabled", false);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showPaths", false);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "maxClusterNum", 3);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "maxClusterNum", 1);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "thresholdMassForVisibleCluster", 60.0f);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "defaultClusterRadius", 25.0f);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "forceBoundary", false);
 
 	RTFilterState state = moduleData->moduleState;
 
@@ -219,6 +218,7 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 	state->maxClusterNum = sshsNodeGetInt(moduleData->moduleNode, "maxClusterNum");
 	state->thresholdMassForVisibleCluster = sshsNodeGetFloat(moduleData->moduleNode, "thresholdMassForVisibleCluster");
 	state->defaultClusterRadius = sshsNodeGetFloat(moduleData->moduleNode, "defaultClusterRadius");
+	state->forceBoundary = sshsNodeGetBool(moduleData->moduleNode, "forceBoundary");
 	state->currentClusterNum = 0;
 
 	// initialize all cluster as empty
@@ -374,7 +374,7 @@ static void caerRectangulartrackerRun(caerModuleData moduleData, size_t argsNumb
 	// plot clusters
 	for (int i=0; i<state->maxClusterNum; i++){
 		if ((*frame != NULL ) && (state->clusterList[i].isEmpty != true) && (state->clusterList[i].visibilityFlag == true)) {
-			drawCluster(caerFrameEventPacketGetEvent(*frame, 0), &state->clusterList[i], sizeX, sizeY, state->showPaths);
+			drawCluster(caerFrameEventPacketGetEvent(*frame, 0), &state->clusterList[i], sizeX, sizeY, state->showPaths, state->forceBoundary);
 		}
 	}
 }
@@ -868,7 +868,6 @@ static void updateClusterMasses(caerModuleData moduleData, int64_t ts) {
 	}
 }
 
-
 static void updateShape(caerModuleData moduleData, Cluster *c, uint16_t x, uint16_t y) {
 	RTFilterState state = moduleData->moduleState;
 
@@ -995,111 +994,66 @@ static float velocityAngleToRad(Cluster *c1, Cluster *c2) {
 	return (angleRad);
 }
 
-static float getDXl(Cluster *c){
-	float rx = c->radius_x;
-	float ry = c->radius_y;
-	float angle = c->angle;
-	float DXl = (rx / cos(angle)) - (ry + rx * tan(angle)) * sin(angle);
-	return (DXl);
-}
+static void drawCluster(caerFrameEvent singleplot, Cluster *c, int sizeX, int sizeY, bool showPaths, bool forceBoundary) {
+	if (c->angle != 0){
+		float A = c->angle;
+		float rx = c->radius_x;
+		float ry = c->radius_y;
+		float UL_x = c->location_x + rx * (float)cos(A) - ry * (float)sin(A);
+		float UL_y = c->location_y + ry * (float)cos(A) + rx * (float)sin(A);
+		float UR_x = c->location_x - rx * (float)cos(A) - ry * (float)sin(A);
+		float UR_y = c->location_y + ry * (float)cos(A) - rx * (float)sin(A);
+		float BL_x = c->location_x + rx * (float)cos(A) + ry * (float)sin(A);
+		float BL_y = c->location_y - ry * (float)cos(A) + rx * (float)sin(A);
+		float BR_x = c->location_x - rx * (float)cos(A) + ry * (float)sin(A);
+		float BR_y = c->location_y - ry * (float)cos(A) - rx * (float)sin(A);
 
-static float getDXs(Cluster *c){
-	float rx = c->radius_x;
-	float ry = c->radius_y;
-	float angle = c->angle;
-	float DXs = (rx / cos(angle)) + (ry - rx * tan(angle)) * sin(angle);
-	return (DXs);
-}
+		if (forceBoundary){
+			UL_x = (UL_x > (float)sizeX) ? (float)sizeX : UL_x;
+			UL_x = (UL_x < 0) ? 0 : UL_x;
+			UL_y = (UL_y > (float)sizeY) ? (float)sizeY : UL_y;
+			UL_y = (UL_y < 0) ? 0 : UL_y;
+			UR_x = (UR_x > (float)sizeX) ? (float)sizeX : UR_x;
+			UR_x = (UR_x < 0) ? 0 : UR_x;
+			UR_y = (UR_y > (float)sizeY) ? (float)sizeY : UR_y;
+			UR_y = (UR_y < 0) ? 0 : UR_y;
+			BL_x = (BL_x > (float)sizeX) ? (float)sizeX : BL_x;
+			BL_x = (BL_x < 0) ? 0 : BL_x;
+			BL_y = (BL_y > (float)sizeY) ? (float)sizeY : BL_y;
+			BL_y = (BL_y < 0) ? 0 : BL_y;
+			BR_x = (BR_x > (float)sizeX) ? (float)sizeX : BR_x;
+			BR_x = (BR_x < 0) ? 0 : BR_x;
+			BR_y = (BR_y > (float)sizeY) ? (float)sizeY : BR_y;
+			BR_y = (BR_y < 0) ? 0 : BR_y;
+		}
 
-static float getDYl(Cluster *c){
-	float rx = c->radius_x;
-	float ry = c->radius_y;
-	float angle = c->angle;
-	float DYl = (ry + rx * tan(angle)) * cos(angle);
-	return (DYl);
-}
+		drawline(singleplot, UL_x, UL_y, UR_x, UR_y, sizeX, sizeY);
+		drawline(singleplot, UL_x, UL_y, BL_x, BL_y, sizeX, sizeY);
+		drawline(singleplot, BL_x, BL_y, BR_x, BR_y, sizeX, sizeY);
+		drawline(singleplot, UR_x, UR_y, BR_x, BR_y, sizeX, sizeY);
+	}
+	else {
+		uint32_t counter = 0;
+		int cx, cy, rx, lx, uy, dy;
+		for (size_t y = 0; y < sizeY; y++) {
+			for (size_t x = 0; x < sizeX; x++) {
+				cx = (int)c->location_x;
+				cy = (int)c->location_y;
+				rx = (int)(c->location_x + c->radius_x);
+				lx = (int)(c->location_x - c->radius_x);
+				uy = (int)(c->location_y + c->radius_y);
+				dy = (int)(c->location_y - c->radius_y);
 
-static float getDYs(Cluster *c){
-	float rx = c->radius_x;
-	float ry = c->radius_y;
-	float angle = c->angle;
-	float DYs = (ry - rx * tan(angle)) * cos(angle);
-	return (DYs);
-}
+				rx = (rx > sizeX) ? sizeX : rx;
+				lx = (lx < 0) ? 0 : lx;
+				uy = (uy > sizeY) ? sizeY : uy;
+				dy = (dy < 0) ? 0 : dy;
 
-static void drawCluster(caerFrameEvent singleplot, Cluster *c, int sizeX, int sizeY, bool showPaths) {
-	uint32_t counter = 0;
-	for (size_t y = 0; y < sizeY; y++) {
-		for (size_t x = 0; x < sizeX; x++) {
-//			if (c->angle != 0){
-//				float A = c->angle;
-//				float Width = c->radius_x * 2;
-//				float Height = c->radius_y * 2;
-//				float UL_x = c->location_x + ( Width / 2 ) * cos(A) - ( Height / 2 ) * sin(A);
-//				float UL_y = c->location_y + ( Height / 2 ) * cos(A)  + ( Width / 2 ) * sin(A);
-//				float UR_x = c->location_x - ( Width / 2 ) * cos(A) - ( Height / 2 ) * sin(A);
-//				float UR_y = c->location_y + ( Height / 2 ) * cos(A)  - ( Width / 2 ) * sin(A);
-//				float BL_x = c->location_x + ( Width / 2 ) * cos(A) + ( Height / 2 ) * sin(A);
-//				float BL_y = c->location_y - ( Height / 2 ) * cos(A)  + ( Width / 2 ) * sin(A);
-//				float BR_x = c->location_x - ( Width / 2 ) * cos(A) + ( Height / 2 ) * sin(A);
-//				float BR_y = c->location_y - ( Height / 2 ) * cos(A)  - ( Width / 2 ) * sin(A);
-//
-//				float Xa = UL_x;
-//				float Ya = UL_y;
-//				float Xb = BL_x;
-//				float Yb = BL_y;
-//				float Xc = BR_x;
-//				float Yc = BR_y;
-//				float Xd = UR_x;
-//				float Yd = UR_y;
-//				if ( (x == (int)c->location_x && y == (int)c->location_y)||
-//						((x > Xa) && (x < Xd) && (y > Ya) && (y < Yd) && ((((x - Xa) / (y - Ya)) - ((Xd - Xa) / (Yd - Ya))) < 0.0001 )) ||
-//						((x > Xb) && (x < Xc) && (y > Yb) && (y < Yc) && ((((x - Xb) / (y - Yb)) - ((Xc - Xb) / (Yc - Yb))) < 0.0001 )) ||
-//						((x > Xa) && (x < Xb) && (y > Yb) && (y < Ya) && ((((x - Xa) / (y - Ya)) - ((Xb - Xa) / (Yb - Ya))) < 0.0001 )) ||
-//						((x > Xd) && (x < Xc) && (y > Yc) && (y < Yd) && ((((x - Xd) / (y - Yd)) - ((Xc - Xd) / (Yc - Yd))) < 0.0001 )) )
-//				{
-//					singleplot->pixels[counter] = (uint16_t) ( (int) 65000);			// red
-//					singleplot->pixels[counter + 1] = (uint16_t) ( (int) 65000);		// green
-//					singleplot->pixels[counter + 2] = (uint16_t) ( (int) 65000);	// blue
-//				}
-//				counter += 3;
-//			}
-
-
-
-//
-//			if (c->angle != 0){
-//				float DXl = getDXl(c);
-//				float DXs = getDXs(c);
-//				float DYl = getDYl(c);
-//				float DYs = getDYs(c);
-//				float Xa = c->location_x - DXs;
-//				float Xb = c->location_x - DXl;
-//				float Xc = c->location_x + DXs;
-//				float Xd = c->location_x + DXl;
-//				float Ya = c->location_y + DYs;
-//				float Yb = c->location_y - DYl;
-//				float Yc = c->location_y - DYs;
-//				float Yd = c->location_y + DYl;
-//
-//				if ( (x == (int)c->location_x && y == (int)c->location_y)||
-//					 ((x > Xa) && (x < Xd) && (y > Ya) && (y < Yd) && ((((x - Xa) / (y - Ya)) - ((Xd - Xa) / (Yd - Ya))) < 0.0001 )) ||
-//					 ((x > Xb) && (x < Xc) && (y > Yb) && (y < Yc) && ((((x - Xb) / (y - Yb)) - ((Xc - Xb) / (Yc - Yb))) < 0.0001 )) ||
-//					 ((x > Xa) && (x < Xb) && (y > Yb) && (y < Ya) && ((((x - Xa) / (y - Ya)) - ((Xb - Xa) / (Yb - Ya))) < 0.0001 )) ||
-//					 ((x > Xd) && (x < Xc) && (y > Yc) && (y < Yd) && ((((x - Xd) / (y - Yd)) - ((Xc - Xd) / (Yc - Yd))) < 0.0001 )) )
-//				{
-//					singleplot->pixels[counter] = (uint16_t) ( (int) 1);			// red
-//					singleplot->pixels[counter + 1] = (uint16_t) ( (int) 1);		// green
-//					singleplot->pixels[counter + 2] = (uint16_t) ( (int) 65000);	// blue
-//				}
-//				counter += 3;
-//			}
-			if (c->angle == 0) {
-				if ( (x == (int)c->location_x && y == (int)c->location_y)||
-					 (x == (int)(c->location_x + c->radius_x) && y <= (c->location_y + c->radius_y) && y >= (c->location_y - c->radius_y)) ||
-					 (x == (int)(c->location_x - c->radius_x) && y <= (c->location_y + c->radius_y) && y >= (c->location_y - c->radius_y)) ||
-					 (y == (int)(c->location_y + c->radius_y) && x <= (c->location_x + c->radius_x) && x >= (c->location_x - c->radius_x)) ||
-					 (y == (int)(c->location_y - c->radius_y) && x <= (c->location_x + c->radius_x) && x >= (c->location_x - c->radius_x)) )
+				if ((x == cx && y == cy)||
+					(x == rx && y <= uy && y >= dy) ||
+					(x == lx && y <= uy && y >= dy) ||
+					(y == uy && x <= rx && x >= lx) ||
+					(y == dy && x <= rx && x >= lx) )
 				{
 					singleplot->pixels[counter] = (uint16_t) ( (int) 65000);			// red
 					singleplot->pixels[counter + 1] = (uint16_t) ( (int) 65000);		// green
@@ -1107,21 +1061,112 @@ static void drawCluster(caerFrameEvent singleplot, Cluster *c, int sizeX, int si
 				}
 				counter += 3;
 			}
-			if (showPaths) {
-				Path *current = c->path;
-				while (current != NULL){
-					if (x == (int)current->location_x && y == (int)current->location_y)
-					{	singleplot->pixels[counter] = (uint16_t) ( (int) 1);			// red
-						singleplot->pixels[counter + 1] = (uint16_t) ( (int) 1);		// green
-						singleplot->pixels[counter + 2] = (uint16_t) ( (int) 65000);	// blue
-					}
-					current = current->next;
+		}
+	}
+	if (showPaths) {
+		drawpath(singleplot, c->path, sizeX);
+	}
+}
+
+static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, float y2, int sizeX, int sizeY){
+	int x, y, xs, xl, ys, yl, dx, dy, p;
+	if (x1 < x2){
+		xs = round(x1);
+		xl = round(x2);
+	}
+	else{
+		xs = round(x2);
+		xl = round(x1);
+	}
+	if (y1 < y2){
+		ys = round(y1);
+		yl = round(y2);
+	}
+	else{
+		ys = round(y2);
+		yl = round(y1);
+	}
+
+	if (xs == xl){
+		for(y = ys; y <= yl; y++) {
+			x = xs;
+			if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
+				return;
+			}
+			p = 3*(y*sizeX + x);
+			if ((p < 0) || (p > 3 * sizeX * sizeY)){
+				return;
+			}
+			singleplot->pixels[p] = (uint16_t) ( (int) 65000);			// red
+			singleplot->pixels[p + 1] = (uint16_t) ( (int) 65000);		// green
+			singleplot->pixels[p + 2] = (uint16_t) ( (int) 65000);	// blue
+		}
+	}
+	else if (ys == yl){
+		for(x = xs; x <= xl; x++) {
+			y = ys;
+			if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
+				return;
+			}
+			p = 3*(y*sizeX + x);
+			if ((p < 0) || (p > 3 * sizeX * sizeY)){
+				return;
+			}
+			singleplot->pixels[p] = (uint16_t) ( (int) 65000);			// red
+			singleplot->pixels[p + 1] = (uint16_t) ( (int) 65000);		// green
+			singleplot->pixels[p + 2] = (uint16_t) ( (int) 65000);	// blue
+		}
+	}
+	else {
+		dx = xl - xs;
+		dy = yl - ys;
+		if (dx > dy){
+			for(x = xs; x <= xl; x++) {
+				y = (round)(y2 - ((y2-y1)/(x2-x1)) * (x2-(float)x));
+				if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
+					return;
 				}
+				p = 3*(y*sizeX + x);
+				if ((p < 0) || (p > 3 * sizeX * sizeY)){
+					return;
+				}
+				singleplot->pixels[p] = (uint16_t) ( (int) 65000);			// red
+				singleplot->pixels[p + 1] = (uint16_t) ( (int) 65000);		// green
+				singleplot->pixels[p + 2] = (uint16_t) ( (int) 65000);	// blue
+			}
+		}
+		else {
+			for(y = ys; y <= yl; y++) {
+				x = (round)(x2 - ((x2-x1)/(y2-y1)) * (y2-(float)y));
+				if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
+					return;
+				}
+				p = 3*(y*sizeX + x);
+				if ((p < 0) || (p > 3 * sizeX * sizeY)){
+					return;
+				}
+				singleplot->pixels[p] = (uint16_t) ( (int) 65000);			// red
+				singleplot->pixels[p + 1] = (uint16_t) ( (int) 65000);		// green
+				singleplot->pixels[p + 2] = (uint16_t) ( (int) 65000);	// blue
 			}
 		}
 	}
 }
 
+static void drawpath(caerFrameEvent singleplot, Path *path, int sizeX){
+	Path *current = path;
+	while (current != NULL){
+		int x = (int)current->location_x;
+		int y = (int)current->location_y;
+		int p = 3*(y*sizeX + x);
+
+		singleplot->pixels[p] = (uint16_t) ( (int) 65000);			// red
+		singleplot->pixels[p + 1] = (uint16_t) ( (int) 1);		// green
+		singleplot->pixels[p + 2] = (uint16_t) ( (int) 65000);	// blue
+
+		current = current->next;
+	}
+}
 
 static void caerRectangulartrackerConfig(caerModuleData moduleData) {
 	caerModuleConfigUpdateReset(moduleData);
@@ -1135,18 +1180,15 @@ static void caerRectangulartrackerConfig(caerModuleData moduleData) {
 	state->maxClusterNum = sshsNodeGetInt(moduleData->moduleNode, "maxClusterNum");
 	state->thresholdMassForVisibleCluster = sshsNodeGetFloat(moduleData->moduleNode, "thresholdMassForVisibleCluster");
 	state->defaultClusterRadius = sshsNodeGetFloat(moduleData->moduleNode, "defaultClusterRadius");
-
+	state->forceBoundary = sshsNodeGetBool(moduleData->moduleNode, "forceBoundary");
 }
 
 static void caerRectangulartrackerExit(caerModuleData moduleData) {
 	// Remove listener, which can reference invalid memory in userData.
 	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
-	//RTFilterState state = moduleData->moduleState;
-
 }
 
 static void caerRectangulartrackerReset(caerModuleData moduleData, uint16_t resetCallSourceID) {
 	UNUSED_ARGUMENT(resetCallSourceID);
-
 }
