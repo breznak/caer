@@ -38,7 +38,6 @@ typedef struct cluster {
 	float angle;
 	float cosAngle;
 	float sinAngle;
-	//Color color;
 	int32_t numEvents;
 	int32_t previousNumEvents;
 	int64_t firstEventTimestamp;
@@ -57,6 +56,7 @@ typedef struct cluster {
 	float radius_y;
 	Path * path;
 	float avgISI;
+	//Color color;
 	//float rgb[4];
 	bool velocityValid;
 	bool visibilityFlag;
@@ -81,6 +81,12 @@ struct RTFilter_state {
 	float defaultClusterRadius;
 	bool showPaths;
 	bool forceBoundary;
+	bool smoothMove;
+	bool useVelocity;
+	bool initializeVelocityToAverage;
+	bool growMergedSizeEnabled;
+	bool angleFollowsVelocity;
+	bool useNearestCluster;
 };
 
 // constants
@@ -97,15 +103,17 @@ static const float AVERAGE_VELOCITY_MIXING_FACTOR = 0.001f;
 static int clusterMassDecayTauUs = 10000;
 static float mixingFactor = 0.005f;
 static float surround = 2.0f;
-static int TimeStep = 100;
-static bool smoothMove = false;
+static bool updateTimeInitialized = false;
+static int64_t nextUpdateTimeUs = 0;
+static int updateIntervalUs = 100;
+
 static float smoothWeight = 100.0f;
 static float smoothPosition = 0.001f;
 static float smoothIntegral = 0.001f;
 static float velAngDiffDegToNotMerge = 60.0f;
-static bool useVelocity = false;
+
 static float thresholdVelocityForVisibleCluster = 0.0f;
-static int pathLength = 100;
+static int pathLength = 200;
 
 //static bool useEllipticalClusters = false;
 //static bool colorClustersDifferentlyEnabled = false;
@@ -113,9 +121,9 @@ static int pathLength = 100;
 //static bool useOffPolarityOnlyEnabled = false;
 //static float aspectRatio = 1.0f;
 //static float clusterSize = 0.1f;
-static bool growMergedSizeEnabled = false;
+
 //static bool showAllClusters = false;
-static bool useNearestCluster = true; // use the nearest cluster to an event, not the first containing it.
+ // use the nearest cluster to an event, not the first containing it.
 static float predictiveVelocityFactor = 1; // making this M=10, for example,  will cause cluster to substantially lead the events, then slow down, speed up, etc.
 
 static bool enableClusterExitPurging = true;
@@ -125,16 +133,15 @@ static bool enableClusterExitPurging = true;
 //static bool showClusterVelocity = false;
 //static bool showClusterMass = false;
 //static float velocityVectorScaling = 1.0f;
-static bool initializeVelocityToAverage = false;
+
 //static bool filterEventsEnabled = false; // enables filtering events so that output events only belong to clustera and point to the clusters.
 static float velocityTauMs = 100.0f;
 //static float frictionTauMs = 0.0 / 0.0; // Float.NaN in java;
 static bool dontMergeEver = false;
-static bool angleFollowsVelocity = false;
+
 
 static float initialAngle = 0.0f;
 static int clusterCounter = 0;
-
 static float averageVelocityPPT_x = 0.0f;
 static float averageVelocityPPT_y = 0.0f;
 
@@ -158,14 +165,14 @@ static float distanceToX(Cluster *c, uint16_t x, uint16_t y, int64_t ts);
 static float distanceToY(Cluster *c, uint16_t x, uint16_t y, int64_t ts);
 static float distanceC1C2(Cluster *c1, Cluster *c2);
 static float distanceToEvent(Cluster *c, uint16_t x, uint16_t y);
-static void updatePosition(Cluster *c, uint16_t x, uint16_t y);
+static void updatePosition(Cluster *c, uint16_t x, uint16_t y, bool smoothMove);
 static void checkAndSetClusterVisibilityFlag(caerModuleData moduleData);
 static void setRadius(Cluster *c, float r);
 static void updateMass(Cluster *c, int64_t ts);
 static void updateClusterMasses(caerModuleData moduleData, int64_t ts);
 static void addEvent(caerModuleData moduleData, Cluster *c, uint16_t x, uint16_t y, int64_t ts);
 static void updateEventRate(Cluster *c, int64_t ts);
-static Cluster newCluster(uint16_t x, uint16_t y, int64_t ts, float defaultClusterRadius);
+static Cluster newCluster(caerModuleData moduleData, uint16_t x, uint16_t y, int64_t ts);
 static void updateAverageEventDistance(Cluster *c);
 static void updateShape(caerModuleData moduleData, Cluster *c, uint16_t x, uint16_t y);
 static void updateSize(Cluster *c, uint16_t x, uint16_t y, float defaultClusterRadius);
@@ -207,6 +214,12 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "thresholdMassForVisibleCluster", 60.0f);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "defaultClusterRadius", 25.0f);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "forceBoundary", false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "smoothMove", false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "useVelocity", false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "initializeVelocityToAverage", false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "growMergedSizeEnabled", false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "angleFollowsVelocity", false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "useNearestCluster", false);
 
 	RTFilterState state = moduleData->moduleState;
 
@@ -219,6 +232,14 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 	state->thresholdMassForVisibleCluster = sshsNodeGetFloat(moduleData->moduleNode, "thresholdMassForVisibleCluster");
 	state->defaultClusterRadius = sshsNodeGetFloat(moduleData->moduleNode, "defaultClusterRadius");
 	state->forceBoundary = sshsNodeGetBool(moduleData->moduleNode, "forceBoundary");
+	state->smoothMove = sshsNodeGetBool(moduleData->moduleNode, "smoothMove");
+	state->useVelocity = sshsNodeGetBool(moduleData->moduleNode, "useVelocity");
+	state->initializeVelocityToAverage = sshsNodeGetBool(moduleData->moduleNode, "initializeVelocityToAverage");
+	state->growMergedSizeEnabled = sshsNodeGetBool(moduleData->moduleNode, "growMergedSizeEnabled");
+	state->angleFollowsVelocity = sshsNodeGetBool(moduleData->moduleNode, "angleFollowsVelocity");
+	state->useNearestCluster = sshsNodeGetBool(moduleData->moduleNode, "useNearestCluster");
+
+
 	state->currentClusterNum = 0;
 
 	// initialize all cluster as empty
@@ -314,7 +335,7 @@ static void caerRectangulartrackerRun(caerModuleData moduleData, size_t argsNumb
 
 	// check nearestCluster exist?
 	int chosenClusterIndex;
-	if (useNearestCluster){
+	if (state->useNearestCluster){
 		chosenClusterIndex = getNearestCluster(moduleData, x, y, ts);
 	}
 	else {
@@ -328,7 +349,7 @@ static void caerRectangulartrackerRun(caerModuleData moduleData, size_t argsNumb
 
 	// if not, create new cluster
 	else if (state->currentClusterNum < state->maxClusterNum) {
-		Cluster clusterNew = newCluster(x, y, ts, state->defaultClusterRadius);
+		Cluster clusterNew = newCluster(moduleData, x, y, ts);
 		int i;
 		for (i=0; i<state->maxClusterNum; i++){
 			if (state->clusterList[i].isEmpty == true){
@@ -337,8 +358,13 @@ static void caerRectangulartrackerRun(caerModuleData moduleData, size_t argsNumb
 			}
 		}
 	}
-	// At each TimeStep point, do update, pruning, merge ..
-	if (ts % TimeStep == 0){
+
+	if (!updateTimeInitialized) {
+		nextUpdateTimeUs = ts + updateIntervalUs;
+		updateTimeInitialized = true;
+	}
+	if (ts > nextUpdateTimeUs) {
+		nextUpdateTimeUs = ts + updateIntervalUs;
 		updateClusterList(moduleData, ts, sizeX, sizeY);
 	}
 
@@ -373,7 +399,7 @@ static void caerRectangulartrackerRun(caerModuleData moduleData, size_t argsNumb
 
 	// plot clusters
 	for (int i=0; i<state->maxClusterNum; i++){
-		if ((*frame != NULL ) && (state->clusterList[i].isEmpty != true) && (state->clusterList[i].visibilityFlag == true)) {
+		if ((*frame != NULL ) && (!state->clusterList[i].isEmpty) && (state->clusterList[i].visibilityFlag)) {
 			drawCluster(caerFrameEventPacketGetEvent(*frame, 0), &state->clusterList[i], sizeX, sizeY, state->showPaths, state->forceBoundary);
 		}
 	}
@@ -428,7 +454,7 @@ static int getFirstContainingCluster(caerModuleData moduleData, uint16_t x, uint
 			}
 			float dx = distanceToX(&state->clusterList[i], x, y, ts);
 			float dy = distanceToY(&state->clusterList[i], x, y, ts);
-			if ((dx < rX) && (dy < rY)) { // TODO needs to account for instantaneousAngle
+			if ((dx < rX) && (dy < rY)) {
 				currentDistance = dx + dy;
 				closest = i;
 				minDistance = currentDistance;
@@ -451,14 +477,17 @@ static void updateClusterList(caerModuleData moduleData, int64_t ts, int16_t siz
 	checkAndSetClusterVisibilityFlag(moduleData);
 }
 
-static Cluster newCluster(uint16_t x, uint16_t y, int64_t ts, float defaultClusterRadius) {
+static Cluster newCluster(caerModuleData moduleData, uint16_t x, uint16_t y, int64_t ts) {
+	RTFilterState state = moduleData->moduleState;
+
 	Cluster clusterNew;
 	clusterNew.aspectRatio = 1.0f;
-	clusterNew.radius = defaultClusterRadius;
-	clusterNew.radius_x = defaultClusterRadius;
-	clusterNew.radius_y = defaultClusterRadius;
+	clusterNew.radius = state->defaultClusterRadius;
+	clusterNew.radius_x = state->defaultClusterRadius;
+	clusterNew.radius_y = state->defaultClusterRadius;
 	clusterNew.clusterNumber = ++clusterCounter;
-	if (initializeVelocityToAverage) {
+	clusterNew.velocityValid = false;
+	if (state->initializeVelocityToAverage) {
 		clusterNew.velocityPPT_x = averageVelocityPPT_x;
 		clusterNew.velocityPPT_y = averageVelocityPPT_y;
 		clusterNew.velocityValid = true;
@@ -480,7 +509,6 @@ static Cluster newCluster(uint16_t x, uint16_t y, int64_t ts, float defaultClust
 	clusterNew.previousNumEvents = 0;
 	clusterNew.hasObtainedSupport = false;
 	clusterNew.avgEventRate = 0.0f;
-	clusterNew.velocityValid = false;
 	clusterNew.visibilityFlag = false;
 	clusterNew.distanceToLastEvent = 1000000;
 	clusterNew.distanceToLastEvent_x = 1000000;
@@ -559,7 +587,6 @@ static void mergeClusters(caerModuleData moduleData) {
 }
 
 static void mergeC1C2(caerModuleData moduleData, int i, int j) {
-
 	RTFilterState state = moduleData->moduleState;
 
 	int weaker = state->clusterList[i].mass > state->clusterList[j].mass ? j : i;
@@ -577,9 +604,9 @@ static void mergeC1C2(caerModuleData moduleData, int i, int j) {
 	state->clusterList[stronger].lastUpdateTime = state->clusterList[stronger].lastEventTimestamp;
 	state->clusterList[stronger].mass = mass;
 
-	if (growMergedSizeEnabled) {
-		float R = (state->clusterList[i].radius + state->clusterList[j].radius);
-		setRadius(&state->clusterList[stronger], R + (mixingFactor * R));
+	if (state->growMergedSizeEnabled) {
+		//float R = (state->clusterList[i].radius + state->clusterList[j].radius);
+		setRadius(&state->clusterList[stronger], state->clusterList[stronger].radius + (mixingFactor * state->clusterList[weaker].radius));
 	}
 
 	state->clusterList[weaker].isEmpty = true;
@@ -637,7 +664,7 @@ static void checkAndSetClusterVisibilityFlag(caerModuleData moduleData) {
 			if ((state->clusterList[i].numEvents < state->thresholdMassForVisibleCluster) || ((state->clusterList[i].numEvents > state->thresholdMassForVisibleCluster) && (state->clusterList[i].mass < state->thresholdMassForVisibleCluster))) {
 				ret = false;
 			}
-			if (useVelocity) {
+			if (state->useVelocity) {
 				float speed = (sqrt((state->clusterList[i].velocityPPT_x * state->clusterList[i].velocityPPT_x) + (state->clusterList[i].velocityPPT_y * state->clusterList[i].velocityPPT_y)) * 1e6f); // speed is in pixels/sec
 				if (speed < thresholdVelocityForVisibleCluster) {
 					ret = false;
@@ -656,7 +683,7 @@ static void checkAndSetClusterVisibilityFlag(caerModuleData moduleData) {
 static void updateClusterLocations(caerModuleData moduleData, int64_t ts) {
 	RTFilterState state = moduleData->moduleState;
 
-	if (!useVelocity) {
+	if (!state->useVelocity) {
 		return;
 	}
 
@@ -668,7 +695,7 @@ static void updateClusterLocations(caerModuleData moduleData, int64_t ts) {
 			}
 			state->clusterList[i].location_x += state->clusterList[i].velocityPPT_x * (float)dt * predictiveVelocityFactor;
 			state->clusterList[i].location_y += state->clusterList[i].velocityPPT_y * (float)dt * predictiveVelocityFactor;
-			if (initializeVelocityToAverage) {
+			if (state->initializeVelocityToAverage) {
 				// update average velocity metric for construction of new Clusters
 				averageVelocityPPT_x = ((1.0f - AVERAGE_VELOCITY_MIXING_FACTOR) * averageVelocityPPT_x) + (AVERAGE_VELOCITY_MIXING_FACTOR * state->clusterList[i].velocityPPT_x);
 				averageVelocityPPT_y = ((1.0f - AVERAGE_VELOCITY_MIXING_FACTOR) * averageVelocityPPT_y) + (AVERAGE_VELOCITY_MIXING_FACTOR * state->clusterList[i].velocityPPT_y);
@@ -681,7 +708,7 @@ static void updateClusterLocations(caerModuleData moduleData, int64_t ts) {
 static void updateClusterPaths(caerModuleData moduleData, int64_t ts) {
 	RTFilterState state = moduleData->moduleState;
 
-	if (!state->pathsEnabled && !useVelocity) {
+	if (!state->pathsEnabled && !state->useVelocity) {
 		return;
 	}
 	for (int i = 0; i < state->maxClusterNum; i++){
@@ -691,7 +718,7 @@ static void updateClusterPaths(caerModuleData moduleData, int64_t ts) {
 			}
 			addPath(&state->clusterList[i].path, state->clusterList[i].location_x, state->clusterList[i].location_y, ts, state->clusterList[i].numEvents - state->clusterList[i].previousNumEvents);
 			state->clusterList[i].previousNumEvents = state->clusterList[i].numEvents;
-			if (useVelocity){
+			if (state->useVelocity){
 				updateVelocity(&state->clusterList[i], state->thresholdMassForVisibleCluster);
 			}
 			int count = getPathSize(state->clusterList[i].path);
@@ -744,15 +771,17 @@ static void updateVelocity(Cluster *c, float thresholdMassForVisibleCluster) {
 	}
 
 //	// update velocityPPT of cluster using last two path points
-	Path *itr = c->path;
-	Path *plast = itr->next;
-//	itr = itr->next;
+	Path *itr = c->path; // create a iterator of paths
+
+	Path *plast = itr;
+	itr = itr->next;
+	Path *pfirst = itr;
+	itr = itr->next;
+
 	int nevents = plast->nEvents;
-	Path *pfirst = itr->next;
-//	itr = itr->next;
-	while ((nevents < thresholdMassForVisibleCluster) && (itr->next != NULL)) {
+	while ((nevents < thresholdMassForVisibleCluster) && (itr != NULL)) {
 		nevents += pfirst->nEvents;
-		pfirst = itr->next;
+		pfirst = itr;
 		itr = itr->next;
 	}
 	if (nevents < thresholdMassForVisibleCluster) {
@@ -797,15 +826,17 @@ static void setRadius(Cluster *c, float r) {
 }
 
 static void addEvent(caerModuleData moduleData, Cluster *c, uint16_t x, uint16_t y, int64_t ts) {
+	RTFilterState state = moduleData->moduleState;
+
 	updateMass(c, ts);
-	updatePosition(c, x, y);
+	updatePosition(c, x, y, state->smoothMove);
 	updateEventRate(c, ts);
 	updateAverageEventDistance(c);
 	updateShape(moduleData, c, x, y);
 	c->lastUpdateTime = ts;
 }
 
-static void updatePosition(Cluster *c, uint16_t x, uint16_t y) {
+static void updatePosition(Cluster *c, uint16_t x, uint16_t y, bool smoothMove) {
 	float m = mixingFactor;
 	float m1 = 1 - m;
 	float newX = (float)x;
@@ -883,7 +914,7 @@ static void updateShape(caerModuleData moduleData, Cluster *c, uint16_t x, uint1
 	}
 
 	// turn cluster so that it is aligned along velocity
-	if (angleFollowsVelocity && c->velocityValid && useVelocity) {
+	if (state->angleFollowsVelocity && c->velocityValid && state->useVelocity) {
 		float velAngle = (float) atan2(c->velocityPPS_y, c->velocityPPS_x);
 		setAngle(c, velAngle);
 	}
@@ -1181,6 +1212,12 @@ static void caerRectangulartrackerConfig(caerModuleData moduleData) {
 	state->thresholdMassForVisibleCluster = sshsNodeGetFloat(moduleData->moduleNode, "thresholdMassForVisibleCluster");
 	state->defaultClusterRadius = sshsNodeGetFloat(moduleData->moduleNode, "defaultClusterRadius");
 	state->forceBoundary = sshsNodeGetBool(moduleData->moduleNode, "forceBoundary");
+	state->smoothMove = sshsNodeGetBool(moduleData->moduleNode, "smoothMove");
+	state->useVelocity = sshsNodeGetBool(moduleData->moduleNode, "useVelocity");
+	state->initializeVelocityToAverage = sshsNodeGetBool(moduleData->moduleNode, "initializeVelocityToAverage");
+	state->growMergedSizeEnabled = sshsNodeGetBool(moduleData->moduleNode, "growMergedSizeEnabled");
+	state->angleFollowsVelocity = sshsNodeGetBool(moduleData->moduleNode, "angleFollowsVelocity");
+	state->useNearestCluster = sshsNodeGetBool(moduleData->moduleNode, "useNearestCluster");
 }
 
 static void caerRectangulartrackerExit(caerModuleData moduleData) {
