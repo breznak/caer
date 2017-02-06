@@ -358,25 +358,14 @@ void programConvolutionMappingSram(caerInputDynapseState state, DvsToDynapseStat
 			for (int sramId = 1; sramId < 3; sramId++) {
 				numConfig = -1;
 				for (size_t neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS_CORE; neuronId++) {
+					//for (size_t filterId = 0; filterId < stateMod->numfilters ; filterId++) {
 					for (int coreId = 0; coreId < DYNAPSE_CONFIG_NUMCORES; ++coreId) {
 						uint8_t dx = 0;
 						uint8_t sx = 0;
 						uint8_t dy = 0;
 						uint8_t sy = 0;
 						numConfig++;
-						int destinationcoreId; // all cores
-						if (coreId == 0) {
-							destinationcoreId = 1;
-						}
-						else if (coreId == 1) {
-							destinationcoreId = 2;
-						}
-						else if (coreId == 2) {
-							destinationcoreId = 4;
-						}
-						else if (coreId == 3) {
-							destinationcoreId = 8;
-						}
+						int destinationcoreId = 15; // all cores
 						// use SRAM for projections to chips U1 and U2
 						if (sramId == 1) {
 							dx = 0;
@@ -391,7 +380,7 @@ void programConvolutionMappingSram(caerInputDynapseState state, DvsToDynapseStat
 							sy = 0;				// WEST ONE
 						}
 						bits[numConfig] = neuronId << 7 | sramId << 5 | coreId << 15 | 1 << 17 | 1 << 4
-							| destinationcoreId << 18 | sy << 27 | dy << 25 | dx << 22 | sx << 24 | coreId << 28;
+							| destinationcoreId << 18 | sy << 27 | dy << 25 | dx << 22 | sx << 24 | 1 << 28;
 					}
 				}
 				// send data with libusb host transfer in packet
@@ -465,52 +454,106 @@ void programMapInCam(caerInputDynapseState state, DvsToDynapseState stateMod) {
 	caerLog(CAER_LOG_NOTICE, "DvsToDynapse", "Programming CAM content...");
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, (uint32_t) stateMod->chipId);
 	if (stateMod->CNNMode) {
-		// now cnn maps
 		if (stateMod->chipId == DYNAPSE_CONFIG_DYNAPSE_U1 || stateMod->chipId == DYNAPSE_CONFIG_DYNAPSE_U2) {
-			//int filters = 0;
-			for (size_t filters = 0; filters < 1; filters++) {
-				//for (size_t coreId = 0; coreId < 4; coreId++) {
-				for (size_t coreId = 0; coreId < 4; coreId++) {
-					for (size_t neuronId = 0; neuronId < 256; neuronId++) {
-						int counter = 0;
-						numConfig = -1;
-						for (size_t camId = 0; camId < 64; camId++) { // 64
-							// all 64 cams, 1 filter
-							numConfig++;
-							uint32_t ei = 1;
-							uint32_t fs = 1;
-							int qx = neuronId % 16;					// coordinates x,y of neuron
-							int qy = (int) floor(neuronId / 16);	//
-							//int mapped_qx = (int) round((double) qx / (double) 5); // coordinated of target neuron
-							//int mapped_qy = (int) round((double) qy / (double) 5);
-							int dest_neuronId = counter;//(qx * 16 + qy);// + (filters * 16); //(nfilter*16); // which neuron to target (4 maps of 8x8 in 32x32 padding 0 stride 8)
+			//compute Gabor filters
+			double x, y;
+			double filters_sin[8][8][16];
+			double filters_cos[8][8][16];
+			//int w = 3; 				//	wave number
+			int h = 8; 					// kernel size
+			double q = M_PI / 2.0;		//filter orientation
+			for (int w = 0; w < 16; w++) {
+				for (int i = 0; i < h; i++) {
+					x = i - 0.5 * (h - 1);
+					for (int j = 0; j < h; j++) {
+						y = j - 0.5 * (h - 1);
+						filters_sin[i][j][w] = exp((-16 / (h * h)) * (x * x + y * y))
+							* cos((2 * M_PI * w / h) * (x * cos(q) + y * sin(q))) / (h * h);
+						filters_cos[i][j][w] = exp((-16 / (h * h)) * (x * x + y * y))
+							* sin((2 * M_PI * w / h) * (x * cos(q) + y * sin(q))) / (h * h);
+						//printf(" %f ", filters_sin[i][j][w]);
+					}
+					//printf("\n");
+				}
+				//printf("\n\n");
 
-							int source_core = coreId;	 		// source core id
-							uint32_t address = neuronId;	 		    // source neuron id
-							/*if(source_core == 3){
-								address = 5;
-							}else if(source_core == 2){
-								address = 255;
-							}*/
+				// now only take positive or negative part
+				for (int i = 0; i < h; i++) {
+					for (int j = 0; j < h; j++) {
+						filters_sin[i][j][w] = copysign(1.0, filters_sin[i][j][w]);
+						filters_cos[i][j][w] = copysign(1.0, filters_cos[i][j][w]);
+						//printf(" %f ", filters_sin[i][j][w]);
+					}
+					//printf("\n");
+				}
+				//printf("\n\n");
+			}
+			int mapid = 0;
+			for (int targetneu = 0; targetneu < 256; targetneu++) {
+				numConfig = -1;
+				for (int filterpixx = 0; filterpixx < 8; filterpixx++) {
+					for (int filterpixy = 0; filterpixy < 8; filterpixy++) {
+						numConfig++;
+						int mapxcoor = mapid % 4;
+						int mapycoor = mapid / 4;
 
-							uint32_t neuron_row = (neuronId & 0xf0) >> 4;
-							uint32_t synapse_row = camId;
-							uint32_t row = neuron_row << 6 | synapse_row;
-							uint32_t column = neuronId & 0xf;
-							//caerLog(CAER_LOG_ERROR, "DvsToDynapse", "address %d, source_core %d, neuron_row %d, synapse_row %d, row %d, column %d",
-							//	address, source_core_id, neuron_row, synapse_row, row, column );
-
-							bits[numConfig] = ei << 29 | fs << 28 | address << 20 | source_core << 18 | 1 << 17
-													| coreId << 15 | row << 5 | column;
+						uint32_t ei = 0;
+						// here we use Gabor's patches
+						if (stateMod->chipId == DYNAPSE_CONFIG_DYNAPSE_U1) {
+							if (filters_sin[filterpixx][filterpixy][mapid] > 0) {
+								ei = 1;
+							}
+							else {
+								ei = 0;
+							}
 						}
-						// send data with libusb host transfer in packet
-						if (!caerDynapseSendDataToUSB(usb_handle, bits, numConfig)) {
-							caerLog(CAER_LOG_ERROR, "DvsToDynapse", "USB transfer failed");
+						else {
+							if (filters_cos[filterpixx][filterpixy][mapid] > 0) {
+								ei = 1;
+							}
+							else {
+								ei = 0;
+							}
 						}
+						uint32_t fs = 1;
+						int sourceneuron_inmap;
+						sourceneuron_inmap = (16 * filterpixx) + (filterpixy) + ((mapycoor % 2) * 8)
+							+ ((mapxcoor % 2) * 16 * 8);
+						int source_core;
+						if (mapxcoor < 2 && mapycoor < 2) {
+							source_core = 0;
+						}
+						else if (mapxcoor < 2 && mapycoor >= 2) {
+							source_core = 1;
+						}
+						else if (mapxcoor >= 2 && mapycoor >= 2) {
+							source_core = 3;
+						}
+						else if (mapxcoor >= 2 && mapycoor < 2) {
+							source_core = 2;
+						}
+						uint32_t synapse_row = filterpixx * 8 + filterpixy; 		// 0 - 63 cam ID
+						uint32_t neuron_row = (targetneu & 0xf0) >> 4;
+						uint32_t row = neuron_row << 6 | synapse_row; // neuron that will receive from sourceneuron_inmap
+						uint32_t column = targetneu & 0xf;							//
+
+						//caerLog(CAER_LOG_NOTICE, "Mapping", "Target neuron %d, source neuron %d, map id %d - mapxcoor %d, mapycoor %d , row %d, column %d",
+						//targetneu, sourceneuron_inmap, mapid, mapxcoor, mapycoor, row, column);
+
+						bits[numConfig] = ei << 29 | fs << 28 | sourceneuron_inmap << 20 | source_core << 18 | 1 << 17
+							| source_core << 15 | row << 5 | column;
 					}
 				}
+				// send data with libusb host transfer in packet
+				//caerLog(CAER_LOG_NOTICE, "Mapping", "numConfig %d, ", numConfig);
+				if (!caerDynapseSendDataToUSB(usb_handle, bits, numConfig)) {
+					caerLog(CAER_LOG_ERROR, "DvsToDynapse", "USB transfer failed");
+				}
+				mapid++;
+				if (mapid == 16) {
+					mapid = 0;
+				}
 			}
-			//}
 		}
 		if (stateMod->chipId == DYNAPSE_CONFIG_DYNAPSE_U3) {
 			// subsampling map
@@ -576,35 +619,172 @@ void programBiasesDvsToDynapse(caerInputDynapseState state, DvsToDynapseState st
 	caerDeviceHandle usb_handle = (caerDeviceHandle) state->deviceState;
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, (uint32_t) stateMod->chipId); //U0->0,U1->8,U2->4,U3->12
 // set biases for all cores
-	for (uint32_t coreId = 0; coreId < 4; coreId++) {
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias", "NBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_AHTHR_N", 7, 1, "HighBias", "NBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_AHW_P", 7, 1, "HighBias", "PBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_BUF_P", 3, 80, "HighBias", "PBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_CASC_N", 7, 1, "HighBias", "NBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_DC_P", 5, 2, "HighBias", "PBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_NMDA_N", 7, 1, "HighBias", "NBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_RFR_N", 2, 180, "HighBias", "NBias"); // 4
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_TAU1_N", 3, 40, "LowBias", "NBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_TAU2_N", 6, 15, "LowBias", "NBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_THR_N", 2, 180, "HighBias", "NBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_TAU_F_P", 6, 150, "HighBias", "PBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_TAU_S_P", 7, 40, "HighBias", "NBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_THR_F_P", 4, 220, "HighBias", "PBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_THR_S_P", 7, 0, "HighBias", "PBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_TAU_F_P", 6, 150, "HighBias", "NBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_TAU_S_P", 7, 40, "HighBias", "NBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_THR_F_P", 0, 220, "HighBias", "PBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_THR_S_P", 7, 0, "HighBias", "PBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 70, "HighBias", "NBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_S_N", 1, 250, "HighBias",
-			"NBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_INH_F_N", 0, 250, "HighBias",
-			"NBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_INH_S_N", 1, 250, "HighBias",
-			"NBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PULSE_PWLK_P", 3, 50, "HighBias", "PBias");
-		caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "R2R_P", 4, 85, "HighBias", "PBias");
+	if (stateMod->CNNMode) {
+		if (stateMod->chipId == DYNAPSE_CONFIG_DYNAPSE_U1) {
+			for (uint32_t coreId = 0; coreId < 4; coreId++) {
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_AHTHR_N", 7, 1, "HighBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_AHW_P", 7, 1, "HighBias", "PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_BUF_P", 3, 80, "HighBias", "PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_CASC_N", 7, 1, "HighBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_DC_P", 5, 2, "HighBias", "PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_NMDA_N", 7, 1, "HighBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_RFR_N", 2, 180, "HighBias", "NBias"); // 4
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_TAU1_N", 3, 40, "LowBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_TAU2_N", 6, 15, "LowBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_THR_N", 2, 180, "HighBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_TAU_F_P", 6, 150, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_TAU_S_P", 7, 40, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_THR_F_P", 1, 150, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_THR_S_P", 7, 1, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_TAU_F_P", 6, 150, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_TAU_S_P", 7, 40, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_THR_F_P", 0, 220, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_THR_S_P", 7, 0, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 70, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_S_N", 1, 250, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_INH_F_N", 0, 250, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_INH_S_N", 1, 250, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PULSE_PWLK_P", 4, 50, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "R2R_P", 4, 85, "HighBias", "PBias");
+			}
+		}
+		else if (stateMod->chipId == DYNAPSE_CONFIG_DYNAPSE_U2) {
+			for (uint32_t coreId = 0; coreId < 4; coreId++) {
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_AHTHR_N", 7, 1, "HighBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_AHW_P", 7, 1, "HighBias", "PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_BUF_P", 3, 80, "HighBias", "PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_CASC_N", 7, 1, "HighBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_DC_P", 5, 2, "HighBias", "PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_NMDA_N", 7, 1, "HighBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_RFR_N", 2, 180, "HighBias", "NBias"); // 4
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_TAU1_N", 3, 40, "LowBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_TAU2_N", 6, 15, "LowBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_THR_N", 2, 180, "HighBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_TAU_F_P", 6, 150, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_TAU_S_P", 7, 40, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_THR_F_P", 1, 90, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_THR_S_P", 7, 0, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_TAU_F_P", 6, 150, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_TAU_S_P", 7, 40, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_THR_F_P", 0, 220, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_THR_S_P", 7, 0, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 40, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_S_N", 1, 250, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_INH_F_N", 0, 250, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_INH_S_N", 1, 250, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PULSE_PWLK_P", 4, 40, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "R2R_P", 4, 85, "HighBias", "PBias");
+			}
+		}
+		else if (stateMod->chipId == DYNAPSE_CONFIG_DYNAPSE_U3) {
+			for (uint32_t coreId = 0; coreId < 4; coreId++) {
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_AHTHR_N", 7, 1, "HighBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_AHW_P", 7, 1, "HighBias", "PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_BUF_P", 3, 80, "HighBias", "PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_CASC_N", 7, 1, "HighBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_DC_P", 5, 2, "HighBias", "PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_NMDA_N", 7, 1, "HighBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_RFR_N", 2, 180, "HighBias", "NBias"); // 4
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_TAU1_N", 3, 40, "LowBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_TAU2_N", 6, 15, "LowBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_THR_N", 2, 180, "HighBias", "NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_TAU_F_P", 6, 150, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_TAU_S_P", 7, 40, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_THR_F_P", 4, 220, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_THR_S_P", 7, 0, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_TAU_F_P", 6, 150, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_TAU_S_P", 7, 40, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_THR_F_P", 0, 220, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_THR_S_P", 7, 0, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 70, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_S_N", 1, 250, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_INH_F_N", 0, 250, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_INH_S_N", 1, 250, "HighBias",
+					"NBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PULSE_PWLK_P", 3, 50, "HighBias",
+					"PBias");
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "R2R_P", 4, 85, "HighBias", "PBias");
+			}
+		}
+	}
+	else {
+		for (uint32_t coreId = 0; coreId < 4; coreId++) {
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias", "NBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_AHTHR_N", 7, 1, "HighBias", "NBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_AHW_P", 7, 1, "HighBias", "PBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_BUF_P", 3, 80, "HighBias", "PBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_CASC_N", 7, 1, "HighBias", "NBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_DC_P", 5, 2, "HighBias", "PBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_NMDA_N", 7, 1, "HighBias", "NBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_RFR_N", 2, 180, "HighBias", "NBias"); // 4
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_TAU1_N", 3, 40, "LowBias", "NBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_TAU2_N", 6, 15, "LowBias", "NBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_THR_N", 2, 180, "HighBias", "NBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_TAU_F_P", 6, 150, "HighBias",
+				"PBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_TAU_S_P", 7, 40, "HighBias",
+				"NBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_THR_F_P", 4, 220, "HighBias",
+				"PBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPIE_THR_S_P", 7, 0, "HighBias", "PBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_TAU_F_P", 6, 150, "HighBias",
+				"NBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_TAU_S_P", 7, 40, "HighBias",
+				"NBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_THR_F_P", 0, 220, "HighBias",
+				"PBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_THR_S_P", 7, 0, "HighBias", "PBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 70, "HighBias",
+				"NBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_S_N", 1, 250, "HighBias",
+				"NBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_INH_F_N", 0, 250, "HighBias",
+				"NBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_INH_S_N", 1, 250, "HighBias",
+				"NBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PULSE_PWLK_P", 3, 50, "HighBias", "PBias");
+			caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "R2R_P", 4, 85, "HighBias", "PBias");
+		}
 	}
 //stateMod->programBiases = false;
 }
