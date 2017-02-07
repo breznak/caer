@@ -166,7 +166,7 @@ static bool mainloop_1(void) {
 	// Filter that track one object by using the median position information
 #ifdef ENABLE_MEDIANTRACKER
 	caerFrameEventPacket medianFrame = NULL;
-	caerMediantrackerFilter(13, polarity_cam, &medianFrame);
+	caerPoint4DEventPacket medianData  = caerMediantrackerFilter(13, polarity_cam, &medianFrame);
 #endif
 
 	// Fitler that maps polarity dvs events as spiking inputs of the dynapse processor

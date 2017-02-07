@@ -42,13 +42,16 @@ static struct caer_module_functions caerMediantrackerFunctions = { .moduleInit =
 	&caerMediantrackerRun, .moduleConfig = &caerMediantrackerConfig, .moduleExit = &caerMediantrackerExit,
 	.moduleReset = &caerMediantrackerReset };
 
-void caerMediantrackerFilter(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame) {
+caerPoint4DEventPacket caerMediantrackerFilter(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame) {
+
+	caerPoint4DEventPacket medianData = NULL;
+
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "MTFilter", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
-		return;
+		return(NULL);
 	}
 
-	caerModuleSM(&caerMediantrackerFunctions, moduleData, sizeof(struct MTFilter_state), 2, polarity, frame);
+	caerModuleSM(&caerMediantrackerFunctions, moduleData, sizeof(struct MTFilter_state), 2, polarity, frame, &medianData);
 }
 
 static bool caerMediantrackerInit(caerModuleData moduleData) {
@@ -82,6 +85,7 @@ static void caerMediantrackerRun(caerModuleData moduleData, size_t argsNumber, v
 	// Interpret variable arguments (same as above in main function).
 	caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
 	caerFrameEventPacket *frame = va_arg(args, caerFrameEventPacket*);
+	caerPoint4DEventPacket *medianData = va_arg(args, caerPoint4DEventPacket *);
 
 	// Only process packets with content.
 	if (polarity == NULL) {
@@ -174,6 +178,25 @@ static void caerMediantrackerRun(caerModuleData moduleData, size_t argsNumber, v
 	}
 	state->xstd = state->xstd + ((float) sqrt(xvar) - state->xstd) * fac;
 	state->ystd = state->ystd + ((float) sqrt(yvar) - state->ystd) * fac;
+
+
+	// allocate 4d event if null
+	if (*medianData == NULL) {
+		*medianData = caerPoint4DEventPacketAllocate(128, sourceID, NULL);
+	}
+	// set timestamp for 4d event
+	caerPoint4DEvent evt = caerPoint4DEventPacketGetEvent(*medianData,
+			caerEventPacketHeaderGetEventNumber(&(*medianData)->packetHeader));
+
+	caerPoint4DEventSetTimestamp(evt, state->lastts);
+
+	caerPoint4DEventSetX(evt,state->xmean);
+	caerPoint4DEventSetX(evt,state->ymean);
+	caerPoint4DEventSetX(evt,state->xstd);
+	caerPoint4DEventSetX(evt,state->ystd);
+
+	// validate event
+	caerPoint4DEventValidate(evt, *medianData);
 
 	*frame = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, sizeX, sizeY, 3);
 	if (*frame != NULL) {
