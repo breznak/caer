@@ -87,6 +87,10 @@
 #include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
 #endif
 
+#ifdef ENABLE_MEDIANTRACKER
+#include "modules/mediantracker/mediantracker.h"
+#endif
+
 static bool mainloop_1(void);
 
 static bool mainloop_1(void) {
@@ -159,6 +163,12 @@ static bool mainloop_1(void) {
 	caerBackgroundActivityFilter(12, polarity_cam);
 #endif
 
+	// Filter that track one object by using the median position information
+#ifdef ENABLE_MEDIANTRACKER
+	caerFrameEventPacket medianFrame = NULL;
+	caerMediantrackerFilter(13, polarity_cam, &medianFrame);
+#endif
+
 	// Fitler that maps polarity dvs events as spiking inputs of the dynapse processor
 	// It is a software mapper
 #ifdef ENABLE_DVSTODYNAPSE
@@ -196,6 +206,10 @@ static bool mainloop_1(void) {
 #endif
 #endif
 
+#if defined(ENABLE_MEDIANTRACKER) && defined (ENABLE_VISUALIZER)
+	caerVisualizer(68, "ImageMedian", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) medianFrame);
+#endif
+
 	// Filter that adds buttons and timer for recording data
 	// or playing a recording file. It implements fast forward and
 	// slow motion buttons, as well as play again from start.
@@ -228,6 +242,10 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_MEANRATEFILTER
 	free(freqplot);
+#endif
+
+#if defined(ENABLE_MEDIANTRACKER) && defined(ENABLE_VISUALIZER)
+	free(medianFrame);
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.
