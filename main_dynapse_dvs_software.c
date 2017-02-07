@@ -166,13 +166,18 @@ static bool mainloop_1(void) {
 	// Filter that track one object by using the median position information
 #ifdef ENABLE_MEDIANTRACKER
 	caerFrameEventPacket medianFrame = NULL;
+	caerMainloopFreeAfterLoop(&free, medianFrame);	// free memory after mainloop
 	caerPoint4DEventPacket medianData  = caerMediantrackerFilter(13, polarity_cam, &medianFrame);
 #endif
 
 	// Fitler that maps polarity dvs events as spiking inputs of the dynapse processor
 	// It is a software mapper
 #ifdef ENABLE_DVSTODYNAPSE
-	caerDvsToDynapse(5, spike, polarity_cam);
+#ifdef ENABLE_MEDIANTRACKER
+	caerDvsToDynapse(5, spike, polarity_cam, medianData);
+#else
+	caerDvsToDynapse(5, spike, polarity_cam, NULL);
+#endif
 #endif
 
 	// Filters can also extract information from event packets: for example
@@ -244,9 +249,6 @@ static bool mainloop_1(void) {
 	free(freqplot);
 #endif
 
-#if defined(ENABLE_MEDIANTRACKER) && defined(ENABLE_VISUALIZER)
-	free(medianFrame);
-#endif
 
 	return (true); // If false is returned, processing of this loop stops.
 }

@@ -1361,6 +1361,15 @@ uint32_t generateCoarseFineBias(sshsNode biasNode) {
 	return (bits);
 }
 
+
+static void sendDefaultConfiguration(caerModuleData moduleData, struct caer_dynapse_info *devInfo) {
+	// Device related configuration has its own sub-node.
+	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(devInfo->chipID, true));
+
+	// Send cAER configuration to libcaer and device.
+	usbConfigSend(sshsGetRelativeNode(deviceConfigNode, "usb/"), moduleData);
+}
+
 bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 
 // USB port/bus/SN settings/restrictions.
@@ -1439,6 +1448,26 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER,DYNAPSE_CONFIG_AER_RUN, true);
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_REQ_DELAY, 30);
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_REQ_EXTENSION, 30);
+
+	// Device related configuration has its own sub-node DYNAPSEFX2
+	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
+
+
+	// create default configuration FX2 USB Configuration and USB buffer settings.
+	sshsNode usbNode = sshsGetRelativeNode(deviceConfigNode, "usb/");
+	sshsNode sysNode = sshsGetRelativeNode(moduleData->moduleNode, "system/");
+
+	sshsNodePutBoolIfAbsent(usbNode, "Run", true);
+	sshsNodePutShortIfAbsent(usbNode, "EarlyPacketDelay", 8); // 125µs time-slices, so 1ms
+	sshsNodePutIntIfAbsent(usbNode, "BufferNumber", 8);
+	sshsNodePutIntIfAbsent(usbNode, "BufferSize", 8192);
+	// Packet settings (size (in events) and time interval (in µs)).
+	sshsNodePutIntIfAbsent(sysNode, "PacketContainerMaxPacketSize", 8192);
+	sshsNodePutIntIfAbsent(sysNode, "PacketContainerInterval", 10000);
+	// Ring-buffer setting (only changes value on module init/shutdown cycles).
+	sshsNodePutIntIfAbsent(sysNode, "DataExchangeBufferSize", 64);
+	// send it
+	sendDefaultConfiguration(moduleData, &dynapse_info);
 
 	// Create default settings and send them to the devices.
 	createDefaultConfiguration(moduleData, DYNAPSE_CONFIG_DYNAPSE_U0);
@@ -1550,16 +1579,11 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_DEFAULT_SRAM,DYNAPSE_CONFIG_DYNAPSE_U3, 0);
 	caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, " Done.\n");
 
-	// Device related configuration has its own sub-node DYNAPSEFX2
-	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
-
+	// chip node
 	sshsNode chipNode = sshsGetRelativeNode(deviceConfigNode, "chip/");
+	// config listeners
 	sshsNodeAddAttributeListener(chipNode, moduleData, &chipConfigListener);
-
-	sshsNode sysNode = sshsGetRelativeNode(deviceConfigNode, "system/");
 	sshsNodeAddAttributeListener(sysNode, moduleData, &systemConfigListener);
-
-	sshsNode usbNode = sshsGetRelativeNode(deviceConfigNode, "usb/");
 	sshsNodeAddAttributeListener(usbNode, moduleData, &usbConfigListener);
 
 	// Device related configuration has its own sub-node.

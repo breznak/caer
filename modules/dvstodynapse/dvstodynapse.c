@@ -18,6 +18,7 @@ struct DvsToDynapse_state {
 	int threshold;							//after which we send spikes out
 	bool init;
 	bool CNNMode;
+	float numStdDevsForBoundingBox;
 	int F;	//filter size	default 8x8
 	int W;	//input size	default 32x32
 	int P;	//zero-padding, only zero is supported
@@ -44,13 +45,13 @@ static struct caer_module_functions caerDvsToDynapseFunctions = { .moduleInit = 
 	&caerDvsToDynapseRun, .moduleConfig = &caerDvsToDynapseConfig, .moduleExit = &caerDvsToDynapseExit, .moduleReset =
 	&caerDvsToDynapseReset };
 
-void caerDvsToDynapse(uint16_t moduleID, caerSpikeEventPacket spike, caerPolarityEventPacket polarity) {
+void caerDvsToDynapse(uint16_t moduleID, caerSpikeEventPacket spike, caerPolarityEventPacket polarity, caerPoint4DEventPacket medianData) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "DvsToDynapse", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}
 
-	caerModuleSM(&caerDvsToDynapseFunctions, moduleData, sizeof(struct DvsToDynapse_state), 2, spike, polarity);
+	caerModuleSM(&caerDvsToDynapseFunctions, moduleData, sizeof(struct DvsToDynapse_state), 3, spike, polarity, medianData);
 }
 
 static bool caerDvsToDynapseInit(caerModuleData moduleData) {
@@ -82,6 +83,7 @@ static bool caerDvsToDynapseInit(caerModuleData moduleData) {
 	state->P = 0;	//zero-padding, only zero is supported
 	state->S = 8;	//stride		default 8
 	state->R = 8;	//repeat same filter - due to mismatch one filter can be applied several times -
+	state->numStdDevsForBoundingBox = 1.4;
 
 	// size of first output Layer  - for cnn mode -
 	state->outputSize1 = (int) ((state->W - state->F + (2 * state->P)) / state->S) + 1;
@@ -99,6 +101,7 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 	// Interpret variable arguments (same as above in main function).
 	caerSpikeEventPacket spike = va_arg(args, caerSpikeEventPacket);	// from dynapse
 	caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket); // from dvs
+	caerPoint4DEventPacket medianData = va_arg(args, caerPoint4DEventPacket); // from dvs
 
 	// Only process packets with content.
 	// will probably need to add an always active neuron , by setting TAU2.
@@ -162,10 +165,67 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 		}
 	}
 
+	// use median tracker information
+	float xmedian=0;
+	float ymedian=0;
+	float xmedianstd=0;
+	float ymedianstd=0;
+
+	if(medianData != NULL){
+
+		CAER_POINT4D_ITERATOR_ALL_START(medianData)
+			xmedian = caerPoint4DEventGetX(caerPoint4DIteratorElement);
+			ymedian = caerPoint4DEventGetY(caerPoint4DIteratorElement);
+			xmedianstd = caerPoint4DEventGetZ(caerPoint4DIteratorElement);
+			ymedianstd = caerPoint4DEventGetW(caerPoint4DIteratorElement);
+		CAER_POINT4D_ITERATOR_ALL_END
+
+		if(xmedianstd > 0 && ymedianstd > 0){
+			sizeX = (int) floor((xmedian + xmedianstd * state->numStdDevsForBoundingBox) - (xmedian - xmedianstd * state->numStdDevsForBoundingBox));
+			sizeY = (int) floor((ymedian + ymedianstd * state->numStdDevsForBoundingBox) - (ymedian - ymedianstd * state->numStdDevsForBoundingBox));
+		}
+
+		//caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "median x,y %f %f - std x,y, %f, %f - sizeX %d, sizeY %d",
+		//	xmedian, ymedian, xmedianstd, ymedianstd, sizeX, sizeY);
+
+		CAER_POLARITY_ITERATOR_VALID_START(polarity)
+				int xx = caerPolarityEventGetX(caerPolarityIteratorElement);
+				int yy = caerPolarityEventGetY(caerPolarityIteratorElement);
+
+				if (		 (xx <= (int) (xmedian + xmedianstd * state->numStdDevsForBoundingBox))
+								&& (xx > (int) (xmedian - xmedianstd * state->numStdDevsForBoundingBox))
+								&& (yy < (int) (ymedian + ymedianstd * state->numStdDevsForBoundingBox))
+								&& (yy > (int) (ymedian - ymedianstd * state->numStdDevsForBoundingBox))){
+					;
+				}else{
+					caerPolarityEventInvalidate(caerPolarityIteratorElement, polarity);
+				}
+		CAER_POLARITY_ITERATOR_VALID_END
+
+	}
+
+
 	CAER_POLARITY_ITERATOR_VALID_START(polarity)
 		int pol_x = caerPolarityEventGetX(caerPolarityIteratorElement);
 		int pol_y = caerPolarityEventGetY(caerPolarityIteratorElement);
 		bool pol_pol = caerPolarityEventGetPolarity(caerPolarityIteratorElement);
+
+		if(medianData != NULL){
+			pol_x = pol_x - (int) floor(xmedian - xmedianstd * state->numStdDevsForBoundingBox);
+			pol_y = pol_y - (int) floor(ymedian - ymedianstd * state->numStdDevsForBoundingBox);
+			if(pol_x < 0){
+				pol_x = 0;
+			}
+			if(pol_y < 0){
+				pol_y = 0;
+			}
+			//caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
+			//	"pol_x,y %d, %d - xmedian %f ymedian %f - stdx %f, stdy %f - sizeX %d, sizeY %d",
+			//	pol_x, pol_y, xmedian , ymedian, xmedianstd, ymedianstd, sizeX, sizeY);
+
+			caerPolarityEventSetX(caerPolarityIteratorElement, pol_x);
+			caerPolarityEventSetY(caerPolarityIteratorElement, pol_y);
+		}
 
 		// generate coordinates in  chip_size x chip_size
 		int new_x, new_y;
@@ -547,7 +607,7 @@ void programMapInCam(caerInputDynapseState state, DvsToDynapseState stateMod) {
 						//	targetneu, sourceneuron_inmap, mapid, mapxcoor, mapycoor, row, column);
 						//}
 						bits[numConfig] = ei << 29 | fs << 28 | sourceneuron_inmap << 20 | source_core << 18 | 1 << 17
-							| source_core << 15 | row << 5 | column;
+							| source_core << 15 | row << 5 | column | 0 << 4;
 
 					}
 				}
@@ -658,7 +718,7 @@ void programBiasesDvsToDynapse(caerInputDynapseState state, DvsToDynapseState st
 					"PBias");
 				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_THR_S_P", 0, 200, "HighBias",
 					"PBias");
-				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 200, "HighBias",
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 250, "HighBias",
 					"NBias");
 				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_S_N", 0, 250, "HighBias",
 					"NBias");
@@ -700,7 +760,7 @@ void programBiasesDvsToDynapse(caerInputDynapseState state, DvsToDynapseState st
 					"PBias");
 				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_THR_S_P", 0, 200, "HighBias",
 					"PBias");
-				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 200, "HighBias",
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 50, "HighBias",
 					"NBias");
 				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_S_N", 0, 250, "HighBias",
 					"NBias");
@@ -742,7 +802,7 @@ void programBiasesDvsToDynapse(caerInputDynapseState state, DvsToDynapseState st
 					"PBias");
 				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "NPDPII_THR_S_P", 7, 0, "HighBias",
 					"PBias");
-				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 70, "HighBias",
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 255, "HighBias",
 					"NBias");
 				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "PS_WEIGHT_EXC_S_N", 1, 250, "HighBias",
 					"NBias");
