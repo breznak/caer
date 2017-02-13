@@ -87,6 +87,8 @@ struct RTFilter_state {
 	bool growMergedSizeEnabled;
 	bool angleFollowsVelocity;
 	bool useNearestCluster;
+	float aspectRatio;
+	bool peopleCounting;
 };
 
 // constants
@@ -105,7 +107,7 @@ static float mixingFactor = 0.005f;
 static float surround = 2.0f;
 static bool updateTimeInitialized = false;
 static int64_t nextUpdateTimeUs = 0;
-static int updateIntervalUs = 100;
+static int updateIntervalUs = 1000;
 
 static float smoothWeight = 100.0f;
 static float smoothPosition = 0.001f;
@@ -113,18 +115,15 @@ static float smoothIntegral = 0.001f;
 static float velAngDiffDegToNotMerge = 60.0f;
 
 static float thresholdVelocityForVisibleCluster = 0.0f;
-static int pathLength = 200;
+static int pathLength = 100;
 
 //static bool useEllipticalClusters = false;
 //static bool colorClustersDifferentlyEnabled = false;
 //static bool useOnePolarityOnlyEnabled = false;
 //static bool useOffPolarityOnlyEnabled = false;
-//static float aspectRatio = 1.0f;
-//static float clusterSize = 0.1f;
-
 //static bool showAllClusters = false;
- // use the nearest cluster to an event, not the first containing it.
-static float predictiveVelocityFactor = 1; // making this M=10, for example,  will cause cluster to substantially lead the events, then slow down, speed up, etc.
+
+static float predictiveVelocityFactor = 1;
 
 static bool enableClusterExitPurging = true;
 //static bool showClusterNumber = false;
@@ -133,8 +132,7 @@ static bool enableClusterExitPurging = true;
 //static bool showClusterVelocity = false;
 //static bool showClusterMass = false;
 //static float velocityVectorScaling = 1.0f;
-
-//static bool filterEventsEnabled = false; // enables filtering events so that output events only belong to clustera and point to the clusters.
+//static bool filterEventsEnabled = false;
 static float velocityTauMs = 100.0f;
 //static float frictionTauMs = 0.0 / 0.0; // Float.NaN in java;
 static bool dontMergeEver = false;
@@ -144,6 +142,14 @@ static float initialAngle = 0.0f;
 static int clusterCounter = 0;
 static float averageVelocityPPT_x = 0.0f;
 static float averageVelocityPPT_y = 0.0f;
+
+static int nIn = 0;
+static int nOut = 0;
+static float botLine = 0.35f;
+static float topLine = 0.55f;
+static bool inBotZone[10];
+static bool inTopZone[10];
+
 
 
 typedef struct RTFilter_state *RTFilterState;
@@ -185,6 +191,7 @@ static float velocityAngleToRad(Cluster *c1, Cluster *c2);
 static void updateClusterLocations(caerModuleData moduleData, int64_t ts);
 static int getPathSize(Path * head);
 static void removeLastPath(Path * head);
+static void removeAllPath(Path * head);
 static void addPath(Path ** head, float x, float y, int64_t t, int events);
 static void updateVelocity(Cluster *c, float thresholdMassForVisibleCluster);
 static void updateClusterPaths(caerModuleData moduleData, int64_t ts);
@@ -220,6 +227,8 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "growMergedSizeEnabled", false);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "angleFollowsVelocity", false);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "useNearestCluster", false);
+	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "aspectRatio", 1.0f);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "peopleCounting", false);
 
 	RTFilterState state = moduleData->moduleState;
 
@@ -238,48 +247,50 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 	state->growMergedSizeEnabled = sshsNodeGetBool(moduleData->moduleNode, "growMergedSizeEnabled");
 	state->angleFollowsVelocity = sshsNodeGetBool(moduleData->moduleNode, "angleFollowsVelocity");
 	state->useNearestCluster = sshsNodeGetBool(moduleData->moduleNode, "useNearestCluster");
-
+	state->aspectRatio = sshsNodeGetFloat(moduleData->moduleNode, "aspectRatio");
+	state->peopleCounting = sshsNodeGetBool(moduleData->moduleNode, "peopleCounting");
 
 	state->currentClusterNum = 0;
 
 	// initialize all cluster as empty
-	for (int i = 0; i < state->maxClusterNum; i++) {
-		state->clusterList[i].location_x = 0.0f;
-		state->clusterList[i].location_y = 0.0f;
-		state->clusterList[i].velocity_x = 0.0f;
-		state->clusterList[i].velocity_y = 0.0f;
-		state->clusterList[i].birthLocation_x = 0.0f;
-		state->clusterList[i].birthLocation_y = 0.0f;
-		state->clusterList[i].lastPacketLocation_x = 0.0f;
-		state->clusterList[i].lastPacketLocation_y = 0.0f;
-		state->clusterList[i].velocityPPT_x = 0.0f;
-		state->clusterList[i].velocityPPT_y = 0.0f;
-		state->clusterList[i].velocityPPS_x = 0.0f;
-		state->clusterList[i].velocityPPS_y = 0.0f;
-		state->clusterList[i].angle = 0.0f;
-		state->clusterList[i].cosAngle = 1.0f;
-		state->clusterList[i].sinAngle = 0.0f;
-//		//Color color;
-		state->clusterList[i].numEvents = 0;
-		state->clusterList[i].previousNumEvents = 0;
-		state->clusterList[i].firstEventTimestamp = 0;
-		state->clusterList[i].lastEventTimestamp = 0;
-		state->clusterList[i].lastUpdateTime = 0;
-		state->clusterList[i].instantaneousEventRate = 0.0f;
-		state->clusterList[i].hasObtainedSupport = false;
-		state->clusterList[i].averageEventDistance = 0.0f;
-		state->clusterList[i].averageEventXDistance = 0.0f;
-		state->clusterList[i].averageEventYDistance = 0.0f;
-		state->clusterList[i].clusterNumber = 0;
-		state->clusterList[i].avgEventRate = 0.0f;
-		state->clusterList[i].radius = 0.0f;
-		state->clusterList[i].aspectRatio = 0.0f;
-		state->clusterList[i].radius_x = 0.0f;
-		state->clusterList[i].radius_y= 0.0f;
+	for (int i = 0; i < 10; i++) {
+//		state->clusterList[i].location_x = 0.0f;
+//		state->clusterList[i].location_y = 0.0f;
+//		state->clusterList[i].velocity_x = 0.0f;
+//		state->clusterList[i].velocity_y = 0.0f;
+//		state->clusterList[i].birthLocation_x = 0.0f;
+//		state->clusterList[i].birthLocation_y = 0.0f;
+//		state->clusterList[i].lastPacketLocation_x = 0.0f;
+//		state->clusterList[i].lastPacketLocation_y = 0.0f;
+//		state->clusterList[i].velocityPPT_x = 0.0f;
+//		state->clusterList[i].velocityPPT_y = 0.0f;
+//		state->clusterList[i].velocityPPS_x = 0.0f;
+//		state->clusterList[i].velocityPPS_y = 0.0f;
+//		state->clusterList[i].angle = 0.0f;
+//		state->clusterList[i].cosAngle = 1.0f;
+//		state->clusterList[i].sinAngle = 0.0f;
+//		state->clusterList[i].numEvents = 0;
+//		state->clusterList[i].previousNumEvents = 0;
+//		state->clusterList[i].firstEventTimestamp = 0;
+//		state->clusterList[i].lastEventTimestamp = 0;
+//		state->clusterList[i].lastUpdateTime = 0;
+//		state->clusterList[i].instantaneousEventRate = 0.0f;
+//		state->clusterList[i].hasObtainedSupport = false;
+//		state->clusterList[i].averageEventDistance = 0.0f;
+//		state->clusterList[i].averageEventXDistance = 0.0f;
+//		state->clusterList[i].averageEventYDistance = 0.0f;
+//		state->clusterList[i].clusterNumber = 0;
+//		state->clusterList[i].avgEventRate = 0.0f;
+//		state->clusterList[i].radius = 0.0f;
+//		state->clusterList[i].aspectRatio = 0.0f;
+//		state->clusterList[i].radius_x = 0.0f;
+//		state->clusterList[i].radius_y= 0.0f;
 		state->clusterList[i].velocityValid = false;
 		state->clusterList[i].isEmpty = true;
 		state->clusterList[i].visibilityFlag = false;
 		state->clusterList[i].path = NULL;
+		inBotZone[i] = false;
+		inTopZone[i] = false;
 	}
 
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
@@ -403,6 +414,53 @@ static void caerRectangulartrackerRun(caerModuleData moduleData, size_t argsNumb
 			drawCluster(caerFrameEventPacketGetEvent(*frame, 0), &state->clusterList[i], sizeX, sizeY, state->showPaths, state->forceBoundary);
 		}
 	}
+	if(state->peopleCounting) {
+		float by = botLine * sizeY;
+		float ty = topLine * sizeY;
+
+		caerFrameEvent singleplot = caerFrameEventPacketGetEvent(*frame, 0);
+		uint32_t counter = 0;
+		for (size_t y = 0; y < sizeY; y++) {
+			for (size_t x = 0; x < sizeX; x++) {
+				if (y == (int)by || y == (int)ty)
+				{
+					singleplot->pixels[counter] = (uint16_t) ( (int) 65000);			// red
+					singleplot->pixels[counter + 1] = (uint16_t) ( (int) 65000);		// green
+					singleplot->pixels[counter + 2] = (uint16_t) ( (int) 65000);	// blue
+				}
+				counter += 3;
+			}
+		}
+
+
+		for (int i=0; i<state->maxClusterNum; i++){
+			if(state->clusterList[i].isEmpty && inBotZone[i]){
+				inBotZone[i] = false;
+			}
+			if(state->clusterList[i].isEmpty && inTopZone[i]){
+				inTopZone[i] = false;
+			}
+			if(state->clusterList[i].isEmpty || !state->clusterList[i].visibilityFlag){
+				continue;
+			}
+			if((state->clusterList[i].location_y < by) && !inBotZone[i]){
+				inBotZone[i] = true;
+			}
+			if((state->clusterList[i].location_y > ty) && !inTopZone[i]){
+				inTopZone[i] = true;
+			}
+			if((state->clusterList[i].location_y < by) && inTopZone[i]){
+				inTopZone[i] = false;
+				nIn++;
+			}
+			if((state->clusterList[i].location_y > ty) && inBotZone[i]){
+				inBotZone[i] = false;
+				nOut++;
+			}
+		}
+		printf("Num of In: %d", nIn);
+		printf("  Num of Out: %d", nOut);
+	}
 }
 
 static int getNearestCluster(caerModuleData moduleData, uint16_t x, uint16_t y, int64_t ts) {
@@ -481,10 +539,10 @@ static Cluster newCluster(caerModuleData moduleData, uint16_t x, uint16_t y, int
 	RTFilterState state = moduleData->moduleState;
 
 	Cluster clusterNew;
-	clusterNew.aspectRatio = 1.0f;
+	clusterNew.aspectRatio = state->aspectRatio;
 	clusterNew.radius = state->defaultClusterRadius;
-	clusterNew.radius_x = state->defaultClusterRadius;
-	clusterNew.radius_y = state->defaultClusterRadius;
+	clusterNew.radius_x = state->defaultClusterRadius / state->aspectRatio;
+	clusterNew.radius_y = state->defaultClusterRadius * state->aspectRatio;
 	clusterNew.clusterNumber = ++clusterCounter;
 	clusterNew.velocityValid = false;
 	if (state->initializeVelocityToAverage) {
@@ -540,6 +598,7 @@ static void pruneClusters(caerModuleData moduleData, int64_t ts, int16_t sizeX, 
 			bool hitEdge = hasHitEdge(&state->clusterList[i], sizeX, sizeY);
 			if ((t0 > ts) || massTooSmall || (timeSinceSupport < 0) || hitEdge) {
 				state->clusterList[i].isEmpty = true;
+				removeAllPath(state->clusterList[i].path);
 				state->currentClusterNum--;
 			}
 		}
@@ -610,6 +669,7 @@ static void mergeC1C2(caerModuleData moduleData, int i, int j) {
 	}
 
 	state->clusterList[weaker].isEmpty = true;
+	removeAllPath(state->clusterList[weaker].path);
 	state->currentClusterNum--;
 }
 
@@ -762,6 +822,16 @@ static void removeLastPath(Path * head){
 		}
 		free(current->next);
 		current->next = NULL;
+	}
+}
+
+static void removeAllPath(Path * head){
+	Path * current = head;
+	Path * delete = current;
+	while (current != NULL){
+		delete = current;
+		current = current->next;
+		free(delete);
 	}
 }
 
@@ -1218,6 +1288,8 @@ static void caerRectangulartrackerConfig(caerModuleData moduleData) {
 	state->growMergedSizeEnabled = sshsNodeGetBool(moduleData->moduleNode, "growMergedSizeEnabled");
 	state->angleFollowsVelocity = sshsNodeGetBool(moduleData->moduleNode, "angleFollowsVelocity");
 	state->useNearestCluster = sshsNodeGetBool(moduleData->moduleNode, "useNearestCluster");
+	state->aspectRatio = sshsNodeGetFloat(moduleData->moduleNode, "aspectRatio");
+	state->peopleCounting = sshsNodeGetBool(moduleData->moduleNode, "peopleCounting");
 }
 
 static void caerRectangulartrackerExit(caerModuleData moduleData) {
