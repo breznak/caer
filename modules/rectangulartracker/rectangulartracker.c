@@ -145,7 +145,7 @@ static float averageVelocityPPT_y = 0.0f;
 
 static int nIn = 0;
 static int nOut = 0;
-static float botLine = 0.35f;
+static float botLine = 0.5f;
 static float topLine = 0.55f;
 static bool inBotZone[10];
 static bool inTopZone[10];
@@ -198,6 +198,7 @@ static void updateClusterPaths(caerModuleData moduleData, int64_t ts);
 static void drawCluster(caerFrameEvent singleplot, Cluster *c, int sizeX, int sizeY, bool showPaths, bool forceBoundary);
 static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, float y2, int sizeX, int sizeY);
 static void drawpath(caerFrameEvent singleplot, Path *path, int sizeX);
+static void updateCurrentClusterNum(caerModuleData moduleData);
 
 
 static struct caer_module_functions caerRectangulartrackerFunctions = { .moduleInit = &caerRectangulartrackerInit, .moduleRun = &caerRectangulartrackerRun, .moduleConfig = &caerRectangulartrackerConfig, .moduleExit = &caerRectangulartrackerExit, .moduleReset = &caerRectangulartrackerReset };
@@ -217,8 +218,8 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "dynamicAngleEnabled", false);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "pathsEnabled", false);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showPaths", false);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "maxClusterNum", 1);
-	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "thresholdMassForVisibleCluster", 60.0f);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "maxClusterNum", 10);
+	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "thresholdMassForVisibleCluster", 30.0f);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "defaultClusterRadius", 25.0f);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "forceBoundary", false);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "smoothMove", false);
@@ -254,40 +255,47 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 
 	// initialize all cluster as empty
 	for (int i = 0; i < 10; i++) {
-//		state->clusterList[i].location_x = 0.0f;
-//		state->clusterList[i].location_y = 0.0f;
-//		state->clusterList[i].velocity_x = 0.0f;
-//		state->clusterList[i].velocity_y = 0.0f;
-//		state->clusterList[i].birthLocation_x = 0.0f;
-//		state->clusterList[i].birthLocation_y = 0.0f;
-//		state->clusterList[i].lastPacketLocation_x = 0.0f;
-//		state->clusterList[i].lastPacketLocation_y = 0.0f;
-//		state->clusterList[i].velocityPPT_x = 0.0f;
-//		state->clusterList[i].velocityPPT_y = 0.0f;
-//		state->clusterList[i].velocityPPS_x = 0.0f;
-//		state->clusterList[i].velocityPPS_y = 0.0f;
-//		state->clusterList[i].angle = 0.0f;
-//		state->clusterList[i].cosAngle = 1.0f;
-//		state->clusterList[i].sinAngle = 0.0f;
-//		state->clusterList[i].numEvents = 0;
-//		state->clusterList[i].previousNumEvents = 0;
-//		state->clusterList[i].firstEventTimestamp = 0;
-//		state->clusterList[i].lastEventTimestamp = 0;
-//		state->clusterList[i].lastUpdateTime = 0;
-//		state->clusterList[i].instantaneousEventRate = 0.0f;
-//		state->clusterList[i].hasObtainedSupport = false;
-//		state->clusterList[i].averageEventDistance = 0.0f;
-//		state->clusterList[i].averageEventXDistance = 0.0f;
-//		state->clusterList[i].averageEventYDistance = 0.0f;
-//		state->clusterList[i].clusterNumber = 0;
-//		state->clusterList[i].avgEventRate = 0.0f;
-//		state->clusterList[i].radius = 0.0f;
-//		state->clusterList[i].aspectRatio = 0.0f;
-//		state->clusterList[i].radius_x = 0.0f;
-//		state->clusterList[i].radius_y= 0.0f;
+		state->clusterList[i].location_x = 0.0f;
+		state->clusterList[i].location_y = 0.0f;
+		state->clusterList[i].velocity_x = 0.0f;
+		state->clusterList[i].velocity_y = 0.0f;
+		state->clusterList[i].birthLocation_x = 0.0f;
+		state->clusterList[i].birthLocation_y = 0.0f;
+		state->clusterList[i].lastPacketLocation_x = 0.0f;
+		state->clusterList[i].lastPacketLocation_y = 0.0f;
+		state->clusterList[i].velocityPPT_x = 0.0f;
+		state->clusterList[i].velocityPPT_y = 0.0f;
+		state->clusterList[i].velocityPPS_x = 0.0f;
+		state->clusterList[i].velocityPPS_y = 0.0f;
+		state->clusterList[i].angle = 0.0f;
+		state->clusterList[i].cosAngle = 1.0f;
+		state->clusterList[i].sinAngle = 0.0f;
+		state->clusterList[i].numEvents = 0;
+		state->clusterList[i].previousNumEvents = 0;
+		state->clusterList[i].firstEventTimestamp = 0;
+		state->clusterList[i].lastEventTimestamp = 0;
+		state->clusterList[i].lastUpdateTime = 0;
+		state->clusterList[i].instantaneousEventRate = 0.0f;
+		state->clusterList[i].hasObtainedSupport = false;
+		state->clusterList[i].averageEventDistance = 0.0f;
+		state->clusterList[i].averageEventXDistance = 0.0f;
+		state->clusterList[i].averageEventYDistance = 0.0f;
+		state->clusterList[i].clusterNumber = 0;
+		state->clusterList[i].avgEventRate = 0.0f;
+		state->clusterList[i].radius = state->defaultClusterRadius;
+		state->clusterList[i].aspectRatio = state->aspectRatio;
+		state->clusterList[i].radius_x = state->defaultClusterRadius / state->aspectRatio;
+		state->clusterList[i].radius_y= state->defaultClusterRadius * state->aspectRatio;
+		state->clusterList[i].avgISI = 0.0f;
 		state->clusterList[i].velocityValid = false;
-		state->clusterList[i].isEmpty = true;
 		state->clusterList[i].visibilityFlag = false;
+		state->clusterList[i].instantaneousISI = 0.0f;
+		state->clusterList[i].distanceToLastEvent = 1000000.0f;
+		state->clusterList[i].distanceToLastEvent_x = 1000000.0f;
+		state->clusterList[i].distanceToLastEvent_y = 1000000.0f;
+		state->clusterList[i].mass = 0.0f;
+		state->clusterList[i].vFilterTime = 0.0f;
+		state->clusterList[i].isEmpty = true;
 		state->clusterList[i].path = NULL;
 		inBotZone[i] = false;
 		inTopZone[i] = false;
@@ -344,6 +352,8 @@ static void caerRectangulartrackerRun(caerModuleData moduleData, size_t argsNumb
 		continue;
 	}
 
+	updateCurrentClusterNum(moduleData);
+
 	// check nearestCluster exist?
 	int chosenClusterIndex;
 	if (state->useNearestCluster){
@@ -365,7 +375,6 @@ static void caerRectangulartrackerRun(caerModuleData moduleData, size_t argsNumb
 		for (i=0; i<state->maxClusterNum; i++){
 			if (state->clusterList[i].isEmpty == true){
 				state->clusterList[i] = clusterNew;
-				state->currentClusterNum++;
 			}
 		}
 	}
@@ -414,6 +423,8 @@ static void caerRectangulartrackerRun(caerModuleData moduleData, size_t argsNumb
 			drawCluster(caerFrameEventPacketGetEvent(*frame, 0), &state->clusterList[i], sizeX, sizeY, state->showPaths, state->forceBoundary);
 		}
 	}
+
+	// people counting
 	if(state->peopleCounting) {
 		float by = botLine * sizeY;
 		float ty = topLine * sizeY;
@@ -539,40 +550,54 @@ static Cluster newCluster(caerModuleData moduleData, uint16_t x, uint16_t y, int
 	RTFilterState state = moduleData->moduleState;
 
 	Cluster clusterNew;
-	clusterNew.aspectRatio = state->aspectRatio;
-	clusterNew.radius = state->defaultClusterRadius;
-	clusterNew.radius_x = state->defaultClusterRadius / state->aspectRatio;
-	clusterNew.radius_y = state->defaultClusterRadius * state->aspectRatio;
-	clusterNew.clusterNumber = ++clusterCounter;
+	clusterNew.location_x = (float)x;
+	clusterNew.location_y = (float)y;
+	clusterNew.velocity_x = 0.0f;
+	clusterNew.velocity_y = 0.0f;
+	clusterNew.birthLocation_x = (float)x;
+	clusterNew.birthLocation_y = (float)y;
+	clusterNew.lastPacketLocation_x = (float)x;
+	clusterNew.lastPacketLocation_y = (float)y;
+
+	clusterNew.velocityPPT_x = 0.0f;
+	clusterNew.velocityPPT_y = 0.0f;
+	clusterNew.velocityPPS_x = 0.0f;
+	clusterNew.velocityPPS_y = 0.0f;
 	clusterNew.velocityValid = false;
 	if (state->initializeVelocityToAverage) {
 		clusterNew.velocityPPT_x = averageVelocityPPT_x;
 		clusterNew.velocityPPT_y = averageVelocityPPT_y;
 		clusterNew.velocityValid = true;
 	}
-	clusterNew.location_x = (float)x;
-	clusterNew.location_y = (float)y;
-	clusterNew.birthLocation_x = (float)x;
-	clusterNew.birthLocation_y = (float)y;
-	clusterNew.lastPacketLocation_x = (float)x;
-	clusterNew.lastPacketLocation_y = (float)y;
-	clusterNew.lastEventTimestamp = ts;
-	clusterNew.lastUpdateTime = ts;
-	clusterNew.firstEventTimestamp = ts;
-	clusterNew.numEvents = 1;
-	clusterNew.mass = 1.0f;
 	clusterNew.angle = 0.0f;
 	clusterNew.cosAngle = 1.0f;
 	clusterNew.sinAngle = 0.0f;
+	clusterNew.numEvents = 1;
 	clusterNew.previousNumEvents = 0;
+	clusterNew.lastEventTimestamp = ts;
+	clusterNew.lastUpdateTime = ts;
+	clusterNew.firstEventTimestamp = ts;
+	clusterNew.instantaneousEventRate = 0.0f;
 	clusterNew.hasObtainedSupport = false;
+	clusterNew.averageEventDistance = 0.0f;
+	clusterNew.averageEventXDistance = 0.0f;
+	clusterNew.averageEventYDistance = 0.0f;
+	clusterNew.clusterNumber = ++clusterCounter;
 	clusterNew.avgEventRate = 0.0f;
+	clusterNew.avgISI = 0.0f;
+	clusterNew.aspectRatio = state->aspectRatio;
+	clusterNew.radius = state->defaultClusterRadius;
+	clusterNew.radius_x = state->defaultClusterRadius / state->aspectRatio;
+	clusterNew.radius_y = state->defaultClusterRadius * state->aspectRatio;
 	clusterNew.visibilityFlag = false;
 	clusterNew.distanceToLastEvent = 1000000;
 	clusterNew.distanceToLastEvent_x = 1000000;
 	clusterNew.distanceToLastEvent_y = 1000000;
-	clusterNew.path = NULL;
+	clusterNew.instantaneousISI = 0.0f;
+	clusterNew.mass = 1.0f;
+	clusterNew.vFilterTime = 0.0f;
 	clusterNew.isEmpty = false;
+	clusterNew.path = NULL;
 	return (clusterNew);
 }
 
@@ -599,7 +624,6 @@ static void pruneClusters(caerModuleData moduleData, int64_t ts, int16_t sizeX, 
 			if ((t0 > ts) || massTooSmall || (timeSinceSupport < 0) || hitEdge) {
 				state->clusterList[i].isEmpty = true;
 				removeAllPath(state->clusterList[i].path);
-				state->currentClusterNum--;
 			}
 		}
 	}
@@ -670,7 +694,6 @@ static void mergeC1C2(caerModuleData moduleData, int i, int j) {
 
 	state->clusterList[weaker].isEmpty = true;
 	removeAllPath(state->clusterList[weaker].path);
-	state->currentClusterNum--;
 }
 
 int64_t getLifetime(Cluster *c) {
@@ -1268,6 +1291,18 @@ static void drawpath(caerFrameEvent singleplot, Path *path, int sizeX){
 		current = current->next;
 	}
 }
+
+static void updateCurrentClusterNum(caerModuleData moduleData){
+	RTFilterState state = moduleData->moduleState;
+
+	state->currentClusterNum = 0;
+	for(int i = 0; i < state->maxClusterNum; i++){
+		if (!state->clusterList[i].isEmpty){
+			state->currentClusterNum++;
+		}
+	}
+}
+
 
 static void caerRectangulartrackerConfig(caerModuleData moduleData) {
 	caerModuleConfigUpdateReset(moduleData);
