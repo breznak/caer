@@ -67,12 +67,6 @@
 
 static bool mainloop_1(void);
 
-#ifdef ENABLE_LEARNINGFILTER
-	// create frame for displaying weight and synapse
-	caerFrameEventPacket weightplot = NULL;
-	caerFrameEventPacket synapseplot = NULL;
-#endif
-
 static bool mainloop_1(void) {
 
 	// An eventPacketContainer bundles event packets of different types together,
@@ -99,12 +93,6 @@ static bool mainloop_1(void) {
 	spike = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
 	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
 
-#ifdef ENABLE_LEARNINGFILTER
-	// create frame for displaying weight and synapse
-	caerFrameEventPacket weightplot = NULL;
-	caerFrameEventPacket synapseplot = NULL;
-#endif
-
 #endif
 
 #ifdef ENABLE_NETWORK_INPUT
@@ -123,9 +111,13 @@ static bool mainloop_1(void) {
 	caerMeanRateFilter(4, spike, &freqplot);
 #endif
 
-
 #ifdef ENABLE_LEARNINGFILTER
-	caerLearningFilter(5, 1, spike, &weightplot, &synapseplot);
+
+	// create frame for displaying weight and synapse
+	caerFrameEventPacket weightplot = NULL;
+	caerFrameEventPacket synapseplot = NULL;
+
+	caerLearningFilter(5, spike, &weightplot, &synapseplot);
 #endif
 
 #ifdef ENABLE_MONITORNEUFILTER
@@ -162,6 +154,11 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_MEANRATEFILTER
 	free(freqplot);
+#endif
+
+#ifdef ENABLE_LEARNINGFILTER
+	free(weightplot);
+	free(synapseplot);
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.

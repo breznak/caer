@@ -165,7 +165,7 @@
 #include <libcaer/events/spike.h>
 #include <libcaer/events/frame.h> //display
 
-void caerLearningFilter(uint16_t moduleID, int16_t eventSourceID, caerSpikeEventPacket spike,
+void caerLearningFilter(uint16_t moduleID, caerSpikeEventPacket spike,
 		caerFrameEventPacket *weightplotfeature, caerFrameEventPacket *synapseplotfeature);
 
 #endif /* LEARNINGFILTER_H_ */
