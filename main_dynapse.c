@@ -120,19 +120,12 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_MEANRATEFILTER
 	// create frame for displaying frequencoes
 	caerFrameEventPacket freqplot = NULL;
-#ifdef DYNAPSEFX2
-	caerMeanRateFilter(4, 1, spike, &freqplot);
-#endif
-#ifdef ENABLE_FILE_INPUT
-	caerMeanRateFilter(4, 10, spike, &freqplot);
-#endif
+	caerMeanRateFilter(4, spike, &freqplot);
 #endif
 
 
 #ifdef ENABLE_LEARNINGFILTER
-#ifdef DYNAPSEFX2
 	caerLearningFilter(5, 1, spike, &weightplot, &synapseplot);
-#endif
 #endif
 
 #ifdef ENABLE_MONITORNEUFILTER
