@@ -59,13 +59,19 @@
 #include "modules/monitorneufilter/monitorneufilter.h"
 #endif
 
-#ifdef ENABLE_INFOFILTER
-#include "modules/infofilter/infofilter.h"
+#ifdef ENABLE_LEARNINGFILTER
+#include <libcaer/events/frame.h>
 #endif
 
 // Common filters support.
 
 static bool mainloop_1(void);
+
+#ifdef ENABLE_LEARNINGFILTER
+	// create frame for displaying weight and synapse
+	caerFrameEventPacket weightplot = NULL;
+	caerFrameEventPacket synapseplot = NULL;
+#endif
 
 static bool mainloop_1(void) {
 
@@ -84,6 +90,7 @@ static bool mainloop_1(void) {
 	// We search for them by type here, because input modules may not have all or any of them.
 	spike = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
 	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
+
 #endif
 
 #ifdef ENABLE_FILE_INPUT //should be 0 for experiment
@@ -91,6 +98,13 @@ static bool mainloop_1(void) {
 	// We search for them by type here, because input modules may not have all or any of them.
 	spike = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
 	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
+
+#ifdef ENABLE_LEARNINGFILTER
+	// create frame for displaying weight and synapse
+	caerFrameEventPacket weightplot = NULL;
+	caerFrameEventPacket synapseplot = NULL;
+#endif
+
 #endif
 
 #ifdef ENABLE_NETWORK_INPUT
@@ -114,8 +128,11 @@ static bool mainloop_1(void) {
 #endif
 #endif
 
-#ifdef ENABLE_PIXELMATRIX
-	caerPixelMatrixFilter(11, spike);
+
+#ifdef ENABLE_LEARNINGFILTER
+#ifdef DYNAPSEFX2
+	caerLearningFilter(5, 1, spike, &weightplot, &synapseplot);
+#endif
 #endif
 
 #ifdef ENABLE_MONITORNEUFILTER
@@ -126,23 +143,11 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_VISUALIZER
 	caerVisualizer(64, "Spike", &caerVisualizerRendererSpikeEvents, NULL, (caerEventPacketHeader) spike);
 #ifdef ENABLE_MEANRATEFILTER
-	if(freqplot != NULL){
-		caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
-	}
+	caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
 #endif
-#endif
-
-	// Filter that adds buttons and timer for recording data
-	// or playing a recording file. It implements fast forward and
-	// slow motion buttons, as well as play again from start.
-	// It is a very basic  interface (320x240)
-#ifdef ENABLE_INFOFILTER
-#if defined(ENABLE_FILE_INPUT) && defined(ENABLE_FILE_OUTPUT)
-	caerInfoFilter(78, container, 10, 7);
-#elif defined(ENABLE_FILE_INPUT) && !defined(ENABLE_FILE_OUTPUT)
-	caerInfoFilter(78, container, 10, NULL);
-#elif !defined(ENABLE_FILE_INPUT) && defined(ENABLE_FILE_OUTPUT)
-	caerInfoFilter(78, container, NULL, 7);
+#ifdef ENABLE_LEARNINGFILTER
+	caerVisualizer(66, "Weight", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) weightplot);
+	caerVisualizer(67, "Synapse", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplot);
 #endif
 #endif
 
