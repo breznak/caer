@@ -189,9 +189,7 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_MEANRATEFILTER
 	// create frame for displaying frequencies
 	caerFrameEventPacket freqplot = NULL;
-#ifdef DYNAPSEFX2
 	caerMeanRateFilter(4, spike, &freqplot);
-#endif
 #endif
 
 #ifdef ENABLE_MONITORNEUFILTER
