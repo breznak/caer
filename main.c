@@ -79,6 +79,9 @@
 #include <libcaer/events/frame.h>
 #include "modules/meanratefilter_dvs/meanratefilter_dvs.h"
 #endif
+#ifdef ENABLE_ROTATEFILTER
+#include "modules/rotatefilter/rotatefilter.h"
+#endif
 
 #ifdef ENABLE_IMAGEGENERATOR
 #include "modules/imagegenerator/imagegenerator.h"
@@ -201,7 +204,7 @@ static bool mainloop_1(void) {
 	caerMediantrackerFilter(13, polarity, &medianFrame);
 #endif
 
-	// Filter that track one object by using the median position information
+	// Filter that show the mean rate of events
 #ifdef ENABLE_MEANRATEFILTER_DVS
 	caerFrameEventPacket freqplot = NULL;
 	caerMeanRateFilterDVS(15, polarity, &freqplot);
@@ -209,6 +212,12 @@ static bool mainloop_1(void) {
 	caerMeanRateFilterDVS(15, polarity, &freqplot);
 #endif
 #endif
+
+	// Filter that rotate events in different ways
+#ifdef ENABLE_ROTATEFILTER
+	caerRotateFilter(16, polarity);
+#endif
+
 
 	// Enable APS frame image enhancements.
 #ifdef ENABLE_FRAMEENHANCER
