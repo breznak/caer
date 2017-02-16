@@ -267,6 +267,9 @@ static void caerGestureLearningFilterRun(caerModuleData moduleData, size_t argsN
 
 	GFilterState state = moduleData->moduleState;
 
+	if(spike == NULL){
+		return;
+	}
 	// init
 	if (state->eventSourceID == NULL) {
 		state->eventSourceID = caerEventPacketHeaderGetEventSource(&spike->packetHeader); // into state so that all functions can use it after init.
@@ -1514,9 +1517,6 @@ bool ClearAllCamG(caerModuleData moduleData) {
 	for (neuronId = 0; neuronId < 32 * 32; neuronId++) {
 		for (camId = 0; camId < 64; camId++) {
 			WriteCamG(moduleData, 0, 1 << 10 | neuronId, 0, camId, 0, 0, 0);
-			WriteCamG(moduleData, 0, 2 << 10 | neuronId, 0, camId, 0, 0, 0);
-			WriteCamG(moduleData, 0, 3 << 10 | neuronId, 0, camId, 0, 0, 0);
-			WriteCamG(moduleData, 0, 4 << 10 | neuronId, 0, camId, 0, 0, 0);
 		}
 	}
 
@@ -1916,31 +1916,31 @@ bool ResetBiasesG(caerModuleData moduleData) {
 			}
 			else if (chipId == DYNAPSE_CONFIG_DYNAPSE_U2 || chipId == DYNAPSE_CONFIG_DYNAPSE_U1
 				|| chipId == DYNAPSE_CONFIG_DYNAPSE_U0) { // DYNAPSE_CONFIG_DYNAPSE_U2 = 4
-				setBiasBitsG(moduleData, chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias", "NBias");
-				setBiasBitsG(moduleData, chipId, coreId, "IF_AHTHR_N", 7, 0, "HighBias", "NBias");
-				setBiasBitsG(moduleData, chipId, coreId, "IF_AHW_P", 7, 0, "HighBias", "PBias");
+				setBiasBitsG(moduleData, chipId, coreId, "IF_AHTAU_N", 4, 2, "LowBias", "NBias");
+				setBiasBitsG(moduleData, chipId, coreId, "IF_AHTHR_N", 3, 4, "HighBias", "NBias");
+				setBiasBitsG(moduleData, chipId, coreId, "IF_AHW_P", 1, 80, "HighBias", "PBias");
 				setBiasBitsG(moduleData, chipId, coreId, "IF_BUF_P", 3, 80, "HighBias", "PBias");
-				setBiasBitsG(moduleData, chipId, coreId, "IF_CASC_N", 7, 0, "HighBias", "NBias");
-				setBiasBitsG(moduleData, chipId, coreId, "IF_DC_P", 7, 0, "HighBias", "PBias");
-				setBiasBitsG(moduleData, chipId, coreId, "IF_NMDA_N", 7, 0, "HighBias", "NBias");
-				setBiasBitsG(moduleData, chipId, coreId, "IF_RFR_N", 5, 103, "HighBias", "NBias");
-				setBiasBitsG(moduleData, chipId, coreId, "IF_TAU1_N", 4, 200, "LowBias", "NBias");
-				setBiasBitsG(moduleData, chipId, coreId, "IF_TAU2_N", 6, 15, "HighBias", "NBias");
-				setBiasBitsG(moduleData, chipId, coreId, "IF_THR_N", 4, 30, "HighBias", "NBias"); //0, 200 //3, 150 //4, 40
-				setBiasBitsG(moduleData, chipId, coreId, "NPDPIE_TAU_F_P", 7, 30, "HighBias", "PBias"); //70!!!!! //6, 200 //105
+				setBiasBitsG(moduleData, chipId, coreId, "IF_CASC_N", 0, 25, "HighBias", "NBias");
+				setBiasBitsG(moduleData, chipId, coreId, "IF_DC_P", 7, 60, "HighBias", "PBias");
+				setBiasBitsG(moduleData, chipId, coreId, "IF_NMDA_N", 3, 1, "HighBias", "NBias");
+				setBiasBitsG(moduleData, chipId, coreId, "IF_RFR_N", 3, 3, "HighBias", "NBias");
+				setBiasBitsG(moduleData, chipId, coreId, "IF_TAU1_N", 4, 18, "LowBias", "NBias");
+				setBiasBitsG(moduleData, chipId, coreId, "IF_TAU2_N", 4, 100, "HighBias", "NBias");
+				setBiasBitsG(moduleData, chipId, coreId, "IF_THR_N", 2, 166, "HighBias", "NBias"); //0, 200 //3, 150 //4, 40
+				setBiasBitsG(moduleData, chipId, coreId, "NPDPIE_TAU_F_P", 5, 40, "HighBias", "PBias"); //70!!!!! //6, 200 //105
 				setBiasBitsG(moduleData, chipId, coreId, "NPDPIE_TAU_S_P", 6, 200, "HighBias", "PBias");
-				setBiasBitsG(moduleData, chipId, coreId, "NPDPIE_THR_F_P", 0, 220, "HighBias", "PBias");
-				setBiasBitsG(moduleData, chipId, coreId, "NPDPIE_THR_S_P", 0, 220, "HighBias", "PBias");
-				setBiasBitsG(moduleData, chipId, coreId, "NPDPII_TAU_F_P", 7, 30, "HighBias", "PBias"); //7, 40, "HighBias", "NBias");
-				setBiasBitsG(moduleData, chipId, coreId, "NPDPII_TAU_S_P", 7, 40, "HighBias", "NBias");
-				setBiasBitsG(moduleData, chipId, coreId, "NPDPII_THR_F_P", 0, 200, "HighBias", "PBias"); //7, 40, "HighBias", "PBias");
-				setBiasBitsG(moduleData, chipId, coreId, "NPDPII_THR_S_P", 7, 40, "HighBias", "PBias");
+				setBiasBitsG(moduleData, chipId, coreId, "NPDPIE_THR_F_P", 1, 80, "HighBias", "PBias");
+				setBiasBitsG(moduleData, chipId, coreId, "NPDPIE_THR_S_P", 7, 40, "HighBias", "PBias");
+				setBiasBitsG(moduleData, chipId, coreId, "NPDPII_TAU_F_P", 5, 40, "HighBias", "PBias"); //7, 40, "HighBias", "NBias");
+				setBiasBitsG(moduleData, chipId, coreId, "NPDPII_TAU_S_P", 7, 1, "HighBias", "NBias");
+				setBiasBitsG(moduleData, chipId, coreId, "NPDPII_THR_F_P", 1, 80, "HighBias", "PBias"); //7, 40, "HighBias", "PBias");
+				setBiasBitsG(moduleData, chipId, coreId, "NPDPII_THR_S_P", 7, 150, "HighBias", "PBias");
 				setBiasBitsG(moduleData, chipId, coreId, "PS_WEIGHT_EXC_F_N", 1, 100, "HighBias", "NBias"); //29!!!
 				setBiasBitsG(moduleData, chipId, coreId, "PS_WEIGHT_EXC_S_N", 1, 50, "HighBias", "NBias"); //19!!! //0, 38
 				setBiasBitsG(moduleData, chipId, coreId, "PS_WEIGHT_INH_F_N", 0, 250, "HighBias", "NBias"); //7, 0, "HighBias", "NBias");
 				setBiasBitsG(moduleData, chipId, coreId, "PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "NBias");
 				setBiasBitsG(moduleData, chipId, coreId, "PULSE_PWLK_P", 3, 50, "HighBias", "PBias");
-				setBiasBitsG(moduleData, chipId, coreId, "R2R_P", 4, 85, "HighBias", "PBias");
+				setBiasBitsG(moduleData, chipId, coreId, "R2R_P", 3, 160, "HighBias", "PBias");
 			}
 		}
 	}

@@ -99,14 +99,9 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 	caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket); // from dvs
 	caerPoint4DEventPacket medianData = va_arg(args, caerPoint4DEventPacket); // from dvs
 
-	// Only process packets with content.
-	// will probably need to add an always active neuron , by setting TAU2.
-	if (polarity == NULL || spike == NULL) {
-		return;
-	}
 	DvsToDynapseState state = moduleData->moduleState;
 	// --- start  usb handle / from spike event source id
-	int eventSourceID = caerEventPacketHeaderGetEventSource(&spike->packetHeader);
+	int eventSourceID = 1;//caerEventPacketHeaderGetEventSource(&spike->packetHeader);
 	state->eventSourceModuleState = (caerInputDynapseState) caerMainloopGetSourceState(U16T(eventSourceID));
 	state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(eventSourceID));
 	if (state->eventSourceModuleState == NULL || state->eventSourceConfigNode == NULL) {
@@ -135,6 +130,12 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 		state->init = false;
 		programConvolutionMappingSram(stateSource, state, moduleData);
 
+	}
+
+	// Only process packets with content.
+	// will probably need to add an always active neuron , by setting TAU2.
+	if (polarity == NULL) {
+		return;
 	}
 
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(
