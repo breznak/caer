@@ -85,7 +85,7 @@ static int time_count_last = 0;
 static int32_t stimuliPattern = 0;
 static struct itimerval oldtv;
 static int stimdisabled = 0;
-static int pattern_number = 4; //3 or 4
+static int pattern_number = 3; //3 or 4
 
 static int usb_packet_maximum_size = 1024; //1366 1365 1360 1350 1300 1200 1100 1000 100 85 OK; 8000 5000 3000 2000 1500 1400 1375 1370 1367
 // case multi chip mapping
@@ -366,7 +366,7 @@ static void caerGestureLearningFilterRun(caerModuleData moduleData, size_t argsN
 			} else if (pattern_number == 4) {
 				stimuliPattern = (stimuliPattern + 1) % 4;
 			}
-			EnableStimuliGenG(moduleData, stimuliPattern + 7);
+			EnableStimuliGenG(moduleData, stimuliPattern);
 			time_count_last = time_count;
 			stimdisabled = 0;
 		}
@@ -1436,19 +1436,10 @@ bool EnableStimuliGenG(caerModuleData moduleData, int32_t pattern) {
 	GFilterState state = moduleData->moduleState;
 
 	// --- start USB handle / from spike event source id
-	state->eventSourceModuleState = caerMainloopGetSourceState(U16T(state->eventSourceID));
-	state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(state->eventSourceID));
+	sshsNode inputNode = caerMainloopGetSourceNode(U16T(state->eventSourceID));
 
-	// --- end USB handle
+	sshsNodePutBool(inputNode, "filePath", "/home/dongchen/Desktop/gestures/hand.aedat");
 
-	sshsNode deviceConfigNodeMain = sshsGetRelativeNode(state->eventSourceConfigNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
-	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNodeMain, "spikeGen/");
-	sshsNodePutBool(spikeNode, "running", true);
-	sshsNodePutInt(spikeNode, "stim_type", pattern);
-	sshsNodePutInt(spikeNode, "stim_duration", 100);
-	sshsNodePutInt(spikeNode, "stim_avr", 1); //2000
-	sshsNodePutBool(spikeNode, "repeat", true);
-	sshsNodePutBool(spikeNode, "doStim", true);
 	return (true);
 }
 
