@@ -14,7 +14,7 @@
 #define SYNAPSE_UPGRADE_THRESHOLD_LUT_LENGTH 128 //800 //80
 #define SPIKE_QUEUE_LENGTH 500
 #define SPIKE_QUEUE_WIDTH 2
-#define MAXIMUM_CONSIDERED_SPIKE_DELAY 800 //80 //???what is the unit of timestamp???
+#define MAXIMUM_CONSIDERED_SPIKE_DELAY 800 //80 us 
 #define MINIMUM_CONSIDERED_SPIKE_NUM 100 //10
 
 //for configuring the deep spiking neural network on chip

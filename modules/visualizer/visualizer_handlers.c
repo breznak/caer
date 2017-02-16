@@ -23,11 +23,11 @@ void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLE
 		}
 		else if (posx < (int) DYNAPSE_CONFIG_NEUROW * currentZoomFactor
 			&& posy > (int) DYNAPSE_CONFIG_NEUCOL * currentZoomFactor) {
-			coreid = 2;
+			coreid = 1;
 		}
 		else if (posx > (int) DYNAPSE_CONFIG_NEUROW * currentZoomFactor
 			&& posy < (int) DYNAPSE_CONFIG_NEUCOL * currentZoomFactor) {
-			coreid = 1;
+			coreid = 2;
 		}
 		else if (posx < (int) DYNAPSE_CONFIG_NEUROW * currentZoomFactor
 			&& posy < (int) DYNAPSE_CONFIG_NEUCOL * currentZoomFactor) {

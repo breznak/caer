@@ -127,7 +127,7 @@ static bool mainloop_1(void) {
 
 	// A simple visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
-	caerVisualizer(64, "Spike", &caerVisualizerRendererSpikeEvents, NULL, (caerEventPacketHeader) spike);
+	caerVisualizer(64, "Spike", &caerVisualizerRendererSpikeEvents, &caerVisualizerEventHandlerSpikeEvents, (caerEventPacketHeader) spike);
 #ifdef ENABLE_MEANRATEFILTER
 	caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
 #endif

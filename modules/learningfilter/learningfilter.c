@@ -98,7 +98,7 @@ static int numConfig_chipU1 = 0;
 static int numConfig_chipU2 = 0;
 static int numConfig_chipU3 = 0;
 
-static bool caerLearningFilterInit(caerModuleData moduleData); //It may not run at the beginning of the experiment ????????????
+static bool caerLearningFilterInit(caerModuleData moduleData); 
 static void caerLearningFilterRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerLearningFilterConfig(caerModuleData moduleData);
 static void caerLearningFilterExit(caerModuleData moduleData);
@@ -257,6 +257,9 @@ static void caerLearningFilterRun(caerModuleData moduleData, size_t argsNumber, 
 
 	LFilterState state = moduleData->moduleState;
 
+    if(spike == NULL){
+        return;
+    }
 	// init
 	if(state->eventSourceID == NULL){
 		state->eventSourceID  = caerEventPacketHeaderGetEventSource(&spike->packetHeader);// into state so that all functions can use it after init.
