@@ -368,6 +368,9 @@ static void caerRectangulartrackerRun(caerModuleData moduleData, size_t argsNumb
 	if ((caerPolarityIteratorElement == NULL)){
 		continue;
 	}
+	if (!caerPolarityEventIsValid(caerPolarityIteratorElement)){
+		continue;
+	}
 	if ((x > sizeX) || (y > sizeY)) {
 		continue;
 	}

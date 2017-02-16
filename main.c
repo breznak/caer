@@ -192,6 +192,11 @@ static bool mainloop_1(void) {
 	caerStatistics(3, (caerEventPacketHeader) polarity, 1000);
 #endif
 
+	// Filter that rotate events in different ways
+#ifdef ENABLE_ROTATEFILTER
+	caerRotateFilter(16, polarity);
+#endif
+
 	// Filters that track multiple objects by using rectangular clusters
 #ifdef ENABLE_RECTANGULARTRACKER
 	caerFrameEventPacket rectangularFrame = NULL;
@@ -212,12 +217,6 @@ static bool mainloop_1(void) {
 	caerMeanRateFilterDVS(15, polarity, &freqplot);
 #endif
 #endif
-
-	// Filter that rotate events in different ways
-#ifdef ENABLE_ROTATEFILTER
-	caerRotateFilter(16, polarity);
-#endif
-
 
 	// Enable APS frame image enhancements.
 #ifdef ENABLE_FRAMEENHANCER
