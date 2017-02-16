@@ -10,7 +10,7 @@
 #include "base/module.h"
 #include "ext/buffers.h"
 #include "math.h"
-
+#include "ext/colorjet/colorjet.h"
 
 typedef struct path {
 	float location_x;
@@ -56,8 +56,7 @@ typedef struct cluster {
 	float radius_y;
 	Path * path;
 	float avgISI;
-	//Color color;
-	//float rgb[4];
+	COLOUR color;
 	bool velocityValid;
 	bool visibilityFlag;
 	float instantaneousISI;
@@ -89,6 +88,10 @@ struct RTFilter_state {
 	bool useNearestCluster;
 	float aspectRatio;
 	bool peopleCounting;
+	float botLine;
+	float topLine;
+	float leftLine;
+	float rightLine;
 };
 
 // constants
@@ -100,6 +103,7 @@ static const float ASPECT_RATIO_MIN_DYNAMIC_ANGLE_DISABLED = 0.5f;
 static const float ASPECT_RATIO_MAX_DYNAMIC_ANGLE_ENABLED = 1.0f;
 static const float ASPECT_RATIO_MIN_DYNAMIC_ANGLE_ENABLED = 0.5f;
 static const float AVERAGE_VELOCITY_MIXING_FACTOR = 0.001f;
+static const float FULL_BRIGHTNESS_LIFETIME = 100000.0f;
 
 
 static int clusterMassDecayTauUs = 10000;
@@ -145,8 +149,6 @@ static float averageVelocityPPT_y = 0.0f;
 
 static int nIn = 0;
 static int nOut = 0;
-static float botLine = 0.5f;
-static float topLine = 0.55f;
 static bool inBotZone[10];
 static bool inTopZone[10];
 
@@ -199,7 +201,8 @@ static void drawCluster(caerFrameEvent singleplot, Cluster *c, int sizeX, int si
 static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, float y2, int sizeX, int sizeY);
 static void drawpath(caerFrameEvent singleplot, Path *path, int sizeX);
 static void updateCurrentClusterNum(caerModuleData moduleData);
-
+static void updateColor(Cluster *c);
+static void checkCountingArea(caerModuleData moduleDate, int16_t sizeX, int16_t sizeY);
 
 static struct caer_module_functions caerRectangulartrackerFunctions = { .moduleInit = &caerRectangulartrackerInit, .moduleRun = &caerRectangulartrackerRun, .moduleConfig = &caerRectangulartrackerConfig, .moduleExit = &caerRectangulartrackerExit, .moduleReset = &caerRectangulartrackerReset };
 
@@ -230,6 +233,10 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "useNearestCluster", false);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "aspectRatio", 1.0f);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "peopleCounting", false);
+	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "botLine", 0.5f);
+	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "topLine", 0.6f);
+	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "leftLine", 0.01f);
+	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "rightLine", 0.99f);
 
 	RTFilterState state = moduleData->moduleState;
 
@@ -250,6 +257,10 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 	state->useNearestCluster = sshsNodeGetBool(moduleData->moduleNode, "useNearestCluster");
 	state->aspectRatio = sshsNodeGetFloat(moduleData->moduleNode, "aspectRatio");
 	state->peopleCounting = sshsNodeGetBool(moduleData->moduleNode, "peopleCounting");
+	state->botLine = sshsNodeGetFloat(moduleData->moduleNode, "botLine");
+	state->topLine = sshsNodeGetFloat(moduleData->moduleNode, "topLine");
+	state->leftLine = sshsNodeGetFloat(moduleData->moduleNode, "leftLine");
+	state->rightLine = sshsNodeGetFloat(moduleData->moduleNode, "rightLine");
 
 	state->currentClusterNum = 0;
 
@@ -420,20 +431,27 @@ static void caerRectangulartrackerRun(caerModuleData moduleData, size_t argsNumb
 	// plot clusters
 	for (int i=0; i<state->maxClusterNum; i++){
 		if ((*frame != NULL ) && (!state->clusterList[i].isEmpty) && (state->clusterList[i].visibilityFlag)) {
+			updateColor(&state->clusterList[i]);
 			drawCluster(caerFrameEventPacketGetEvent(*frame, 0), &state->clusterList[i], sizeX, sizeY, state->showPaths, state->forceBoundary);
 		}
 	}
 
 	// people counting
 	if(state->peopleCounting) {
-		float by = botLine * sizeY;
-		float ty = topLine * sizeY;
+		checkCountingArea(moduleData, sizeX, sizeY);
+		float by = state->botLine * sizeY;
+		float ty = state->topLine * sizeY;
+		float lx = state->leftLine * sizeX;
+		float rx = state->rightLine * sizeX;
 
 		caerFrameEvent singleplot = caerFrameEventPacketGetEvent(*frame, 0);
 		uint32_t counter = 0;
 		for (size_t y = 0; y < sizeY; y++) {
 			for (size_t x = 0; x < sizeX; x++) {
-				if (y == (int)by || y == (int)ty)
+				if ((x == (int)rx && y <= ty && y >= by) ||
+					(x == (int)lx && y <= ty && y >= by) ||
+					(y == (int)ty && x <= rx && x >= lx) ||
+					(y == (int)by && x <= rx && x >= lx))
 				{
 					singleplot->pixels[counter] = (uint16_t) ( (int) 65000);			// red
 					singleplot->pixels[counter + 1] = (uint16_t) ( (int) 65000);		// green
@@ -443,7 +461,7 @@ static void caerRectangulartrackerRun(caerModuleData moduleData, size_t argsNumb
 			}
 		}
 
-
+		//TODO make algorithm for x dimension.
 		for (int i=0; i<state->maxClusterNum; i++){
 			if(state->clusterList[i].isEmpty && inBotZone[i]){
 				inBotZone[i] = false;
@@ -1179,9 +1197,9 @@ static void drawCluster(caerFrameEvent singleplot, Cluster *c, int sizeX, int si
 					(y == uy && x <= rx && x >= lx) ||
 					(y == dy && x <= rx && x >= lx) )
 				{
-					singleplot->pixels[counter] = (uint16_t) ( (int) 65000);			// red
-					singleplot->pixels[counter + 1] = (uint16_t) ( (int) 65000);		// green
-					singleplot->pixels[counter + 2] = (uint16_t) ( (int) 65000);	// blue
+					singleplot->pixels[counter] =  c->color.r;		// red
+					singleplot->pixels[counter + 1] = c->color.g;		// green
+					singleplot->pixels[counter + 2] = c->color.b;	// blue
 				}
 				counter += 3;
 			}
@@ -1303,6 +1321,47 @@ static void updateCurrentClusterNum(caerModuleData moduleData){
 	}
 }
 
+static void updateColor(Cluster *c){
+	float brightness = fmax(0.0f, fmin(1.0f, (float)getLifetime(c) / FULL_BRIGHTNESS_LIFETIME));
+	c->color.r = (uint16_t)(65535.0f * brightness);
+	c->color.g = (uint16_t)(65535.0f * brightness);
+	c->color.b = (uint16_t)(65535.0f * brightness);
+}
+
+static void checkCountingArea(caerModuleData moduleDate, int16_t sizeX, int16_t sizeY){
+	RTFilterState state = moduleDate->moduleState;
+
+	if(state->botLine < 0.0f){
+		state->botLine = 0.0f;
+	}
+	if(state->botLine > sizeY){
+		state->botLine = sizeY;
+	}
+	if(state->topLine < 0.0f){
+		state->topLine = 0.0f;
+	}
+	if(state->topLine > sizeY){
+		state->topLine = sizeY;
+	}
+	if(state->botLine > state->topLine){
+		state->botLine = state->topLine;
+	}
+	if(state->leftLine < 0.0f){
+		state->leftLine = 0.0f;
+	}
+	if(state->leftLine > sizeX){
+		state->leftLine = sizeX;
+	}
+	if(state->rightLine < 0.0f){
+		state->rightLine = 0.0f;
+	}
+	if(state->rightLine > sizeX){
+		state->rightLine = sizeX;
+	}
+	if(state->leftLine > state->rightLine){
+		state->leftLine = state->rightLine;
+	}
+}
 
 static void caerRectangulartrackerConfig(caerModuleData moduleData) {
 	caerModuleConfigUpdateReset(moduleData);
@@ -1325,6 +1384,10 @@ static void caerRectangulartrackerConfig(caerModuleData moduleData) {
 	state->useNearestCluster = sshsNodeGetBool(moduleData->moduleNode, "useNearestCluster");
 	state->aspectRatio = sshsNodeGetFloat(moduleData->moduleNode, "aspectRatio");
 	state->peopleCounting = sshsNodeGetBool(moduleData->moduleNode, "peopleCounting");
+	state->botLine = sshsNodeGetFloat(moduleData->moduleNode, "botLine");
+	state->topLine = sshsNodeGetFloat(moduleData->moduleNode, "topLine");
+	state->leftLine = sshsNodeGetFloat(moduleData->moduleNode, "leftLine");
+	state->rightLine = sshsNodeGetFloat(moduleData->moduleNode, "rightLine");
 }
 
 static void caerRectangulartrackerExit(caerModuleData moduleData) {
