@@ -1442,7 +1442,7 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 
 	// Let's turn on blocking data-get mode to avoid wasting resources.
 	caerDeviceConfigSet(state->deviceState, CAER_HOST_CONFIG_DATAEXCHANGE,
-	CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING,true);
+	CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, false);
 
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_RUN, true);
 	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_AER,DYNAPSE_CONFIG_AER_RUN, true);
