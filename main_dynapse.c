@@ -99,12 +99,6 @@ static bool mainloop_1(void) {
 	spike = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
 	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
 
-#ifdef ENABLE_LEARNINGFILTER
-	// create frame for displaying weight and synapse
-	caerFrameEventPacket weightplot = NULL;
-	caerFrameEventPacket synapseplot = NULL;
-#endif
-
 #endif
 
 #ifdef ENABLE_NETWORK_INPUT
@@ -120,19 +114,11 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_MEANRATEFILTER
 	// create frame for displaying frequencoes
 	caerFrameEventPacket freqplot = NULL;
-#ifdef DYNAPSEFX2
-	caerMeanRateFilter(4, 1, spike, &freqplot);
+	caerMeanRateFilter(4, spike, &freqplot);
 #endif
-#ifdef ENABLE_FILE_INPUT
-	caerMeanRateFilter(4, 10, spike, &freqplot);
-#endif
-#endif
-
 
 #ifdef ENABLE_LEARNINGFILTER
-#ifdef DYNAPSEFX2
-	caerLearningFilter(5, 1, spike, &weightplot, &synapseplot);
-#endif
+	caerLearningFilter(5, spike, &weightplot, &synapseplot);
 #endif
 
 #ifdef ENABLE_MONITORNEUFILTER
@@ -170,6 +156,7 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_MEANRATEFILTER
 	free(freqplot);
 #endif
+
 
 	return (true); // If false is returned, processing of this loop stops.
 }

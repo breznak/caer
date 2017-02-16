@@ -16,11 +16,16 @@
 #include <stdlib.h>
 #include <signal.h>
 
+#ifdef _WIN32
+#include <Windows.h>
+#else
+#include <unistd.h>
+#endif
+
 struct LFilter_state {
-	caerInputDynapseState eventSourceModuleState; //sshsNode // caerInputDynapseState // need to be carefully tested
+	caerInputDynapseState eventSourceModuleState;
 	sshsNode eventSourceConfigNode;
 	int eventSourceID;
-	bool noSpikes;
 	int32_t colorscaleMax;
 	int32_t colorscaleMin;
 	int8_t reset;
@@ -82,7 +87,7 @@ static struct itimerval oldtv;
 static int stimdisabled = 0;
 static int pattern_number = 4; //3 or 4
 
-static int usb_packet_maximum_size = 1366; //1366 1365 1360 1350 1300 1200 1100 1000 100 85 OK; 8000 5000 3000 2000 1500 1400 1375 1370 1367
+static int usb_packet_maximum_size = 1024; //1366 1365 1360 1350 1300 1200 1100 1000 100 85 OK; 8000 5000 3000 2000 1500 1400 1375 1370 1367
 // case multi chip mapping
 static int bits_chipU0[DYNAPSE_MAX_USER_USB_PACKET_SIZE];
 static int bits_chipU1[DYNAPSE_MAX_USER_USB_PACKET_SIZE];
@@ -97,18 +102,22 @@ static bool caerLearningFilterInit(caerModuleData moduleData); //It may not run 
 static void caerLearningFilterRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerLearningFilterConfig(caerModuleData moduleData);
 static void caerLearningFilterExit(caerModuleData moduleData);
-static void caerLearningFilterReset(caerModuleData moduleData, uint16_t resetCallSourceID);
+static void caerLearningFilterReset(caerModuleData moduleData, int resetCallSourceID);
+
 static void ModifyForwardSynapse(caerModuleData moduleData, int64_t preNeuronAddr, int64_t postNeuronAddr, double deltaWeight, caerFrameEventPacket *synapseplotfeature, caerFrameEventPacket *weightplotfeature);
 static void ModifyBackwardSynapse(caerModuleData moduleData, int64_t preNeuronAddr, int64_t postNeuronAddr, double deltaWeight, caerFrameEventPacket *weightplotfeature);
 static bool ResetNetwork(caerModuleData moduleData);
 static bool BuildSynapse(caerModuleData moduleData, uint32_t preNeuronAddr, uint32_t postNeuronAddr, uint32_t virtualNeuronAddr, int16_t synapseType, int8_t realOrVirtualSynapse, int8_t virtualNeuronAddrEnable);
-static bool WriteCam(caerModuleData moduleData, uint32_t preNeuronAddr, uint32_t postNeuronAddr, uint32_t virtualNeuronAddr, uint32_t camId, int16_t synapseType, int8_t virtualNeuronAddrEnable, int8_t stdp);
-static bool WriteSram(caerModuleData moduleData, uint32_t preNeuronAddr, uint32_t postNeuronAddr, uint32_t virtualNeuronAddr, uint32_t sramId, int8_t virtualNeuronAddrEnable, int8_t stdp);
+static bool WriteCam(caerModuleData moduleData, uint32_t preNeuronAddr, uint32_t postNeuronAddr, uint32_t virtualNeuronAddr, uint32_t camId, int16_t synapseType, int8_t virtualNeuronAddrEnable, int8_t stdp );
+static int GetWriteCamBits(caerModuleData moduleData, uint32_t preNeuronAddr, uint32_t postNeuronAddr, uint32_t virtualNeuronAddr,
+		uint32_t camId, int16_t synapseType, int8_t virtualNeuronAddrEnable);
+static int GetWriteCamChipId(uint32_t postNeuronAddr);
+static bool WriteSram(caerModuleData moduleData,  uint32_t preNeuronAddr, uint32_t postNeuronAddr, uint32_t virtualNeuronAddr, uint32_t sramId, int8_t virtualNeuronAddrEnable, int8_t stdp);
 static void Shuffle1DArray(int64_t *array, int64_t Range);
 static void GetRand1DArray(int64_t *array, int64_t Range, int64_t CamNumAvailable);
 static void GetRand1DBinaryArray(int64_t *binaryArray, int64_t Range, int64_t CamNumAvailable);
 static bool ResetBiases(caerModuleData moduleData);
-static bool EnableStimuliGenL(caerModuleData moduleData, int32_t pattern);
+static bool EnableStimuliGenL(caerModuleData moduleData,  int32_t pattern);
 static bool DisableStimuliGenL(caerModuleData moduleData);
 static bool EnableStimuliGenPrimitiveCam(caerModuleData moduleData);
 static bool DisableStimuliGenPrimitiveCam(caerModuleData moduleData);
@@ -178,6 +187,8 @@ static bool caerLearningFilterInit(caerModuleData moduleData) {
 
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
+	state->eventSourceID = NULL;
+
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
 	if (!sshsNodeAttributeExists(sourceInfoNode, "apsSizeX", SSHS_SHORT)) {
 		sshsNodePutShort(sourceInfoNode, "apsSizeX", VISUALIZER_HEIGHT_FEATURE); //DYNAPSE_X4BOARD_NEUY
@@ -214,9 +225,23 @@ static void caerLearningFilterConfig(caerModuleData moduleData) {
 
 static void caerLearningFilterExit(caerModuleData moduleData) { // Remove listener, which can reference invalid memory in userData.
 	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
+
+	LFilterState state = moduleData->moduleState;
+
+	// --- start USB handle / from spike event source id
+	state->eventSourceModuleState = caerMainloopGetSourceState(state->eventSourceID);
+	state->eventSourceConfigNode = caerMainloopGetSourceNode(state->eventSourceID);
+	// --- end USB handle
+
+	sshsNode deviceConfigNodeMain = sshsGetRelativeNode(state->eventSourceConfigNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
+	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNodeMain, "spikeGen/");
+	sshsNodePutBool(spikeNode, "running", true);
+	sshsNodePutBool(spikeNode, "repeat", false);
+	sshsNodePutBool(spikeNode, "doStim", false);
+
 }
 
-static void caerLearningFilterReset(caerModuleData moduleData, uint16_t resetCallSourceID) {
+static void caerLearningFilterReset(caerModuleData moduleData, int resetCallSourceID) {
 	UNUSED_ARGUMENT(moduleData);
 	UNUSED_ARGUMENT(resetCallSourceID);
 //	ResetNetwork(moduleData);
@@ -225,27 +250,19 @@ static void caerLearningFilterReset(caerModuleData moduleData, uint16_t resetCal
 static void caerLearningFilterRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
 	UNUSED_ARGUMENT(argsNumber);
 
-	// Interpret variable arguments (same as above in main function).
+
 	caerSpikeEventPacket spike = va_arg(args, caerSpikeEventPacket);
 	caerFrameEventPacket *weightplotfeature = va_arg(args, caerFrameEventPacket*);
 	caerFrameEventPacket *synapseplotfeature = va_arg(args, caerFrameEventPacket*);
 
 	LFilterState state = moduleData->moduleState;
 
-	if(spike == NULL){
-		state->noSpikes = true;
-	}else{
-		state->noSpikes = false;
-	}
-	if(!state->noSpikes){
-		if(state->eventSourceID == NULL){
-			state->eventSourceID = caerEventPacketHeaderGetEventSource(&spike->packetHeader);// into state so that all functions can use it after init.
-		}
+	// init
+	if(state->eventSourceID == NULL){
+		state->eventSourceID  = caerEventPacketHeaderGetEventSource(&spike->packetHeader);// into state so that all functions can use it after init.
 	}
 
-//	uint32_t counterW;
 	uint32_t counterS;
-//	COLOUR colW;
 	COLOUR colS;
 	uint16_t sizeX = VISUALIZER_HEIGHT_FEATURE;
 	uint16_t sizeY = VISUALIZER_WIDTH_FEATURE;
@@ -654,7 +671,7 @@ void ModifyForwardSynapse(caerModuleData moduleData, int64_t preSpikeAddr, int64
 					synapseUpgrade = 1;
 					synapseType = EXCITATORY_SLOW_SYNAPSE_ID;
 					DisableStimuliGenPrimitiveCam(moduleData);
-					WriteCam(moduleData, (uint32_t) preNeuronAddr, (uint32_t) postNeuronAddr, 0, camId, synapseType, 0, 1);
+					WriteCam(moduleData,  (uint32_t) preNeuronAddr, (uint32_t) postNeuronAddr, 0, camId, synapseType, 0, 1);
 					EnableStimuliGenPrimitiveCam(moduleData);
 					if ((postNeuronAddr & 0x3c00) >> 10 == 3 && (postNeuronAddr & 0x300) >> 8 == 3) {
 						if (new_weight > 10)
@@ -720,7 +737,6 @@ void ModifyForwardSynapse(caerModuleData moduleData, int64_t preSpikeAddr, int64
 					}
 
 					memory.weightMap->buffer2d[preNeuronAddr-MEMORY_NEURON_ADDR_OFFSET][postNeuronAddr-MEMORY_NEURON_ADDR_OFFSET] = new_weight;
-//					memory.weightMap->buffer2d[min-MEMORY_NEURON_ADDR_OFFSET][postNeuronAddr-MEMORY_NEURON_ADDR_OFFSET] = 0;
 				}
 
 				if (synapseUpgrade == 1) {
@@ -798,6 +814,7 @@ bool ResetNetwork(caerModuleData moduleData)
 	SetTimer();
 
 	ClearAllCam(moduleData); //only for 1st chip
+//	SetInputLayerCam(moduleData, eventSourceID);
 
 	LFilterState state = moduleData->moduleState;
 	int8_t exType = state->resetExType; //initial synapse type fast or slow
@@ -1032,6 +1049,7 @@ bool BuildSynapse(caerModuleData moduleData, uint32_t preNeuronAddr, uint32_t po
 			}
 			if (sramAvailable == 1 && sramId != 0) { //sramId != 0 && sramId != 1 && sramId != 2 && sramId != 3
 				WriteSram(moduleData, preNeuronAddr, postNeuronAddr, virtualNeuronAddr, sramId, virtualNeuronAddrEnable, 0);
+
 				memory.sramMap->buffer2d[preNeuronAddr-MEMORY_NEURON_ADDR_OFFSET][sramId] = 1; //taken
 				chipCoreId = (int) (postNeuronAddr >> 8);
 				memory.sramMapContent->buffer2d[preNeuronAddr-MEMORY_NEURON_ADDR_OFFSET][sramId] = chipCoreId; //taken
@@ -1111,6 +1129,78 @@ bool BuildSynapse(caerModuleData moduleData, uint32_t preNeuronAddr, uint32_t po
 	return (true);
 }
 
+//get chip id based on post neuron
+static int GetWriteCamChipId(uint32_t postNeuronAddr) {
+
+	uint32_t chipId_t, chipId;
+	chipId_t = postNeuronAddr >> NEURON_CHIPID_SHIFT;
+	if (chipId_t == 1)
+		chipId = DYNAPSE_CONFIG_DYNAPSE_U0;
+	else if (chipId_t == 2)
+		chipId = DYNAPSE_CONFIG_DYNAPSE_U1;
+	else if (chipId_t == 3)
+		chipId = DYNAPSE_CONFIG_DYNAPSE_U2;
+	else if (chipId_t == 4)
+		chipId = DYNAPSE_CONFIG_DYNAPSE_U3;
+
+	return(chipId);
+
+}
+
+//write neuron CAM when a synapse is built or modified
+static int GetWriteCamBits(caerModuleData moduleData, uint32_t preNeuronAddr, uint32_t postNeuronAddr, uint32_t virtualNeuronAddr,
+		uint32_t camId, int16_t synapseType, int8_t virtualNeuronAddrEnable) {
+
+	LFilterState state = moduleData->moduleState;
+
+	uint32_t chipId_t, chipId, bits;
+	chipId_t = postNeuronAddr >> NEURON_CHIPID_SHIFT;
+	if (chipId_t == 1)
+		chipId = DYNAPSE_CONFIG_DYNAPSE_U0;
+	else if (chipId_t == 2)
+		chipId = DYNAPSE_CONFIG_DYNAPSE_U1;
+	else if (chipId_t == 3)
+		chipId = DYNAPSE_CONFIG_DYNAPSE_U2;
+	else if (chipId_t == 4)
+		chipId = DYNAPSE_CONFIG_DYNAPSE_U3;
+	uint32_t ei = 0;
+	uint32_t fs = 0;
+    uint32_t address = preNeuronAddr & NEURON_ADDRESS_BITS;
+    uint32_t source_core = 0;
+    if (virtualNeuronAddrEnable == 0)
+    	source_core = (preNeuronAddr & NEURON_COREID_BITS) >> NEURON_COREID_SHIFT;
+    else
+    	source_core = (virtualNeuronAddr & NEURON_COREID_BITS) >> NEURON_COREID_SHIFT; //to change
+    if (synapseType > 0) //if it is EX synapse
+    	ei = EXCITATORY_SYNAPSE;
+    else
+    	ei = INHIBITORY_SYNAPSE;
+    if (abs(synapseType) == FAST_SYNAPSE_ID)
+    	fs = FAST_SYNAPSE;
+    else if (abs(synapseType) == SLOW_SYNAPSE_ID)
+    	fs = SLOW_SYNAPSE;
+    else if (abs(synapseType) == NO_SYNAPSE_ID) {
+        address = NO_SYNAPSE_ADDRESS;
+        source_core = NO_SYNAPSE_CORE;
+    }
+    uint32_t coreId = (postNeuronAddr & NEURON_COREID_BITS) >> NEURON_COREID_SHIFT;
+    uint32_t neuron_row = (postNeuronAddr & NEURON_ROW_BITS) >> NEURON_ROW_SHIFT;
+    uint32_t synapse_row = camId;
+    uint32_t row = neuron_row << CAM_NEURON_ROW_SHIFT | synapse_row;
+	uint32_t column = postNeuronAddr & NEURON_COL_BITS;
+    bits = ei << CXQ_CAM_EI_SHIFT |
+    		fs << CXQ_CAM_FS_SHIFT |
+    		address << CXQ_ADDR_SHIFT |
+    		source_core << CXQ_SOURCE_CORE_SHIFT |
+    		CXQ_PROGRAM |
+    		coreId << CXQ_PROGRAM_COREID_SHIFT |
+    		row << CXQ_PROGRAM_ROW_SHIFT |
+    		column << CXQ_PROGRAM_COLUMN_SHIFT;
+
+	return(bits);
+
+}
+
 //write neuron CAM when a synapse is built or modified
 bool WriteCam(caerModuleData moduleData, uint32_t preNeuronAddr, uint32_t postNeuronAddr, uint32_t virtualNeuronAddr,
 		uint32_t camId, int16_t synapseType, int8_t virtualNeuronAddrEnable, int8_t stdp) {
@@ -1120,6 +1210,7 @@ bool WriteCam(caerModuleData moduleData, uint32_t preNeuronAddr, uint32_t postNe
 	// --- start  usb handle / from spike event source id
 	state->eventSourceModuleState = caerMainloopGetSourceState(U16T(state->eventSourceID));
 	state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(state->eventSourceID));
+
 	caerInputDynapseState stateSource = state->eventSourceModuleState;
 	// --- end usb handle
 
@@ -1209,6 +1300,7 @@ bool WriteSram(caerModuleData moduleData, uint32_t preNeuronAddr, uint32_t postN
 	// --- start  usb handle / from spike event source id
 	state->eventSourceModuleState = caerMainloopGetSourceState(U16T(state->eventSourceID));
 	state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(state->eventSourceID));
+
 	caerInputDynapseState stateSource = state->eventSourceModuleState;
 	// --- end usb handle
 
@@ -1294,6 +1386,9 @@ bool WriteSram(caerModuleData moduleData, uint32_t preNeuronAddr, uint32_t postN
 }
 
 bool ClearAllCam(caerModuleData moduleData) {
+
+	LFilterState state = moduleData->moduleState;
+
 	uint32_t neuronId, camId;
 	for (neuronId = 0; neuronId < 32 * 32; neuronId++) {
 		for (camId = 0; camId < 64; camId++) {
@@ -1303,7 +1398,26 @@ bool ClearAllCam(caerModuleData moduleData) {
 			WriteCam(moduleData, 0, 4 << 10 | neuronId, 0, camId, 0, 0, 0);
 		}
 	}
-	return (true);
+
+	/*
+	// --- start USB handle / from spike event source id
+	state->eventSourceModuleState = caerMainloopGetSourceState(state->eventSourceID);
+	state->eventSourceConfigNode = caerMainloopGetSourceNode(state->eventSourceID);
+	// --- end USB handle
+	caerInputDynapseState stateSource = state->eventSourceModuleState;
+
+	caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U0);
+	caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
+
+	caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U1);
+	caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
+
+	caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U2);
+	caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);
+
+	caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_ID, DYNAPSE_CONFIG_DYNAPSE_U3);
+	caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CLEAR_CAM, 0, 0);*/
+
 }
 
 void Shuffle1DArray(int64_t *array, int64_t Range) {
@@ -1324,6 +1438,7 @@ bool EnableStimuliGenL(caerModuleData moduleData, int32_t pattern) {
 	// --- start USB handle / from spike event source id
 	state->eventSourceModuleState = caerMainloopGetSourceState(U16T(state->eventSourceID));
 	state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(state->eventSourceID));
+
 	// --- end USB handle
 
 	sshsNode deviceConfigNodeMain = sshsGetRelativeNode(state->eventSourceConfigNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
@@ -1366,6 +1481,7 @@ bool EnableStimuliGenPrimitiveCam(caerModuleData moduleData) {
 
 bool DisableStimuliGenPrimitiveCam(caerModuleData moduleData) {
 	LFilterState state = moduleData->moduleState;
+
 
 	state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(state->eventSourceID));
 
@@ -1611,6 +1727,7 @@ bool ResetBiases(caerModuleData moduleData) {
 	// --- start  usb handle / from spike event source id
 	state->eventSourceModuleState = caerMainloopGetSourceState(U16T(state->eventSourceID));
 	state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(state->eventSourceID));
+
 	caerInputDynapseState stateSource = state->eventSourceModuleState;
 	// --- end usb handle
 
@@ -1898,8 +2015,8 @@ bool ResetBiases(caerModuleData moduleData) {
 				setBiasBits(moduleData, chipId, coreId, "PS_WEIGHT_INH_S_N", 7, 0, "HighBias", "NBias");
 				setBiasBits(moduleData, chipId, coreId, "PULSE_PWLK_P", 3, 50, "HighBias", "PBias");
 				setBiasBits(moduleData, chipId, coreId, "R2R_P", 4, 85, "HighBias", "PBias");
-			}
 
+			}
 		}
 	}
 	return (true);
@@ -1911,6 +2028,7 @@ void setBiasBits(caerModuleData moduleData, uint32_t chipId, uint32_t coreId, co
 
 	state->eventSourceModuleState = caerMainloopGetSourceState(U16T(state->eventSourceID));
 	state->eventSourceConfigNode = caerMainloopGetSourceNode(U16T(state->eventSourceID));
+
 	caerInputDynapseState stateSource = state->eventSourceModuleState;
 
     size_t biasNameLength = strlen(biasName_t);

@@ -91,7 +91,18 @@
 #include "modules/mediantracker/mediantracker.h"
 #endif
 
+#ifdef ENABLE_GESTURELEARNINGFILTER
+#include <libcaer/events/frame.h>
+#endif
+
 static bool mainloop_1(void);
+
+#ifdef ENABLE_GESTURELEARNINGFILTER
+	// create frame for displaying weight and synapse
+	caerFrameEventPacket weightplotG = NULL;
+	caerFrameEventPacket synapseplotG = NULL;
+#endif
+
 
 static bool mainloop_1(void) {
 
@@ -189,9 +200,11 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_MEANRATEFILTER
 	// create frame for displaying frequencies
 	caerFrameEventPacket freqplot = NULL;
-#ifdef DYNAPSEFX2
 	caerMeanRateFilter(4, spike, &freqplot);
 #endif
+
+#ifdef ENABLE_GESTURELEARNINGFILTER
+	caerGestureLearningFilter(11, spike, &weightplotG, &synapseplotG);
 #endif
 
 #ifdef ENABLE_MONITORNEUFILTER
@@ -208,6 +221,10 @@ static bool mainloop_1(void) {
 #endif
 #if defined(DAVISFX2) || defined(DAVISFX3) || defined(DVS128) || defined(ENABLE_FILE_INPUT)
 	caerVisualizer(66, "Polarity", &caerVisualizerRendererPolarityEvents, NULL, (caerEventPacketHeader) polarity_cam);
+#endif
+#ifdef ENABLE_GESTURELEARNINGFILTER
+	caerVisualizer(69, "Weight", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) weightplotG);
+	caerVisualizer(70, "Synapse", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplotG);
 #endif
 #endif
 
