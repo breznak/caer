@@ -92,6 +92,9 @@ struct RTFilter_state {
 	float topLine;
 	float leftLine;
 	float rightLine;
+	bool useOnePolarityOnlyEnabled;
+	bool useOffPolarityOnlyEnabled;
+	bool showAllClusters;
 };
 
 // constants
@@ -123,9 +126,6 @@ static int pathLength = 100;
 
 //static bool useEllipticalClusters = false;
 //static bool colorClustersDifferentlyEnabled = false;
-//static bool useOnePolarityOnlyEnabled = false;
-//static bool useOffPolarityOnlyEnabled = false;
-//static bool showAllClusters = false;
 
 static float predictiveVelocityFactor = 1;
 
@@ -203,6 +203,7 @@ static void drawpath(caerFrameEvent singleplot, Path *path, int sizeX);
 static void updateCurrentClusterNum(caerModuleData moduleData);
 static void updateColor(Cluster *c);
 static void checkCountingArea(caerModuleData moduleDate, int16_t sizeX, int16_t sizeY);
+static void countPeople(caerFrameEvent singleplot, caerModuleData moduleDate, int16_t sizeX, int16_t sizeY);
 
 static struct caer_module_functions caerRectangulartrackerFunctions = { .moduleInit = &caerRectangulartrackerInit, .moduleRun = &caerRectangulartrackerRun, .moduleConfig = &caerRectangulartrackerConfig, .moduleExit = &caerRectangulartrackerExit, .moduleReset = &caerRectangulartrackerReset };
 
@@ -237,6 +238,9 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "topLine", 0.6f);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "leftLine", 0.01f);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "rightLine", 0.99f);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "useOnePolarityOnlyEnabled", false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "useOffPolarityOnlyEnabled", false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showAllClusters", false);
 
 	RTFilterState state = moduleData->moduleState;
 
@@ -261,6 +265,10 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 	state->topLine = sshsNodeGetFloat(moduleData->moduleNode, "topLine");
 	state->leftLine = sshsNodeGetFloat(moduleData->moduleNode, "leftLine");
 	state->rightLine = sshsNodeGetFloat(moduleData->moduleNode, "rightLine");
+	state->useOnePolarityOnlyEnabled = sshsNodeGetBool(moduleData->moduleNode, "useOnePolarityOnlyEnabled");
+	state->useOffPolarityOnlyEnabled = sshsNodeGetBool(moduleData->moduleNode, "useOffPolarityOnlyEnabled");
+	state->showAllClusters = sshsNodeGetBool(moduleData->moduleNode, "showAllClusters");
+
 
 	state->currentClusterNum = 0;
 
@@ -355,12 +363,26 @@ static void caerRectangulartrackerRun(caerModuleData moduleData, size_t argsNumb
 	int64_t ts = caerPolarityEventGetTimestamp64(caerPolarityIteratorElement, polarity);
 	uint16_t x = caerPolarityEventGetX(caerPolarityIteratorElement);
 	uint16_t y = caerPolarityEventGetY(caerPolarityIteratorElement);
+	bool eventType = caerPolarityEventGetPolarity(caerPolarityIteratorElement);
 
 	if ((caerPolarityIteratorElement == NULL)){
 		continue;
 	}
 	if ((x > sizeX) || (y > sizeY)) {
 		continue;
+	}
+
+	if (state->useOnePolarityOnlyEnabled) {
+		if (state->useOffPolarityOnlyEnabled) {
+			if (eventType == 1) {
+				continue;
+			}
+		}
+		else {
+			if (eventType == 0) {
+				continue;
+			}
+		}
 	}
 
 	updateCurrentClusterNum(moduleData);
@@ -430,7 +452,7 @@ static void caerRectangulartrackerRun(caerModuleData moduleData, size_t argsNumb
 
 	// plot clusters
 	for (int i=0; i<state->maxClusterNum; i++){
-		if ((*frame != NULL ) && (!state->clusterList[i].isEmpty) && (state->clusterList[i].visibilityFlag)) {
+		if ((*frame != NULL ) && (!state->clusterList[i].isEmpty) && (state->clusterList[i].visibilityFlag || state->showAllClusters)) {
 			updateColor(&state->clusterList[i]);
 			drawCluster(caerFrameEventPacketGetEvent(*frame, 0), &state->clusterList[i], sizeX, sizeY, state->showPaths, state->forceBoundary);
 		}
@@ -438,57 +460,7 @@ static void caerRectangulartrackerRun(caerModuleData moduleData, size_t argsNumb
 
 	// people counting
 	if(state->peopleCounting) {
-		checkCountingArea(moduleData, sizeX, sizeY);
-		float by = state->botLine * sizeY;
-		float ty = state->topLine * sizeY;
-		float lx = state->leftLine * sizeX;
-		float rx = state->rightLine * sizeX;
-
-		caerFrameEvent singleplot = caerFrameEventPacketGetEvent(*frame, 0);
-		uint32_t counter = 0;
-		for (size_t y = 0; y < sizeY; y++) {
-			for (size_t x = 0; x < sizeX; x++) {
-				if ((x == (int)rx && y <= ty && y >= by) ||
-					(x == (int)lx && y <= ty && y >= by) ||
-					(y == (int)ty && x <= rx && x >= lx) ||
-					(y == (int)by && x <= rx && x >= lx))
-				{
-					singleplot->pixels[counter] = (uint16_t) ( (int) 65000);			// red
-					singleplot->pixels[counter + 1] = (uint16_t) ( (int) 65000);		// green
-					singleplot->pixels[counter + 2] = (uint16_t) ( (int) 65000);	// blue
-				}
-				counter += 3;
-			}
-		}
-
-		//TODO make algorithm for x dimension.
-		for (int i=0; i<state->maxClusterNum; i++){
-			if(state->clusterList[i].isEmpty && inBotZone[i]){
-				inBotZone[i] = false;
-			}
-			if(state->clusterList[i].isEmpty && inTopZone[i]){
-				inTopZone[i] = false;
-			}
-			if(state->clusterList[i].isEmpty || !state->clusterList[i].visibilityFlag){
-				continue;
-			}
-			if((state->clusterList[i].location_y < by) && !inBotZone[i]){
-				inBotZone[i] = true;
-			}
-			if((state->clusterList[i].location_y > ty) && !inTopZone[i]){
-				inTopZone[i] = true;
-			}
-			if((state->clusterList[i].location_y < by) && inTopZone[i]){
-				inTopZone[i] = false;
-				nIn++;
-			}
-			if((state->clusterList[i].location_y > ty) && inBotZone[i]){
-				inBotZone[i] = false;
-				nOut++;
-			}
-		}
-		printf("Num of In: %d", nIn);
-		printf("  Num of Out: %d", nOut);
+		countPeople(caerFrameEventPacketGetEvent(*frame, 0), moduleData, sizeX, sizeY);
 	}
 }
 
@@ -1363,6 +1335,61 @@ static void checkCountingArea(caerModuleData moduleDate, int16_t sizeX, int16_t 
 	}
 }
 
+static void countPeople(caerFrameEvent singleplot, caerModuleData moduleDate, int16_t sizeX, int16_t sizeY){
+	RTFilterState state = moduleDate->moduleState;
+
+	checkCountingArea(moduleDate, sizeX, sizeY);
+	float by = state->botLine * sizeY;
+	float ty = state->topLine * sizeY;
+	float lx = state->leftLine * sizeX;
+	float rx = state->rightLine * sizeX;
+
+	uint32_t counter = 0;
+	for (size_t y = 0; y < sizeY; y++) {
+		for (size_t x = 0; x < sizeX; x++) {
+			if ((x == (int)rx && y <= ty && y >= by) ||
+					(x == (int)lx && y <= ty && y >= by) ||
+					(y == (int)ty && x <= rx && x >= lx) ||
+					(y == (int)by && x <= rx && x >= lx))
+			{
+				singleplot->pixels[counter] = (uint16_t) ( (int) 65000);			// red
+				singleplot->pixels[counter + 1] = (uint16_t) ( (int) 65000);		// green
+				singleplot->pixels[counter + 2] = (uint16_t) ( (int) 65000);	// blue
+			}
+			counter += 3;
+		}
+	}
+
+	//TODO make algorithm for x dimension.
+	for (int i=0; i<state->maxClusterNum; i++){
+		if(state->clusterList[i].isEmpty && inBotZone[i]){
+			inBotZone[i] = false;
+		}
+		if(state->clusterList[i].isEmpty && inTopZone[i]){
+			inTopZone[i] = false;
+		}
+		if(state->clusterList[i].isEmpty || !state->clusterList[i].visibilityFlag){
+			continue;
+		}
+		if((state->clusterList[i].location_y < by) && !inBotZone[i]){
+			inBotZone[i] = true;
+		}
+		if((state->clusterList[i].location_y > ty) && !inTopZone[i]){
+			inTopZone[i] = true;
+		}
+		if((state->clusterList[i].location_y < by) && inTopZone[i]){
+			inTopZone[i] = false;
+			nIn++;
+		}
+		if((state->clusterList[i].location_y > ty) && inBotZone[i]){
+			inBotZone[i] = false;
+			nOut++;
+		}
+	}
+	printf("Num of In: %d", nIn);
+	printf("  Num of Out: %d", nOut);
+}
+
 static void caerRectangulartrackerConfig(caerModuleData moduleData) {
 	caerModuleConfigUpdateReset(moduleData);
 
@@ -1388,6 +1415,9 @@ static void caerRectangulartrackerConfig(caerModuleData moduleData) {
 	state->topLine = sshsNodeGetFloat(moduleData->moduleNode, "topLine");
 	state->leftLine = sshsNodeGetFloat(moduleData->moduleNode, "leftLine");
 	state->rightLine = sshsNodeGetFloat(moduleData->moduleNode, "rightLine");
+	state->useOnePolarityOnlyEnabled = sshsNodeGetBool(moduleData->moduleNode, "useOnePolarityOnlyEnabled");
+	state->useOffPolarityOnlyEnabled = sshsNodeGetBool(moduleData->moduleNode, "useOffPolarityOnlyEnabled");
+	state->showAllClusters = sshsNodeGetBool(moduleData->moduleNode, "showAllClusters");
 }
 
 static void caerRectangulartrackerExit(caerModuleData moduleData) {
