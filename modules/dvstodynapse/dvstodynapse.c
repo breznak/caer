@@ -56,10 +56,7 @@ void caerDvsToDynapse(uint16_t moduleID, caerSpikeEventPacket spike, caerPolarit
 
 static bool caerDvsToDynapseInit(caerModuleData moduleData) {
 
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "threshold", 10);
-	//sshsNodePutBoolIfAbsent(moduleData->moduleNode, "CNNMode", true);
-	// set default values
-
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "threshold", 5);
 	DvsToDynapseState state = moduleData->moduleState;
 
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
@@ -74,7 +71,6 @@ static bool caerDvsToDynapseInit(caerModuleData moduleData) {
 	state->chipId = DYNAPSE_CONFIG_DYNAPSE_U3; //(uint16_t) sshsNodeGetInt(moduleData->moduleNode, "chipId");
 	state->threshold = sshsNodeGetInt(moduleData->moduleNode, "threshold");
 	state->init = true; //sshsNodeGetBool(moduleData->moduleNode, "programCamAllChips"); // false at startup
-	//state->CNNMode = sshsNodeGetBool(moduleData->moduleNode, "CNNMode"); // false at startup
 	state->DownsampledMap = NULL;
 
 	state->CNNMode = true;

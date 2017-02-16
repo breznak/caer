@@ -128,10 +128,10 @@ static bool mainloop_1(void) {
 	caerSpecialEventPacket special_cam = NULL;
 	caerPolarityEventPacket polarity_cam = NULL;
 
-	container = caerInputFile(10);
+	container_cam = caerInputFile(10);
 	// We search for them by type here, because input modules may not have all or any of them.
-	polarity_cam = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container, POLARITY_EVENT);
-	special_cam = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
+	polarity_cam = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container_cam, POLARITY_EVENT);
+	special_cam = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container_cam, SPECIAL_EVENT);
 #endif
 
 #ifdef DVS128
@@ -194,7 +194,7 @@ static bool mainloop_1(void) {
 	// Filters can also extract information from event packets: for example
 	// to show statistics about the current event-rate.
 #ifdef ENABLE_STATISTICS
-	caerStatistics(3, (caerEventPacketHeader) spike, 1000);
+	caerStatistics(3, (caerEventPacketHeader) polarity_cam, 1000);
 #endif
 
 #ifdef ENABLE_MEANRATEFILTER
@@ -204,7 +204,7 @@ static bool mainloop_1(void) {
 #endif
 
 #ifdef ENABLE_GESTURELEARNINGFILTER
-	caerGestureLearningFilter(11, spike, &weightplotG, &synapseplotG);
+	caerGestureLearningFilter(11, 10, spike, &weightplotG, &synapseplotG);
 #endif
 
 #ifdef ENABLE_MONITORNEUFILTER
@@ -265,7 +265,6 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_MEANRATEFILTER
 	free(freqplot);
 #endif
-
 
 	return (true); // If false is returned, processing of this loop stops.
 }
