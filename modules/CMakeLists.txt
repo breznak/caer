@@ -21,6 +21,7 @@ ADD_SUBDIRECTORY(rectangulartracker)
 ADD_SUBDIRECTORY(mediantracker)
 ADD_SUBDIRECTORY(dvstodynapse)
 ADD_SUBDIRECTORY(learningfilter)
+ADD_SUBDIRECTORY(gesturelearningfilter)
 #ADD_SUBDIRECTORY(pixelmatrix)
 
 # Support private modules that don't get considered for commit,

@@ -86,7 +86,7 @@
 #define POOLING2_CAM_INHIBITORY_N (POOLING2_LAYERS_N - 1)
 
 #define OUTPUT1_N 512
-#define OUTPUT2_N 4 //3 or 4
+#define OUTPUT2_N 3 //3 or 4
 
 //for encoding the chip input commands
 #define CXQ_PROGRAM (1 << 17) // (0x80 << 10)
@@ -165,7 +165,7 @@
 #include <libcaer/events/spike.h>
 #include <libcaer/events/frame.h> //display
 
-void caerLearningFilter(uint16_t moduleID, caerSpikeEventPacket spike,
+void caerGestureLearningFilter(uint16_t moduleID, caerSpikeEventPacket spike,
 		caerFrameEventPacket *weightplotfeature, caerFrameEventPacket *synapseplotfeature);
 
 #endif /* LEARNINGFILTER_H_ */
