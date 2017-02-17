@@ -84,8 +84,7 @@ void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLE
 		if(indexLin > 255){
 			indexLin = 255;
 		}
-		bool ret = caerDeviceConfigSet( ((caerInputDynapseState)state->eventSourceModuleState)->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, (uint32_t) chipId);
-		printf("RET %d\n", ret);
+		caerDeviceConfigSet( ((caerInputDynapseState)state->eventSourceModuleState)->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, (uint32_t) chipId);
 		caerDeviceConfigSet( ((caerInputDynapseState)state->eventSourceModuleState)->deviceState, DYNAPSE_CONFIG_MONITOR_NEU, coreid, indexLin);
 
 		if(chipId == 0){
