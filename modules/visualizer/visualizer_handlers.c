@@ -12,32 +12,32 @@
 
 void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLEGRO_EVENT event) {
 	if (event.type == ALLEGRO_EVENT_MOUSE_BUTTON_UP) {
-		uint32_t posx, posy;
+		int posx, posy;
 		posx = U32T(event.mouse.x);
 		posy = U32T(event.mouse.y);
 
 		// adjust coordinates according to zoom
 		float currentZoomFactor = sshsNodeGetFloat(state->visualizerConfigNode, "zoomFactor");
 		if(currentZoomFactor > 1){
-			posx = (int) floor(posx / currentZoomFactor);
-			posy = (int) floor(posy / currentZoomFactor);
+			posx =  (int) floor((float)posx / currentZoomFactor);
+			posy =  (int) floor((float)posy / currentZoomFactor);
 		}else if(currentZoomFactor < 1){
-			posx = (int) floor(posx * currentZoomFactor);
-			posy = (int) floor(posy * currentZoomFactor);
+			posx = (int) floor((float)posx * currentZoomFactor);
+			posy = (int) floor((float)posy * currentZoomFactor);
 		}
 		//caerLog(CAER_LOG_NOTICE, "Visualizer", "pos x %d, pos y %d Zoom %f \n", posx, posy, currentZoomFactor);
 
 		// select chip
 		uint16_t chipId = 0;
-		if (posx > (int) DYNAPSE_CONFIG_XCHIPSIZE
-			&& posy > (int) DYNAPSE_CONFIG_YCHIPSIZE ) {
+		if (posx >= (int) DYNAPSE_CONFIG_XCHIPSIZE
+			&& posy >= (int) DYNAPSE_CONFIG_YCHIPSIZE ) {
 			chipId = DYNAPSE_CONFIG_DYNAPSE_U3;
 		}
 		else if (posx < (int) DYNAPSE_CONFIG_XCHIPSIZE
-			&& posy > (int) DYNAPSE_CONFIG_YCHIPSIZE ) {
+			&& posy >= (int) DYNAPSE_CONFIG_YCHIPSIZE ) {
 			chipId = DYNAPSE_CONFIG_DYNAPSE_U2;
 		}
-		else if (posx > (int) DYNAPSE_CONFIG_XCHIPSIZE
+		else if (posx >= (int) DYNAPSE_CONFIG_XCHIPSIZE
 			&& posy < (int) DYNAPSE_CONFIG_YCHIPSIZE ) {
 			chipId = DYNAPSE_CONFIG_DYNAPSE_U1;
 		}
@@ -47,15 +47,16 @@ void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLE
 		}
 		// adjust coordinate for chip
 		if(chipId == DYNAPSE_CONFIG_DYNAPSE_U3){
-			posx = posx - (DYNAPSE_CONFIG_XCHIPSIZE-1);
-			posy = posy - (DYNAPSE_CONFIG_YCHIPSIZE-1);
-		}else if(chipId == DYNAPSE_CONFIG_DYNAPSE_U2){
-			posy = posy - (DYNAPSE_CONFIG_YCHIPSIZE-1);
+			posx = posx - DYNAPSE_CONFIG_XCHIPSIZE;
+			posy = posy - DYNAPSE_CONFIG_YCHIPSIZE;
+		}else if(chipId ==DYNAPSE_CONFIG_DYNAPSE_U2){
+			posy = posy - DYNAPSE_CONFIG_YCHIPSIZE;
 		}else if(chipId == DYNAPSE_CONFIG_DYNAPSE_U1){
-			posx = posx - (DYNAPSE_CONFIG_XCHIPSIZE-1);
+			posx = posx - DYNAPSE_CONFIG_XCHIPSIZE;
 		}else if(chipId == DYNAPSE_CONFIG_DYNAPSE_U0){
 			;
 		}
+
 		// select core
 		uint8_t coreid = 0;
 		if(posx >= 16 && posy < 16){
@@ -69,7 +70,7 @@ void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLE
 		}
 		// adjust coordinates for cores
 		if(coreid == 1){
-			posy= posy - DYNAPSE_CONFIG_NEUCOL;
+			posy = posy - DYNAPSE_CONFIG_NEUCOL;
 		}else if(coreid == 0){
 			;
 		}else if(coreid == 2){
