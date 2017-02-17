@@ -172,7 +172,7 @@ bool caerVisualizerRendererIMU6Events(caerVisualizerPublicState state, caerEvent
 	gyroZ /= (float) validEvents;
 
 	// Acceleration X, Y as lines. Z as a circle.
-	float accelXScaled = centerPointX + accelX * scaleFactorAccel;
+	float accelXScaled = centerPointX - accelX * scaleFactorAccel;
 	RESET_LIMIT_POS(accelXScaled, maxSizeX - 2 - lineThickness);
 	RESET_LIMIT_NEG(accelXScaled, 1 + lineThickness);
 	float accelYScaled = centerPointY - accelY * scaleFactorAccel;
