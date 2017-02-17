@@ -1608,13 +1608,13 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_loop_close",);
 
 		// Free allocated memory.
-		for (size_t i = 0; i < state->networkIO->clientsSize; i++) {
-			free(state->networkIO->clients[i]);
-		}
+		//for (size_t i = 0; i < state->networkIO->clientsSize; i++) {
+		//	free(state->networkIO->clients[i]);
+		//}
 
-		free(state->networkIO->server);
-		free(state->networkIO->address);
-		free(state->networkIO);
+		//free(state->networkIO->server);
+		//free(state->networkIO->address);
+		//free(state->networkIO);
 	}
 	else {
 		// Ensure all data written to disk.
