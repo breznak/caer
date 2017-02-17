@@ -152,16 +152,15 @@ void caerVisualizerSystemInit(void) {
 	}
 
 	// Install main event sources: mouse and keyboard.
-/*	if (al_install_mouse()) {
+	if (al_install_mouse()) {
 		// Successfully initialized Allegro mouse event source.
 		caerLog(CAER_LOG_DEBUG, "Visualizer", "Allegro mouse event source initialized successfully.");
 	}
 	else {
 		// Failed to initialize Allegro mouse event source.
 		caerLog(CAER_LOG_EMERGENCY, "Visualizer", "Failed to initialize Allegro mouse event source.");
-		exit(EXIT_FAILURE);
 	}
-*/
+
 	if (al_install_keyboard()) {
 		// Successfully initialized Allegro keyboard event source.
 		caerLog(CAER_LOG_DEBUG, "Visualizer", "Allegro keyboard event source initialized successfully.");
@@ -169,7 +168,6 @@ void caerVisualizerSystemInit(void) {
 	else {
 		// Failed to initialize Allegro keyboard event source.
 		caerLog(CAER_LOG_EMERGENCY, "Visualizer", "Failed to initialize Allegro keyboard event source.");
-		exit(EXIT_FAILURE);
 	}
 
 	// On success, set thread name back to original. Any threads created by Allegro
