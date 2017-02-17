@@ -1607,14 +1607,9 @@ void caerOutputCommonExit(caerModuleData moduleData) {
 		retVal = uv_loop_close(&state->networkIO->loop);
 		UV_RET_CHECK(retVal, state->parentModule->moduleSubSystemString, "uv_loop_close",);
 
-		// Free allocated memory.
-		//for (size_t i = 0; i < state->networkIO->clientsSize; i++) {
-		//	free(state->networkIO->clients[i]);
-		//}
-
-		//free(state->networkIO->server);
-		//free(state->networkIO->address);
-		//free(state->networkIO);
+		// Free allocated memory. libuv already frees all client/server related memory.
+		free(state->networkIO->address);
+		free(state->networkIO);
 	}
 	else {
 		// Ensure all data written to disk.
