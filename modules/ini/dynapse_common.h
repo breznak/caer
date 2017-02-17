@@ -64,7 +64,6 @@ const char *chipIDToName(int16_t chipID, bool withEndSlash);
 
 static uint32_t convertBias(const char *biasName, const char* lowhi, const char*cl, const char*sex, uint8_t enal,
 	uint16_t fineValue, uint8_t coarseValue, uint8_t special);
-static uint32_t generateCoarseFineBiasParent(sshsNode biasNode, const char *biasName);
 static uint32_t generateCoarseFineBias(sshsNode biasNode);
 static void systemConfigListener(sshsNode node, void *userData, enum sshs_node_attribute_events event,
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue);

@@ -350,8 +350,7 @@ uint32_t generatesBitsCoarseFineBiasSetting(sshsNode node, const char *biasName,
 	sshsNodePutBool(biasConfigNode, "special", false);
 
 	//now send
-	const char *nodeName = sshsNodeGetName(biasConfigNode);
-	uint32_t value = generateCoarseFineBiasParent(biasConfigNode, nodeName);
+	uint32_t value = generateCoarseFineBias(biasConfigNode);
 
 	return (value);
 
@@ -386,9 +385,7 @@ static void updateCoarseFineBiasSetting(caerModuleData moduleData,
 	sshsNodePutBool(biasConfigNode, "special", false);
 
 	//now send
-	const char *nodeName = sshsNodeGetName(biasConfigNode);
-
-	uint32_t value = generateCoarseFineBiasParent(biasConfigNode, nodeName);
+	uint32_t value = generateCoarseFineBias(biasConfigNode);
 
 	// finally send configuration via USB
 	caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
@@ -435,7 +432,7 @@ static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_att
 		const char *nodeParent = sshsNodeGetName(parent);
 		sshsNode grandparent = sshsNodeGetParent(parent);
 		const char *nodeGrandParent = sshsNodeGetName(grandparent);
-		uint32_t value = generateCoarseFineBiasParent(node, nodeName);
+		uint32_t value = generateCoarseFineBias(node);
 
 		DisableStimuliGen(moduleData, 1);
 
@@ -1281,55 +1278,6 @@ char *int2bin(int a) {
 		a = a / 2;
 	}
 	return tmp;
-}
-
-static void biasConfigSend(sshsNode node, caerModuleData moduleData, struct caer_dynapse_info *devInfo) {
-
-	// get the number of children biases
-	uint32_t value;
-	size_t biasNodesLength = 0;
-	sshsNode *biasNodes = sshsNodeGetChildren(node, &biasNodesLength);
-	char *nodeName = sshsNodeGetName(node);
-	caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString, "BIAS LENGHT ... %d NAME %s\n", biasNodesLength,
-		nodeName);
-
-	// SEND DEFAULT BIASES TO ALL CHIPS in BOARD (0,3) only chip id 4 for now
-	for (uint32_t this_chip = 4; this_chip < 5; this_chip++) {
-		// Let's select this chip for configuration
-		if (!caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-		DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, this_chip)) {
-			caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString, "Failed to configure chip bits");
-		}
-
-		// send configuration, one bias per time
-		if (biasNodes != NULL) {
-			for (size_t i = 0; i < biasNodesLength; i++) {
-				nodeName = sshsNodeGetName(biasNodes[i]);
-				value = generateCoarseFineBiasParent(biasNodes[i], nodeName);
-
-				// finally send configuration via USB
-				caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState,
-				DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, value);
-
-			}
-			free(biasNodes);
-		}
-	}
-
-}
-
-static uint32_t generateCoarseFineBiasParent(sshsNode biasNode, const char * biasName) {
-	// Add trailing slash to node name (required!).
-	size_t biasNameLength = strlen(biasName);
-	char biasNameFull[biasNameLength + 2];
-	memcpy(biasNameFull, biasName, biasNameLength);
-	biasNameFull[biasNameLength] = '/';
-	biasNameFull[biasNameLength + 1] = '\0';
-
-	// Get bias configuration node.
-	sshsNode biasConfigNode = sshsGetRelativeNode(biasNode, biasNameFull);
-
-	return (generateCoarseFineBias(biasNode));
 }
 
 uint32_t generateCoarseFineBias(sshsNode biasNode) {
