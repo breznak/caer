@@ -1,5 +1,6 @@
 #include "visualizer.h"
 #include "base/mainloop.h"
+#include "modules/ini/dynapse_common.h"
 
 #include <math.h>
 #include <allegro5/allegro_primitives.h>
@@ -38,8 +39,7 @@ bool doClear) {
 			// OFF polarity (red).
 			al_put_pixel(caerPolarityEventGetX(caerPolarityIteratorElement),
 				caerPolarityEventGetY(caerPolarityIteratorElement), al_map_rgb(255, 0, 0));
-		}
-	CAER_POLARITY_ITERATOR_VALID_END
+		}CAER_POLARITY_ITERATOR_VALID_END
 
 	return (true);
 }
@@ -235,6 +235,128 @@ bool doClear) {
 	return (true);
 }
 
+bool caerVisualizerRendererSpikeEventsRaster(caerVisualizerPublicState state, caerEventPacketContainer container,
+bool doClear) {
+	UNUSED_ARGUMENT(state);
+
+	// Clear bitmap to black to erase old events.
+	if (doClear) {
+		al_clear_to_color(al_map_rgb(0, 0, 0));
+	}
+
+	caerEventPacketHeader spikeEventPacketHeader = caerEventPacketContainerFindEventPacketByType(container,
+		SPIKE_EVENT);
+
+	if (spikeEventPacketHeader == NULL || caerEventPacketHeaderGetEventValid(spikeEventPacketHeader) == 0) {
+		return (false);
+	}
+
+	// get size bitmap's size
+	int32_t sizeX = state->bitmapRendererSizeX;
+	int32_t sizeY = state->bitmapRendererSizeY;
+
+	// find max and min TS
+	int32_t min_ts = INT_MAX;
+	int32_t max_ts = INT_MIN;
+	CAER_SPIKE_ITERATOR_ALL_START( (caerSpikeEventPacket) spikeEventPacketHeader )
+		int32_t ts = caerSpikeEventGetTimestamp(caerSpikeIteratorElement);
+		if (ts > max_ts) {
+			max_ts = ts;
+		}
+		if (ts < min_ts) {
+			min_ts = ts;
+		}CAER_SPIKE_ITERATOR_ALL_END
+	// time span
+	int32_t time_span = max_ts - min_ts;
+	float scalex = 0.0;
+	if (time_span > 0) {
+		scalex = ((float) sizeX / 2) / ((float) time_span); // two rasterplots in x
+	}
+	float scaley = ((float) sizeY / 2) / ((float) DYNAPSE_CONFIG_NUMNEURONS); // two rasterplots in y
+	int32_t new_x = 0;
+
+	// Render all spikes.
+	CAER_SPIKE_ITERATOR_ALL_START( (caerSpikeEventPacket) spikeEventPacketHeader )
+
+	// get core id
+		int8_t coreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);
+		int32_t ts = caerSpikeEventGetTimestamp(caerSpikeIteratorElement);
+		ts = ts - min_ts;
+		new_x = (int32_t) floor((float) ts * scalex);
+
+		// get x,y position
+		uint16_t y = caerSpikeEventGetY(caerSpikeIteratorElement);
+		uint16_t x = caerSpikeEventGetX(caerSpikeIteratorElement);
+
+		// calculate coordinates in the screen
+		// select chip
+		uint8_t chipId = caerSpikeEventGetChipID(caerSpikeIteratorElement);
+		// adjust coordinate for chip
+		if (chipId == DYNAPSE_CONFIG_DYNAPSE_U3) {
+			x = x - DYNAPSE_CONFIG_XCHIPSIZE;
+			y = y - DYNAPSE_CONFIG_YCHIPSIZE;
+		}
+		else if (chipId == DYNAPSE_CONFIG_DYNAPSE_U2) {
+			y = y - DYNAPSE_CONFIG_YCHIPSIZE;
+		}
+		else if (chipId == DYNAPSE_CONFIG_DYNAPSE_U1) {
+			x = x - DYNAPSE_CONFIG_XCHIPSIZE;
+		}
+		else if (chipId == DYNAPSE_CONFIG_DYNAPSE_U0 + 1) { // sram can't be zero
+			;
+		}
+		// adjust coordinates for cores
+		if (coreId == 1) {
+			y = y - DYNAPSE_CONFIG_NEUCOL;
+		}
+		else if (coreId == 0) {
+			;
+		}
+		else if (coreId == 2) {
+			x = x - DYNAPSE_CONFIG_NEUCOL;
+		}
+		else if (coreId == 3) {
+			x = x - DYNAPSE_CONFIG_NEUCOL;
+			y = y - DYNAPSE_CONFIG_NEUCOL;
+		}
+
+		uint32_t indexLin = x * DYNAPSE_CONFIG_NEUCOL + y;
+		uint32_t new_y = indexLin + (coreId * DYNAPSE_CONFIG_NUMNEURONS_CORE);
+
+		// adjust coordinate for plot
+		new_y = (int32_t) floor((float) new_y * scaley);
+		// move
+		if (chipId == DYNAPSE_CONFIG_DYNAPSE_U3) {
+			new_x = (int32_t) floor((float) new_x + ((float) sizeX / 2));
+			new_y = (uint32_t) floor((float) new_y + (float) sizeY / 2.0);
+		}
+		else if (chipId == DYNAPSE_CONFIG_DYNAPSE_U2) {
+			new_x = (int32_t) floor((float) new_x + ((float) sizeX / 2));
+		}
+		else if (chipId == DYNAPSE_CONFIG_DYNAPSE_U1) {
+			new_y = (uint32_t) floor((float) new_y + (float) sizeY / 2.0);
+		}
+		else if (chipId == DYNAPSE_CONFIG_DYNAPSE_U0 + 1) { // sram can't be zero
+			;
+		}
+		// draw borders
+		for (int x = 0; x < sizeX; x++) {
+			al_put_pixel(x, sizeY / 2, al_map_rgb(255, 255, 255));
+		}
+		for (int y = 0; y < sizeY; y++) {
+			al_put_pixel(sizeX / 2, y, al_map_rgb(255, 255, 255));
+		}
+
+		// draw pixels (neurons might be merged due to aliasing..)
+		al_put_pixel(new_x, new_y, al_map_rgb(coreId * 80, 255, 50 * coreId));
+
+		//caerLog(CAER_LOG_NOTICE, __func__, "chipId %d, new_x %d, new_y %d, indexLin %d\n", chipId, new_x, new_y, indexLin);
+
+	CAER_SPIKE_ITERATOR_ALL_END
+
+	return (true);
+}
+
 bool caerVisualizerRendererSpikeEvents(caerVisualizerPublicState state, caerEventPacketContainer container,
 bool doClear) {
 	UNUSED_ARGUMENT(state);
@@ -254,14 +376,15 @@ bool doClear) {
 	// Render all spikes.
 	CAER_SPIKE_ITERATOR_ALL_START( (caerSpikeEventPacket) spikeEventPacketHeader )
 
-		// get core id
-		uint64_t coreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);
+	// get core id
+		uint8_t coreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);
+		uint8_t chipId = caerSpikeEventGetChipID(caerSpikeIteratorElement);
 		//get x,y position
-		uint16_t y = caerSpikeEventGetY(caerSpikeIteratorElement);	
-		uint16_t x = caerSpikeEventGetX(caerSpikeIteratorElement);	
+		uint16_t y = caerSpikeEventGetY(caerSpikeIteratorElement);
+		uint16_t x = caerSpikeEventGetX(caerSpikeIteratorElement);
 
-		al_put_pixel(x, y, al_map_rgb(coreId*80, 85, 30*coreId));
-		
+		al_put_pixel(x, y, al_map_rgb(coreId * 80, 85, 30 * coreId));
+
 	CAER_SPIKE_ITERATOR_ALL_END
 
 	return (true);

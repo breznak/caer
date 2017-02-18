@@ -209,9 +209,9 @@ caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisu
 	char *next;
 	char *curr = data;
 	while ((next = strchr(curr, '-')) != NULL) {
-	    curr = next + 1;
+		curr = next + 1;
 	}
-	if( caerStrEquals( curr, "VisualizerUserSize")){
+	if (caerStrEquals(curr, "VisualizerUserSize")) {
 		caerLog(CAER_LOG_NOTICE, __func__, "init size from user defined Size \n");
 		state->bitmapRendererSizeX = userSizeX;
 		state->bitmapRendererSizeY = userSizeY;
@@ -325,10 +325,10 @@ void caerVisualizerUpdate(caerVisualizerState state, caerEventPacketContainer co
 
 	// Keep statistics up-to-date with all events, always.
 	CAER_EVENT_PACKET_CONTAINER_ITERATOR_START(container)
-		caerStatisticsStringUpdate(caerEventPacketContainerIteratorElement, &state->packetStatistics);
-	CAER_EVENT_PACKET_CONTAINER_ITERATOR_END
+			caerStatisticsStringUpdate(caerEventPacketContainerIteratorElement, &state->packetStatistics);
+		CAER_EVENT_PACKET_CONTAINER_ITERATOR_END
 
-	// Only render every Nth container (or packet, if using standard visualizer).
+		// Only render every Nth container (or packet, if using standard visualizer).
 	state->packetSubsampleCount++;
 
 	if (state->packetSubsampleCount >= atomic_load_explicit(&state->packetSubsampleRendering, memory_order_relaxed)) {
@@ -776,56 +776,55 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRe
 
 	// Search for biggest sizes amongst all event packets.
 	CAER_EVENT_PACKET_CONTAINER_ITERATOR_START(container)
-		// Get size information from source.
-		sourceID = caerEventPacketHeaderGetEventSource(caerEventPacketContainerIteratorElement);
+	// Get size information from source.
+			sourceID = caerEventPacketHeaderGetEventSource(caerEventPacketContainerIteratorElement);
 
-		sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
-		if (sourceInfoNode == NULL) {
-			// This should never happen, but we handle it gracefully.
-			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
-				"Failed to get source info to setup visualizer resolution.");
-			return (false);
-		}
+			sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
+			if (sourceInfoNode == NULL) {
+				// This should never happen, but we handle it gracefully.
+				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+					"Failed to get source info to setup visualizer resolution.");
+				return (false);
+			}
 
-		// Default sizes if nothing else is specified in sourceInfo node.
-		int16_t packetSizeX = 0;
-		int16_t packetSizeY = 0;
+			// Default sizes if nothing else is specified in sourceInfo node.
+			int16_t packetSizeX = 0;
+			int16_t packetSizeY = 0;
 
-		// Get sizes from sourceInfo node. visualizer prefix takes precedence,
-		// for APS and DVS images, alternative prefixes are provided, as well
-		// as for generic data visualization.
-		if (sshsNodeAttributeExists(sourceInfoNode, "visualizerSizeX", SSHS_SHORT)) {
-			packetSizeX = sshsNodeGetShort(sourceInfoNode, "visualizerSizeX");
-			packetSizeY = sshsNodeGetShort(sourceInfoNode, "visualizerSizeY");
-		}
-		else if (sshsNodeAttributeExists(sourceInfoNode, "dvsSizeX", SSHS_SHORT)
-			&& caerEventPacketHeaderGetEventType(caerEventPacketContainerIteratorElement) == POLARITY_EVENT) {
-			packetSizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-			packetSizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
-		}
-		else if (sshsNodeAttributeExists(sourceInfoNode, "apsSizeX", SSHS_SHORT)
-			&& caerEventPacketHeaderGetEventType(caerEventPacketContainerIteratorElement) == FRAME_EVENT) {
-			packetSizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
-			packetSizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
-		}
-		else if (sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SSHS_SHORT)) {
-			packetSizeX = sshsNodeGetShort(sourceInfoNode, "dataSizeX");
-			packetSizeY = sshsNodeGetShort(sourceInfoNode, "dataSizeY");
-		}
-		// Get Size for Custom Plotting
-		if(sshsNodeAttributeExists(sourceInfoNode, "userSizeX", SSHS_INT)) {
-			userSizeX = sshsNodeGetInt(sourceInfoNode, "userSizeX");
-			userSizeY = sshsNodeGetInt(sourceInfoNode, "userSizeY");
-		}
+			// Get sizes from sourceInfo node. visualizer prefix takes precedence,
+			// for APS and DVS images, alternative prefixes are provided, as well
+			// as for generic data visualization.
+			if (sshsNodeAttributeExists(sourceInfoNode, "visualizerSizeX", SSHS_SHORT)) {
+				packetSizeX = sshsNodeGetShort(sourceInfoNode, "visualizerSizeX");
+				packetSizeY = sshsNodeGetShort(sourceInfoNode, "visualizerSizeY");
+			}
+			else if (sshsNodeAttributeExists(sourceInfoNode, "dvsSizeX", SSHS_SHORT)
+				&& caerEventPacketHeaderGetEventType(caerEventPacketContainerIteratorElement) == POLARITY_EVENT) {
+				packetSizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
+				packetSizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
+			}
+			else if (sshsNodeAttributeExists(sourceInfoNode, "apsSizeX", SSHS_SHORT)
+				&& caerEventPacketHeaderGetEventType(caerEventPacketContainerIteratorElement) == FRAME_EVENT) {
+				packetSizeX = sshsNodeGetShort(sourceInfoNode, "apsSizeX");
+				packetSizeY = sshsNodeGetShort(sourceInfoNode, "apsSizeY");
+			}
+			else if (sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SSHS_SHORT)) {
+				packetSizeX = sshsNodeGetShort(sourceInfoNode, "dataSizeX");
+				packetSizeY = sshsNodeGetShort(sourceInfoNode, "dataSizeY");
+			}
+			// Get Size for Custom Plotting
+			if (sshsNodeAttributeExists(sourceInfoNode, "userSizeX", SSHS_INT)) {
+				userSizeX = sshsNodeGetInt(sourceInfoNode, "userSizeX");
+				userSizeY = sshsNodeGetInt(sourceInfoNode, "userSizeY");
+			}
 
-		if (packetSizeX > sizeX) {
-			sizeX = packetSizeX;
-		}
+			if (packetSizeX > sizeX) {
+				sizeX = packetSizeX;
+			}
 
-		if (packetSizeY > sizeY) {
-			sizeY = packetSizeY;
-		}
-	CAER_EVENT_PACKET_CONTAINER_ITERATOR_END
+			if (packetSizeY > sizeY) {
+				sizeY = packetSizeY;
+			}CAER_EVENT_PACKET_CONTAINER_ITERATOR_END
 
 	moduleData->moduleState = caerVisualizerInit(renderer, eventHandler, sizeX, sizeY, VISUALIZER_DEFAULT_ZOOM, true,
 		moduleData, sourceID, userSizeX, userSizeY);

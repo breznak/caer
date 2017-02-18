@@ -68,9 +68,9 @@
 static bool mainloop_1(void);
 
 #ifdef ENABLE_LEARNINGFILTER
-	// create frame for displaying weight and synapse
-	caerFrameEventPacket weightplot = NULL;
-	caerFrameEventPacket synapseplot = NULL;
+// create frame for displaying weight and synapse
+caerFrameEventPacket weightplot = NULL;
+caerFrameEventPacket synapseplot = NULL;
 #endif
 
 static bool mainloop_1(void) {
@@ -157,7 +157,6 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_MEANRATEFILTER
 	free(freqplot);
 #endif
-
 
 	return (true); // If false is returned, processing of this loop stops.
 }
