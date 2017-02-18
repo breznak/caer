@@ -146,7 +146,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 
 		// set the biases if asked
 		if (state->doSetFreq) {
-
+			//TODO: NOT IMPLEMENTED
 		}
 	}
 

@@ -1290,8 +1290,12 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 	sshsNodePutShort(sourceInfoNode, "chipID", dynapse_info.chipID);
 
 	// Put source information for generic visualization, to be used to display and debug filter information.
-	sshsNodePutShort(sourceInfoNode, "dataSizeX", 64);
-	sshsNodePutShort(sourceInfoNode, "dataSizeY", 64);
+	sshsNodePutShort(sourceInfoNode, "dataSizeX", DYNAPSE_X4BOARD_NEUX);
+	sshsNodePutShort(sourceInfoNode, "dataSizeY", DYNAPSE_X4BOARD_NEUY);
+
+	// used for personalized size visualizer
+	sshsNodePutInt(sourceInfoNode, "userSizeX", 512);		//us x axis
+	sshsNodePutInt(sourceInfoNode, "userSizeY", 512);		//two chips in y
 
 // Generate source string for output modules.
 	size_t sourceStringLength = (size_t) snprintf(NULL, 0, "#Source %" PRIu16 ": %s\r\n", moduleData->moduleID,

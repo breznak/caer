@@ -3,6 +3,7 @@
 
 #include "main.h"
 #include "base/module.h"
+
 #include <libcaer/events/packetContainer.h>
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_font.h>
@@ -28,7 +29,7 @@ typedef void (*caerVisualizerEventHandler)(caerVisualizerPublicState state, ALLE
 // For reuse inside other modules.
 caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisualizerEventHandler eventHandler,
 	int32_t bitmapSizeX, int32_t bitmapSizeY, float defaultZoomFactor, bool defaultShowStatistics,
-	caerModuleData parentModule, int16_t eventSourceID);
+	caerModuleData parentModule, int16_t eventSourceID, int32_t bitmapRasterSizeX, int32_t bitmapRasterSizeY);
 void caerVisualizerUpdate(caerVisualizerState state, caerEventPacketContainer container);
 void caerVisualizerExit(caerVisualizerState state);
 void caerVisualizerReset(caerVisualizerState state);
@@ -43,7 +44,7 @@ bool caerVisualizerRendererFrameEvents(caerVisualizerPublicState state, caerEven
 bool caerVisualizerRendererIMU6Events(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
 bool caerVisualizerRendererPoint2DEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
 bool caerVisualizerRendererSpikeEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
-bool caerVisualizerRendererSpikeEventsFrequency(caerVisualizerPublicState state, caerEventPacketContainer container,
+bool caerVisualizerRendererSpikeEventsRaster(caerVisualizerPublicState state, caerEventPacketContainer container,
 bool doClear);
 
 // Default event handlers.

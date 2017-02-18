@@ -177,7 +177,7 @@ void caerVisualizerSystemInit(void) {
 
 caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisualizerEventHandler eventHandler,
 	int32_t bitmapSizeX, int32_t bitmapSizeY, float defaultZoomFactor, bool defaultShowStatistics,
-	caerModuleData parentModule, int16_t eventSourceID) {
+	caerModuleData parentModule, int16_t eventSourceID, int32_t userSizeX, int32_t userSizeY) {
 	// Allocate memory for visualizer state.
 	caerVisualizerState state = calloc(1, sizeof(struct caer_visualizer_state));
 	if (state == NULL) {
@@ -202,6 +202,20 @@ caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisu
 	// Remember sizes.
 	state->bitmapRendererSizeX = bitmapSizeX;
 	state->bitmapRendererSizeY = bitmapSizeY;
+
+	// If parentModuleName is "UserSize" create bitmap of dimensions [userSizeX, userSizeY]
+	// If userSizeX/userSizeY is not specified in the device_common file, use default 64x64
+	char *data = sshsNodeGetName(state->parentModule->moduleNode);
+	char *next;
+	char *curr = data;
+	while ((next = strchr(curr, '-')) != NULL) {
+	    curr = next + 1;
+	}
+	if( caerStrEquals( curr, "VisualizerUserSize")){
+		caerLog(CAER_LOG_NOTICE, __func__, "init size from user defined Size \n");
+		state->bitmapRendererSizeX = userSizeX;
+		state->bitmapRendererSizeY = userSizeY;
+	}
 
 	updateDisplaySize(state, false);
 
@@ -406,6 +420,7 @@ static bool caerVisualizerInitGraphics(caerVisualizerState state) {
 	// Create memory bitmap for drawing into.
 	al_set_new_bitmap_flags(ALLEGRO_MEMORY_BITMAP | ALLEGRO_MIN_LINEAR | ALLEGRO_MAG_LINEAR);
 	state->bitmapRenderer = al_create_bitmap(state->bitmapRendererSizeX, state->bitmapRendererSizeY);
+
 	if (state->bitmapRenderer == NULL) {
 		// Clean up all memory that may have been used.
 		caerVisualizerExitGraphics(state);
@@ -755,6 +770,8 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRe
 	// Default sizes if nothing else is specified in sourceInfo node.
 	int16_t sizeX = 20;
 	int16_t sizeY = 20;
+	int32_t userSizeX = 64;
+	int32_t userSizeY = 64;
 	int16_t sourceID = -1;
 
 	// Search for biggest sizes amongst all event packets.
@@ -795,6 +812,11 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRe
 			packetSizeX = sshsNodeGetShort(sourceInfoNode, "dataSizeX");
 			packetSizeY = sshsNodeGetShort(sourceInfoNode, "dataSizeY");
 		}
+		// Get Size for Custom Plotting
+		if(sshsNodeAttributeExists(sourceInfoNode, "userSizeX", SSHS_INT)) {
+			userSizeX = sshsNodeGetInt(sourceInfoNode, "userSizeX");
+			userSizeY = sshsNodeGetInt(sourceInfoNode, "userSizeY");
+		}
 
 		if (packetSizeX > sizeX) {
 			sizeX = packetSizeX;
@@ -806,7 +828,7 @@ static bool caerVisualizerModuleInit(caerModuleData moduleData, caerVisualizerRe
 	CAER_EVENT_PACKET_CONTAINER_ITERATOR_END
 
 	moduleData->moduleState = caerVisualizerInit(renderer, eventHandler, sizeX, sizeY, VISUALIZER_DEFAULT_ZOOM, true,
-		moduleData, sourceID);
+		moduleData, sourceID, userSizeX, userSizeY);
 	if (moduleData->moduleState == NULL) {
 		return (false);
 	}

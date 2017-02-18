@@ -53,8 +53,6 @@ void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLE
 			posy = posy - DYNAPSE_CONFIG_YCHIPSIZE;
 		}else if(chipId == DYNAPSE_CONFIG_DYNAPSE_U1){
 			posx = posx - DYNAPSE_CONFIG_XCHIPSIZE;
-		}else if(chipId == DYNAPSE_CONFIG_DYNAPSE_U0){
-			;
 		}
 
 		// select core
