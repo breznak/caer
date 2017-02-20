@@ -26,6 +26,9 @@ void caerDynapseSetBias(caerInputDynapseState state, uint32_t chipId, uint32_t c
 uint32_t generatesBitsCoarseFineBiasSetting(sshsNode node, const char *biasName, uint8_t coarseValue,
 	uint16_t fineValue, const char *hlbias, const char *currentLevel, const char *sex,
 	bool enabled, int chipid);
+bool setCamContent(caerInputDynapseState state, int16_t chipId, bool ei, bool fs, int16_t address,
+	int8_t source_core, int8_t coreId, int16_t row, int16_t column);
+
 
 bool EnableStimuliGen(caerModuleData moduleData) {
 	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
@@ -1707,6 +1710,31 @@ void caerInputDYNAPSERun(caerModuleData moduleData, size_t argsNumber, va_list a
 	}
 }
 
+//write neuron CAM when a synapse is built or modified
+bool setCamContent(caerInputDynapseState state, int16_t chipId, bool ei, bool fs, int16_t address,
+	int8_t source_core, int8_t coreId, int16_t row, int16_t column) {
+
+	// Check if the pointer is valid.
+	if (state->deviceState == NULL) {
+		struct caer_dynapse_info emptyInfo = { 0, .deviceString = NULL };
+		return(false);
+	}
+
+    uint32_t bits = ei << 29 |
+    		fs << 28 |
+    		address << 20 |
+    		source_core << 18 |
+    		1 << 17 |
+    		coreId << 8 |
+    		row << 5 |
+    		column << 0;
+
+    caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, chipId);
+    caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, bits); //this is the 30 bits
+
+	return (true);
+}
+
 void caerDynapseSetBias(caerInputDynapseState state, uint32_t chipId, uint32_t coreId, const char *biasName_t,
 	uint8_t coarseValue, uint16_t fineValue, const char *lowHigh, const char *npBias) {
 
@@ -1738,7 +1766,7 @@ void caerDynapseSetBias(caerInputDynapseState state, uint32_t chipId, uint32_t c
 	uint32_t bits = generatesBitsCoarseFineBiasSetting(state->eventSourceConfigNode, biasName, coarseValue, fineValue,
 		lowHigh, "Normal", npBias, true, (int) chipId);
 
-	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, bits);
+	//caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, bits);
 
 	return;
 }

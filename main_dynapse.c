@@ -63,6 +63,10 @@
 #include <libcaer/events/frame.h>
 #endif
 
+#ifdef ENABLE_HELLOWORLD
+#include "modules/helloworld/helloworld.h"
+#endif
+
 // Common filters support.
 
 static bool mainloop_1(void);
@@ -123,6 +127,10 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_MONITORNEUFILTER
 	caerMonitorNeuFilter(6, 1);
+#endif
+
+#ifdef ENABLE_HELLOWORLD
+	caerHelloWorldModule(12, spike);
 #endif
 
 	// A simple visualizer exists to show what the output looks like.

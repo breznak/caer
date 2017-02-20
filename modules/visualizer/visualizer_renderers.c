@@ -376,7 +376,7 @@ bool doClear) {
 	// Render all spikes.
 	CAER_SPIKE_ITERATOR_ALL_START( (caerSpikeEventPacket) spikeEventPacketHeader )
 
-	// get core id
+		// get core id
 		uint8_t coreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);
 		uint8_t chipId = caerSpikeEventGetChipID(caerSpikeIteratorElement);
 		//get x,y position
