@@ -2,7 +2,7 @@
  *  Author: federico.corradi@inilabs.com
  */
 
-#define USE_CUDNN 2
+//#define USE_CUDNN 2
 
 // Choose your network and it will run in real-time :-)
 // DVS FACE DETECTION - remember to enable doSaveHist_png in imagegenerator

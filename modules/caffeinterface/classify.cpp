@@ -10,14 +10,14 @@ using std::string;
 void MyCaffe::file_set(int * inim, int size, char *b, double thr,
 		bool printoutputs, caerFrameEvent *single_frame, bool showactivations, bool norminput) {
 
-	for (size_t x = 0; x < size; x++) {
+	/*for (size_t x = 0; x < size; x++) {
 		for (size_t y = 0; y < size; y++) {
 			int linindex = x * size + y;
 			if (inim[linindex] == 256) {
 				inim[linindex] = 255; // [0,255] is png
 			}
 		}
-	}
+	}*/
 
 	// Loading img
 	cv::Mat img = cv::Mat(size, size, CV_8UC1);
