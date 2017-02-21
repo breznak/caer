@@ -101,7 +101,7 @@
 #define DISPLAYIMGSIZE 64
 #endif
 #ifdef ENABLE_CAFFEINTERFACE
-#define CAFFEVISUALIZERSIZE 64
+#define CAFFEVISUALIZERSIZE 1024
 #include "modules/caffeinterface/wrapper.h"
 #endif
 

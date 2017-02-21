@@ -36,7 +36,7 @@ void MyCaffe::file_set(int * inim, int size, char *b, double thr,
 		img2 = img2 * 0.00390625; // normalize 0,255 to 1
 	}
 
-	CHECK(!img.empty()) << "Unable to decode image " << file_i;
+	CHECK(!img2.empty()) << "Unable to decode image " << file_i;
 	std::vector<Prediction> predictions = MyCaffe::Classify(img2, 5,
 			single_frame, showactivations);
 
@@ -61,7 +61,7 @@ void MyCaffe::file_set(int * inim, int size, char *b, double thr,
 	        inim[i*size + j] = color;
 	    }
 	}
-	//cv::imshow("debug",255.*img);
+	//cv::imshow("debug",img2);
 	//cv::waitKey(1);
 
 }
