@@ -12,6 +12,7 @@
 #include "main.h"
 #include "dynapse_common.h"
 #include "base/mainloop.h"
+#include "ext/portable_time.h"
 #include <libcaer/events/packetContainer.h>
 #include <libcaer/events/spike.h>
 
@@ -341,10 +342,10 @@ void spiketrainReg(void *spikeGenState) {
 	atomic_load(&state->genSpikeState.sy) << 9;
 
 	if (!atomic_load(&state->genSpikeState.started)) {
-		LABELSTART: clock_gettime(CLOCK_MONOTONIC, &tstart);
+		LABELSTART: portable_clock_gettime_monotonic(&tstart);
 	}
 
-	clock_gettime(CLOCK_MONOTONIC, &tend);
+	portable_clock_gettime_monotonic(&tend);
 
 	if (atomic_load(&state->genSpikeState.stim_duration)
 		<= ((double) tend.tv_sec + 1.0e-9 * tend.tv_nsec) - ((double) tstart.tv_sec + 1.0e-9 * tstart.tv_nsec)) {
@@ -414,10 +415,10 @@ void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCH
 		}
 
 	if (!atomic_load(&state->genSpikeState.started)) {
-		LABELSTART: clock_gettime(CLOCK_MONOTONIC, &tstart);
+		LABELSTART: portable_clock_gettime_monotonic(&tstart);
 	}
 
-	clock_gettime(CLOCK_MONOTONIC, &tend);
+	portable_clock_gettime_monotonic(&tend);
 
 	if (atomic_load(&state->genSpikeState.stim_duration)
 		<= ((double) tend.tv_sec + 1.0e-9 * tend.tv_nsec) - ((double) tstart.tv_sec + 1.0e-9 * tstart.tv_nsec)) {
@@ -528,10 +529,10 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 	atomic_load(&state->genSpikeState.sx) << 6 | 1 << 7 | 1 << 9;
 
 	if (!atomic_load(&state->genSpikeState.started)) {
-		LABELSTART: clock_gettime(CLOCK_MONOTONIC, &tstart);
+		LABELSTART: portable_clock_gettime_monotonic(&tstart);
 	}
 
-	clock_gettime(CLOCK_MONOTONIC, &tend);
+	portable_clock_gettime_monotonic(&tend);
 
 	if (atomic_load(&state->genSpikeState.stim_duration)
 		<= ((double) tend.tv_sec + 1.0e-9 * tend.tv_nsec) - ((double) tstart.tv_sec + 1.0e-9 * tstart.tv_nsec)) {
