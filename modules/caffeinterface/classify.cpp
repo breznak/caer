@@ -46,6 +46,7 @@ void MyCaffe::file_set(int * inim, int size, char *b, double thr,
 		p = predictions[i];
 		if(i == 0){
 			std::strcpy(b,p.first.c_str());
+			cv::putText(img, p.first.c_str(), cv::Point(2,10), CV_FONT_HERSHEY_PLAIN, 0.6, cv::Scalar(255));
 		}
 		if (printoutputs) {
 			std::cout << "\n" << std::fixed << std::setprecision(4) << p.second
@@ -53,7 +54,6 @@ void MyCaffe::file_set(int * inim, int size, char *b, double thr,
 		}
 	}
 
-	cv::putText(img, p.first.c_str(), cv::Point(2,10), CV_FONT_HERSHEY_PLAIN, 0.6, cv::Scalar(255));
 	for (int j = 0; j < size; j++) {
 	    for (int i = 0; i < size; i++) {
 	        uchar& uxy = img.at<uchar>(i, j);
