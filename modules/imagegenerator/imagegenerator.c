@@ -193,8 +193,8 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 	sshsNode sourceInfoNodeCA = caerMainloopGetSourceInfo(sourceID);
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
 	if (!sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SSHS_SHORT)) { //to do for visualizer change name of field to a more generic one
-		sshsNodePutShort(sourceInfoNode, "dataSizeX", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeX"));
-		sshsNodePutShort(sourceInfoNode, "dataSizeY", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeY"));
+		sshsNodePutShort(sourceInfoNode, "dataSizeX", CLASSIFY_IMG_SIZE);
+		sshsNodePutShort(sourceInfoNode, "dataSizeY", CLASSIFY_IMG_SIZE);
 	}
 
 	//update module state

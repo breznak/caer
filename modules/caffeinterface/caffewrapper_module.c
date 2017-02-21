@@ -56,7 +56,7 @@ static bool caerCaffeWrapperInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doShowActivations", false);
 	state->doShowActivations = sshsNodeGetBool(moduleData->moduleNode,
 			"doShowActivations");
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doNormInputImages", false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doNormInputImages", true);
 	state->doNormInputImages = sshsNodeGetBool(moduleData->moduleNode,
 				"doNormInputImages");
 
