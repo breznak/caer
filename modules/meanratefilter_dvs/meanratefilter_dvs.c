@@ -9,6 +9,7 @@
 #include "base/mainloop.h"
 #include "base/module.h"
 #include "ext/buffers.h"
+#include "ext/portable_time.h"
 #include "ext/colorjet/colorjet.h"
 
 struct MRFilter_state {
@@ -113,7 +114,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 
 	// if not measuring, let's start
 	if (state->startedMeas == false) {
-		clock_gettime(CLOCK_MONOTONIC, &state->tstart);
+		portable_clock_gettime_monotonic(&state->tstart);
 		state->measureStartedAt = (double) state->tstart.tv_sec + 1.0e-9 * state->tstart.tv_nsec;
 		state->startedMeas = true;
 	}
@@ -124,7 +125,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 	int16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dataSizeY");
 
 	// get current time
-	clock_gettime(CLOCK_MONOTONIC, &state->tend);
+	portable_clock_gettime_monotonic(&state->tend);
 	double now = ((double) state->tend.tv_sec + 1.0e-9 * state->tend.tv_nsec);
 	// if we measured for enough time..
 	if (state->measureMinTime <= (now - state->measureStartedAt)) {
