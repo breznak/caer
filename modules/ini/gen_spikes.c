@@ -375,7 +375,6 @@ void spiketrainReg(void *spikeGenState) {
 		DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, value); //usb_handle
 		/* */
 		portable_clock_gettime_monotonic(&dd);
-		long ns = round(dd.tv_nsec - ss.tv_nsec); // Convert nanoseconds to milliseconds
 		tim.tv_nsec = tim.tv_nsec - (dd.tv_nsec - ss.tv_nsec);
 		/* now do the nano sleep */
 		nanosleep(&tim, NULL);
@@ -467,7 +466,6 @@ void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCH
 
 		/* */
 		portable_clock_gettime_monotonic(&dd);
-		long ns = round(dd.tv_nsec - ss.tv_nsec); // Convert nanoseconds to milliseconds
 		tim.tv_nsec = tim.tv_nsec - (dd.tv_nsec - ss.tv_nsec);
 		/* */
 		nanosleep(&tim, NULL);
@@ -608,7 +606,6 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 
 		/* remove time it took to send, to meet frequency */
 		portable_clock_gettime_monotonic(&dd);
-		long ns = round(dd.tv_nsec - ss.tv_nsec); // Convert nanoseconds to milliseconds
 		tim.tv_nsec = tim.tv_nsec - (dd.tv_nsec - ss.tv_nsec);
 		/* now do the nano sleep */
 		nanosleep(&tim, NULL);
