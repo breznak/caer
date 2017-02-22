@@ -399,7 +399,7 @@ void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCH
 		tim.tv_nsec = 1000000000L / atomic_load(&state->genSpikeState.stim_avr);
 	}
 	else {
-		tim.tv_nsec = 999999999L; //1000000000L;
+		tim.tv_nsec = 999999999L;
 	}
 
 	//generate chip command for stimulating
@@ -488,7 +488,7 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 		tim.tv_nsec = 1000000000L / atomic_load(&state->genSpikeState.stim_avr);
 	}
 	else {
-		tim.tv_nsec = 999999999L;  // one sec
+		tim.tv_nsec = 999999999L;
 	}
 
 	//generate chip command for stimulating
