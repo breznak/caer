@@ -348,7 +348,7 @@ bool doClear) {
 		}
 
 		// draw pixels (neurons might be merged due to aliasing..)
-		al_put_pixel(new_x, new_y, al_map_rgb(coreId * 80, 255, 50 * coreId));
+		al_put_pixel(new_x, new_y, al_map_rgb(coreId * 0, 255, 0 * coreId));
 
 		//caerLog(CAER_LOG_NOTICE, __func__, "chipId %d, new_x %d, new_y %d, indexLin %d\n", chipId, new_x, new_y, indexLin);
 
@@ -383,7 +383,18 @@ bool doClear) {
 		uint16_t y = caerSpikeEventGetY(caerSpikeIteratorElement);
 		uint16_t x = caerSpikeEventGetX(caerSpikeIteratorElement);
 
-		al_put_pixel(x, y, al_map_rgb(coreId * 80, 85, 30 * coreId));
+		if (coreId == 0){
+			al_put_pixel(x, y, al_map_rgb(coreId * 0, 255, 0 * coreId));
+			}
+		else if (coreId == 1) {
+			al_put_pixel(x, y, al_map_rgb(coreId * 0, 0, 255 * coreId));
+			}
+		else if(coreId == 2) {
+			al_put_pixel(x, y, al_map_rgb(coreId * 255, 0, 0 * coreId));
+			}
+		else if(coreId == 3) {
+			al_put_pixel(x, y, al_map_rgb(coreId * 255, 255, 0 * coreId));
+			}
 
 	CAER_SPIKE_ITERATOR_ALL_END
 
