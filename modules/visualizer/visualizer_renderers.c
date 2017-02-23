@@ -384,16 +384,16 @@ bool doClear) {
 		uint16_t x = caerSpikeEventGetX(caerSpikeIteratorElement);
 
 		if (coreId == 0){
-			al_put_pixel(x, y, al_map_rgb(coreId * 0, 255, 0 * coreId));
+			al_put_pixel(x, y, al_map_rgb( 0, 255, 0 ));
 			}
 		else if (coreId == 1) {
-			al_put_pixel(x, y, al_map_rgb(coreId * 0, 0, 255 * coreId));
+			al_put_pixel(x, y, al_map_rgb( 0, 0, 255 ));
 			}
 		else if(coreId == 2) {
-			al_put_pixel(x, y, al_map_rgb(coreId * 255, 0, 0 * coreId));
+			al_put_pixel(x, y, al_map_rgb( 255, 0, 0 ));
 			}
 		else if(coreId == 3) {
-			al_put_pixel(x, y, al_map_rgb(coreId * 255, 255, 0 * coreId));
+			al_put_pixel(x, y, al_map_rgb( 255, 255, 0));
 			}
 
 	CAER_SPIKE_ITERATOR_ALL_END
