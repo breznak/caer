@@ -67,6 +67,11 @@
 #include <libcaer/events/frame.h>
 #endif
 
+#ifdef ENABLE_MEANRATEFILTER_DVS
+#include <libcaer/events/frame.h>
+#include "modules/meanratefilter_dvs/meanratefilter_dvs.h"
+#endif
+
 #ifdef ENABLE_MONITORNEUFILTER
 #include "modules/monitorneufilter/monitorneufilter.h"
 #endif
@@ -101,7 +106,7 @@
 #define DISPLAYIMGSIZE 64
 #endif
 #ifdef ENABLE_CAFFEINTERFACE
-#define CAFFEVISUALIZERSIZE 64
+#define CAFFEVISUALIZERSIZE 1024
 #include "modules/caffeinterface/wrapper.h"
 #endif
 
@@ -189,6 +194,15 @@ static bool mainloop_1(void) {
 	caerFrameEventPacket medianFrame = NULL;
 	caerMainloopFreeAfterLoop(&free, medianFrame);	// free memory after mainloop
 	caerPoint4DEventPacket medianData  = caerMediantrackerFilter(13, polarity_cam, &medianFrame);
+#endif
+
+	// Filter that show the mean rate of events
+#ifdef ENABLE_MEANRATEFILTER_DVS
+	caerFrameEventPacket freqplot = NULL;
+	caerMeanRateFilterDVS(15, polarity_cam, &freqplot);
+#ifdef ENABLE_FILE_INPUT
+	caerMeanRateFilterDVS(15, polarity_cam, &freqplot);
+#endif
 #endif
 
 	// Fitler that maps polarity dvs events as spiking inputs of the dynapse processor
@@ -283,6 +297,11 @@ static bool mainloop_1(void) {
 	caerVisualizer(69, "Weight", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) weightplotG);
 	caerVisualizer(70, "Synapse", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplotG);
 #endif
+#ifdef ENABLE_MEANRATEFILTER_DVS
+	if(freqplot != NULL){
+		caerVisualizer(73, "MeanRateFrequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
+	}
+#endif
 #endif
 
 #if defined(ENABLE_VISUALIZER) && defined (ENABLE_IMAGEGENERATOR)
@@ -342,6 +361,10 @@ static bool mainloop_1(void) {
 	free(classification_results);
 	free(networkActivity);
 #endif
+#endif
+
+#ifdef ENABLE_MEANRATEFILTER_DVS
+	free(freqplot);
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.

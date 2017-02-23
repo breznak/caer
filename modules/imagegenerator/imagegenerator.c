@@ -40,6 +40,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 static void caerImageGeneratorExit(caerModuleData moduleData);
 static bool allocateImageMapSubsampled(imagegeneratorState state,
 		int16_t sourceID, int16_t sizeX, int16_t sizeY);
+static void caerImageGeneratorConfig(caerModuleData moduleData);
 
 static struct caer_module_functions caerImageGeneratorFunctions = {
 		.moduleInit = &caerImageGeneratorInit, .moduleRun =
@@ -79,6 +80,17 @@ static bool caerImageGeneratorInit(caerModuleData moduleData) {
 	state->ImageMap = NULL;
 
 	return (true);
+}
+
+static void caerImageGeneratorConfig(caerModuleData moduleData) {
+
+	// Ensure numSpikes is set.
+	imagegeneratorState state = moduleData->moduleState;
+
+	state->numSpikes = sshsNodeGetInt(moduleData->moduleNode, "numSpikes");
+	state->rectifyPolarities = sshsNodeGetBool(moduleData->moduleNode,"rectifyPolarities");
+	state->colorscale = sshsNodeGetInt(moduleData->moduleNode, "colorscale");
+
 }
 
 static void caerImageGeneratorExit(caerModuleData moduleData) {
@@ -181,8 +193,8 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 	sshsNode sourceInfoNodeCA = caerMainloopGetSourceInfo(sourceID);
 	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
 	if (!sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SSHS_SHORT)) { //to do for visualizer change name of field to a more generic one
-		sshsNodePutShort(sourceInfoNode, "dataSizeX", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeX"));
-		sshsNodePutShort(sourceInfoNode, "dataSizeY", sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeY"));
+		sshsNodePutShort(sourceInfoNode, "dataSizeX", CLASSIFY_IMG_SIZE);
+		sshsNodePutShort(sourceInfoNode, "dataSizeY", CLASSIFY_IMG_SIZE);
 	}
 
 	//update module state
@@ -203,8 +215,14 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 
 	if (polarity != NULL) {
 
-		float cam_sizeX = sshsNodeGetShort(sourceInfoNode, "dataSizeX");
-		float cam_sizeY = sshsNodeGetShort(sourceInfoNode, "dataSizeY");
+		float cam_sizeX = sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeX");
+		float cam_sizeY = sshsNodeGetShort(sourceInfoNodeCA, "dataSizeY");
+
+		if(cam_sizeX == 0 || cam_sizeY == 0){
+			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+								"Wrong device size not computing anything in here..");
+			return;
+		}
 
 		float res_x = CLASSIFY_IMG_SIZE / cam_sizeX;
 		float res_y = CLASSIFY_IMG_SIZE / cam_sizeY;
@@ -324,6 +342,8 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 		} //CAER_POLARITY_ITERATOR_VALID_END
 		free(onlyvalid);
 	}/* **** SPIKE SECTION END *** */
+
+	caerImageGeneratorConfig(moduleData);
 
 }
 

@@ -12,6 +12,7 @@
 #include "main.h"
 #include "dynapse_common.h"
 #include "base/mainloop.h"
+#include "ext/portable_time.h"
 #include <libcaer/events/packetContainer.h>
 #include <libcaer/events/spike.h>
 
@@ -48,6 +49,7 @@ static int CamCleared = 0;
 static int CamAllCleared = 0;
 static int BiasesLoaded = 0;
 static int pattern_number = 4; //3 or 4
+
 
 bool caerGenSpikeInit(caerModuleData moduleData) {
 
@@ -329,7 +331,7 @@ void spiketrainReg(void *spikeGenState) {
 		tim.tv_nsec = 1000000000L / atomic_load(&state->genSpikeState.stim_avr);
 	}
 	else {
-		tim.tv_nsec = 1000000000L;
+		tim.tv_nsec = 999999999L;
 	}
 
 	uint32_t value = atomic_load(&state->genSpikeState.core_d) | 0 << 16 | 0 << 17 | 1 << 13 |
@@ -341,10 +343,10 @@ void spiketrainReg(void *spikeGenState) {
 	atomic_load(&state->genSpikeState.sy) << 9;
 
 	if (!atomic_load(&state->genSpikeState.started)) {
-		LABELSTART: clock_gettime(CLOCK_MONOTONIC, &tstart);
+		LABELSTART: portable_clock_gettime_monotonic(&tstart);
 	}
 
-	clock_gettime(CLOCK_MONOTONIC, &tend);
+	portable_clock_gettime_monotonic(&tend);
 
 	if (atomic_load(&state->genSpikeState.stim_duration)
 		<= ((double) tend.tv_sec + 1.0e-9 * tend.tv_nsec) - ((double) tstart.tv_sec + 1.0e-9 * tstart.tv_nsec)) {
@@ -362,14 +364,21 @@ void spiketrainReg(void *spikeGenState) {
 	}
 
 	if (!atomic_load(&state->genSpikeState.done)) {
-		nanosleep(&tim, NULL);
-		// send spikes
+
+		/* remove time it takes to send, to better match the target freq */
+		struct timespec ss, dd;
+		portable_clock_gettime_monotonic(&ss);
+		/* */
 		caerDeviceConfigSet((caerDeviceHandle) state->deviceState,
 		DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, atomic_load(&state->genSpikeState.chip_id));  //usb_handle
-		/*send the spike*/
 		caerDeviceConfigSet((caerDeviceHandle) state->deviceState,
 		DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, value); //usb_handle
-		//caerLog(CAER_LOG_NOTICE, "spikeGen", "sending spikes %d \n", value);
+		/* */
+		portable_clock_gettime_monotonic(&dd);
+		tim.tv_nsec = tim.tv_nsec - (dd.tv_nsec - ss.tv_nsec);
+		/* now do the nano sleep */
+		nanosleep(&tim, NULL);
+
 	}
 
 }
@@ -390,7 +399,7 @@ void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCH
 		tim.tv_nsec = 1000000000L / atomic_load(&state->genSpikeState.stim_avr);
 	}
 	else {
-		tim.tv_nsec = 1000000000L; //1000000000L;
+		tim.tv_nsec = 999999999L;
 	}
 
 	//generate chip command for stimulating
@@ -414,10 +423,10 @@ void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCH
 		}
 
 	if (!atomic_load(&state->genSpikeState.started)) {
-		LABELSTART: clock_gettime(CLOCK_MONOTONIC, &tstart);
+		LABELSTART: portable_clock_gettime_monotonic(&tstart);
 	}
 
-	clock_gettime(CLOCK_MONOTONIC, &tend);
+	portable_clock_gettime_monotonic(&tend);
 
 	if (atomic_load(&state->genSpikeState.stim_duration)
 		<= ((double) tend.tv_sec + 1.0e-9 * tend.tv_nsec) - ((double) tstart.tv_sec + 1.0e-9 * tstart.tv_nsec)) {
@@ -435,7 +444,12 @@ void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCH
 	}
 
 	if (!atomic_load(&state->genSpikeState.done)) {
-		nanosleep(&tim, NULL);
+
+		/* remove time it takes to send, to better match the target freq */
+		struct timespec ss, dd;
+		portable_clock_gettime_monotonic(&ss);
+		/* */
+
 		// send spikes
 		caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP,
 		DYNAPSE_CONFIG_CHIP_ID, atomic_load(&state->genSpikeState.chip_id));
@@ -449,6 +463,12 @@ void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCH
 					//caerLog(CAER_LOG_NOTICE, "spikeGen", "sending spikes %d \n", valueSent);
 				}
 			}
+
+		/* */
+		portable_clock_gettime_monotonic(&dd);
+		tim.tv_nsec = tim.tv_nsec - (dd.tv_nsec - ss.tv_nsec);
+		/* */
+		nanosleep(&tim, NULL);
 	}
 
 }
@@ -468,7 +488,7 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 		tim.tv_nsec = 1000000000L / atomic_load(&state->genSpikeState.stim_avr);
 	}
 	else {
-		tim.tv_nsec = 1000000000L;
+		tim.tv_nsec = 999999999L;
 	}
 
 	//generate chip command for stimulating
@@ -528,10 +548,10 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 	atomic_load(&state->genSpikeState.sx) << 6 | 1 << 7 | 1 << 9;
 
 	if (!atomic_load(&state->genSpikeState.started)) {
-		LABELSTART: clock_gettime(CLOCK_MONOTONIC, &tstart);
+		LABELSTART: portable_clock_gettime_monotonic(&tstart);
 	}
 
-	clock_gettime(CLOCK_MONOTONIC, &tend);
+	portable_clock_gettime_monotonic(&tend);
 
 	if (atomic_load(&state->genSpikeState.stim_duration)
 		<= ((double) tend.tv_sec + 1.0e-9 * tend.tv_nsec) - ((double) tstart.tv_sec + 1.0e-9 * tstart.tv_nsec)) {
@@ -549,7 +569,12 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 	}
 
 	if (!atomic_load(&state->genSpikeState.done)) {
-		nanosleep(&tim, NULL);
+
+		/* remove time it takes to send */
+		struct timespec ss, dd;
+		portable_clock_gettime_monotonic(&ss);
+		/* */
+
 		// send spikes
 		if (atomic_load(&state->genSpikeState.doStimPrimitiveBias) == true
 			&& atomic_load(&state->genSpikeState.doStimPrimitiveCam) == true) {
@@ -578,7 +603,13 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 				DYNAPSE_CONFIG_CHIP_CONTENT, valueSentInhibitoryControl);
 			}
 		}
-		//caerLog(CAER_LOG_NOTICE, "spikeGen", "sending spikes %d \n", valueSent);
+
+		/* remove time it took to send, to meet frequency */
+		portable_clock_gettime_monotonic(&dd);
+		tim.tv_nsec = tim.tv_nsec - (dd.tv_nsec - ss.tv_nsec);
+		/* now do the nano sleep */
+		nanosleep(&tim, NULL);
+
 	}
 }
 
