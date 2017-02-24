@@ -67,6 +67,10 @@
 #include "modules/helloworld/helloworld.h"
 #endif
 
+#ifdef ENABLE_EFFECTIVETRANSFERFUNCTION
+#include "modules/effectivetransferfunction/effectivetransferfunction.h"
+#endif
+
 // Common filters support.
 
 static bool mainloop_1(void);
@@ -121,6 +125,15 @@ static bool mainloop_1(void) {
 	caerMeanRateFilter(4, spike, &freqplot);
 #endif
 
+#ifdef ENABLE_EFFECTIVETRANSFERFUNCTION
+	caerFrameEventPacket ETFPlot = NULL;	//plot
+	caerPoint4DEventPacket ETFData  = caerEffectiveTransferFunction(13, spike);
+
+	if(ETFData != NULL){
+		caerEffectiveTransferFunctionMakePlot(&ETFData, &ETFPlot);
+	}
+#endif
+
 #ifdef ENABLE_LEARNINGFILTER
 	caerLearningFilter(5, spike, &weightplot, &synapseplot);
 #endif
@@ -144,6 +157,9 @@ static bool mainloop_1(void) {
 	caerVisualizer(66, "Weight", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) weightplot);
 	caerVisualizer(67, "Synapse", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplot);
 #endif
+#ifdef ENABLE_EFFECTIVETRANSFERFUNCTION
+	caerVisualizer(69, "EffectiveTransferFunction", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) ETFPlot);
+#endif
 #endif
 
 #ifdef ENABLE_FILE_OUTPUT
@@ -164,6 +180,10 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_MEANRATEFILTER
 	free(freqplot);
+#endif
+
+#ifdef ENABLE_EFFECTIVETRANSFERFUNCTION
+	free(ETFPlot);
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.

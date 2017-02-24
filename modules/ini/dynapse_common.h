@@ -46,6 +46,18 @@ struct gen_spike_state {
 	atomic_int_fast32_t dy;
 	atomic_bool sx;
 	atomic_bool sy;
+	/* ETF */
+	// stimulation Thread ETF
+	thrd_t ETFThread;
+	atomic_bool ETFStim;
+	atomic_bool ETFstarted;
+	atomic_bool ETFdone;
+	atomic_int_fast32_t ETFchip_id;		// the chip that will be measured [0,4,8,12]
+	atomic_int_fast32_t ETFduration;	// total stimulation duration
+	atomic_int_fast32_t ETFphase_num;	// stimulation phase number
+	atomic_bool ETFrepeat;
+	atomic_bool ETFrunningThread;
+	int ETFstepnum;
 };
 
 struct caer_input_dynapse_state {

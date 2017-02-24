@@ -30,6 +30,8 @@
 bool caerGenSpikeInit(caerModuleData moduleData);
 void caerGenSpikeExit(caerModuleData moduleData);
 int spikeGenThread(void *spikeGenState);
+int stimulationETFThread(void *spikeGenState);
+void spiketrainETF(void *spikeGenState);
 void spiketrainReg(void *spikeGenState);
 void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCHIPSIZE][DYNAPSE_CONFIG_YCHIPSIZE]);
 void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress);
@@ -43,13 +45,13 @@ void ResetBiases(void *spikeGenState);
 //		const char *lowHigh, const char *npBias);
 
 struct timespec tstart = { 0, 0 }, tend = { 0, 0 };
+struct timespec tstart_etf = { 0, 0 }, tend_etf = { 0, 0 };
 static int CamSeted = 0;
 static int CamSetedSingle = 0;
 static int CamCleared = 0;
 static int CamAllCleared = 0;
 static int BiasesLoaded = 0;
 static int pattern_number = 4; //3 or 4
-
 
 bool caerGenSpikeInit(caerModuleData moduleData) {
 
@@ -107,14 +109,51 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(spikeNode, "loadDefaultBiases", false); //1 //false
 	atomic_store(&state->genSpikeState.loadDefaultBiases, sshsNodeGetBool(spikeNode, "loadDefaultBiases"));
 
-	atomic_store(&state->genSpikeState.started, false); //false
+	atomic_store(&state->genSpikeState.started, false);
 	atomic_store(&state->genSpikeState.done, true);
+
+	sshsNodePutBoolIfAbsent(spikeNode, "ETFStim", false);
+	atomic_store(&state->genSpikeState.ETFStim, sshsNodeGetBool(spikeNode, "ETFStim"));
+
+	sshsNodePutBoolIfAbsent(spikeNode, "ETFstarted", false);
+	atomic_store(&state->genSpikeState.ETFstarted, sshsNodeGetBool(spikeNode, "ETFstarted"));
+
+	sshsNodePutBoolIfAbsent(spikeNode, "ETFdone", true);
+	atomic_store(&state->genSpikeState.ETFdone, sshsNodeGetBool(spikeNode, "ETFdone"));
+
+	sshsNodePutIntIfAbsent(spikeNode, "ETFchip_id", 0);
+	atomic_store(&state->genSpikeState.ETFchip_id, sshsNodeGetInt(spikeNode, "ETFchip_id"));
+
+	sshsNodePutIntIfAbsent(spikeNode, "ETFduration", 30);
+	atomic_store(&state->genSpikeState.ETFduration, sshsNodeGetInt(spikeNode, "ETFduration"));
+
+	sshsNodePutIntIfAbsent(spikeNode, "ETFphase_num", 6);
+	atomic_store(&state->genSpikeState.ETFphase_num, sshsNodeGetInt(spikeNode, "ETFphase_num"));
+
+	sshsNodePutBoolIfAbsent(spikeNode, "ETFrepeat", true);
+	atomic_store(&state->genSpikeState.ETFrepeat, sshsNodeGetBool(spikeNode, "ETFrepeat"));
+
+	sshsNodePutBoolIfAbsent(spikeNode, "ETFrunningThread", true);
+	atomic_store(&state->genSpikeState.ETFrunningThread, sshsNodeGetBool(spikeNode, "ETFrunningThread"));
+
+	state->genSpikeState.ETFstepnum = 0;
+
+	sshsNodePutBoolIfAbsent(spikeNode, "loadDefaultBiases", false); //1 //false
+	atomic_store(&state->genSpikeState.loadDefaultBiases, sshsNodeGetBool(spikeNode, "loadDefaultBiases"));
+
+	state->genSpikeState.ETFStim = false;
 
 	// Start separate stimulation thread.
 	atomic_store(&state->genSpikeState.running, true);
 
 	if (thrd_create(&state->genSpikeState.spikeGenThread, &spikeGenThread, state) != thrd_success) {
-		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "SpikeGen: Failed to start thread.");
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "spikeGenThread: Failed to start thread.");
+		return (NULL);
+	}
+
+	// Start etf stimulation thread
+	if (thrd_create(&state->genSpikeState.ETFThread, &stimulationETFThread, state) != thrd_success) {
+		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "stimulationETFThread: Failed to start thread.");
 		return (NULL);
 	}
 
@@ -174,11 +213,140 @@ void caerGenSpikeExit(caerModuleData moduleData) {
 
 	// Shut down stimulation thread and wait on it to finish.
 	atomic_store(&state->genSpikeState.running, false);
+	atomic_store(&state->genSpikeState.ETFrunningThread, false); //ETF
 
 	if ((errno = thrd_join(state->genSpikeState.spikeGenThread, NULL)) != thrd_success) {
 		// This should never happen!
 		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
 			"SpikeGen: Failed to join rendering thread. Error: %d.", errno);
+	}
+
+	// Shut down stimulation thread and wait on it to finish.
+	atomic_store(&state->genSpikeState.ETFrunningThread, false);
+	atomic_store(&state->genSpikeState.ETFdone, true);
+	atomic_store(&state->genSpikeState.ETFrepeat, false);
+
+	if ((errno = thrd_join(state->genSpikeState.ETFThread, NULL)) != thrd_success) {
+		// This should never happen!
+		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
+			"EffectiveTransferFunction: Failed to join rendering thread. Error: %d.", errno);
+	}
+
+
+
+}
+
+int stimulationETFThread(void *spikeGenState) {
+	if (spikeGenState == NULL) {
+		return (thrd_error);
+	}
+
+	caerInputDynapseState state = spikeGenState;
+
+	thrd_set_name("stimulationETFThread");
+
+	while (atomic_load_explicit(&state->genSpikeState.ETFrunningThread, // the loop
+		memory_order_relaxed)) {
+		if (atomic_load(&state->genSpikeState.ETFStim)) {
+			spiketrainETF(state);
+		}
+	}
+
+	return (thrd_success);
+}
+
+void spiketrainETF(void *spikeGenState) {
+	if (spikeGenState == NULL) {
+		return;
+	}
+
+	caerInputDynapseState state = spikeGenState;
+
+	struct timespec tim;
+	tim.tv_sec = 0;
+	float measureMinTime = atomic_load(&state->genSpikeState.ETFduration);
+	int inFreqs[6] = { 5, 10, 20, 30, 50, 100, 120 };
+	int nSteps = 6;
+	state->genSpikeState.ETFstepnum = nSteps;
+	double stepDur = measureMinTime / (float) nSteps;
+
+	int this_step = 0;
+
+	struct timespec ss, dd;
+	portable_clock_gettime_monotonic(&ss);
+
+	if (!atomic_load(&state->genSpikeState.ETFstarted)) {
+		LABELSTART: portable_clock_gettime_monotonic(&tstart_etf);
+	}
+
+	portable_clock_gettime_monotonic(&tend_etf);
+
+	//check frequency phase and change accordingly
+	double current_time = (double) ((double) tend_etf.tv_sec + 1.0e-9 * tend_etf.tv_nsec - (double) tstart_etf.tv_sec
+		+ 1.0e-9 * tstart_etf.tv_nsec);
+	this_step = (int) round(current_time / stepDur);
+	atomic_store(&state->genSpikeState.ETFphase_num, this_step);
+	if (inFreqs[this_step] > 0) {
+		tim.tv_nsec = 1000000000L / inFreqs[this_step];	// select frequency
+	}
+	else {
+		tim.tv_nsec = 999999999L;
+	}
+
+	if (atomic_load(&state->genSpikeState.ETFduration) <= current_time) {
+		if (atomic_load(&state->genSpikeState.ETFstarted)) {
+			caerLog(CAER_LOG_NOTICE, __func__, "stimulation finished.\n");
+		}
+		atomic_store(&state->genSpikeState.ETFdone, true);
+		atomic_store(&state->genSpikeState.ETFstarted, false);
+		if (atomic_load(&state->genSpikeState.ETFrepeat)) {
+			caerLog(CAER_LOG_NOTICE, __func__, "stimulation re-started.\n");
+			atomic_store(&state->genSpikeState.ETFstarted, true);
+			atomic_store(&state->genSpikeState.ETFdone, false);
+			goto LABELSTART;
+		}
+	}
+
+	if (!atomic_load(&state->genSpikeState.ETFdone)) {
+		//caerInputDynapseState stateSource = state->eventSourceModuleState;
+		int bits_chipU0[DYNAPSE_MAX_USER_USB_PACKET_SIZE];
+		int counter = 0;
+		if (counter + 1 >= DYNAPSE_MAX_USER_USB_PACKET_SIZE) {
+			caerLog(CAER_LOG_ERROR, __func__, "Breaking transaction\n");
+			// we got data
+			// select destination chip
+			if (state->genSpikeState.ETFchip_id == DYNAPSE_CONFIG_DYNAPSE_U0 || state->genSpikeState.ETFchip_id == DYNAPSE_CONFIG_DYNAPSE_U1
+				|| state->genSpikeState.ETFchip_id == DYNAPSE_CONFIG_DYNAPSE_U2 || state->genSpikeState.ETFchip_id == DYNAPSE_CONFIG_DYNAPSE_U3) {
+				caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+				DYNAPSE_CONFIG_CHIP_ID, atomic_load(&state->genSpikeState.ETFchip_id));
+			}
+			else {
+				caerLog(CAER_LOG_ERROR, __func__,
+					"Chip Id selected is non valid, please select one of 0,4,8,12\n");
+			}
+			// send data with libusb host transfer in packet
+			if (!caerDynapseSendDataToUSB(state->deviceState, bits_chipU0, counter)) {
+				caerLog(CAER_LOG_ERROR, __func__, "USB transfer failed");
+			}
+			counter = 0;
+		}
+		else {
+			bits_chipU0[counter] = 0xf | 0 << 16 | 0 << 17 | 1 << 13 | 0 << 18 | 5 << 20 | 0 << 4 | 0 << 6 | 0 << 7
+				| 0 << 9;
+			counter++;
+		}
+		if (counter > 0) {
+			caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
+			DYNAPSE_CONFIG_CHIP_ID, atomic_load(&state->genSpikeState.ETFchip_id));
+			// send data with libusb host transfer in packet
+			if (!caerDynapseSendDataToUSB(state->deviceState, bits_chipU0, counter)) {
+				caerLog(CAER_LOG_ERROR, __func__, "USB transfer failed");
+			}
+		}
+		portable_clock_gettime_monotonic(&dd);
+		tim.tv_nsec = tim.tv_nsec - (dd.tv_nsec - ss.tv_nsec);
+		/* now do the nano sleep */
+		nanosleep(&tim, NULL);
 	}
 
 }
@@ -406,7 +574,7 @@ void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCH
 	uint32_t value, valueSent;
 	uint32_t value2DArray[DYNAPSE_CONFIG_XCHIPSIZE][DYNAPSE_CONFIG_YCHIPSIZE];
 	int64_t rowId, colId;
-	for (rowId = 0; rowId < DYNAPSE_CONFIG_XCHIPSIZE; rowId++)
+	for (rowId = 0; rowId < DYNAPSE_CONFIG_XCHIPSIZE; rowId++) {
 		for (colId = 0; colId < DYNAPSE_CONFIG_YCHIPSIZE; colId++) {
 			if (spikePattern[rowId][colId] == 1)
 				value = 0xf | 0 << 16 | 0 << 17 | 1 << 13
@@ -421,6 +589,7 @@ void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCH
 			}
 			value2DArray[rowId][colId] = value;
 		}
+	}
 
 	if (!atomic_load(&state->genSpikeState.started)) {
 		LABELSTART: portable_clock_gettime_monotonic(&tstart);
@@ -491,7 +660,7 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 		tim.tv_nsec = 999999999L;
 	}
 
-	//generate chip command for stimulating
+	// generate chip command for stimulating
 	uint32_t valueSent, valueSentTeaching, valueSentTeachingControl, valueSentInhibitory, valueSentInhibitoryControl;
 	uint32_t source_address;
 	valueSent = 0xf | 0 << 16 | 0 << 17 | 1 << 13 | (sourceAddress & 0xff) << 20 | ((sourceAddress & 0x300) >> 8) << 18

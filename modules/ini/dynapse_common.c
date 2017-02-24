@@ -246,7 +246,33 @@ static void spikeConfigListener(sshsNode node, void *userData, enum sshs_node_at
 		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "chip_id")) {
 			atomic_store(&state->genSpikeState.chip_id, changeValue.iint);
 		}
-
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "ETFphase_num")) {
+			atomic_store(&state->genSpikeState.ETFphase_num, changeValue.iint);
+		}
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "ETFStim")) {
+			atomic_store(&state->genSpikeState.ETFStim, changeValue.boolean);
+		}
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "ETFstarted")) {
+			atomic_store(&state->genSpikeState.ETFstarted, changeValue.boolean);
+		}
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "ETFdone")) {
+			atomic_store(&state->genSpikeState.ETFdone, changeValue.boolean);
+		}
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "ETFchip_id")) {
+			atomic_store(&state->genSpikeState.ETFchip_id, changeValue.iint);
+		}
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "ETFduration")) {
+			atomic_store(&state->genSpikeState.ETFduration, changeValue.iint);
+		}
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "ETFphase_num")) {
+			atomic_store(&state->genSpikeState.ETFphase_num, changeValue.iint);
+		}
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "ETFrepeat")) {
+			atomic_store(&state->genSpikeState.ETFrepeat, changeValue.boolean);
+		}
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "ETFrunningThread")) {
+			atomic_store(&state->genSpikeState.ETFrunningThread, changeValue.boolean);
+		}
 	}
 
 }
