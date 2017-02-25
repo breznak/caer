@@ -17,7 +17,7 @@
 #include <libcaer/devices/dynapse.h>
 
 struct gen_spike_state {
-	bool doStim;
+	atomic_bool doStim;
 	atomic_int_fast32_t stim_type;
 	atomic_int_fast32_t stim_avr;				// Hertz [1/s]
 	atomic_int_fast32_t stim_std;				//
@@ -48,15 +48,12 @@ struct gen_spike_state {
 	atomic_bool sy;
 	/* ETF */
 	// stimulation Thread ETF
-	thrd_t ETFThread;
-	atomic_bool ETFStim;
 	atomic_bool ETFstarted;
 	atomic_bool ETFdone;
 	atomic_int_fast32_t ETFchip_id;		// the chip that will be measured [0,4,8,12]
 	atomic_int_fast32_t ETFduration;	// total stimulation duration
 	atomic_int_fast32_t ETFphase_num;	// stimulation phase number
 	atomic_bool ETFrepeat;
-	atomic_bool ETFrunningThread;
 	int ETFstepnum;
 };
 

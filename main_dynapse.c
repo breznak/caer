@@ -120,18 +120,13 @@ static bool mainloop_1(void) {
 #endif
 
 #ifdef ENABLE_MEANRATEFILTER
-	// create frame for displaying frequencoes
+	// create frame for displaying frequencies
 	caerFrameEventPacket freqplot = NULL;
 	caerMeanRateFilter(4, spike, &freqplot);
 #endif
 
 #ifdef ENABLE_EFFECTIVETRANSFERFUNCTION
-	caerFrameEventPacket ETFPlot = NULL;	//plot
 	caerPoint4DEventPacket ETFData  = caerEffectiveTransferFunction(13, spike);
-
-	if(ETFData != NULL){
-		caerEffectiveTransferFunctionMakePlot(&ETFData, &ETFPlot);
-	}
 #endif
 
 #ifdef ENABLE_LEARNINGFILTER
@@ -149,7 +144,7 @@ static bool mainloop_1(void) {
 	// A simple visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
 	caerVisualizer(64, "Spike", &caerVisualizerRendererSpikeEvents, &caerVisualizerEventHandlerSpikeEvents, (caerEventPacketHeader) spike);
-	caerVisualizer(68, "UserSize", &caerVisualizerRendererSpikeEventsRaster, NULL, (caerEventPacketHeader) spike);
+	//caerVisualizer(68, "UserSize", &caerVisualizerRendererSpikeEventsRaster, NULL, (caerEventPacketHeader) spike);
 #ifdef ENABLE_MEANRATEFILTER
 	caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
 #endif
@@ -158,7 +153,7 @@ static bool mainloop_1(void) {
 	caerVisualizer(67, "Synapse", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplot);
 #endif
 #ifdef ENABLE_EFFECTIVETRANSFERFUNCTION
-	caerVisualizer(69, "EffectiveTransferFunction", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) ETFPlot);
+	caerVisualizer(69, "EffectiveTransferFunction", &caerVisualizerRendererETF4D, NULL, (caerEventPacketHeader) ETFData);
 #endif
 #endif
 
@@ -180,10 +175,6 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_MEANRATEFILTER
 	free(freqplot);
-#endif
-
-#ifdef ENABLE_EFFECTIVETRANSFERFUNCTION
-	free(ETFPlot);
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.

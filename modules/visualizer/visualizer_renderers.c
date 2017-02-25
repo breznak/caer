@@ -10,6 +10,7 @@
 #include <libcaer/events/frame.h>
 #include <libcaer/events/imu6.h>
 #include <libcaer/events/point2d.h>
+#include <libcaer/events/point4d.h>
 #include <libcaer/events/spike.h>
 
 bool caerVisualizerRendererPolarityEvents(caerVisualizerPublicState state, caerEventPacketContainer container,
@@ -251,7 +252,7 @@ bool doClear) {
 		return (false);
 	}
 
-	// get size bitmap's size
+	// get bitmap's size
 	int32_t sizeX = state->bitmapRendererSizeX;
 	int32_t sizeY = state->bitmapRendererSizeY;
 
@@ -376,27 +377,85 @@ bool doClear) {
 	// Render all spikes.
 	CAER_SPIKE_ITERATOR_ALL_START( (caerSpikeEventPacket) spikeEventPacketHeader )
 
-		// get core id
+	// get core id
 		uint8_t coreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);
 		uint8_t chipId = caerSpikeEventGetChipID(caerSpikeIteratorElement);
 		//get x,y position
 		uint16_t y = caerSpikeEventGetY(caerSpikeIteratorElement);
 		uint16_t x = caerSpikeEventGetX(caerSpikeIteratorElement);
 
-		if (coreId == 0){
-			al_put_pixel(x, y, al_map_rgb( 0, 255, 0 ));
-			}
+		if (coreId == 0) {
+			al_put_pixel(x, y, al_map_rgb(0, 255, 0));
+		}
 		else if (coreId == 1) {
-			al_put_pixel(x, y, al_map_rgb( 0, 0, 255 ));
-			}
-		else if(coreId == 2) {
-			al_put_pixel(x, y, al_map_rgb( 255, 0, 0 ));
-			}
-		else if(coreId == 3) {
-			al_put_pixel(x, y, al_map_rgb( 255, 255, 0));
-			}
+			al_put_pixel(x, y, al_map_rgb(0, 0, 255));
+		}
+		else if (coreId == 2) {
+			al_put_pixel(x, y, al_map_rgb(255, 0, 0));
+		}
+		else if (coreId == 3) {
+			al_put_pixel(x, y, al_map_rgb(255, 255, 0));
+		}
 
 	CAER_SPIKE_ITERATOR_ALL_END
+
+	return (true);
+}
+
+bool caerVisualizerRendererETF4D(caerVisualizerPublicState state, caerEventPacketContainer container,
+bool doClear) {
+	UNUSED_ARGUMENT(state);
+
+	caerEventPacketHeader Point4DEventPacketHeader = caerEventPacketContainerFindEventPacketByType(container,
+		POINT4D_EVENT);
+	if (Point4DEventPacketHeader == NULL || caerEventPacketHeaderGetEventValid(Point4DEventPacketHeader) == 0) {
+		return (false);
+	}
+
+	// Clear bitmap to black to erase old events.
+	if (doClear) {
+		al_clear_to_color(al_map_rgb(0, 0, 0));
+	}
+
+	// get bitmap's size
+	int32_t sizeX = state->bitmapRendererSizeX;
+	int32_t sizeY = state->bitmapRendererSizeY;
+
+	float maxY = INT_MIN;
+
+	CAER_POINT4D_ITERATOR_VALID_START((caerPoint4DEventPacket) Point4DEventPacketHeader)
+		float corex = caerPoint4DEventGetX(caerPoint4DIteratorElement);
+		float corey = caerPoint4DEventGetY(caerPoint4DIteratorElement);
+		float mean = caerPoint4DEventGetZ(caerPoint4DIteratorElement);
+		float var = caerPoint4DEventGetW(caerPoint4DIteratorElement);
+
+		int coreid = corex * 1 + corey;
+		if (maxY < mean) {
+			maxY = mean;
+		}
+	CAER_POINT4D_ITERATOR_ALL_END
+
+	float scaley = ((float) sizeY) / maxY; // two rasterplots in x
+	float scalex = ((float) sizeX) / 5;
+
+	int counter = 0;
+	CAER_POINT4D_ITERATOR_VALID_START((caerPoint4DEventPacket) Point4DEventPacketHeader)
+		float corex = caerPoint4DEventGetX(caerPoint4DIteratorElement);
+		float corey = caerPoint4DEventGetY(caerPoint4DIteratorElement);
+		float mean = caerPoint4DEventGetZ(caerPoint4DIteratorElement);
+		float var = caerPoint4DEventGetW(caerPoint4DIteratorElement);
+
+		int coreid = corex * 1 + corey;	// color
+		int new_y = (int32_t) floor((float) mean * scaley);
+
+		al_put_pixel(sizeX - (uint32_t)round(counter*scalex), new_y, al_map_rgb(coreid * 80, 255, 0));
+
+		if(counter == 5){
+			counter = 0;
+		}else{
+			counter++;
+		}
+	CAER_POINT4D_ITERATOR_ALL_END
 
 	return (true);
 }

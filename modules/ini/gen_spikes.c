@@ -26,11 +26,11 @@
 #define STIM_PATTERNB_SINGLE   8
 #define STIM_PATTERNC_SINGLE   9
 #define STIM_PATTERND_SINGLE   10
+#define STIM_ETF	11
 
 bool caerGenSpikeInit(caerModuleData moduleData);
 void caerGenSpikeExit(caerModuleData moduleData);
 int spikeGenThread(void *spikeGenState);
-int stimulationETFThread(void *spikeGenState);
 void spiketrainETF(void *spikeGenState);
 void spiketrainReg(void *spikeGenState);
 void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCHIPSIZE][DYNAPSE_CONFIG_YCHIPSIZE]);
@@ -63,6 +63,7 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNodeMain, "spikeGen/");
 
 	sshsNodePutBoolIfAbsent(spikeNode, "doStim", false); //false
+	atomic_store(&state->genSpikeState.doStim, sshsNodeGetBool(spikeNode, "doStim"));
 
 	sshsNodePutIntIfAbsent(spikeNode, "stim_type", U8T(STIM_REGULAR)); //STIM_REGULAR
 	atomic_store(&state->genSpikeState.stim_type, sshsNodeGetInt(spikeNode, "stim_type"));
@@ -112,9 +113,6 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 	atomic_store(&state->genSpikeState.started, false);
 	atomic_store(&state->genSpikeState.done, true);
 
-	sshsNodePutBoolIfAbsent(spikeNode, "ETFStim", false);
-	atomic_store(&state->genSpikeState.ETFStim, sshsNodeGetBool(spikeNode, "ETFStim"));
-
 	sshsNodePutBoolIfAbsent(spikeNode, "ETFstarted", false);
 	atomic_store(&state->genSpikeState.ETFstarted, sshsNodeGetBool(spikeNode, "ETFstarted"));
 
@@ -127,21 +125,16 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(spikeNode, "ETFduration", 30);
 	atomic_store(&state->genSpikeState.ETFduration, sshsNodeGetInt(spikeNode, "ETFduration"));
 
-	sshsNodePutIntIfAbsent(spikeNode, "ETFphase_num", 6);
+	sshsNodePutIntIfAbsent(spikeNode, "ETFphase_num", 0);
 	atomic_store(&state->genSpikeState.ETFphase_num, sshsNodeGetInt(spikeNode, "ETFphase_num"));
 
 	sshsNodePutBoolIfAbsent(spikeNode, "ETFrepeat", true);
 	atomic_store(&state->genSpikeState.ETFrepeat, sshsNodeGetBool(spikeNode, "ETFrepeat"));
 
-	sshsNodePutBoolIfAbsent(spikeNode, "ETFrunningThread", true);
-	atomic_store(&state->genSpikeState.ETFrunningThread, sshsNodeGetBool(spikeNode, "ETFrunningThread"));
-
-	state->genSpikeState.ETFstepnum = 0;
+	state->genSpikeState.ETFstepnum = 6;
 
 	sshsNodePutBoolIfAbsent(spikeNode, "loadDefaultBiases", false); //1 //false
 	atomic_store(&state->genSpikeState.loadDefaultBiases, sshsNodeGetBool(spikeNode, "loadDefaultBiases"));
-
-	state->genSpikeState.ETFStim = false;
 
 	// Start separate stimulation thread.
 	atomic_store(&state->genSpikeState.running, true);
@@ -152,10 +145,10 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 	}
 
 	// Start etf stimulation thread
-	if (thrd_create(&state->genSpikeState.ETFThread, &stimulationETFThread, state) != thrd_success) {
+	/*if (thrd_create(&state->genSpikeState.ETFThread, &stimulationETFThread, state) != thrd_success) {
 		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "stimulationETFThread: Failed to start thread.");
 		return (NULL);
-	}
+	}*/
 
 	/*address*/
 	sshsNodePutBoolIfAbsent(spikeNode, "sx", false);
@@ -213,7 +206,9 @@ void caerGenSpikeExit(caerModuleData moduleData) {
 
 	// Shut down stimulation thread and wait on it to finish.
 	atomic_store(&state->genSpikeState.running, false);
-	atomic_store(&state->genSpikeState.ETFrunningThread, false); //ETF
+	atomic_store(&state->genSpikeState.ETFdone, true);
+	atomic_store(&state->genSpikeState.ETFrepeat, false);
+	atomic_store(&state->genSpikeState.doStim, false);
 
 	if ((errno = thrd_join(state->genSpikeState.spikeGenThread, NULL)) != thrd_success) {
 		// This should never happen!
@@ -221,38 +216,7 @@ void caerGenSpikeExit(caerModuleData moduleData) {
 			"SpikeGen: Failed to join rendering thread. Error: %d.", errno);
 	}
 
-	// Shut down stimulation thread and wait on it to finish.
-	atomic_store(&state->genSpikeState.ETFrunningThread, false);
-	atomic_store(&state->genSpikeState.ETFdone, true);
-	atomic_store(&state->genSpikeState.ETFrepeat, false);
 
-	if ((errno = thrd_join(state->genSpikeState.ETFThread, NULL)) != thrd_success) {
-		// This should never happen!
-		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
-			"EffectiveTransferFunction: Failed to join rendering thread. Error: %d.", errno);
-	}
-
-
-
-}
-
-int stimulationETFThread(void *spikeGenState) {
-	if (spikeGenState == NULL) {
-		return (thrd_error);
-	}
-
-	caerInputDynapseState state = spikeGenState;
-
-	thrd_set_name("stimulationETFThread");
-
-	while (atomic_load_explicit(&state->genSpikeState.ETFrunningThread, // the loop
-		memory_order_relaxed)) {
-		if (atomic_load(&state->genSpikeState.ETFStim)) {
-			spiketrainETF(state);
-		}
-	}
-
-	return (thrd_success);
 }
 
 void spiketrainETF(void *spikeGenState) {
@@ -265,7 +229,7 @@ void spiketrainETF(void *spikeGenState) {
 	struct timespec tim;
 	tim.tv_sec = 0;
 	float measureMinTime = atomic_load(&state->genSpikeState.ETFduration);
-	int inFreqs[6] = { 5, 10, 20, 30, 50, 100, 120 };
+	int inFreqs[6] = { 5, 10, 20, 30, 50, 100 };
 	int nSteps = 6;
 	state->genSpikeState.ETFstepnum = nSteps;
 	double stepDur = measureMinTime / (float) nSteps;
@@ -295,12 +259,12 @@ void spiketrainETF(void *spikeGenState) {
 
 	if (atomic_load(&state->genSpikeState.ETFduration) <= current_time) {
 		if (atomic_load(&state->genSpikeState.ETFstarted)) {
-			caerLog(CAER_LOG_NOTICE, __func__, "stimulation finished.\n");
+			caerLog(CAER_LOG_NOTICE, __func__, "ETF stimulation finished.\n");
 		}
 		atomic_store(&state->genSpikeState.ETFdone, true);
 		atomic_store(&state->genSpikeState.ETFstarted, false);
 		if (atomic_load(&state->genSpikeState.ETFrepeat)) {
-			caerLog(CAER_LOG_NOTICE, __func__, "stimulation re-started.\n");
+			caerLog(CAER_LOG_NOTICE, __func__, "ETF stimulation re-started.\n");
 			atomic_store(&state->genSpikeState.ETFstarted, true);
 			atomic_store(&state->genSpikeState.ETFdone, false);
 			goto LABELSTART;
@@ -308,7 +272,6 @@ void spiketrainETF(void *spikeGenState) {
 	}
 
 	if (!atomic_load(&state->genSpikeState.ETFdone)) {
-		//caerInputDynapseState stateSource = state->eventSourceModuleState;
 		int bits_chipU0[DYNAPSE_MAX_USER_USB_PACKET_SIZE];
 		int counter = 0;
 		if (counter + 1 >= DYNAPSE_MAX_USER_USB_PACKET_SIZE) {
@@ -370,6 +333,7 @@ int spikeGenThread(void *spikeGenState) {
 		else if (state->genSpikeState.setCam == false && CamSeted == 1) {
 			CamSeted = 0;
 		}
+
 		if (state->genSpikeState.setCamSingle == true && CamSetedSingle == 0) {
 			SetCamSingle(state);
 			CamSetedSingle = 1;
@@ -405,10 +369,10 @@ int spikeGenThread(void *spikeGenState) {
 			spiketrainReg(state);
 		}
 		else if (state->genSpikeState.stim_type == STIM_POISSON) {
-
+			// TODO
 		}
 		else if (state->genSpikeState.stim_type == STIM_GAUSSIAN) {
-
+			// TODO
 		}
 		else if (state->genSpikeState.stim_type == STIM_PATTERNA) {
 			// generate pattern A
@@ -477,6 +441,9 @@ int spikeGenThread(void *spikeGenState) {
 			//generate pattern D
 			uint32_t sourceAddress = 4;
 			spiketrainPatSingle(state, sourceAddress);
+		}
+		else if(state->genSpikeState.stim_type == STIM_ETF){
+			spiketrainETF(state);
 		}
 
 	}
