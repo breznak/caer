@@ -20,5 +20,5 @@ caerEventPacketContainer caerInputDYNAPSEFX2(uint16_t moduleID) {
 }
 
 static bool caerInputDYNAPSEFX2Init(caerModuleData moduleData) {
-	return (caerInputDYNAPSEInit(moduleData, CAER_DEVICE_DYNAPSE));
+	return (caerInputDYNAPSEInit(moduleData));
 }

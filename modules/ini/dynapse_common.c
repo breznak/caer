@@ -4,6 +4,7 @@
 #include "ext/buffers.h"
 #include "libcaer/devices/dynapse.h"
 #include "ext/colorjet/colorjet.h"
+#include <unistd.h>
 
 static uint32_t convertBias(const char *biasName, const char* lowhi, const char*cl, const char*sex, uint8_t enal,
 	uint16_t fineValue, uint8_t coarseValue, uint8_t special);
@@ -26,9 +27,11 @@ void caerDynapseSetBias(caerInputDynapseState state, uint32_t chipId, uint32_t c
 uint32_t generatesBitsCoarseFineBiasSetting(sshsNode node, const char *biasName, uint8_t coarseValue,
 	uint16_t fineValue, const char *hlbias, const char *currentLevel, const char *sex,
 	bool enabled, int chipid);
-bool setCamContent(caerInputDynapseState state, int16_t chipId, bool ei, bool fs, int16_t address,
-	int8_t source_core, int8_t coreId, int16_t row, int16_t column);
-
+bool setCamContent(caerInputDynapseState state, int16_t chipId, bool ei, bool fs, int16_t address, int8_t source_core,
+	int8_t coreId, int16_t row, int16_t column);
+bool caerGenSpikeInit(caerModuleData moduleData);
+void caerDynapseSetBias(caerInputDynapseState state, uint32_t chipId, uint32_t coreId, const char *biasName_t,
+	uint8_t coarseValue, uint16_t fineValue, const char *lowHigh, const char *npBias);
 
 bool EnableStimuliGen(caerModuleData moduleData) {
 	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
@@ -72,7 +75,6 @@ const char *chipIDToName(int16_t chipID, bool withEndSlash) {
 	}
 	printf("unknown device id exiting...\n");
 	exit(1);
-	return ((withEndSlash) ? ("Unknown/") : ("Unknown"));
 }
 
 static void mainloopDataNotifyIncrease(void *p) {
@@ -100,23 +102,25 @@ static void chipConfigListener(sshsNode node, void *userData, enum sshs_node_att
 	const char *changeKey, enum sshs_node_attr_value_type changeType, union sshs_node_attr_value changeValue) {
 	UNUSED_ARGUMENT(node);
 
+	caerModuleData moduleData = userData;
+
 	if (event == SSHS_ATTRIBUTE_MODIFIED) {
-		/*if (changeType == SSHS_INT
-		 && caerStrEquals(changeKey, "BufferNumber")) {
-		 caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, CAER_HOST_CONFIG_USB,
-		 CAER_HOST_CONFIG_USB_BUFFER_NUMBER, U32T(changeValue.iint));
-		 } else if (changeType == SSHS_INT
-		 && caerStrEquals(changeKey, "BufferSize")) {
-		 caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, CAER_HOST_CONFIG_USB,
-		 CAER_HOST_CONFIG_USB_BUFFER_SIZE, U32T(changeValue.iint));
-		 } else if (changeType == SSHS_SHORT
-		 && caerStrEquals(changeKey, "EarlyPacketDelay")) {
-		 caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, DYNAPSE_CONFIG_USB,
-		 DYNAPSE_CONFIG_USB_EARLY_PACKET_DELAY, U32T(changeValue.ishort));
-		 } else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "Run")) {
-		 caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, DYNAPSE_CONFIG_USB,
-		 DYNAPSE_CONFIG_USB_RUN, changeValue.boolean);
-		 }*/
+		if (changeType == SSHS_INT && caerStrEquals(changeKey, "BufferNumber")) {
+			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, CAER_HOST_CONFIG_USB,
+			CAER_HOST_CONFIG_USB_BUFFER_NUMBER, U32T(changeValue.iint));
+		}
+		else if (changeType == SSHS_INT && caerStrEquals(changeKey, "BufferSize")) {
+			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, CAER_HOST_CONFIG_USB,
+			CAER_HOST_CONFIG_USB_BUFFER_SIZE, U32T(changeValue.iint));
+		}
+		else if (changeType == SSHS_SHORT && caerStrEquals(changeKey, "EarlyPacketDelay")) {
+			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, DYNAPSE_CONFIG_USB,
+			DYNAPSE_CONFIG_USB_EARLY_PACKET_DELAY, U32T(changeValue.ishort));
+		}
+		else if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "Run")) {
+			caerDeviceConfigSet(((caerInputDynapseState) moduleData->moduleState)->deviceState, DYNAPSE_CONFIG_USB,
+			DYNAPSE_CONFIG_USB_RUN, changeValue.boolean);
+		}
 	}
 
 }
@@ -309,7 +313,7 @@ uint32_t generatesBitsCoarseFineBiasSetting(sshsNode node, const char *biasName,
 	biasNameFull[biasNameLength + 1] = '\0';
 
 	// Device related configuration has its own sub-node.
-	sshsNode deviceConfigNodeLP = sshsGetRelativeNode(node, chipIDToName(chipid, true));
+	sshsNode deviceConfigNodeLP = sshsGetRelativeNode(node,  chipIDToName((int16_t)chipid, true));
 
 	sshsNode biasNodeLP = sshsGetRelativeNode(deviceConfigNodeLP, "bias/");
 
@@ -343,7 +347,7 @@ static void updateCoarseFineBiasSetting(caerModuleData moduleData, const char *b
 	biasNameFull[biasNameLength + 1] = '\0';
 
 	// Device related configuration has its own sub-node.
-	sshsNode deviceConfigNodeLP = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(chipid, true));
+	sshsNode deviceConfigNodeLP = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName((int16_t)chipid, true));
 
 	sshsNode biasNodeLP = sshsGetRelativeNode(deviceConfigNodeLP, "bias/");
 
@@ -399,10 +403,10 @@ static void biasConfigListener(sshsNode node, void *userData, enum sshs_node_att
 	caerModuleData moduleData = userData;
 
 	if (event == SSHS_ATTRIBUTE_MODIFIED) {
-		const char *nodeName = sshsNodeGetName(node);
+		//const char *nodeName = sshsNodeGetName(node);
 
 		sshsNode parent = sshsNodeGetParent(node);
-		const char *nodeParent = sshsNodeGetName(parent);
+		//const char *nodeParent = sshsNodeGetName(parent);
 		sshsNode grandparent = sshsNodeGetParent(parent);
 		const char *nodeGrandParent = sshsNodeGetName(grandparent);
 		uint32_t value = generateCoarseFineBias(node);
@@ -703,7 +707,7 @@ static void updateSilentBiases(caerModuleData moduleData, int chipid) {
 static void createDefaultConfiguration(caerModuleData moduleData, int chipid) {
 
 	// Device related configuration has its own sub-node..
-	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(chipid, true));
+	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName((int16_t)chipid, true));
 
 // Chip biases, defaults.
 	sshsNode biasNode = sshsGetRelativeNode(deviceConfigNode, "bias/");
@@ -1219,14 +1223,14 @@ static uint32_t convertBias(const char *biasName, const char* lowhi, const char*
 	if (addr == DYNAPSE_CONFIG_BIAS_U_SSP || addr == DYNAPSE_CONFIG_BIAS_U_SSN || addr == DYNAPSE_CONFIG_BIAS_D_SSP
 		|| addr == DYNAPSE_CONFIG_BIAS_D_SSN) {
 		confbits = 0;
-		inbits = addr << 18 | 1 << 16 | 63 << 10 | fineValue << 4 | confbits;
+		inbits = (uint32_t) addr << 18 | 1 << 16 | 63 << 10 |  (uint32_t) fineValue << 4 |  (uint32_t) confbits;
 	}
 	else if (addr == DYNAPSE_CONFIG_BIAS_D_BUFFER || addr == DYNAPSE_CONFIG_BIAS_U_BUFFER) {
 		confbits = 0;
-		inbits = addr << 18 | 1 << 16 | special << 15 | coarseRev << 12 | fineValue << 4;
+		inbits =  (uint32_t)addr << 18 | 1 << 16 |  (uint32_t)special << 15 | (uint32_t) coarseRev << 12 |  (uint32_t)fineValue << 4;
 	}
 	else {
-		inbits = addr << 18 | 1 << 16 | special << 15 | coarseRev << 12 | fineValue << 4 | confbits;
+		inbits =  (uint32_t)addr << 18 | 1 << 16 |  (uint32_t)special << 15 |  (uint32_t)coarseRev << 12 |  (uint32_t)fineValue << 4 |  (uint32_t)confbits;
 	}
 
 	return (inbits);
@@ -1235,12 +1239,12 @@ static uint32_t convertBias(const char *biasName, const char* lowhi, const char*
 
 uint32_t generateCoarseFineBias(sshsNode biasNode) {
 
-	char *biasName = sshsNodeGetName(biasNode);
+	const char *biasName = sshsNodeGetName(biasNode);
 
 	bool enal = sshsNodeGetBool(biasNode, "enabled");
 	bool special = sshsNodeGetBool(biasNode, "special");
-	uint8_t coarseValue = sshsNodeGetByte(biasNode, "coarseValue");
-	uint16_t fineValue = sshsNodeGetShort(biasNode, "fineValue");
+	int8_t coarseValue = sshsNodeGetByte(biasNode, "coarseValue");
+	int16_t fineValue = sshsNodeGetShort(biasNode, "fineValue");
 	char * lowhi = sshsNodeGetString(biasNode, "BiasLowHi");
 	char * cl = sshsNodeGetString(biasNode, "currentLevel");
 	char * sex = sshsNodeGetString(biasNode, "sex");
@@ -1257,7 +1261,7 @@ uint32_t generateCoarseFineBias(sshsNode biasNode) {
 	else
 		specialed = 0;
 
-	uint32_t bits = convertBias(biasName, lowhi, cl, sex, enal, fineValue, coarseValue, specialed);
+	uint32_t bits = convertBias(biasName, lowhi, cl, sex, enal, (uint16_t) fineValue, (uint8_t) coarseValue, specialed);
 
 	return (bits);
 }
@@ -1270,7 +1274,7 @@ static void sendDefaultConfiguration(caerModuleData moduleData, struct caer_dyna
 	usbConfigSend(sshsGetRelativeNode(deviceConfigNode, "usb/"), moduleData);
 }
 
-bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
+bool caerInputDYNAPSEInit(caerModuleData moduleData) {
 
 // USB port/bus/SN settings/restrictions.
 // These can be used to force connection to one specific device at startup.
@@ -1621,8 +1625,8 @@ bool caerInputDYNAPSEInit(caerModuleData moduleData, uint16_t deviceType) {
 void caerInputDYNAPSEExit(caerModuleData moduleData) {
 
 	// Device related configuration has its own sub-node.
-	struct caer_dynapse_info devInfo = caerDynapseInfoGet(
-		((caerInputDynapseState) moduleData->moduleState)->deviceState);
+	//struct caer_dynapse_info devInfo = caerDynapseInfoGet(
+	//	((caerInputDynapseState) moduleData->moduleState)->deviceState);
 	sshsNode deviceConfigNode = sshsGetRelativeNode(moduleData->moduleNode, chipIDToName(DYNAPSE_CHIP_DYNAPSE, true));
 
 	// Remove listener, which can reference invalid memory in userData.
@@ -1731,26 +1735,20 @@ void caerInputDYNAPSERun(caerModuleData moduleData, size_t argsNumber, va_list a
 }
 
 //write neuron CAM when a synapse is built or modified
-bool setCamContent(caerInputDynapseState state, int16_t chipId, bool ei, bool fs, int16_t address,
-	int8_t source_core, int8_t coreId, int16_t row, int16_t column) {
+bool setCamContent(caerInputDynapseState state, int16_t chipId, bool ei, bool fs, int16_t address, int8_t source_core,
+	int8_t coreId, int16_t row, int16_t column) {
 
 	// Check if the pointer is valid.
 	if (state->deviceState == NULL) {
-		struct caer_dynapse_info emptyInfo = { 0, .deviceString = NULL };
-		return(false);
+		//struct caer_dynapse_info emptyInfo = { 0, .deviceString = NULL };
+		return (false);
 	}
 
-    uint32_t bits = ei << 29 |
-    		fs << 28 |
-    		address << 20 |
-    		source_core << 18 |
-    		1 << 17 |
-    		coreId << 8 |
-    		row << 5 |
-    		column << 0;
+	uint32_t bits = (uint32_t) (ei << 29 | fs << 28 | (uint16_t) address << 20 | (uint8_t) source_core << 18 | 1 << 17 | (uint8_t) coreId << 8 | (uint16_t) row << 5
+		| (uint16_t) column << 0);
 
-    caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, chipId);
-    caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, bits); //this is the 30 bits
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, (uint32_t) chipId);
+	caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, bits); //this is the 30 bits
 
 	return (true);
 }
@@ -1760,7 +1758,7 @@ void caerDynapseSetBias(caerInputDynapseState state, uint32_t chipId, uint32_t c
 
 	// Check if the pointer is valid.
 	if (state->deviceState == NULL) {
-		struct caer_dynapse_info emptyInfo = { 0, .deviceString = NULL };
+		//struct caer_dynapse_info emptyInfo = { 0, .deviceString = NULL };
 		return;
 	}
 
@@ -1783,7 +1781,7 @@ void caerDynapseSetBias(caerInputDynapseState state, uint32_t chipId, uint32_t c
 		biasName[3 + i] = biasName_t[i];
 	}
 
-	uint32_t bits = generatesBitsCoarseFineBiasSetting(state->eventSourceConfigNode, biasName, coarseValue, fineValue,
+	generatesBitsCoarseFineBiasSetting(state->eventSourceConfigNode, biasName, coarseValue, fineValue,
 		lowHigh, "Normal", npBias, true, (int) chipId);
 
 	//caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, bits);

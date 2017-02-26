@@ -11,19 +11,19 @@
 
 void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLEGRO_EVENT event) {
 	if (event.type == ALLEGRO_EVENT_MOUSE_BUTTON_UP) {
-		int posx, posy;
-		posx = U32T(event.mouse.x);
-		posy = U32T(event.mouse.y);
+		double posx, posy;
+		posx = (double) U32T(event.mouse.x);
+		posy = (double) U32T(event.mouse.y);
 
 		// adjust coordinates according to zoom
-		float currentZoomFactor = sshsNodeGetFloat(state->visualizerConfigNode, "zoomFactor");
+		double currentZoomFactor = (double) sshsNodeGetFloat(state->visualizerConfigNode, "zoomFactor");
 		if (currentZoomFactor > 1) {
-			posx = (int) floor((float) posx / currentZoomFactor);
-			posy = (int) floor((float) posy / currentZoomFactor);
+			posx = (double)floor((double) posx / currentZoomFactor);
+			posy = (double)floor((double) posy / currentZoomFactor);
 		}
 		else if (currentZoomFactor < 1) {
-			posx = (int) floor((float) posx * currentZoomFactor);
-			posy = (int) floor((float) posy * currentZoomFactor);
+			posx = (double)floor((double) posx * currentZoomFactor);
+			posy = (double)floor((double) posy * currentZoomFactor);
 		}
 		//caerLog(CAER_LOG_NOTICE, "Visualizer", "pos x %d, pos y %d Zoom %f \n", posx, posy, currentZoomFactor);
 
@@ -83,7 +83,7 @@ void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLE
 		}
 
 		// linear index
-		uint32_t indexLin = posx * DYNAPSE_CONFIG_NEUCOL + posy;
+		uint32_t indexLin = (uint32_t) posx * DYNAPSE_CONFIG_NEUCOL + (uint32_t) posy;
 		if (indexLin > 255) {
 			indexLin = 255;
 		}

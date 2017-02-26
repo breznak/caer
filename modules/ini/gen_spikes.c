@@ -40,12 +40,11 @@ void SetCamSingle(void *spikeGenState);
 void ClearCam(void *spikeGenState);
 void ClearAllCam(void *spikeGenState);
 void ResetBiases(void *spikeGenState);
-//void setBiasBits(void *spikeGenState, uint32_t chipId, uint32_t coreId,
-//		const char *biasName_t, uint8_t coarseValue, uint16_t fineValue,
-//		const char *lowHigh, const char *npBias);
+void caerDynapseSetBias(caerInputDynapseState state, uint32_t chipId, uint32_t coreId, const char *biasName_t,
+	uint8_t coarseValue, uint16_t fineValue, const char *lowHigh, const char *npBias);
 
-struct timespec tstart = { 0, 0 }, tend = { 0, 0 };
-struct timespec tstart_etf = { 0, 0 }, tend_etf = { 0, 0 };
+static struct timespec tstart = { 0, 0 }, tend = { 0, 0 };
+static struct timespec tstart_etf = { 0, 0 }, tend_etf = { 0, 0 };
 static int CamSeted = 0;
 static int CamSetedSingle = 0;
 static int CamCleared = 0;
@@ -190,9 +189,9 @@ void caerGenSpikeExit(caerModuleData moduleData) {
 			if (caerStrEquals("DYNAPSEFX2", sshsNodeGetName(biasNodesU0[i]))) {
 				sshsNode *biasNodesU1 = sshsNodeGetChildren(biasNodesU0[i], &biasNodesLength);
 				if (biasNodesU1 != NULL) {
-					for (size_t i = 0; i < biasNodesLength; i++) {
-						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[i]))) {
-							sshsNodePutBool(biasNodesU1[i], "doStim",
+					for (size_t ii = 0; ii < biasNodesLength; ii++) {
+						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[ii]))) {
+							sshsNodePutBool(biasNodesU1[ii], "doStim",
 							false);
 							caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "doStim has been set back to false.");
 						}
@@ -205,9 +204,6 @@ void caerGenSpikeExit(caerModuleData moduleData) {
 	}
 
 	// Shut down stimulation thread and wait on it to finish.
-	atomic_store(&state->genSpikeState.running, false);
-	atomic_store(&state->genSpikeState.ETFdone, true);
-	atomic_store(&state->genSpikeState.ETFrepeat, false);
 	atomic_store(&state->genSpikeState.doStim, false);
 
 	if ((errno = thrd_join(state->genSpikeState.spikeGenThread, NULL)) != thrd_success) {
@@ -232,7 +228,7 @@ void spiketrainETF(void *spikeGenState) {
 	int inFreqs[6] = { 5, 10, 20, 30, 50, 100 };
 	int nSteps = 6;
 	state->genSpikeState.ETFstepnum = nSteps;
-	double stepDur = measureMinTime / (float) nSteps;
+	double stepDur = (double) measureMinTime / (double) nSteps;
 
 	int this_step = 0;
 
@@ -248,7 +244,7 @@ void spiketrainETF(void *spikeGenState) {
 	//check frequency phase and change accordingly
 	double current_time = (double) ((double) tend_etf.tv_sec + 1.0e-9 * tend_etf.tv_nsec - (double) tstart_etf.tv_sec
 		+ 1.0e-9 * tstart_etf.tv_nsec);
-	this_step = (int) round(current_time / stepDur);
+	this_step = (int) round((double)current_time / (double) stepDur);
 	atomic_store(&state->genSpikeState.ETFphase_num, this_step);
 	if (inFreqs[this_step] > 0) {
 		tim.tv_nsec = 1000000000L / inFreqs[this_step];	// select frequency
@@ -281,7 +277,7 @@ void spiketrainETF(void *spikeGenState) {
 			if (state->genSpikeState.ETFchip_id == DYNAPSE_CONFIG_DYNAPSE_U0 || state->genSpikeState.ETFchip_id == DYNAPSE_CONFIG_DYNAPSE_U1
 				|| state->genSpikeState.ETFchip_id == DYNAPSE_CONFIG_DYNAPSE_U2 || state->genSpikeState.ETFchip_id == DYNAPSE_CONFIG_DYNAPSE_U3) {
 				caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-				DYNAPSE_CONFIG_CHIP_ID, atomic_load(&state->genSpikeState.ETFchip_id));
+				DYNAPSE_CONFIG_CHIP_ID, (uint32_t) atomic_load(&state->genSpikeState.ETFchip_id));
 			}
 			else {
 				caerLog(CAER_LOG_ERROR, __func__,
@@ -300,7 +296,7 @@ void spiketrainETF(void *spikeGenState) {
 		}
 		if (counter > 0) {
 			caerDeviceConfigSet(state->deviceState, DYNAPSE_CONFIG_CHIP,
-			DYNAPSE_CONFIG_CHIP_ID, atomic_load(&state->genSpikeState.ETFchip_id));
+			DYNAPSE_CONFIG_CHIP_ID, (uint32_t) atomic_load(&state->genSpikeState.ETFchip_id));
 			// send data with libusb host transfer in packet
 			if (!caerDynapseSendDataToUSB(state->deviceState, bits_chipU0, counter)) {
 				caerLog(CAER_LOG_ERROR, __func__, "USB transfer failed");
@@ -469,13 +465,13 @@ void spiketrainReg(void *spikeGenState) {
 		tim.tv_nsec = 999999999L;
 	}
 
-	uint32_t value = atomic_load(&state->genSpikeState.core_d) | 0 << 16 | 0 << 17 | 1 << 13 |
-	atomic_load(&state->genSpikeState.core_s) << 18 |
-	atomic_load(&state->genSpikeState.address) << 20 |
-	atomic_load(&state->genSpikeState.dx) << 4 |
-	atomic_load(&state->genSpikeState.sx) << 6 |
-	atomic_load(&state->genSpikeState.dy) << 7 |
-	atomic_load(&state->genSpikeState.sy) << 9;
+	uint32_t value = (uint32_t) atomic_load(&state->genSpikeState.core_d) | 0 << 16 | 0 << 17 | 1 << 13 |
+		(uint32_t) atomic_load(&state->genSpikeState.core_s) << 18 |
+	(uint32_t) atomic_load(&state->genSpikeState.address) << 20 |
+	(uint32_t) atomic_load(&state->genSpikeState.dx) << 4 |
+	 (uint) atomic_load(&state->genSpikeState.sx) << 6 |
+	(uint32_t) atomic_load(&state->genSpikeState.dy) << 7 |
+	(uint) atomic_load(&state->genSpikeState.sy) << 9;
 
 	if (!atomic_load(&state->genSpikeState.started)) {
 		LABELSTART: portable_clock_gettime_monotonic(&tstart);
@@ -505,9 +501,9 @@ void spiketrainReg(void *spikeGenState) {
 		portable_clock_gettime_monotonic(&ss);
 		/* */
 		caerDeviceConfigSet((caerDeviceHandle) state->deviceState,
-		DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, atomic_load(&state->genSpikeState.chip_id));  //usb_handle
+		DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, (uint32_t) atomic_load(&state->genSpikeState.chip_id));  //usb_handle
 		caerDeviceConfigSet((caerDeviceHandle) state->deviceState,
-		DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, value); //usb_handle
+		DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_CONTENT, (uint32_t) value); //usb_handle
 		/* */
 		portable_clock_gettime_monotonic(&dd);
 		tim.tv_nsec = tim.tv_nsec - (dd.tv_nsec - ss.tv_nsec);
@@ -545,12 +541,12 @@ void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCH
 		for (colId = 0; colId < DYNAPSE_CONFIG_YCHIPSIZE; colId++) {
 			if (spikePattern[rowId][colId] == 1)
 				value = 0xf | 0 << 16 | 0 << 17 | 1 << 13
-					| (((rowId / DYNAPSE_CONFIG_NEUROW) << 1) | (colId / DYNAPSE_CONFIG_NEUCOL)) << 18
-					| (((rowId % DYNAPSE_CONFIG_NEUROW) << 4) | (colId % DYNAPSE_CONFIG_NEUCOL)) << 20 |
-					atomic_load(&state->genSpikeState.dx) << 4 |
-					atomic_load(&state->genSpikeState.sx) << 6 |
-					atomic_load(&state->genSpikeState.dy) << 7 |
-					atomic_load(&state->genSpikeState.sy) << 9;
+					| (uint) (((rowId / DYNAPSE_CONFIG_NEUROW) << 1) | (uint) (colId / DYNAPSE_CONFIG_NEUCOL)) << 18
+					| (uint) (((rowId % DYNAPSE_CONFIG_NEUROW) << 4) | (uint) (colId % DYNAPSE_CONFIG_NEUCOL)) << 20 |
+					(uint) atomic_load(&state->genSpikeState.dx) << 4 |
+					(uint) atomic_load(&state->genSpikeState.sx) << 6 |
+					(uint) atomic_load(&state->genSpikeState.dy) << 7 |
+					(uint) atomic_load(&state->genSpikeState.sy) << 9;
 			else {
 				value = 0;
 			}
@@ -588,7 +584,7 @@ void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCH
 
 		// send spikes
 		caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP,
-		DYNAPSE_CONFIG_CHIP_ID, atomic_load(&state->genSpikeState.chip_id));
+		DYNAPSE_CONFIG_CHIP_ID, (uint32_t) atomic_load(&state->genSpikeState.chip_id));
 		//send the spike
 		for (rowId = 0; rowId < DYNAPSE_CONFIG_XCHIPSIZE; rowId++)
 			for (colId = 0; colId < DYNAPSE_CONFIG_YCHIPSIZE; colId++) {
@@ -630,13 +626,14 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 	// generate chip command for stimulating
 	uint32_t valueSent, valueSentTeaching, valueSentTeachingControl, valueSentInhibitory, valueSentInhibitoryControl;
 	uint32_t source_address;
-	valueSent = 0xf | 0 << 16 | 0 << 17 | 1 << 13 | (sourceAddress & 0xff) << 20 | ((sourceAddress & 0x300) >> 8) << 18
+	valueSent = 0xf | 0 << 16 | 0 << 17 | 1 << 13 | (uint) (sourceAddress & 0xff) << 20 | (uint)((sourceAddress & 0x300) >> 8) << 18
 		|
-		atomic_load(&state->genSpikeState.dx) << 4 |
-		atomic_load(&state->genSpikeState.sx) << 6 |
-		atomic_load(&state->genSpikeState.dy) << 7 |
-		atomic_load(&state->genSpikeState.sy) << 9;
+		(uint) atomic_load(&state->genSpikeState.dx) << 4 |
+		(uint) atomic_load(&state->genSpikeState.sx) << 6 |
+		(uint) atomic_load(&state->genSpikeState.dy) << 7 |
+		(uint) atomic_load(&state->genSpikeState.sy) << 9;
 
+	source_address = 0;
 	if (pattern_number == 3) {
 		if ((sourceAddress & 0xff) == 1) {
 			source_address = 0;
@@ -663,25 +660,25 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 		}
 	}
 
-	valueSentTeaching = 0x8 | 0 << 16 | 0 << 17 | 1 << 13 | source_address << 20 | 0x3 << 18 |
-	atomic_load(&state->genSpikeState.dx) << 4 |
-	atomic_load(&state->genSpikeState.sx) << 6 |
-	atomic_load(&state->genSpikeState.dy) << 7 |
-	atomic_load(&state->genSpikeState.sy) << 9; //((sourceAddress & 0x300) >> 8) << 18
+	valueSentTeaching = 0x8 | 0 << 16 | 0 << 17 | 1 << 13 | (uint) source_address << 20 | 0x3 << 18 |
+		(uint) atomic_load(&state->genSpikeState.dx) << 4 |
+		(uint) atomic_load(&state->genSpikeState.sx) << 6 |
+		(uint) atomic_load(&state->genSpikeState.dy) << 7 |
+		(uint) atomic_load(&state->genSpikeState.sy) << 9; //((sourceAddress & 0x300) >> 8) << 18
 
-	valueSentTeachingControl = 0xc | 0 << 16 | 0 << 17 | 1 << 13 | source_address << 20 | 0x3 << 18 |
-	atomic_load(&state->genSpikeState.dx) << 4 |
-	atomic_load(&state->genSpikeState.sx) << 6 | 1 << 7 | 1 << 9;
+	valueSentTeachingControl = 0xc | 0 << 16 | 0 << 17 | 1 << 13 | (uint) source_address << 20 | 0x3 << 18 |
+		(uint) atomic_load(&state->genSpikeState.dx) << 4 |
+		(uint) atomic_load(&state->genSpikeState.sx) << 6 | 1 << 7 | 1 << 9;
 
 	valueSentInhibitory = 0x8 | 0 << 16 | 0 << 17 | 1 << 13 | 3 << 20 | 0x3 << 18 |
-	atomic_load(&state->genSpikeState.dx) << 4 |
-	atomic_load(&state->genSpikeState.sx) << 6 |
-	atomic_load(&state->genSpikeState.dy) << 7 |
-	atomic_load(&state->genSpikeState.sy) << 9; //((sourceAddress & 0x300) >> 8) << 18
+		(uint) atomic_load(&state->genSpikeState.dx) << 4 |
+		(uint) atomic_load(&state->genSpikeState.sx) << 6 |
+		(uint) atomic_load(&state->genSpikeState.dy) << 7 |
+		(uint) atomic_load(&state->genSpikeState.sy) << 9; //((sourceAddress & 0x300) >> 8) << 18
 
 	valueSentInhibitoryControl = 0xc | 0 << 16 | 0 << 17 | 1 << 13 | 3 << 20 | 0x3 << 18 |
-	atomic_load(&state->genSpikeState.dx) << 4 |
-	atomic_load(&state->genSpikeState.sx) << 6 | 1 << 7 | 1 << 9;
+		(uint) atomic_load(&state->genSpikeState.dx) << 4 |
+		(uint) atomic_load(&state->genSpikeState.sx) << 6 | 1 << 7 | 1 << 9;
 
 	if (!atomic_load(&state->genSpikeState.started)) {
 		LABELSTART: portable_clock_gettime_monotonic(&tstart);
@@ -715,7 +712,7 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 		if (atomic_load(&state->genSpikeState.doStimPrimitiveBias) == true
 			&& atomic_load(&state->genSpikeState.doStimPrimitiveCam) == true) {
 			caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP,
-			DYNAPSE_CONFIG_CHIP_ID, atomic_load(&state->genSpikeState.chip_id));
+			DYNAPSE_CONFIG_CHIP_ID, (uint32_t) atomic_load(&state->genSpikeState.chip_id));
 			//send the spike
 			caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP,
 			DYNAPSE_CONFIG_CHIP_CONTENT, valueSent);
@@ -756,7 +753,7 @@ void SetCam(void *spikeGenState) {
 	caerInputDynapseState state = spikeGenState;
 	caerDeviceHandle usb_handle = (caerDeviceHandle) state->deviceState;
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
-		atomic_load(&state->genSpikeState.chip_id)); //0
+		(uint32_t) atomic_load(&state->genSpikeState.chip_id)); //0
 	uint32_t neuronId;
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "Started programming cam..");
 	for (neuronId = 0; neuronId < DYNAPSE_CONFIG_XCHIPSIZE * DYNAPSE_CONFIG_YCHIPSIZE; neuronId++) {
@@ -773,9 +770,9 @@ void SetCam(void *spikeGenState) {
 			if (caerStrEquals("DYNAPSEFX2", sshsNodeGetName(biasNodesU0[i]))) {
 				sshsNode *biasNodesU1 = sshsNodeGetChildren(biasNodesU0[i], &biasNodesLength);
 				if (biasNodesU1 != NULL) {
-					for (size_t i = 0; i < biasNodesLength; i++) {
-						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[i]))) {
-							sshsNodePutBool(biasNodesU1[i], "setCam",
+					for (size_t ii = 0; ii < biasNodesLength; ii++) {
+						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[ii]))) {
+							sshsNodePutBool(biasNodesU1[ii], "setCam",
 							false);
 							caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "setCam has been set back to false.");
 						}
@@ -796,7 +793,7 @@ void SetCamSingle(void *spikeGenState) {
 	caerInputDynapseState state = spikeGenState;
 	caerDeviceHandle usb_handle = (caerDeviceHandle) state->deviceState;
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
-		atomic_load(&state->genSpikeState.chip_id)); //0
+		(uint32_t) atomic_load(&state->genSpikeState.chip_id)); //0
 
 	int64_t rowId, colId;
 	int64_t num = DYNAPSE_CONFIG_CAMCOL;
@@ -839,7 +836,7 @@ void SetCamSingle(void *spikeGenState) {
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "Started programming cam..");
 	for (rowId = 0; rowId < DYNAPSE_CONFIG_XCHIPSIZE; rowId++) {
 		for (colId = 0; colId < DYNAPSE_CONFIG_YCHIPSIZE; colId++) {
-			neuronId = ((rowId & 0X10) >> 4) << 9 | ((colId & 0X10) >> 4) << 8 | (rowId & 0xf) << 4 | (colId & 0xf);
+			neuronId = (uint) ((rowId & 0X10) >> 4) << 9 | (uint) ((colId & 0X10) >> 4) << 8 | (uint) (rowId & 0xf) << 4 | (uint) (colId & 0xf);
 			if (spikePatternA[rowId][colId] == 1) {
 				caerDynapseWriteCam(state->deviceState, 1, neuronId, 0, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
 			}
@@ -880,9 +877,9 @@ void SetCamSingle(void *spikeGenState) {
 			if (caerStrEquals("DYNAPSEFX2", sshsNodeGetName(biasNodesU0[i]))) {
 				sshsNode *biasNodesU1 = sshsNodeGetChildren(biasNodesU0[i], &biasNodesLength);
 				if (biasNodesU1 != NULL) {
-					for (size_t i = 0; i < biasNodesLength; i++) {
-						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[i]))) {
-							sshsNodePutBool(biasNodesU1[i], "setCamSingle",
+					for (size_t ii = 0; ii < biasNodesLength; ii++) {
+						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[ii]))) {
+							sshsNodePutBool(biasNodesU1[ii], "setCamSingle",
 							false);
 							caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "setCamSingle has been set back to false.");
 						}
@@ -903,7 +900,7 @@ void ClearCam(void *spikeGenState) {
 	caerInputDynapseState state = spikeGenState;
 	caerDeviceHandle usb_handle = (caerDeviceHandle) state->deviceState;
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
-		atomic_load(&state->genSpikeState.chip_id)); //0
+		(uint32_t) atomic_load(&state->genSpikeState.chip_id)); //0
 	uint32_t neuronId;
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "Started clearing cam...");
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "please wait...");
@@ -923,9 +920,9 @@ void ClearCam(void *spikeGenState) {
 			if (caerStrEquals("DYNAPSEFX2", sshsNodeGetName(biasNodesU0[i]))) {
 				sshsNode *biasNodesU1 = sshsNodeGetChildren(biasNodesU0[i], &biasNodesLength);
 				if (biasNodesU1 != NULL) {
-					for (size_t i = 0; i < biasNodesLength; i++) {
-						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[i]))) {
-							sshsNodePutBool(biasNodesU1[i], "clearCam",
+					for (size_t ii = 0; ii < biasNodesLength; ii++) {
+						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[ii]))) {
+							sshsNodePutBool(biasNodesU1[ii], "clearCam",
 							false);
 							caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "clearCam has been set back to false.");
 						}
@@ -946,13 +943,13 @@ void ClearAllCam(void *spikeGenState) {
 	caerInputDynapseState state = spikeGenState;
 	caerDeviceHandle usb_handle = (caerDeviceHandle) state->deviceState;
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
-		atomic_load(&state->genSpikeState.chip_id));
+		(uint32_t) atomic_load(&state->genSpikeState.chip_id));
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "Started clearing cam..");
 	uint32_t bits[DYNAPSE_CONFIG_NUMNEURONS * DYNAPSE_X4BOARD_NEUX];
 	int numConfig = -1;
-	for (size_t neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS; neuronId++) {
+	for (uint32_t neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS; neuronId++) {
 		numConfig = -1;
-		for (size_t camId = 0; camId < DYNAPSE_X4BOARD_NEUX; camId++) {
+		for (uint32_t camId = 0; camId < DYNAPSE_X4BOARD_NEUX; camId++) {
 			numConfig++;
 			bits[numConfig] = caerDynapseGenerateCamBits(0, neuronId, camId, 0);
 		}
@@ -973,9 +970,9 @@ void ClearAllCam(void *spikeGenState) {
 			if (caerStrEquals("DYNAPSEFX2", sshsNodeGetName(biasNodesU0[i]))) {
 				sshsNode *biasNodesU1 = sshsNodeGetChildren(biasNodesU0[i], &biasNodesLength);
 				if (biasNodesU1 != NULL) {
-					for (size_t i = 0; i < biasNodesLength; i++) {
-						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[i]))) {
-							sshsNodePutBool(biasNodesU1[i], "clearAllCam",
+					for (size_t ii = 0; ii < biasNodesLength; ii++) {
+						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[ii]))) {
+							sshsNodePutBool(biasNodesU1[ii], "clearAllCam",
 							false);
 							caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "clearAllCam has been set back to false.");
 						}
@@ -993,14 +990,15 @@ void ResetBiases(void *spikeGenState) {
 
 	caerLog(CAER_LOG_NOTICE, "loadDefaultBiases", "started...");
 	caerInputDynapseState state = spikeGenState;
-	struct caer_dynapse_info dynapse_info = caerDynapseInfoGet(state->deviceState);
+	//struct caer_dynapse_info dynapse_info = caerDynapseInfoGet(state->deviceState);
 
 	if (spikeGenState == NULL) {
 		return;
 	}
 
 	caerDeviceHandle usb_handle = (caerDeviceHandle) state->deviceState;
-	uint32_t chipId_t, chipId, coreId;
+	uint32_t chipId_t, coreId;
+	uint32_t chipId=0;
 
 	for (chipId_t = 0; chipId_t < 1; chipId_t++) {
 
@@ -1054,9 +1052,9 @@ void ResetBiases(void *spikeGenState) {
 			if (caerStrEquals("DYNAPSEFX2", sshsNodeGetName(biasNodesU0[i]))) {
 				sshsNode *biasNodesU1 = sshsNodeGetChildren(biasNodesU0[i], &biasNodesLength);
 				if (biasNodesU1 != NULL) {
-					for (size_t i = 0; i < biasNodesLength; i++) {
-						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[i]))) {
-							sshsNodePutBool(biasNodesU1[i], "loadDefaultBiases",
+					for (size_t ii = 0; ii < biasNodesLength; ii++) {
+						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[ii]))) {
+							sshsNodePutBool(biasNodesU1[ii], "loadDefaultBiases",
 							false);
 							caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "loadDefaultBiases has been set back to false.");
 						}

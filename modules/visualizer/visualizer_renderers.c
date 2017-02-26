@@ -280,10 +280,10 @@ bool doClear) {
 	CAER_SPIKE_ITERATOR_ALL_START( (caerSpikeEventPacket) spikeEventPacketHeader )
 
 	// get core id
-		int8_t coreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);
+		uint8_t coreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);
 		int32_t ts = caerSpikeEventGetTimestamp(caerSpikeIteratorElement);
 		ts = ts - min_ts;
-		new_x = (int32_t) floor((float) ts * scalex);
+		new_x = (int32_t) floor( (double) ts * (double) scalex);
 
 		// get x,y position
 		uint16_t y = caerSpikeEventGetY(caerSpikeIteratorElement);
@@ -322,30 +322,30 @@ bool doClear) {
 		}
 
 		uint32_t indexLin = x * DYNAPSE_CONFIG_NEUCOL + y;
-		uint32_t new_y = indexLin + (coreId * DYNAPSE_CONFIG_NUMNEURONS_CORE);
+		uint32_t new_y = (uint32_t) indexLin + (uint32_t) (coreId * DYNAPSE_CONFIG_NUMNEURONS_CORE);
 
 		// adjust coordinate for plot
-		new_y = (int32_t) floor((float) new_y * scaley);
+		new_y = (int32_t) floor((double) new_y * (double) scaley);
 		// move
 		if (chipId == DYNAPSE_CONFIG_DYNAPSE_U3) {
-			new_x = (int32_t) floor((float) new_x + ((float) sizeX / 2));
-			new_y = (uint32_t) floor((float) new_y + (float) sizeY / 2.0);
+			new_x = (int32_t) floor( new_x + ((double) sizeX / 2));
+			new_y = (int32_t) floor( new_y + (double) sizeY / 2.0);
 		}
 		else if (chipId == DYNAPSE_CONFIG_DYNAPSE_U2) {
-			new_x = (int32_t) floor((float) new_x + ((float) sizeX / 2));
+			new_x = (int32_t) floor( new_x + ((double) sizeX / 2));
 		}
 		else if (chipId == DYNAPSE_CONFIG_DYNAPSE_U1) {
-			new_y = (uint32_t) floor((float) new_y + (float) sizeY / 2.0);
+			new_y = (int32_t) floor( new_y + (double) sizeY / 2.0);
 		}
 		else if (chipId == DYNAPSE_CONFIG_DYNAPSE_U0 + 1) { // sram can't be zero
 			;
 		}
 		// draw borders
-		for (int x = 0; x < sizeX; x++) {
-			al_put_pixel(x, sizeY / 2, al_map_rgb(255, 255, 255));
+		for (int xx = 0; xx < sizeX; xx++) {
+			al_put_pixel(xx, sizeY / 2, al_map_rgb(255, 255, 255));
 		}
-		for (int y = 0; y < sizeY; y++) {
-			al_put_pixel(sizeX / 2, y, al_map_rgb(255, 255, 255));
+		for (int yy = 0; yy < sizeY; yy++) {
+			al_put_pixel(sizeX / 2, yy, al_map_rgb(255, 255, 255));
 		}
 
 		// draw pixels (neurons might be merged due to aliasing..)
@@ -377,9 +377,9 @@ bool doClear) {
 	// Render all spikes.
 	CAER_SPIKE_ITERATOR_ALL_START( (caerSpikeEventPacket) spikeEventPacketHeader )
 
-	// get core id
+		// get core id
 		uint8_t coreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);
-		uint8_t chipId = caerSpikeEventGetChipID(caerSpikeIteratorElement);
+		//uint8_t chipId = caerSpikeEventGetChipID(caerSpikeIteratorElement);
 		//get x,y position
 		uint16_t y = caerSpikeEventGetY(caerSpikeIteratorElement);
 		uint16_t x = caerSpikeEventGetX(caerSpikeIteratorElement);
@@ -424,12 +424,12 @@ bool doClear) {
 	float maxY = INT_MIN;
 
 	CAER_POINT4D_ITERATOR_VALID_START((caerPoint4DEventPacket) Point4DEventPacketHeader)
-		float corex = caerPoint4DEventGetX(caerPoint4DIteratorElement);
-		float corey = caerPoint4DEventGetY(caerPoint4DIteratorElement);
+		//float corex = caerPoint4DEventGetX(caerPoint4DIteratorElement);
+		//float corey = caerPoint4DEventGetY(caerPoint4DIteratorElement);
 		float mean = caerPoint4DEventGetZ(caerPoint4DIteratorElement);
-		float var = caerPoint4DEventGetW(caerPoint4DIteratorElement);
+		//float var = caerPoint4DEventGetW(caerPoint4DIteratorElement);
 
-		int coreid = corex * 1 + corey;
+		//int coreid = corex * 1 + corey;
 		if (maxY < mean) {
 			maxY = mean;
 		}
@@ -443,12 +443,12 @@ bool doClear) {
 		float corex = caerPoint4DEventGetX(caerPoint4DIteratorElement);
 		float corey = caerPoint4DEventGetY(caerPoint4DIteratorElement);
 		float mean = caerPoint4DEventGetZ(caerPoint4DIteratorElement);
-		float var = caerPoint4DEventGetW(caerPoint4DIteratorElement);
+		//float var = caerPoint4DEventGetW(caerPoint4DIteratorElement);
 
-		int coreid = corex * 1 + corey;	// color
-		int new_y = (int32_t) floor((float) mean * scaley);
+		int coreid = (int) corex * 1 + (int) corey;	// color
+		int new_y = (int32_t) floor( mean * scaley);
 
-		al_put_pixel(sizeX - (uint32_t)round(counter*scalex), new_y, al_map_rgb(coreid * 80, 255, 0));
+		al_put_pixel((uint32_t) sizeX - (uint32_t)round(counter*scalex), new_y, al_map_rgb(coreid * 80, 255, 0));
 
 		if(counter == 5){
 			counter = 0;
