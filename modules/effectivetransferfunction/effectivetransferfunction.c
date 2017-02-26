@@ -34,9 +34,11 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 static void caerEffectiveTransferFunctionConfig(caerModuleData moduleData);
 static void caerEffectiveTransferFunctionExit(caerModuleData moduleData);
 static void caerEffectiveTransferFunctionReset(caerModuleData moduleData, uint16_t resetCallSourceID);
+void caerDynapseSetBias(caerInputDynapseState state, uint32_t chipId, uint32_t coreId, const char *biasName_t,
+	uint8_t coarseValue, uint16_t fineValue, const char *lowHigh, const char *npBias);
 
-static bool allocateETFMapSpikes(ETFFilterState state, int xsize, int ysize);
-static bool allocateETFMapFreq(ETFFilterState state, int xsize, int ysize);
+static bool allocateETFMapSpikes(ETFFilterState state, int16_t xsize, int16_t ysize);
+static bool allocateETFMapFreq(ETFFilterState state, int16_t xsize, int16_t ysize);
 
 static struct caer_module_functions caerEffectiveTransferFunctionFunctions = { .moduleInit =
 	&caerEffectiveTransferFunctionInit, .moduleRun = &caerEffectiveTransferFunctionRun, .moduleConfig =
@@ -135,48 +137,48 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 	if (!state->init) {
 		/*
 		 * do init... */
-		int bits_chipU0[DYNAPSE_MAX_USER_USB_PACKET_SIZE];
-		int counter = 0;
+		//int bits_chipU0[DYNAPSE_MAX_USER_USB_PACKET_SIZE];
+		//int counter = 0;
 		if (state->chipId == DYNAPSE_CONFIG_DYNAPSE_U0 || state->chipId == DYNAPSE_CONFIG_DYNAPSE_U1
 			|| state->chipId == DYNAPSE_CONFIG_DYNAPSE_U2 || state->chipId == DYNAPSE_CONFIG_DYNAPSE_U3) {
 			// is chip id is valid
-			caerDeviceConfigSet(state->eventSourceModuleState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
-				state->chipId);
+			caerDeviceConfigSet(state->eventSourceModuleState->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
+				(uint32_t) state->chipId);
 			// set biases for input spikes
-			for (int coreId = 0; coreId < 4; coreId++) {
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias", "NBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "IF_AHTHR_N", 7, 1, "HighBias", "NBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "IF_AHW_P", 7, 1, "HighBias", "PBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "IF_BUF_P", 3, 80, "HighBias", "PBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "IF_CASC_N", 7, 1, "HighBias", "NBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "IF_DC_P", 7, 2, "HighBias", "PBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "IF_NMDA_N", 7, 1, "HighBias", "PBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "IF_RFR_N", 0, 108, "HighBias", "NBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "IF_TAU1_N", 6, 24, "LowBias", "NBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "IF_TAU2_N", 5, 15, "HighBias", "NBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "IF_THR_N", 3, 20, "HighBias", "NBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "NPDPIE_TAU_F_P", 5, 41, "HighBias", "PBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "NPDPIE_TAU_S_P", 7, 40, "HighBias", "NBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "NPDPIE_THR_F_P", 2, 200, "HighBias", "PBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "NPDPIE_THR_S_P", 7, 0, "HighBias", "PBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "NPDPII_TAU_F_P", 7, 40, "HighBias", "NBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "NPDPII_TAU_S_P", 7, 40, "HighBias", "NBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "NPDPII_THR_F_P", 7, 40, "HighBias", "PBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "NPDPII_THR_S_P", 7, 40, "HighBias", "PBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 216, "HighBias",
+			for (uint32_t coreId = 0; coreId < 4; coreId++) {
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_AHTHR_N", 7, 1, "HighBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_AHW_P", 7, 1, "HighBias", "PBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_BUF_P", 3, 80, "HighBias", "PBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_CASC_N", 7, 1, "HighBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_DC_P", 7, 2, "HighBias", "PBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_NMDA_N", 7, 1, "HighBias", "PBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_RFR_N", 0, 108, "HighBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_TAU1_N", 6, 24, "LowBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_TAU2_N", 5, 15, "HighBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_THR_N", 3, 20, "HighBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "NPDPIE_TAU_F_P", 5, 41, "HighBias", "PBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "NPDPIE_TAU_S_P", 7, 40, "HighBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "NPDPIE_THR_F_P", 2, 200, "HighBias", "PBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "NPDPIE_THR_S_P", 7, 0, "HighBias", "PBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "NPDPII_TAU_F_P", 7, 40, "HighBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "NPDPII_TAU_S_P", 7, 40, "HighBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "NPDPII_THR_F_P", 7, 40, "HighBias", "PBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "NPDPII_THR_S_P", 7, 40, "HighBias", "PBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 216, "HighBias",
 					"NBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "PS_WEIGHT_EXC_S_N", 7, 1, "HighBias", "NBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "PS_WEIGHT_INH_F_N", 7, 1, "HighBias", "NBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "PS_WEIGHT_INH_S_N", 7, 1, "HighBias", "NBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "PULSE_PWLK_P", 0, 43, "HighBias", "PBias");
-				caerDynapseSetBias(stateSource, state->chipId, coreId, "R2R_P", 4, 85, "HighBias", "PBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "PS_WEIGHT_EXC_S_N", 7, 1, "HighBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "PS_WEIGHT_INH_F_N", 7, 1, "HighBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "PS_WEIGHT_INH_S_N", 7, 1, "HighBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "PULSE_PWLK_P", 0, 43, "HighBias", "PBias");
+				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "R2R_P", 4, 85, "HighBias", "PBias");
 			}
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Started clearing cam..");
 			uint32_t bits[DYNAPSE_CONFIG_NUMNEURONS * DYNAPSE_X4BOARD_NEUX];
 			int numConfig = -1;
-			for (size_t neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS; neuronId++) {
+			for (uint32_t neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS; neuronId++) {
 				numConfig = -1;
-				for (size_t camId = 0; camId < DYNAPSE_X4BOARD_NEUX; camId++) {
+				for (uint32_t camId = 0; camId < DYNAPSE_X4BOARD_NEUX; camId++) {
 					if (camId == 0) {
 						numConfig++;
 						bits[numConfig] = caerDynapseGenerateCamBits(5, neuronId, camId, 3);
@@ -229,7 +231,7 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 			for (size_t corey = 0; corey < DYNAPSE_X4BOARD_COREY/2; corey++) {
 				max_freq = 0.0f;
 				//get sum from core
-				for (size_t neuronid = 0; neuronid < DYNAPSE_CONFIG_NUMNEURONS_CORE; neuronid++) {
+				for (int neuronid = 0; neuronid < DYNAPSE_CONFIG_NUMNEURONS_CORE; neuronid++) {
 
 					int x = neuronid % 16;
 					int y = neuronid / 16;
@@ -245,7 +247,7 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 					/ (float) DYNAPSE_CONFIG_NUMNEURONS_CORE;
 
 				//calculate variance
-				for (size_t neuronid = 0; neuronid < DYNAPSE_CONFIG_NUMNEURONS_CORE; neuronid++) {
+				for (int neuronid = 0; neuronid < DYNAPSE_CONFIG_NUMNEURONS_CORE; neuronid++) {
 
 					int x = neuronid % 16;
 					int y = neuronid / 16;
@@ -263,7 +265,7 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 			// allocate 4d event if null
 			if (*ETFData == NULL) {
 				*ETFData = caerPoint4DEventPacketAllocate(
-				(DYNAPSE_X4BOARD_COREY/2) * (DYNAPSE_X4BOARD_COREX/2) * stateSource->genSpikeState.ETFstepnum, sourceID, NULL);
+				(DYNAPSE_X4BOARD_COREY/2) * (DYNAPSE_X4BOARD_COREX/2) * stateSource->genSpikeState.ETFstepnum, (int16_t) sourceID, NULL);
 				caerMainloopFreeAfterLoop(&free, *ETFData);
 			}
 			// get last event
@@ -309,10 +311,10 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 
 	// Iterate over spikes in the packet
 	CAER_SPIKE_ITERATOR_VALID_START(spike)
-		int32_t timestamp = caerSpikeEventGetTimestamp(caerSpikeIteratorElement);
+		//int32_t timestamp = caerSpikeEventGetTimestamp(caerSpikeIteratorElement);
 		uint8_t chipid = caerSpikeEventGetChipID(caerSpikeIteratorElement);
-		uint8_t neuronid = caerSpikeEventGetNeuronID(caerSpikeIteratorElement);
-		uint8_t coreid = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);
+		uint32_t neuronid = caerSpikeEventGetNeuronID(caerSpikeIteratorElement);
+		//uint8_t coreid = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);
 
 		int chipToMonitor = 0;
 		if (stateSource->genSpikeState.chip_id == 0) {
@@ -351,7 +353,7 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 static void caerEffectiveTransferFunctionConfig(caerModuleData moduleData) {
 	caerModuleConfigUpdateReset(moduleData);
 
-	ETFFilterState state = moduleData->moduleState;
+	//ETFFilterState state = moduleData->moduleState;
 
 }
 
@@ -359,20 +361,20 @@ static void caerEffectiveTransferFunctionExit(caerModuleData moduleData) {
 	// Remove listener, which can reference invalid memory in userData
 	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
-	ETFFilterState state = moduleData->moduleState;
+	//ETFFilterState state = moduleData->moduleState;
 
-	//sshsNodePutBool(moduleData->moduleNode, "doMeasurement", false);
+	sshsNodePutBool(moduleData->moduleNode, "doMeasurement", false);
 
 }
 
 static void caerEffectiveTransferFunctionReset(caerModuleData moduleData, uint16_t resetCallSourceID) {
 	UNUSED_ARGUMENT(resetCallSourceID);
 
-	ETFFilterState state = moduleData->moduleState;
+	//ETFFilterState state = moduleData->moduleState;
 
 }
 
-static bool allocateETFMapFreq(ETFFilterState state, int xsize, int ysize) {
+static bool allocateETFMapFreq(ETFFilterState state, int16_t xsize, int16_t ysize) {
 	// Get size information from source.
 
 	int16_t sizeX = xsize;
@@ -392,7 +394,7 @@ static bool allocateETFMapFreq(ETFFilterState state, int xsize, int ysize) {
 	return (true);
 }
 
-static bool allocateETFMapSpikes(ETFFilterState state, int xsize, int ysize) {
+static bool allocateETFMapSpikes(ETFFilterState state, int16_t xsize, int16_t ysize) {
 	// Get size information from source.
 
 	int16_t sizeX = xsize;
