@@ -1639,7 +1639,11 @@ void caerInputDYNAPSEExit(caerModuleData moduleData) {
 	sshsNode sysNode = sshsGetRelativeNode(moduleData->moduleNode, "system/");
 	sshsNodeRemoveAttributeListener(sysNode, moduleData, &systemConfigListener);
 
+	// make sure no spikes are being sent
 	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNode, "spikeGen/");
+	sshsNodePutBool(spikeNode, "doStim", false);
+	sshsNodePutBool(spikeNode, "doStimPrimitiveBias", false);
+	sshsNodePutBool(spikeNode, "doStimPrimitiveCam", false);
 	sshsNodeRemoveAttributeListener(spikeNode, moduleData, &spikeConfigListener);
 
 	// Remove USB config listener for biases

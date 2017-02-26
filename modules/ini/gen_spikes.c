@@ -180,6 +180,12 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 void caerGenSpikeExit(caerModuleData moduleData) {
 	caerInputDynapseState state = moduleData->moduleState;
 
+	// Shut down stimulation thread and wait on it to finish.
+	atomic_store_explicit(&state->genSpikeState.doStim, false, memory_order_release);
+	//sshsNodePutBool(moduleData->moduleNode, "doStim", false);
+	//sshsNodePutBool(moduleData->moduleNode, "doStimPrimitiveBias", false);
+	//sshsNodePutBool(moduleData->moduleNode, "doStimPrimitiveCam", false);
+
 	//make sure that doStim is off
 	size_t biasNodesLength = 0;
 	sshsNode *biasNodesU0 = sshsNodeGetChildren(state->eventSourceConfigNode, &biasNodesLength);
@@ -193,6 +199,10 @@ void caerGenSpikeExit(caerModuleData moduleData) {
 						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[ii]))) {
 							sshsNodePutBool(biasNodesU1[ii], "doStim",
 							false);
+							sshsNodePutBool(biasNodesU1[ii], "doStimPrimitiveBias",
+							false);
+							sshsNodePutBool(biasNodesU1[ii], "doStimPrimitiveCam",
+							false);
 							caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "doStim has been set back to false.");
 						}
 					}
@@ -202,9 +212,6 @@ void caerGenSpikeExit(caerModuleData moduleData) {
 		}
 		free(biasNodesU0);
 	}
-
-	// Shut down stimulation thread and wait on it to finish.
-	atomic_store(&state->genSpikeState.doStim, false);
 
 	if ((errno = thrd_join(state->genSpikeState.spikeGenThread, NULL)) != thrd_success) {
 		// This should never happen!
@@ -320,7 +327,7 @@ int spikeGenThread(void *spikeGenState) {
 	thrd_set_name("SpikeGenThread");
 
 	while (atomic_load_explicit(&state->genSpikeState.running, // the loop
-		memory_order_relaxed)) {
+		memory_order_acquire)) {
 
 		if (state->genSpikeState.setCam == true && CamSeted == 0) {
 			SetCam(state);
@@ -755,11 +762,11 @@ void SetCam(void *spikeGenState) {
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
 		(uint32_t) atomic_load(&state->genSpikeState.chip_id)); //0
 	uint32_t neuronId;
-	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "Started programming cam..");
+	caerLog(CAER_LOG_NOTICE, __func__, "Started programming cam..");
 	for (neuronId = 0; neuronId < DYNAPSE_CONFIG_XCHIPSIZE * DYNAPSE_CONFIG_YCHIPSIZE; neuronId++) {
 		caerDynapseWriteCam(state->deviceState, neuronId, neuronId, 0, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
 	}
-	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "CAM programmed successfully.");
+	caerLog(CAER_LOG_NOTICE, __func__, "CAM programmed successfully.");
 
 	// set back setCam to false
 	size_t biasNodesLength = 0;
@@ -833,7 +840,7 @@ void SetCamSingle(void *spikeGenState) {
 	}
 
 	uint32_t neuronId;
-	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "Started programming cam..");
+	caerLog(CAER_LOG_NOTICE, __func__, "Started programming cam..");
 	for (rowId = 0; rowId < DYNAPSE_CONFIG_XCHIPSIZE; rowId++) {
 		for (colId = 0; colId < DYNAPSE_CONFIG_YCHIPSIZE; colId++) {
 			neuronId = (uint) ((rowId & 0X10) >> 4) << 9 | (uint) ((colId & 0X10) >> 4) << 8 | (uint) (rowId & 0xf) << 4 | (uint) (colId & 0xf);
