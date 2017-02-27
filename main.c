@@ -82,6 +82,9 @@
 #ifdef ENABLE_ROTATEFILTER
 #include "modules/rotatefilter/rotatefilter.h"
 #endif
+#ifdef ENABLE_ACTIVITYINDICATOR
+#include "modules/activityindicator/activityindicator.h"
+#endif
 
 #ifdef ENABLE_IMAGEGENERATOR
 #include "modules/imagegenerator/imagegenerator.h"
@@ -207,6 +210,11 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_MEDIANTRACKER
 	caerFrameEventPacket medianFrame = NULL;
 	caerMediantrackerFilter(13, polarity, &medianFrame);
+#endif
+
+	// Show how crowed the areas is (Mensa project)
+#ifdef ENABLE_ACTIVITYINDICATOR
+	caerActivityIndicator(17, polarity);
 #endif
 
 	// Filter that show the mean rate of events
