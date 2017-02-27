@@ -20,7 +20,7 @@ struct AI_state {
 	int low;
 	int median;
 	int high;
-	int activeNum;
+	long activeNum;
 	activityLevel areaActivity;
 	simple2DBufferLong spikeCountMap;
 	simple2DBufferInt activeCountMap;
@@ -40,17 +40,25 @@ static bool allocateActiveCountMap(AIState state, int16_t sourceID);
 
 static struct caer_module_functions caerActivityIndicatorFunctions = { .moduleInit = &caerActivityIndicatorInit, .moduleRun = &caerActivityIndicatorRun, .moduleConfig = &caerActivityIndicatorConfig, .moduleExit = &caerActivityIndicatorExit, .moduleReset = &caerActivityIndicatorReset };
 
-void caerActivityIndicator(uint16_t moduleID, caerPolarityEventPacket polarity) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "AI", CAER_MODULE_PROCESSOR);
+AResults caerActivityIndicator(uint16_t moduleID, caerPolarityEventPacket polarity) {
+
+	AResults number = malloc(sizeof(struct activity_results));
+	caerMainloopFreeAfterLoop(&free, number);
+	number->activityValue = -1;
+	strcpy(number->stringValue,"");
+
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ActivityIndicator", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
-		return;
+		return(number);
 	}
-	caerModuleSM(&caerActivityIndicatorFunctions, moduleData, sizeof(struct AI_state), 2, polarity);
+	caerModuleSM(&caerActivityIndicatorFunctions, moduleData, sizeof(struct AI_state), 2, polarity, number);
+
+	return(number);
 }
 
 static bool caerActivityIndicatorInit(caerModuleData moduleData) {
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "measuringTime", 1000000);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "activeThreshold", 1000);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "measuringTime", 10000000);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "activeThreshold", 10);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "low", 100);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "median", 500);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "high", 1000);
@@ -76,6 +84,7 @@ static void caerActivityIndicatorRun(caerModuleData moduleData, size_t argsNumbe
 	UNUSED_ARGUMENT(argsNumber);
 
 	caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
+	AResults results = va_arg(args, AResults);
 
 	//Only process packets with content.
 	if (polarity == NULL) {
@@ -157,20 +166,26 @@ static void caerActivityIndicatorRun(caerModuleData moduleData, size_t argsNumbe
 
 		if (state->activeNum < state->low){
 			state->areaActivity = Verylow;
-			printf("   Very low, activeNum: %d", state->activeNum);
+			//caerLog(CAER_LOG_NOTICE, __func__, "   Very low, activeNum: %d", state->activeNum);
+			strcpy(results->stringValue, "Very low");
 		}
 		else if (state->activeNum < median){
 			state->areaActivity = low;
-			printf("   Low, activeNum: %d", state->activeNum);
+			//caerLog(CAER_LOG_NOTICE, __func__, "  Low, activeNum: %d", state->activeNum);
+			strcpy(results->stringValue, "Low");
 		}
 		else if (state->activeNum < high){
 			state->areaActivity = median;
-			printf("   Median, activeNum: %d", state->activeNum);
+			//caerLog(CAER_LOG_NOTICE, __func__, "   Median, activeNum: %d", state->activeNum);
+			strcpy(results->stringValue, "Median");
 		}
 		else {
 			state->areaActivity = high;
-			printf("   High, activeNum: %d", state->activeNum);
+			//caerLog(CAER_LOG_NOTICE, __func__, "   High, activeNum: %d", state->activeNum);
+			strcpy(results->stringValue, "High");
 		}
+		//printf("real number %d\n", state->activeNum);
+		results->activityValue = state->activeNum;
 	}
 }
 

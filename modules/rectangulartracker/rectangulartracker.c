@@ -428,6 +428,7 @@ static void caerRectangulartrackerRun(caerModuleData moduleData, size_t argsNumb
 
 	//plot events
 	*frame = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, sizeX, sizeY, 3);
+	caerMainloopFreeAfterLoop(&free, *frame);
 	if (*frame != NULL) {
 		caerFrameEvent singleplot = caerFrameEventPacketGetEvent(*frame, 0);
 		CAER_POLARITY_ITERATOR_VALID_START(polarity)

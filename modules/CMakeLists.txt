@@ -26,6 +26,7 @@ ADD_SUBDIRECTORY(rotatefilter)
 ADD_SUBDIRECTORY(helloworld)
 ADD_SUBDIRECTORY(effectivetransferfunction)
 ADD_SUBDIRECTORY(activityindicator)
+ADD_SUBDIRECTORY(opencvdisplay)
 #ADD_SUBDIRECTORY(pixelmatrix)
 
 # Support private modules that don't get considered for commit,

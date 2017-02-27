@@ -85,6 +85,9 @@
 #ifdef ENABLE_ACTIVITYINDICATOR
 #include "modules/activityindicator/activityindicator.h"
 #endif
+#ifdef ENABLE_OPENCVDISPLAY
+#include "modules/opencvdisplay/opencvdisplay_module.h"
+#endif
 
 #ifdef ENABLE_IMAGEGENERATOR
 #include "modules/imagegenerator/imagegenerator.h"
@@ -214,16 +217,20 @@ static bool mainloop_1(void) {
 
 	// Show how crowed the areas is (Mensa project)
 #ifdef ENABLE_ACTIVITYINDICATOR
-	caerActivityIndicator(17, polarity);
+	AResults rr =  caerActivityIndicator(17, polarity);
+#endif
+
+#if defined(ENABLE_OPENCVDISPLAY) && defined(ENABLE_ACTIVITYINDICATOR)
+	caerFrameEventPacket frameRes = NULL;
+	if(rr->activityValue != -1){
+		frameRes = caerOpenCVDisplay(18, rr);
+	}
 #endif
 
 	// Filter that show the mean rate of events
 #ifdef ENABLE_MEANRATEFILTER_DVS
 	caerFrameEventPacket freqplot = NULL;
 	caerMeanRateFilterDVS(15, polarity, &freqplot);
-#ifdef ENABLE_FILE_INPUT
-	caerMeanRateFilterDVS(15, polarity, &freqplot);
-#endif
 #endif
 
 	// Enable APS frame image enhancements.
@@ -252,6 +259,9 @@ static bool mainloop_1(void) {
 	if(freqplot != NULL){
 		caerVisualizer(70, "MeanRateFrequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
 	}
+#endif
+#if defined(ENABLE_OPENCVDISPLAY) && defined(ENABLE_ACTIVITYINDICATOR)
+	caerVisualizer(71, "FrameRes", &caerVisualizerRendererFrameEvents, visualizerEventHandler, (caerEventPacketHeader) frameRes);
 #endif
 	//caerVisualizerMulti(68, "PolarityAndFrame", &caerVisualizerMultiRendererPolarityAndFrameEvents, visualizerEventHandler, container);
 #endif
@@ -353,25 +363,9 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_IMAGEGENERATOR
 	free(classifyhist);
 	free(haveimage);
-#ifdef ENABLE_VISUALIZER
-	free(imagegeneratorFrame);
-#endif
 #if defined(ENABLE_CAFFEINTERFACE) || defined(ENABLE_NULLHOPINTERFACE)
 	free(classification_results);
-	free(networkActivity);
 #endif
-#endif
-
-#if defined(ENABLE_RECTANGULARTRACKER) && defined(ENABLE_VISUALIZER)
-	free(rectangularFrame);
-#endif
-
-#if defined(ENABLE_MEDIANTRACKER) && defined(ENABLE_VISUALIZER)
-	free(medianFrame);
-#endif
-
-#ifdef ENABLE_MEANRATEFILTER_DVS
-	free(freqplot);
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.

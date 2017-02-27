@@ -202,6 +202,7 @@ static void caerMediantrackerRun(caerModuleData moduleData, size_t argsNumber, v
 	caerPoint4DEventValidate(evt, *medianData);
 
 	*frame = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, sizeX, sizeY, 3);
+	caerMainloopFreeAfterLoop(&free, *frame);
 	if (*frame != NULL) {
 		caerFrameEvent singleplot = caerFrameEventPacketGetEvent(*frame, 0);
 		uint32_t counter = 0;

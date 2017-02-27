@@ -424,12 +424,7 @@ bool doClear) {
 	float maxY = INT_MIN;
 
 	CAER_POINT4D_ITERATOR_VALID_START((caerPoint4DEventPacket) Point4DEventPacketHeader)
-		//float corex = caerPoint4DEventGetX(caerPoint4DIteratorElement);
-		//float corey = caerPoint4DEventGetY(caerPoint4DIteratorElement);
 		float mean = caerPoint4DEventGetZ(caerPoint4DIteratorElement);
-		//float var = caerPoint4DEventGetW(caerPoint4DIteratorElement);
-
-		//int coreid = corex * 1 + corey;
 		if (maxY < mean) {
 			maxY = mean;
 		}
@@ -443,7 +438,6 @@ bool doClear) {
 		float corex = caerPoint4DEventGetX(caerPoint4DIteratorElement);
 		float corey = caerPoint4DEventGetY(caerPoint4DIteratorElement);
 		float mean = caerPoint4DEventGetZ(caerPoint4DIteratorElement);
-		//float var = caerPoint4DEventGetW(caerPoint4DIteratorElement);
 
 		int coreid = (int) corex * 1 + (int) corey;	// color
 		int new_y = (int32_t) floor( mean * scaley);

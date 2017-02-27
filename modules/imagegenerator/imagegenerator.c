@@ -35,30 +35,25 @@ struct imagegenerator_state {
 typedef struct imagegenerator_state *imagegeneratorState;
 
 static bool caerImageGeneratorInit(caerModuleData moduleData);
-static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
-		va_list args);
+static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, va_list args);
 static void caerImageGeneratorExit(caerModuleData moduleData);
-static bool allocateImageMapSubsampled(imagegeneratorState state,
-		int16_t sourceID, int16_t sizeX, int16_t sizeY);
+static bool allocateImageMapSubsampled(imagegeneratorState state, int16_t sourceID, int16_t sizeX, int16_t sizeY);
 static void caerImageGeneratorConfig(caerModuleData moduleData);
 
-static struct caer_module_functions caerImageGeneratorFunctions = {
-		.moduleInit = &caerImageGeneratorInit, .moduleRun =
-				&caerImageGeneratorRun, .moduleConfig =
-		NULL, .moduleExit = &caerImageGeneratorExit };
+static struct caer_module_functions caerImageGeneratorFunctions = { .moduleInit = &caerImageGeneratorInit, .moduleRun =
+	&caerImageGeneratorRun, .moduleConfig =
+NULL, .moduleExit = &caerImageGeneratorExit };
 
-void caerImageGenerator(uint16_t moduleID, caerPolarityEventPacket polarity,
-		int classify_img_size, int *packet_hist, bool * haveimg) {
+void caerImageGenerator(uint16_t moduleID, caerPolarityEventPacket polarity, int classify_img_size, int *packet_hist,
+	bool * haveimg) {
 
-	caerModuleData moduleData = caerMainloopFindModule(moduleID,
-			"ImageGenerator", CAER_MODULE_PROCESSOR);
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageGenerator", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}
 
-	caerModuleSM(&caerImageGeneratorFunctions, moduleData,
-			sizeof(struct imagegenerator_state), 4, polarity, classify_img_size,
-			packet_hist, haveimg);
+	caerModuleSM(&caerImageGeneratorFunctions, moduleData, sizeof(struct imagegenerator_state), 4, polarity,
+		classify_img_size, packet_hist, haveimg);
 
 	return;
 }
@@ -71,8 +66,7 @@ static bool caerImageGeneratorInit(caerModuleData moduleData) {
 	state->numSpikes = sshsNodeGetInt(moduleData->moduleNode, "numSpikes");
 
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "rectifyPolarities", true);
-	state->rectifyPolarities = sshsNodeGetBool(moduleData->moduleNode,
-			"rectifyPolarities");
+	state->rectifyPolarities = sshsNodeGetBool(moduleData->moduleNode, "rectifyPolarities");
 
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "colorscale", 200);
 	state->colorscale = sshsNodeGetInt(moduleData->moduleNode, "colorscale");
@@ -88,7 +82,7 @@ static void caerImageGeneratorConfig(caerModuleData moduleData) {
 	imagegeneratorState state = moduleData->moduleState;
 
 	state->numSpikes = sshsNodeGetInt(moduleData->moduleNode, "numSpikes");
-	state->rectifyPolarities = sshsNodeGetBool(moduleData->moduleNode,"rectifyPolarities");
+	state->rectifyPolarities = sshsNodeGetBool(moduleData->moduleNode, "rectifyPolarities");
 	state->colorscale = sshsNodeGetInt(moduleData->moduleNode, "colorscale");
 
 }
@@ -99,8 +93,7 @@ static void caerImageGeneratorExit(caerModuleData moduleData) {
 }
 
 //This function implement 3sigma normalization and converts the image in nullhop format
-static bool normalize_image_map_sigma(imagegeneratorState state, int * hist,
-		int size) {
+static bool normalize_image_map_sigma(imagegeneratorState state, int * hist, int size) {
 
 	int sum = 0, count = 0;
 	for (int i = 0; i < size; i++) {
@@ -134,13 +127,15 @@ static bool normalize_image_map_sigma(imagegeneratorState state, int * hist,
 
 	if (state->rectifyPolarities) {
 		mean_png_gray = 0; // rectified
-	} else {
+	}
+	else {
 		mean_png_gray = (127.0 / 255.0) * 256.0f; //256 included here for nullhop reshift
 	}
 	if (state->rectifyPolarities) {
 		range = numSDevs * sig * (1.0f / 256.0f); //256 included here for nullhop reshift
 		halfrange = 0;
-	} else {
+	}
+	else {
 		range = numSDevs * sig * 2 * (1.0f / 256.0f); //256 included here for nullhop reshift
 		halfrange = numSDevs * sig;
 	}
@@ -154,13 +149,14 @@ static bool normalize_image_map_sigma(imagegeneratorState state, int * hist,
 
 				hist[linindex] = mean_png_gray;
 
-			} else {
-				float f = (state->ImageMap[col_idx][row_idx] + halfrange)
-						/ range;
+			}
+			else {
+				float f = (state->ImageMap[col_idx][row_idx] + halfrange) / range;
 
 				if (f > 256) {
 					f = 256; //256 included here for nullhop reshift
-				} else if (f < 0) {
+				}
+				else if (f < 0) {
 					f = 0;
 				}
 
@@ -173,8 +169,7 @@ static bool normalize_image_map_sigma(imagegeneratorState state, int * hist,
 
 }
 
-static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
-		va_list args) {
+static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
 	UNUSED_ARGUMENT(argsNumber);
 
 	// Interpret variable arguments (same as above in main function).
@@ -203,12 +198,10 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 	/* **** SPIKE SECTION START *** */
 	// If the map is not allocated yet, do it.
 	if (state->ImageMap == NULL) {
-		if (!allocateImageMapSubsampled(state,
-				caerEventPacketHeaderGetEventSource(&polarity->packetHeader),
-				CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE)) {
+		if (!allocateImageMapSubsampled(state, caerEventPacketHeaderGetEventSource(&polarity->packetHeader),
+			CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE)) {
 			// Failed to allocate memory, nothing to do.
-			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
-					"Failed to allocate memory for ImageMap.");
+			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for ImageMap.");
 			return;
 		}
 	}
@@ -218,9 +211,9 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 		float cam_sizeX = sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeX");
 		float cam_sizeY = sshsNodeGetShort(sourceInfoNodeCA, "dataSizeY");
 
-		if(cam_sizeX == 0 || cam_sizeY == 0){
+		if (cam_sizeX == 0 || cam_sizeY == 0) {
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
-								"Wrong device size not computing anything in here..");
+				"Wrong device size not computing anything in here..");
 			return;
 		}
 
@@ -228,20 +221,17 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 		float res_y = CLASSIFY_IMG_SIZE / cam_sizeY;
 
 		if (state->colorscale <= 0) {
-			caerLog(CAER_LOG_CRITICAL, "imagegenerator",
-					"please select colorscale >0");
+			caerLog(CAER_LOG_CRITICAL, "imagegenerator", "please select colorscale >0");
 			exit(1);
 		}
 
-		caerEventPacketHeader *onlyvalid = caerCopyEventPacketOnlyValidEvents(
-				polarity);
+		caerEventPacketHeader *onlyvalid = caerCopyEventPacketOnlyValidEvents(polarity);
 		if (onlyvalid == NULL) {
 			return;
 		}
 		int32_t numtotevs = caerEventPacketHeaderGetEventValid(onlyvalid);
 
-		caerPolarityEventPacket currPolarityPacket =
-				(caerPolarityEventPacket) onlyvalid;
+		caerPolarityEventPacket currPolarityPacket = (caerPolarityEventPacket) onlyvalid;
 
 		//default is all events
 		int numevs_start = 0;
@@ -259,19 +249,18 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 			numevs_start = numtotevs - state->numSpikes;
 			numevs_end = numtotevs;
 
-		} else if ((numtotevs + state->spikeCounter) >= state->numSpikes) {
+		}
+		else if ((numtotevs + state->spikeCounter) >= state->numSpikes) {
 			//takes only the last 2000
 			numevs_start = numtotevs - (state->numSpikes - state->spikeCounter);
 			numevs_end = numtotevs;
 		}
 
-		for (int32_t caerPolarityIteratorCounter = numevs_start;
-				caerPolarityIteratorCounter < numevs_end;
-				caerPolarityIteratorCounter++) {
+		for (int32_t caerPolarityIteratorCounter = numevs_start; caerPolarityIteratorCounter < numevs_end;
+			caerPolarityIteratorCounter++) {
 
-			caerPolarityEvent caerPolarityIteratorElement =
-					caerPolarityEventPacketGetEvent(currPolarityPacket,
-							caerPolarityIteratorCounter);
+			caerPolarityEvent caerPolarityIteratorElement = caerPolarityEventPacketGetEvent(currPolarityPacket,
+				caerPolarityIteratorCounter);
 
 			if (!caerPolarityEventIsValid(caerPolarityIteratorElement)) {
 				continue;
@@ -287,21 +276,21 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 
 			//Update image Map
 			if (state->rectifyPolarities) {
-				state->ImageMap[pos_x][pos_y] = state->ImageMap[pos_x][pos_y]
-						+ 1; //rectify events
-			} else {
+				state->ImageMap[pos_x][pos_y] = state->ImageMap[pos_x][pos_y] + 1; //rectify events
+			}
+			else {
 				if (pol == 0) {
-					state->ImageMap[pos_x][pos_y] =
-							state->ImageMap[pos_x][pos_y] - 1;
-				} else {
-					state->ImageMap[pos_x][pos_y] =
-							state->ImageMap[pos_x][pos_y] + 1;
+					state->ImageMap[pos_x][pos_y] = state->ImageMap[pos_x][pos_y] - 1;
+				}
+				else {
+					state->ImageMap[pos_x][pos_y] = state->ImageMap[pos_x][pos_y] + 1;
 				}
 			}
 
 			if (state->ImageMap[pos_x][pos_y] > state->colorscale) {
 				state->ImageMap[pos_x][pos_y] = state->colorscale;
-			} else if (state->ImageMap[pos_x][pos_y] < -state->colorscale) {
+			}
+			else if (state->ImageMap[pos_x][pos_y] < -state->colorscale) {
 				state->ImageMap[pos_x][pos_y] = -state->colorscale;
 			}
 
@@ -317,10 +306,9 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 				clock_t start = clock(), diff;
 #endif
 
-				if (!normalize_image_map_sigma(state, hist,
-						CLASSIFY_IMG_SIZE)) {
+				if (!normalize_image_map_sigma(state, hist, CLASSIFY_IMG_SIZE)) {
 					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
-							"Failed to normalize image map with 3 sigma range.");
+						"Failed to normalize image map with 3 sigma range.");
 					return;
 				};
 #ifdef TIMING
@@ -347,16 +335,14 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
 
 }
 
-void caerImageGeneratorAddText(uint16_t moduleID, int * hist_packet,
-		caerFrameEventPacket *imagegeneratorFrame, int size, char * classification_results){
+void caerImageGeneratorAddText(uint16_t moduleID, int * hist_packet, caerFrameEventPacket *imagegeneratorFrame,
+	int size, char * classification_results) {
 
-	caerModuleData moduleData = caerMainloopFindModule(moduleID,
-			"ImageGenerator", CAER_MODULE_PROCESSOR);
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageGenerator", CAER_MODULE_PROCESSOR);
 
 	// put info into frame
 	if (*imagegeneratorFrame != NULL) {
-		caerFrameEvent singleplot = caerFrameEventPacketGetEvent(
-				*imagegeneratorFrame, 0);
+		caerFrameEvent singleplot = caerFrameEventPacketGetEvent(*imagegeneratorFrame, 0);
 
 		uint32_t counter = 0;
 		for (size_t x = 0; x < size; x++) {
@@ -369,65 +355,54 @@ void caerImageGeneratorAddText(uint16_t moduleID, int * hist_packet,
 			}
 		}
 		//add info to the frame
-		caerFrameEventSetLengthXLengthYChannelNumber(singleplot, size, size, 3,
-				*imagegeneratorFrame);
+		caerFrameEventSetLengthXLengthYChannelNumber(singleplot, size, size, 3, *imagegeneratorFrame);
 	}
 
 }
 
+void caerImageGeneratorMakeFrame(uint16_t moduleID, int * hist_packet, caerFrameEventPacket *imagegeneratorFrame,
+	int size) {
 
-void caerImageGeneratorMakeFrame(uint16_t moduleID, int * hist_packet,
-		caerFrameEventPacket *imagegeneratorFrame, int size) {
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageGenerator", CAER_MODULE_PROCESSOR);
 
-	caerModuleData moduleData = caerMainloopFindModule(moduleID,
-			"ImageGenerator", CAER_MODULE_PROCESSOR);
-
-	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode,
-			"sourceInfo/");
+	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
 	if (!sshsNodeAttributeExists(sourceInfoNode, "dataSizeX", SSHS_SHORT)) { //to do for visualizer change name of field to a more generic one
 		sshsNodePutShort(sourceInfoNode, "dataSizeX", size);
 		sshsNodePutShort(sourceInfoNode, "dataSizeY", size);
 	}
 
 	// put info into frame
-	*imagegeneratorFrame = caerFrameEventPacketAllocate(1,
-			I16T(moduleData->moduleID), 0, size, size, 3);
+	*imagegeneratorFrame = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, size, size, 3);
+	caerMainloopFreeAfterLoop(&free, *imagegeneratorFrame);
 	if (*imagegeneratorFrame != NULL) {
-		caerFrameEvent singleplot = caerFrameEventPacketGetEvent(
-				*imagegeneratorFrame, 0);
+		caerFrameEvent singleplot = caerFrameEventPacketGetEvent(*imagegeneratorFrame, 0);
 
 		uint32_t counter = 0;
 		for (size_t x = 0; x < size; x++) {
 			for (size_t y = 0; y < size; y++) {
 				//COLOUR col  = GetColour((double) state->frequencyMap->buffer2d[y][x], state->colorscaleMin, state->colorscaleMax);
 				int linindex = x * size + y;
-				singleplot->pixels[counter] =
-						(uint16_t) ((int) (hist_packet[linindex]) * 255); // red
-				singleplot->pixels[counter + 1] =
-						(uint16_t) ((int) (hist_packet[linindex]) * 255); // green
-				singleplot->pixels[counter + 2] =
-						(uint16_t) ((int) (hist_packet[linindex]) * 255); // blue
+				singleplot->pixels[counter] = (uint16_t) ((int) (hist_packet[linindex]) * 255); // red
+				singleplot->pixels[counter + 1] = (uint16_t) ((int) (hist_packet[linindex]) * 255); // green
+				singleplot->pixels[counter + 2] = (uint16_t) ((int) (hist_packet[linindex]) * 255); // blue
 				counter += 3;
 			}
 		}
 
 		//add info to the frame
-		caerFrameEventSetLengthXLengthYChannelNumber(singleplot, size, size, 3,
-				*imagegeneratorFrame);
+		caerFrameEventSetLengthXLengthYChannelNumber(singleplot, size, size, 3, *imagegeneratorFrame);
 		//validate frame
 		caerFrameEventValidate(singleplot, *imagegeneratorFrame);
 	}
 
 }
 
-static bool allocateImageMapSubsampled(imagegeneratorState state,
-		int16_t sourceID, int16_t sizeX, int16_t sizeY) {
+static bool allocateImageMapSubsampled(imagegeneratorState state, int16_t sourceID, int16_t sizeX, int16_t sizeY) {
 	// Get size information from source.
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
 	if (sourceInfoNode == NULL) {
 		// This should never happen, but we handle it gracefully.
-		caerLog(CAER_LOG_ERROR, __func__,
-				"Failed to get source info to allocate image map.");
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to get source info to allocate image map.");
 		return (false);
 	}
 

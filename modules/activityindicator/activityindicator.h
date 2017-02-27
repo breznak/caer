@@ -11,7 +11,15 @@
 #include "main.h"
 
 #include <libcaer/events/polarity.h>
+#define STATUSCHAR	1024
 
-void caerActivityIndicator(uint16_t moduleID, caerPolarityEventPacket polarity);
+struct activity_results {
+	char stringValue[STATUSCHAR];
+	int activityValue;
+};
+
+typedef struct activity_results *AResults;
+
+AResults caerActivityIndicator(uint16_t moduleID, caerPolarityEventPacket polarity);
 
 #endif /* ACTIVITYINDICATOR_H_ */
