@@ -47,12 +47,17 @@
 #include "modules/misc/out/unix_socket.h"
 #endif
 
+#ifdef ENABLE_STATISTICS
+#include "modules/statistics/statistics.h"
+#endif
+
 #ifdef ENABLE_VISUALIZER
 #include "modules/visualizer/visualizer.h"
 #endif
 
 #ifdef ENABLE_MEANRATEFILTER
 #include <libcaer/events/frame.h>
+#include "modules/meanratefilter/meanratefilter.h"
 #endif
 
 #ifdef ENABLE_MONITORNEUFILTER
@@ -171,10 +176,6 @@ static bool mainloop_1(void) {
 
 	// And also send them via UDP. This is fast, as it doesn't care what is on the other side.
 	caerOutputNetUDP(9, 2, spike, special);
-#endif
-
-#ifdef ENABLE_MEANRATEFILTER
-	free(freqplot);
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.

@@ -387,7 +387,7 @@ static void caerEffectiveTransferFunctionExit(caerModuleData moduleData) {
 static void caerEffectiveTransferFunctionReset(caerModuleData moduleData, uint16_t resetCallSourceID) {
 	UNUSED_ARGUMENT(resetCallSourceID);
 
-	//ETFFilterState state = moduleData->moduleState;
+	ETFFilterState state = moduleData->moduleState;
 
 }
 

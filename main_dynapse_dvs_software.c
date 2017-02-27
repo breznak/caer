@@ -347,24 +347,12 @@ static bool mainloop_1(void) {
 	caerOutputNetUDP(9, 2, spike, special);
 #endif
 
-#ifdef ENABLE_MEANRATEFILTER
-	free(freqplot);
-#endif
-
 #ifdef ENABLE_IMAGEGENERATOR
 	free(classifyhist);
 	free(haveimage);
-#ifdef ENABLE_VISUALIZER
-	free(imagegeneratorFrame);
-#endif
 #if defined(ENABLE_CAFFEINTERFACE)
 	free(classification_results);
-	free(networkActivity);
 #endif
-#endif
-
-#ifdef ENABLE_MEANRATEFILTER_DVS
-	free(freqplot);
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.

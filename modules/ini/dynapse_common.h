@@ -70,4 +70,15 @@ void caerInputDYNAPSEExit(caerModuleData moduleData);
 void caerInputDYNAPSERun(caerModuleData moduleData, size_t argsNumber, va_list args);
 const char *chipIDToName(int16_t chipID, bool withEndSlash);
 
+void caerDynapseSetBias(caerInputDynapseState state, uint32_t chipId, uint32_t coreId, const char *biasName_t,
+	uint8_t coarseValue, uint16_t fineValue, const char *lowHigh, const char *npBias);
+uint32_t generatesBitsCoarseFineBiasSetting(sshsNode node, const char *biasName, uint8_t coarseValue,
+	uint16_t fineValue, const char *hlbias, const char *currentLevel, const char *sex,
+	bool enabled, int chipid);
+bool setCamContent(caerInputDynapseState state, int16_t chipId, bool ei, bool fs, int16_t address, int8_t source_core,
+	int8_t coreId, int16_t row, int16_t column);
+bool caerGenSpikeInit(caerModuleData moduleData);
+void caerDynapseSetBias(caerInputDynapseState state, uint32_t chipId, uint32_t coreId, const char *biasName_t,
+	uint8_t coarseValue, uint16_t fineValue, const char *lowHigh, const char *npBias);
+
 #endif /* DYNAPSE_COMMON_H_ */

@@ -330,6 +330,7 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 
 	// put info into frame
 	*freqplot = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, sizeX, sizeY, 3);
+	caerMainloopFreeAfterLoop(&free, *freqplot);
 	if (*freqplot != NULL) {
 		caerFrameEvent singleplot = caerFrameEventPacketGetEvent(*freqplot, 0);
 
