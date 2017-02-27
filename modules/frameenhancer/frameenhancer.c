@@ -11,8 +11,6 @@ struct FrameEnhancer_state {
 	int demosaicType;
 	bool doContrast;
 	int contrastType;
-	bool doWhiteBalance;
-	int whiteBalanceType;
 };
 
 typedef struct FrameEnhancer_state *FrameEnhancerState;
@@ -42,16 +40,13 @@ caerFrameEventPacket caerFrameEnhancer(uint16_t moduleID, caerFrameEventPacket f
 static bool caerFrameEnhancerInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doDemosaic", false);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doContrast", false);
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doWhiteBalance", false);
 
 #ifdef ENABLE_FRAMEENHANCER_OPENCV
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "demosaicType", "opencv_edge_aware");
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "contrastType", "opencv_normalization");
-	sshsNodePutStringIfAbsent(moduleData->moduleNode, "whiteBalanceType", "opencv_grayworld");
 #else
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "demosaicType", "standard");
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "contrastType", "standard");
-	sshsNodePutStringIfAbsent(moduleData->moduleNode, "whiteBalanceType", "standard");
 #endif
 
 	// Initialize configuration.
@@ -100,26 +95,6 @@ static void caerFrameEnhancerRun(caerModuleData moduleData, size_t argsNumber, v
 		// This creates a new, independent frame, which also needs to be
 		// correctly reclaimed at the end of the mainloop run.
 		caerMainloopFreeAfterLoop(&free, *enhancedFrame);
-	}
-
-	if (state->doWhiteBalance) {
-#ifdef ENABLE_FRAMEENHANCER_OPENCV
-		switch (state->whiteBalanceType) {
-			case 0:
-				caerFrameUtilsWhiteBalance(*enhancedFrame);
-				break;
-
-			case 1:
-				caerFrameUtilsOpenCVWhiteBalance(*enhancedFrame, WHITEBALANCE_SIMPLE);
-				break;
-
-			case 2:
-				caerFrameUtilsOpenCVWhiteBalance(*enhancedFrame, WHITEBALANCE_GRAYWORLD);
-				break;
-		}
-#else
-		caerFrameUtilsWhiteBalance(*enhancedFrame);
-#endif
 	}
 
 	if (state->doContrast) {
@@ -188,23 +163,6 @@ static void caerFrameEnhancerConfig(caerModuleData moduleData) {
 	}
 
 	free(contrastType);
-
-	state->doWhiteBalance = sshsNodeGetBool(moduleData->moduleNode, "doWhiteBalance");
-
-	char *whiteBalanceType = sshsNodeGetString(moduleData->moduleNode, "whiteBalanceType");
-
-	if (caerStrEquals(whiteBalanceType, "opencv_simple")) {
-		state->whiteBalanceType = 1;
-	}
-	else if (caerStrEquals(whiteBalanceType, "opencv_grayworld")) {
-		state->whiteBalanceType = 2;
-	}
-	else {
-		// Standard, non-OpenCV method.
-		state->whiteBalanceType = 0;
-	}
-
-	free(whiteBalanceType);
 }
 
 static void caerFrameEnhancerExit(caerModuleData moduleData) {
