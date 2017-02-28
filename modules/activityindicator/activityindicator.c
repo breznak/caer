@@ -57,11 +57,11 @@ AResults caerActivityIndicator(uint16_t moduleID, caerPolarityEventPacket polari
 }
 
 static bool caerActivityIndicatorInit(caerModuleData moduleData) {
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "measuringTime", 100000);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "measuringTime", 500000);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "activeThreshold", 20);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "low", 100);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "median", 500);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "high", 1000);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "median", 1000);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "high", 4000);
 
 	AIState state = moduleData->moduleState;
 
@@ -169,12 +169,12 @@ static void caerActivityIndicatorRun(caerModuleData moduleData, size_t argsNumbe
 			//caerLog(CAER_LOG_NOTICE, __func__, "   Very low, activeNum: %d", state->activeNum);
 			strcpy(results->stringValue, "Very low");
 		}
-		else if (state->activeNum < median){
+		else if (state->activeNum < state->median){
 			state->areaActivity = low;
 			//caerLog(CAER_LOG_NOTICE, __func__, "  Low, activeNum: %d", state->activeNum);
 			strcpy(results->stringValue, "Low");
 		}
-		else if (state->activeNum < high){
+		else if (state->activeNum < state->high){
 			state->areaActivity = median;
 			//caerLog(CAER_LOG_NOTICE, __func__, "   Median, activeNum: %d", state->activeNum);
 			strcpy(results->stringValue, "Median");
