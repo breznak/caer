@@ -446,7 +446,7 @@ static bool caerVisualizerInitGraphics(caerVisualizerState state) {
 		return (false);
 	}
 
-	state->displayTimer = al_create_timer(1.0f / VISUALIZER_REFRESH_RATE);
+	state->displayTimer = al_create_timer((double)1.0f / (double)VISUALIZER_REFRESH_RATE);
 	if (state->displayTimer == NULL) {
 		// Clean up all memory that may have been used.
 		caerVisualizerExitGraphics(state);

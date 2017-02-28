@@ -231,7 +231,12 @@ void spiketrainETF(void *spikeGenState) {
 	//check frequency phase and change accordingly
 	double current_time = (double) ((double) tend_etf.tv_sec + 1.0e-9 * tend_etf.tv_nsec - (double) tstart_etf.tv_sec
 		+ 1.0e-9 * tstart_etf.tv_nsec);
-	this_step = (int) round((double) current_time / (double) stepDur);
+	this_step = 1;
+	double chek = round((double) current_time / (double) stepDur);
+	if(chek < INT32_MAX && chek > INT32_MIN ){
+		this_step = (int32_t) chek;
+	}
+
 	atomic_store(&state->genSpikeState.ETFphase_num, this_step);
 	if (inFreqs[this_step] > 0) {
 		tim.tv_nsec = 1000000000L / inFreqs[this_step];	// select frequency
