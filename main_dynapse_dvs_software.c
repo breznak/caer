@@ -350,8 +350,10 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_IMAGEGENERATOR
 	free(classifyhist);
 	free(haveimage);
+	//free(imagegeneratorFrame);
 #if defined(ENABLE_CAFFEINTERFACE)
 	free(classification_results);
+	//free(networkActivity);
 #endif
 #endif
 
