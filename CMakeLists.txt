@@ -69,8 +69,8 @@ ENDIF()
 
 # Check GCC compiler version, 4.9 is needed at least for atomics support.
 IF (CC_GCC)
-	IF (${CMAKE_C_COMPILER_VERSION} VERSION_LESS "4.9.0")
-		MESSAGE(FATAL_ERROR "GCC version found is ${CMAKE_C_COMPILER_VERSION}. Required >= 4.9.0.")
+	IF (${CMAKE_C_COMPILER_VERSION} VERSION_LESS "5.2.0")
+		MESSAGE(FATAL_ERROR "GCC version found is ${CMAKE_C_COMPILER_VERSION}. Required >= 5.2.0.")
 	ENDIF()
 ENDIF()
 
@@ -139,7 +139,7 @@ ADD_DEFINITIONS(-DCM_BUILD_DIR=${CM_BUILD_DIR} -DCM_SHARE_DIR=${CM_SHARE_DIR})
 # C11 standard needed (atomics, threads)
 IF (CC_GCC OR CC_CLANG)
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11")
-	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 ENDIF()
 
 # Enable all warnings for GCC / Clang
