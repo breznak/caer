@@ -283,7 +283,10 @@ bool doClear) {
 		uint8_t coreId = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);
 		int32_t ts = caerSpikeEventGetTimestamp(caerSpikeIteratorElement);
 		ts = ts - min_ts;
-		new_x = (int32_t) floor( (double) ts * (double) scalex);
+		double chek = floor( (double) ts * (double) scalex);
+		if(chek < INT32_MAX && chek > INT32_MIN ){
+			new_x = (int32_t) chek;
+		}
 
 		// get x,y position
 		uint16_t y = caerSpikeEventGetY(caerSpikeIteratorElement);
@@ -325,17 +328,35 @@ bool doClear) {
 		uint32_t new_y = (uint32_t) indexLin + (uint32_t) (coreId * DYNAPSE_CONFIG_NUMNEURONS_CORE);
 
 		// adjust coordinate for plot
-		new_y = (int32_t) floor((double) new_y * (double) scaley);
+
+		double che = floor((double) new_y * (double) scaley);
+		new_y = 0;
+		if(che < INT32_MAX && che > INT32_MIN ){
+			new_y = (uint32_t) che;
+		}
+
 		// move
 		if (chipId == DYNAPSE_CONFIG_DYNAPSE_U3) {
-			new_x = (int32_t) floor( new_x + ((double) sizeX / 2));
-			new_y = (int32_t) floor( new_y + (double) sizeY / 2.0);
+			che = floor( new_x + ((double) sizeX / 2));
+			if(che < INT32_MAX && che > INT32_MIN ){
+				new_x = (int32_t) che;
+			}
+			che = floor( new_y + (double) sizeY / 2.0);
+			if(che < INT32_MAX && che > INT32_MIN ){
+				new_y = (uint32_t) che;
+			}
 		}
 		else if (chipId == DYNAPSE_CONFIG_DYNAPSE_U2) {
-			new_x = (int32_t) floor( new_x + ((double) sizeX / 2));
+			che = floor( new_x + ((double) sizeX / 2));
+			if(che < INT32_MAX && che > INT32_MIN ){
+				new_x = (int32_t) che;
+			}
 		}
 		else if (chipId == DYNAPSE_CONFIG_DYNAPSE_U1) {
-			new_y = (int32_t) floor( new_y + (double) sizeY / 2.0);
+			che = floor( new_y + (double) sizeY / 2.0);
+			if(che < INT32_MAX && che > INT32_MIN ){
+				new_y = (uint32_t) che;
+			}
 		}
 		else if (chipId == DYNAPSE_CONFIG_DYNAPSE_U0 + 1) { // sram can't be zero
 			;
@@ -349,7 +370,7 @@ bool doClear) {
 		}
 
 		// draw pixels (neurons might be merged due to aliasing..)
-		al_put_pixel(new_x, new_y, al_map_rgb(coreId * 0, 255, 0 * coreId));
+		al_put_pixel( (int) new_x, (int) new_y, al_map_rgb(coreId * 0, 255, 0 * coreId));
 
 		//caerLog(CAER_LOG_NOTICE, __func__, "chipId %d, new_x %d, new_y %d, indexLin %d\n", chipId, new_x, new_y, indexLin);
 
@@ -440,9 +461,19 @@ bool doClear) {
 		float mean = caerPoint4DEventGetZ(caerPoint4DIteratorElement);
 
 		int coreid = (int) corex * 1 + (int) corey;	// color
-		int new_y = (int32_t) floor( mean * scaley);
 
-		al_put_pixel((uint32_t) sizeX - (uint32_t)round(counter*scalex), new_y, al_map_rgb(coreid * 80, 255, 0));
+		double range_check = floor( (double)mean * (double)scaley);
+		int32_t new_y = 0;
+		if(range_check < INT32_MAX && range_check > INT32_MIN ){
+			new_y = (int32_t) range_check;
+		}
+
+		range_check = round((double)counter*(double)scalex);
+		int32_t checked = 0;
+		if(range_check < INT32_MAX && range_check > INT32_MIN ){
+			checked = (int32_t) range_check;
+		}
+		al_put_pixel((int32_t) sizeX - checked, (int32_t) new_y, al_map_rgb( (unsigned char) coreid * 80, 255, 0));
 
 		if(counter == 5){
 			counter = 0;
