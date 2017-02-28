@@ -61,10 +61,11 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 
 	sshsNode spikeNode = sshsGetRelativeNode(deviceConfigNodeMain, "spikeGen/");
 
-	sshsNodePutBoolIfAbsent(spikeNode, "doStim", false); //false
+	sshsNodePutBoolIfAbsent(spikeNode, "doStim", false);
+	sshsNodePutBool(spikeNode, "doStim", false);
 	atomic_store(&state->genSpikeState.doStim, sshsNodeGetBool(spikeNode, "doStim"));
 
-	sshsNodePutIntIfAbsent(spikeNode, "stim_type", U8T(STIM_REGULAR)); //STIM_REGULAR
+	sshsNodePutIntIfAbsent(spikeNode, "stim_type", U8T(STIM_REGULAR));
 	atomic_store(&state->genSpikeState.stim_type, sshsNodeGetInt(spikeNode, "stim_type"));
 
 	sshsNodePutIntIfAbsent(spikeNode, "stim_avr", 3);
@@ -73,10 +74,11 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(spikeNode, "stim_std", 1);
 	atomic_store(&state->genSpikeState.stim_std, sshsNodeGetInt(spikeNode, "stim_std"));
 
-	sshsNodePutIntIfAbsent(spikeNode, "stim_duration", 10); //10
+	sshsNodePutIntIfAbsent(spikeNode, "stim_duration", 10);
 	atomic_store(&state->genSpikeState.stim_duration, sshsNodeGetInt(spikeNode, "stim_duration"));
 
-	sshsNodePutBoolIfAbsent(spikeNode, "repeat", false); //false
+	sshsNodePutBoolIfAbsent(spikeNode, "repeat", false);
+	sshsNodePutBool(spikeNode, "repeat", false);
 	atomic_store(&state->genSpikeState.repeat, sshsNodeGetBool(spikeNode, "repeat"));
 
 	sshsNodePutBoolIfAbsent(spikeNode, "teaching", true);
@@ -88,19 +90,23 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(spikeNode, "sendInhibitoryStimuli", false);
 	atomic_store(&state->genSpikeState.sendInhibitoryStimuli, sshsNodeGetBool(spikeNode, "sendInhibitoryStimuli"));
 
-	sshsNodePutBoolIfAbsent(spikeNode, "setCam", false); //1 //false
+	sshsNodePutBoolIfAbsent(spikeNode, "setCam", false);
+	sshsNodePutBool(spikeNode, "setCam", false);
 	atomic_store(&state->genSpikeState.setCam, sshsNodeGetBool(spikeNode, "setCam"));
 
-	sshsNodePutBoolIfAbsent(spikeNode, "setCamSingle", false); //1 //false
+	sshsNodePutBoolIfAbsent(spikeNode, "setCamSingle", false);
+	sshsNodePutBool(spikeNode, "setCamSingle", false);
 	atomic_store(&state->genSpikeState.setCamSingle, sshsNodeGetBool(spikeNode, "setCamSingle"));
 
-	sshsNodePutBoolIfAbsent(spikeNode, "clearCam", false); //1 //false
+	sshsNodePutBoolIfAbsent(spikeNode, "clearCam", false);
+	sshsNodePutBool(spikeNode, "clearCam", false);
 	atomic_store(&state->genSpikeState.clearCam, sshsNodeGetBool(spikeNode, "clearCam"));
 
-	sshsNodePutBoolIfAbsent(spikeNode, "clearAllCam", false); //1 //false
+	sshsNodePutBoolIfAbsent(spikeNode, "clearAllCam", false);
+	sshsNodePutBool(spikeNode, "clearAllCam", false);
 	atomic_store(&state->genSpikeState.clearAllCam, sshsNodeGetBool(spikeNode, "clearAllCam"));
 
-	sshsNodePutBoolIfAbsent(spikeNode, "doStimPrimitiveBias", true); //false
+	sshsNodePutBoolIfAbsent(spikeNode, "doStimPrimitiveBias", true);
 	atomic_store(&state->genSpikeState.doStimPrimitiveBias, sshsNodeGetBool(spikeNode, "doStimPrimitiveBias"));
 
 	sshsNodePutBoolIfAbsent(spikeNode, "doStimPrimitiveCam", true); //false
@@ -113,9 +119,11 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 	atomic_store(&state->genSpikeState.done, true);
 
 	sshsNodePutBoolIfAbsent(spikeNode, "ETFstarted", false);
+	sshsNodePutBool(spikeNode, "ETFstarted", false);
 	atomic_store(&state->genSpikeState.ETFstarted, sshsNodeGetBool(spikeNode, "ETFstarted"));
 
 	sshsNodePutBoolIfAbsent(spikeNode, "ETFdone", true);
+	sshsNodePutBool(spikeNode, "ETFdone", false);
 	atomic_store(&state->genSpikeState.ETFdone, sshsNodeGetBool(spikeNode, "ETFdone"));
 
 	sshsNodePutIntIfAbsent(spikeNode, "ETFchip_id", 0);
@@ -132,7 +140,9 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 
 	state->genSpikeState.ETFstepnum = 6;
 
-	sshsNodePutBoolIfAbsent(spikeNode, "loadDefaultBiases", false); //1 //false
+	// init status
+	sshsNodePutBoolIfAbsent(spikeNode, "loadDefaultBiases", false);
+	sshsNodePutBool(spikeNode, "loadDefaultBiases", false);
 	atomic_store(&state->genSpikeState.loadDefaultBiases, sshsNodeGetBool(spikeNode, "loadDefaultBiases"));
 
 	// Start separate stimulation thread.
@@ -142,12 +152,6 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "spikeGenThread: Failed to start thread.");
 		return (NULL);
 	}
-
-	// Start etf stimulation thread
-	/*if (thrd_create(&state->genSpikeState.ETFThread, &stimulationETFThread, state) != thrd_success) {
-	 caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "stimulationETFThread: Failed to start thread.");
-	 return (NULL);
-	 }*/
 
 	/*address*/
 	sshsNodePutBoolIfAbsent(spikeNode, "sx", false);
@@ -251,7 +255,7 @@ void spiketrainETF(void *spikeGenState) {
 	}
 
 	if (!atomic_load(&state->genSpikeState.ETFdone)) {
-		int bits_chipU0[DYNAPSE_MAX_USER_USB_PACKET_SIZE];
+		uint32_t bits_chipU0[DYNAPSE_MAX_USER_USB_PACKET_SIZE];
 		int counter = 0;
 		if (counter + 1 >= DYNAPSE_MAX_USER_USB_PACKET_SIZE) {
 			caerLog(CAER_LOG_ERROR, __func__, "Breaking transaction\n");
@@ -738,35 +742,6 @@ void SetCam(void *spikeGenState) {
 	caerLog(CAER_LOG_NOTICE, __func__, "CAM programmed successfully.");
 
 
-	//make sure that doStim is off
-	/*sshsNode spikeGenNode = sshsGetRelativeNode(moduleData->moduleNode, "DYNAPSEFX2/spikeGen/");
-	sshsNodePutBool(spikeGenNode, "doStim", false);
-	sshsNodePutBool(spikeGenNode, "doStimPrimitiveBias", false);
-	sshsNodePutBool(spikeGenNode, "doStimPrimitiveCam", false);*/
-
-	// set back setCam to false
-	size_t biasNodesLength = 0;
-	sshsNode *biasNodesU0 = sshsNodeGetChildren(state->eventSourceConfigNode, &biasNodesLength);
-	// find the spikeGen node
-	if (biasNodesU0 != NULL) {
-		for (size_t i = 0; i < biasNodesLength; i++) {
-			if (caerStrEquals("DYNAPSEFX2", sshsNodeGetName(biasNodesU0[i]))) {
-				sshsNode *biasNodesU1 = sshsNodeGetChildren(biasNodesU0[i], &biasNodesLength);
-				if (biasNodesU1 != NULL) {
-					for (size_t ii = 0; ii < biasNodesLength; ii++) {
-						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[ii]))) {
-							sshsNodePutBool(biasNodesU1[ii], "setCam",
-							false);
-							caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "setCam has been set back to false.");
-						}
-					}
-				}
-				free(biasNodesU1);
-			}
-		}
-		free(biasNodesU0);
-	}
-
 }
 
 void SetCamSingle(void *spikeGenState) {
@@ -852,29 +827,6 @@ void SetCamSingle(void *spikeGenState) {
 
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "CAM programmed successfully.");
 
-	// set back clearAllCam to false
-	size_t biasNodesLength = 0;
-	sshsNode *biasNodesU0 = sshsNodeGetChildren(state->eventSourceConfigNode, &biasNodesLength);
-	// find the spikeGen node
-	if (biasNodesU0 != NULL) {
-		for (size_t i = 0; i < biasNodesLength; i++) {
-			if (caerStrEquals("DYNAPSEFX2", sshsNodeGetName(biasNodesU0[i]))) {
-				sshsNode *biasNodesU1 = sshsNodeGetChildren(biasNodesU0[i], &biasNodesLength);
-				if (biasNodesU1 != NULL) {
-					for (size_t ii = 0; ii < biasNodesLength; ii++) {
-						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[ii]))) {
-							sshsNodePutBool(biasNodesU1[ii], "setCamSingle",
-							false);
-							caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "setCamSingle has been set back to false.");
-						}
-					}
-				}
-				free(biasNodesU1);
-			}
-		}
-		free(biasNodesU0);
-	}
-
 }
 
 void ClearCam(void *spikeGenState) {
@@ -895,28 +847,6 @@ void ClearCam(void *spikeGenState) {
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "Done, CAM cleared successfully.");
 	atomic_store(&state->genSpikeState.clearCam, false);
 
-	// set back clearCam to false
-	size_t biasNodesLength = 0;
-	sshsNode *biasNodesU0 = sshsNodeGetChildren(state->eventSourceConfigNode, &biasNodesLength);
-	// find the spikeGen node
-	if (biasNodesU0 != NULL) {
-		for (size_t i = 0; i < biasNodesLength; i++) {
-			if (caerStrEquals("DYNAPSEFX2", sshsNodeGetName(biasNodesU0[i]))) {
-				sshsNode *biasNodesU1 = sshsNodeGetChildren(biasNodesU0[i], &biasNodesLength);
-				if (biasNodesU1 != NULL) {
-					for (size_t ii = 0; ii < biasNodesLength; ii++) {
-						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[ii]))) {
-							sshsNodePutBool(biasNodesU1[ii], "clearCam",
-							false);
-							caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "clearCam has been set back to false.");
-						}
-					}
-				}
-				free(biasNodesU1);
-			}
-		}
-		free(biasNodesU0);
-	}
 
 }
 
@@ -945,28 +875,6 @@ void ClearAllCam(void *spikeGenState) {
 	caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "CAM cleared successfully.");
 	atomic_store(&state->genSpikeState.clearAllCam, false);
 
-	// set back clearAllCam to false
-	size_t biasNodesLength = 0;
-	sshsNode *biasNodesU0 = sshsNodeGetChildren(state->eventSourceConfigNode, &biasNodesLength);
-	// find the spikeGen node
-	if (biasNodesU0 != NULL) {
-		for (size_t i = 0; i < biasNodesLength; i++) {
-			if (caerStrEquals("DYNAPSEFX2", sshsNodeGetName(biasNodesU0[i]))) {
-				sshsNode *biasNodesU1 = sshsNodeGetChildren(biasNodesU0[i], &biasNodesLength);
-				if (biasNodesU1 != NULL) {
-					for (size_t ii = 0; ii < biasNodesLength; ii++) {
-						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[ii]))) {
-							sshsNodePutBool(biasNodesU1[ii], "clearAllCam",
-							false);
-							caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "clearAllCam has been set back to false.");
-						}
-					}
-				}
-				free(biasNodesU1);
-			}
-		}
-		free(biasNodesU0);
-	}
 
 }
 
@@ -1025,29 +933,6 @@ void ResetBiases(void *spikeGenState) {
 			caerDynapseSetBias(state, chipId, coreId, "PULSE_PWLK_P", 0, 43, "HighBias", "PBias");
 			caerDynapseSetBias(state, chipId, coreId, "R2R_P", 4, 85, "HighBias", "PBias");
 		}
-	}
-
-	// set back loadBiases to false
-	size_t biasNodesLength = 0;
-	sshsNode *biasNodesU0 = sshsNodeGetChildren(state->eventSourceConfigNode, &biasNodesLength);
-	// find the spikeGen node
-	if (biasNodesU0 != NULL) {
-		for (size_t i = 0; i < biasNodesLength; i++) {
-			if (caerStrEquals("DYNAPSEFX2", sshsNodeGetName(biasNodesU0[i]))) {
-				sshsNode *biasNodesU1 = sshsNodeGetChildren(biasNodesU0[i], &biasNodesLength);
-				if (biasNodesU1 != NULL) {
-					for (size_t ii = 0; ii < biasNodesLength; ii++) {
-						if (caerStrEquals("spikeGen", sshsNodeGetName(biasNodesU1[ii]))) {
-							sshsNodePutBool(biasNodesU1[ii], "loadDefaultBiases",
-							false);
-							caerLog(CAER_LOG_NOTICE, "\nSpikeGen", "loadDefaultBiases has been set back to false.");
-						}
-					}
-				}
-				free(biasNodesU1);
-			}
-		}
-		free(biasNodesU0);
 	}
 
 }
