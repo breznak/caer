@@ -353,11 +353,11 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 	// this will update parameters, from user input
 	state->doMeasurement = sshsNodeGetBool(moduleData->moduleNode, "doMeasurement");
 	if (state->doMeasurement != atomic_load(&stateSource->genSpikeState.doStim)) {
-		atomic_store(&stateSource->genSpikeState.doStim, state->doMeasurement);	// pass it to the thread
 		if (state->doMeasurement) {
 			atomic_store(&stateSource->genSpikeState.ETFdone, false); // we just started
 			atomic_store(&stateSource->genSpikeState.ETFstarted, true);
 			atomic_store(&stateSource->genSpikeState.stim_type, 11); //STIM_ETF
+			atomic_store(&stateSource->genSpikeState.doStim, state->doMeasurement);	// pass it to the thread
 		}
 		else {
 			atomic_store(&stateSource->genSpikeState.ETFdone, true); // we stop
