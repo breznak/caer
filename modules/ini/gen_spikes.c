@@ -138,7 +138,7 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(spikeNode, "ETFrepeat", true);
 	atomic_store(&state->genSpikeState.ETFrepeat, sshsNodeGetBool(spikeNode, "ETFrepeat"));
 
-	state->genSpikeState.ETFstepnum = 6;
+	state->genSpikeState.ETFstepnum = 6;	//internal
 
 	// init status
 	sshsNodePutBoolIfAbsent(spikeNode, "loadDefaultBiases", false);
@@ -182,6 +182,9 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 }
 
 void caerGenSpikeExit(caerModuleData moduleData) {
+
+	caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString, "SpikeGenThread: init exit.");
+
 	caerInputDynapseState state = moduleData->moduleState;
 
 	// Shut down stimulation thread and wait on it to finish.
@@ -199,6 +202,8 @@ void caerGenSpikeExit(caerModuleData moduleData) {
 		caerLog(CAER_LOG_CRITICAL, moduleData->moduleSubSystemString,
 			"SpikeGen: Failed to join rendering thread. Error: %d.", errno);
 	}
+
+	caerLog(CAER_LOG_DEBUG, moduleData->moduleSubSystemString, "SpikeGenThread: Exited successfully.");
 
 }
 
@@ -736,6 +741,11 @@ void SetCam(void *spikeGenState) {
 		return;
 	}
 	caerInputDynapseState state = spikeGenState;
+
+	if(atomic_load(&state->genSpikeState.running) == false){
+		return;
+	}
+
 	caerDeviceHandle usb_handle = (caerDeviceHandle) state->deviceState;
 	caerDeviceConfigSet(usb_handle, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
 		(uint32_t) atomic_load(&state->genSpikeState.chip_id)); //0
@@ -745,7 +755,6 @@ void SetCam(void *spikeGenState) {
 		caerDynapseWriteCam(state->deviceState, neuronId, neuronId, 0, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
 	}
 	caerLog(CAER_LOG_NOTICE, __func__, "CAM programmed successfully.");
-
 
 }
 

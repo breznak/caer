@@ -1640,7 +1640,7 @@ void caerInputDYNAPSEExit(caerModuleData moduleData) {
 	// Remove USB config listener for biases
 	//DYNAPSE_CONFIG_DYNAPSE_U0
 	sshsNode deviceConfigNodeU0 = sshsGetRelativeNode(moduleData->moduleNode,
-		chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U3, true));
+		chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U0, true));
 	sshsNode biasNodeU0 = sshsGetRelativeNode(deviceConfigNodeU0, "bias/");
 	size_t biasNodesLength = 0;
 	sshsNode *biasNodesU0 = sshsNodeGetChildren(biasNodeU0, &biasNodesLength);
@@ -1651,6 +1651,7 @@ void caerInputDYNAPSEExit(caerModuleData moduleData) {
 		}
 		free(biasNodesU0);
 	}
+
 	//DYNAPSE_CONFIG_DYNAPSE_U1
 	sshsNode deviceConfigNodeU1 = sshsGetRelativeNode(moduleData->moduleNode,
 		chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U1, true));
@@ -1664,6 +1665,7 @@ void caerInputDYNAPSEExit(caerModuleData moduleData) {
 		}
 		free(biasNodesU1);
 	}
+
 	//DYNAPSE_CONFIG_DYNAPSE_U2
 	sshsNode deviceConfigNodeU2 = sshsGetRelativeNode(moduleData->moduleNode,
 		chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U2, true));
@@ -1677,6 +1679,7 @@ void caerInputDYNAPSEExit(caerModuleData moduleData) {
 		}
 		free(biasNodesU2);
 	}
+
 	//DYNAPSE_CONFIG_DYNAPSE_U3
 	sshsNode deviceConfigNodeU3 = sshsGetRelativeNode(moduleData->moduleNode,
 		chipIDToName(DYNAPSE_CONFIG_DYNAPSE_U3, true));
@@ -1690,12 +1693,16 @@ void caerInputDYNAPSEExit(caerModuleData moduleData) {
 		}
 		free(biasNodesU3);
 	}
+
 	caerDeviceDataStop(((caerInputDynapseState) moduleData->moduleState)->deviceState);
-	caerDeviceClose((caerDeviceHandle *) &moduleData->moduleState);
+	//caerDeviceClose((caerDeviceHandle *) &moduleData->moduleState);
+	caerDeviceClose(  &(((caerInputDynapseState) moduleData->moduleState)->deviceState));
 	if (sshsNodeGetBool(moduleData->moduleNode, "autoRestart")) {
 		// Prime input module again so that it will try to restart if new devices detected.
 		sshsNodePutBool(moduleData->moduleNode, "running", true);
 	}
+
+	caerGenSpikeExit(moduleData);
 }
 
 void caerInputDYNAPSERun(caerModuleData moduleData, size_t argsNumber, va_list args) {

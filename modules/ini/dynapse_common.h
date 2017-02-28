@@ -78,6 +78,7 @@ uint32_t generatesBitsCoarseFineBiasSetting(sshsNode node, const char *biasName,
 bool setCamContent(caerInputDynapseState state, int16_t chipId, bool ei, bool fs, int16_t address, int8_t source_core,
 	int8_t coreId, int16_t row, int16_t column);
 bool caerGenSpikeInit(caerModuleData moduleData);
+void caerGenSpikeExit(caerModuleData moduleData);
 void caerDynapseSetBias(caerInputDynapseState state, uint32_t chipId, uint32_t coreId, const char *biasName_t,
 	uint8_t coarseValue, uint16_t fineValue, const char *lowHigh, const char *npBias);
 

@@ -77,6 +77,7 @@
 #endif
 
 // Common filters support.
+int main(int argc, char **argv);	// define main function
 
 static bool mainloop_1(void);
 
