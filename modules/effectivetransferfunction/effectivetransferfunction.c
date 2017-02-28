@@ -360,6 +360,7 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 			atomic_store(&stateSource->genSpikeState.doStim, state->doMeasurement);	// pass it to the thread
 		}
 		else {
+			atomic_store(&stateSource->genSpikeState.doStim, state->doMeasurement);
 			atomic_store(&stateSource->genSpikeState.ETFdone, true); // we stop
 			atomic_store(&stateSource->genSpikeState.ETFstarted, false);
 		}
