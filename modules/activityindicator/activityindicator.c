@@ -57,8 +57,8 @@ AResults caerActivityIndicator(uint16_t moduleID, caerPolarityEventPacket polari
 }
 
 static bool caerActivityIndicatorInit(caerModuleData moduleData) {
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "measuringTime", 10000000);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "activeThreshold", 10);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "measuringTime", 100000);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "activeThreshold", 20);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "low", 100);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "median", 500);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "high", 1000);

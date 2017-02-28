@@ -15,7 +15,7 @@
 
 struct activity_results {
 	char stringValue[STATUSCHAR];
-	int activityValue;
+	long activityValue;
 };
 
 typedef struct activity_results *AResults;

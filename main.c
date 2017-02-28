@@ -217,7 +217,7 @@ static bool mainloop_1(void) {
 
 	// Show how crowed the areas is (Mensa project)
 #ifdef ENABLE_ACTIVITYINDICATOR
-	AResults rr =  caerActivityIndicator(17, polarity);
+	AResults rr = caerActivityIndicator(17, polarity);
 #endif
 
 #if defined(ENABLE_OPENCVDISPLAY) && defined(ENABLE_ACTIVITYINDICATOR)
