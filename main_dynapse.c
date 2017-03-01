@@ -23,10 +23,6 @@
 #include "modules/ini/dynapse_fx2.h"
 #include "modules/ini/dynapse_common.h"
 
-#ifdef ENABLE_GEN_SPIKES
-#include "modules/misc/in/gen_spikes.h"
-#endif
-
 // Input/Output support.
 #ifdef ENABLE_FILE_INPUT
 #include "modules/misc/in/file.h"
@@ -76,14 +72,17 @@
 #include "modules/effectivetransferfunction/effectivetransferfunction.h"
 #endif
 
+
 // Common filters support.
 
 static bool mainloop_1(void);
 
+#ifdef DYNAPSEFX2
 #ifdef ENABLE_LEARNINGFILTER
 // create frame for displaying weight and synapse
 caerFrameEventPacket weightplot = NULL;
 caerFrameEventPacket synapseplot = NULL;
+#endif
 #endif
 
 static bool mainloop_1(void) {
@@ -108,6 +107,7 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_FILE_INPUT //should be 0 for experiment
 	container = caerInputFile(10);
+
 	// We search for them by type here, because input modules may not have all or any of them.
 	spike = (caerSpikeEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPIKE_EVENT);
 	special = (caerSpecialEventPacket) caerEventPacketContainerFindEventPacketByType(container, SPECIAL_EVENT);
@@ -134,7 +134,7 @@ static bool mainloop_1(void) {
 	caerPoint4DEventPacket ETFData  = caerEffectiveTransferFunction(13, spike);
 #endif
 
-#ifdef ENABLE_LEARNINGFILTER
+#ifdef NABLE_LEARNINGFILTER
 	caerLearningFilter(5, spike, &weightplot, &synapseplot);
 #endif
 
@@ -146,9 +146,14 @@ static bool mainloop_1(void) {
 	caerHelloWorldModule(12, spike);
 #endif
 
+
 	// A simple visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
+#ifdef DYNAPSEFX2
 	caerVisualizer(64, "Spike", &caerVisualizerRendererSpikeEvents, &caerVisualizerEventHandlerSpikeEvents, (caerEventPacketHeader) spike);
+#else
+	caerVisualizer(64, "Spike", &caerVisualizerRendererSpikeEvents, NULL, (caerEventPacketHeader) spike);
+#endif
 	//caerVisualizer(68, "UserSize", &caerVisualizerRendererSpikeEventsRaster, NULL, (caerEventPacketHeader) spike);
 #ifdef ENABLE_MEANRATEFILTER
 	caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
