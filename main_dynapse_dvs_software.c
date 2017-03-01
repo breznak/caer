@@ -39,10 +39,6 @@
 #include "modules/ini/davis_fx3.h"
 #endif
 
-#ifdef ENABLE_GEN_SPIKES
-#include "modules/misc/in/gen_spikes.h"
-#endif
-
 // Input/Output support.
 #ifdef ENABLE_FILE_INPUT
 #include "modules/misc/in/file.h"
@@ -105,9 +101,14 @@
 #define CLASSIFYSIZE 64
 #define DISPLAYIMGSIZE 64
 #endif
+
 #ifdef ENABLE_CAFFEINTERFACE
 #define CAFFEVISUALIZERSIZE 1024
 #include "modules/caffeinterface/wrapper.h"
+#endif
+
+#if defined(ENABLE_CAFFEINTERFACE) && defined(ENABLE_TRAINFROMCAFFE)
+#include "modules/trainfromcaffe/trainfromcaffe.h"
 #endif
 
 static bool mainloop_1(void);
@@ -117,6 +118,7 @@ static bool mainloop_1(void);
 	caerFrameEventPacket weightplotG = NULL;
 	caerFrameEventPacket synapseplotG = NULL;
 #endif
+
 
 
 static bool mainloop_1(void) {
@@ -226,9 +228,16 @@ static bool mainloop_1(void) {
 	int * classifyhist = calloc((int)CLASSIFYSIZE * CLASSIFYSIZE, sizeof(int));
 	if (classifyhist == NULL) {
 			return (false); // Failure.
+	}else{
+		caerMainloopFreeAfterLoop(&free, classifyhist);
 	}
 	bool *haveimage;
 	haveimage = (bool*)malloc(1);
+	if (haveimage == NULL) {
+		return (false); // Failure.
+	}else{
+		caerMainloopFreeAfterLoop(&free, haveimage);
+	}
 	unsigned char ** frame_img_ptr = calloc(sizeof(unsigned char *), 1);
 	// generate image and place it in classifyhist
 	caerImageGenerator(20, polarity_cam, CLASSIFYSIZE, classifyhist, haveimage);
@@ -249,12 +258,24 @@ static bool mainloop_1(void) {
 	caerFrameEventPacket networkActivity = NULL; /* visualization of network activity */
 	char * classification_results = (char *)calloc(1024, sizeof(char));/* classification_results: */
 	if (classification_results == NULL) {
-		caerLog(CAER_LOG_ERROR, "\nmainLoop", "Failed to allocate classification_results.");
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to allocate classification_results.");
 		return (false);
+	}else{
+		caerMainloopFreeAfterLoop(&free, classification_results);
+	}
+	int * classification_results_id;
+	classification_results_id = (int*)malloc(1);	/* classification_results: */
+	classification_results_id[0] = -1; // init
+	if (classification_results_id == NULL) {
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to allocate classification_results_id.");
+		return (false);
+	}else{
+		caerMainloopFreeAfterLoop(&free, classification_results_id);
 	}
 #ifdef ENABLE_IMAGEGENERATOR
 	if(haveimage[0]) {
-		caerCaffeWrapper(21, classifyhist, CLASSIFYSIZE, classification_results,  &networkActivity, CAFFEVISUALIZERSIZE);
+		caerCaffeWrapper(21, classifyhist, CLASSIFYSIZE, classification_results, classification_results_id,
+			&networkActivity, CAFFEVISUALIZERSIZE);
 	}
 #endif
 #endif
@@ -272,6 +293,10 @@ static bool mainloop_1(void) {
 	// create frame for displaying frequencies
 	caerFrameEventPacket freqplot = NULL;
 	caerMeanRateFilter(4, spike, &freqplot);
+#endif
+
+#ifdef	ENABLE_TRAINFROMCAFFE
+	caerTrainingFromCaffeFilter(24, spike, classification_results_id[0]);
 #endif
 
 #ifdef ENABLE_GESTURELEARNINGFILTER
@@ -345,16 +370,6 @@ static bool mainloop_1(void) {
 
 	// And also send them via UDP. This is fast, as it doesn't care what is on the other side.
 	caerOutputNetUDP(9, 2, spike, special);
-#endif
-
-#ifdef ENABLE_IMAGEGENERATOR
-	free(classifyhist);
-	free(haveimage);
-	//free(imagegeneratorFrame);
-#if defined(ENABLE_CAFFEINTERFACE)
-	free(classification_results);
-	//free(networkActivity);
-#endif
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.

@@ -26,15 +26,15 @@ static struct caer_module_functions caerCaffeWrapperFunctions = { .moduleInit = 
 	&caerCaffeWrapperRun, .moduleConfig =
 NULL, .moduleExit = &caerCaffeWrapperExit };
 
-const char * caerCaffeWrapper(uint16_t moduleID, int * classifyhist, int size, double *classificationResults,
+const char * caerCaffeWrapper(uint16_t moduleID, int * classifyhist, int size, char *classificationResults, int *classificationResultsId,
 	caerFrameEventPacket *networkActivity, int sizeDisplay) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "caerCaffeWrapper", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return (NULL);
 	}
 
-	caerModuleSM(&caerCaffeWrapperFunctions, moduleData, sizeof(struct caffewrapper_state), 5, classifyhist, size,
-		classificationResults, networkActivity, sizeDisplay);
+	caerModuleSM(&caerCaffeWrapperFunctions, moduleData, sizeof(struct caffewrapper_state), 6, classifyhist, size,
+		classificationResults, classificationResultsId, networkActivity, sizeDisplay);
 
 	return (NULL);
 }
@@ -68,7 +68,8 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber, va
 
 	int * hist = va_arg(args, int *);
 	int size = va_arg(args, int);
-	char *classificationResults = va_arg(args, char*);
+	char * classificationResults = va_arg(args, char*);
+	int * classificationResultsId = va_arg(args, int*);
 	caerFrameEventPacket *networkActivity = va_arg(args, caerFrameEventPacket*);
 	int sizeDisplay = va_arg(args, int);
 
@@ -97,7 +98,7 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber, va
 		caerFrameEvent single_frame = caerFrameEventPacketGetEvent(*networkActivity, 0);
 		//add info to the frame
 		caerFrameEventSetLengthXLengthYChannelNumber(single_frame, frame_x, frame_y, 1, *networkActivity); // to do remove hard coded size
-		MyCaffe_file_set(state->cpp_class, hist, size, classificationResults, state->detThreshold,
+		MyCaffe_file_set(state->cpp_class, hist, size, classificationResults, classificationResultsId, state->detThreshold,
 			state->doPrintOutputs, &single_frame, state->doShowActivations, state->doNormInputImages);
 		// validate frame
 		if (single_frame != NULL) {

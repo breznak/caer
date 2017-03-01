@@ -7,59 +7,78 @@
 using namespace caffe;
 using std::string;
 
-void MyCaffe::file_set(int * inim, int size, char *b, double thr,
-		bool printoutputs, caerFrameEvent *single_frame, bool showactivations, bool norminput) {
+void MyCaffe::file_set(int * inim, int size, char *b, int * resId, double thr, bool printoutputs,
+	caerFrameEvent *single_frame, bool showactivations, bool norminput) {
 
 	/*for (size_t x = 0; x < size; x++) {
-		for (size_t y = 0; y < size; y++) {
-			int linindex = x * size + y;
-			if (inim[linindex] == 256) {
-				inim[linindex] = 255; // [0,255] is png
-			}
-		}
-	}*/
+	 for (size_t y = 0; y < size; y++) {
+	 int linindex = x * size + y;
+	 if (inim[linindex] == 256) {
+	 inim[linindex] = 255; // [0,255] is png
+	 }
+	 }
+	 }*/
 
 	// Loading img
 	cv::Mat img = cv::Mat(size, size, CV_8UC1);
-	for(size_t i=0; i<size; i++)
-	{
-		for(size_t j=0; j<size; j++)
-		{
-			img.data[i*size+j] = inim[i*size+j];
+	for (size_t i = 0; i < size; i++) {
+		for (size_t j = 0; j < size; j++) {
+			img.data[i * size + j] = inim[i * size + j];
 		}
 	}
 
 	// Convert img to float for Caffe
 	cv::Mat img2;
 	img.convertTo(img2, CV_32FC1);
-	if(norminput){
+	if (norminput) {
 		img2 = img2 * 0.00390625; // normalize 0,255 to 1
 	}
 
 	CHECK(!img2.empty()) << "Unable to decode image " << file_i;
-	std::vector<Prediction> predictions = MyCaffe::Classify(img2, 5,
-			single_frame, showactivations);
+	std::vector<Prediction> predictions = MyCaffe::Classify(img2, 5, single_frame, showactivations);
 
 	/* Print the top N predictions. */
 	Prediction p;
+
+	int c = 0;
+	string filer = "";
+	const std::string filename = NET_VAL;
+	std::ifstream infile(filename);
+
 	for (size_t i = 0; i < predictions.size(); ++i) {
 		p = predictions[i];
-		if(i == 0){
-			std::strcpy(b,p.first.c_str());
-			cv::putText(img, p.first.c_str(), cv::Point(2,10), CV_FONT_HERSHEY_PLAIN, 0.6, cv::Scalar(255));
+		if (i == 0) {
+			std::strcpy(b, p.first.c_str());
+			cv::putText(img, p.first.c_str(), cv::Point(2, 10), CV_FONT_HERSHEY_PLAIN, 0.6, cv::Scalar(255));
+			//resId[0] =
+			//NET_VAL
+			if (infile.fail()) {
+				caerLog(CAER_LOG_ERROR, __func__, "failed to open NET_VAL file");
+				infile.clear();
+			}
+			else {
+				while (!infile.eof()) {
+					getline(infile, filer);
+					if(	!filer.compare(p.first) ){
+						resId[0] = c;
+						//std::cout << "results is " << c << std::endl;
+					}
+					c++;
+				}
+			}
 		}
 		if (printoutputs) {
-			std::cout << "\n" << std::fixed << std::setprecision(4) << p.second
-					<< " - \"" << p.first << "\"" << std::endl;
+			std::cout << "\n" << std::fixed << std::setprecision(4) << p.second << " - \"" << p.first << "\""
+				<< std::endl;
 		}
 	}
 
 	for (int j = 0; j < size; j++) {
-	    for (int i = 0; i < size; i++) {
-	        uchar& uxy = img.at<uchar>(i, j);
-	        int color = (int) uxy;
-	        inim[i*size + j] = color;
-	    }
+		for (int i = 0; i < size; i++) {
+			uchar& uxy = img.at<uchar>(i, j);
+			int color = (int) uxy;
+			inim[i * size + j] = color;
+		}
 	}
 	//cv::imshow("debug",img2);
 	//cv::waitKey(1);
@@ -68,10 +87,14 @@ void MyCaffe::file_set(int * inim, int size, char *b, double thr,
 
 void MyCaffe::init_network() {
 
-	string model_file = NET_MODEL;
-	string trained_file = NET_WEIGHTS;
-	string mean_file = NET_MEAN;
-	string label_file = NET_VAL;
+	string model_file = NET_MODEL
+	;
+	string trained_file = NET_WEIGHTS
+	;
+	string mean_file = NET_MEAN
+	;
+	string label_file = NET_VAL
+	;
 	MyCaffe::Classifier(model_file, trained_file, mean_file, label_file);
 
 	//cv::namedWindow("debug",0);
@@ -79,8 +102,8 @@ void MyCaffe::init_network() {
 
 }
 
-void MyCaffe::Classifier(const string& model_file, const string& trained_file,
-		const string& mean_file, const string& label_file) {
+void MyCaffe::Classifier(const string& model_file, const string& trained_file, const string& mean_file,
+	const string& label_file) {
 #ifdef CPU_ONLY
 	Caffe::set_mode(Caffe::CPU);
 #else
@@ -95,13 +118,11 @@ void MyCaffe::Classifier(const string& model_file, const string& trained_file,
 	net_->CopyTrainedLayersFrom(trained_file);
 
 	CHECK_EQ(net_->num_inputs(), 1) << "Network should have exactly one input.";
-	CHECK_EQ(net_->num_outputs(), 1)
-			<< "Network should have exactly one output.";
+	CHECK_EQ(net_->num_outputs(), 1) << "Network should have exactly one output.";
 
 	Blob<float>* input_layer = net_->input_blobs()[0];
 	num_channels_ = input_layer->channels();
-	CHECK(num_channels_ == 3 || num_channels_ == 1)
-			<< "Input layer should have 1 or 3 channels.";
+	CHECK(num_channels_ == 3 || num_channels_ == 1) << "Input layer should have 1 or 3 channels.";
 	input_geometry_ = cv::Size(input_layer->width(), input_layer->height());
 
 	/* Load the binaryproto mean file. */
@@ -115,11 +136,10 @@ void MyCaffe::Classifier(const string& model_file, const string& trained_file,
 
 	Blob<float>* output_layer = net_->output_blobs()[0];
 	CHECK_EQ(labels_.size(), output_layer->channels())
-			<< "Number of labels is different from the output layer dimension.";
+		<< "Number of labels is different from the output layer dimension.";
 }
 
-static bool PairCompare(const std::pair<float, int>& lhs,
-		const std::pair<float, int>& rhs) {
+static bool PairCompare(const std::pair<float, int>& lhs, const std::pair<float, int>& rhs) {
 	return lhs.first > rhs.first;
 }
 
@@ -128,8 +148,7 @@ static std::vector<int> Argmax(const std::vector<float>& v, int N) {
 	std::vector<std::pair<float, int> > pairs;
 	for (size_t i = 0; i < v.size(); ++i)
 		pairs.push_back(std::make_pair(v[i], i));
-	std::partial_sort(pairs.begin(), pairs.begin() + N, pairs.end(),
-			PairCompare);
+	std::partial_sort(pairs.begin(), pairs.begin() + N, pairs.end(), PairCompare);
 
 	std::vector<int> result;
 	for (int i = 0; i < N; ++i)
@@ -138,8 +157,8 @@ static std::vector<int> Argmax(const std::vector<float>& v, int N) {
 }
 
 /* Return the top N predictions. */
-std::vector<Prediction> MyCaffe::Classify(const cv::Mat& img, int N,
-		caerFrameEvent *single_frame, bool showactivations) {
+std::vector<Prediction> MyCaffe::Classify(const cv::Mat& img, int N, caerFrameEvent *single_frame,
+	bool showactivations) {
 	std::vector<float> output = Predict(img, single_frame, showactivations);
 
 	N = std::min<int>(labels_.size(), N);
@@ -161,8 +180,7 @@ void MyCaffe::SetMean(const string& mean_file) {
 	/* Convert from BlobProto to Blob<float> */
 	Blob<float> mean_blob;
 	mean_blob.FromProto(blob_proto);
-	CHECK_EQ(mean_blob.channels(), num_channels_)
-			<< "Number of channels of mean file doesn't match input layer.";
+	CHECK_EQ(mean_blob.channels(), num_channels_) << "Number of channels of mean file doesn't match input layer.";
 
 	/* The format of the mean file is planar 32-bit float BGR or grayscale. */
 	std::vector<cv::Mat> channels;
@@ -189,12 +207,10 @@ void MyCaffe::SetMean(const string& mean_file) {
 
 }
 
-std::vector<float> MyCaffe::Predict(const cv::Mat& img,
-		caerFrameEvent *single_frame, bool showactivations) {
+std::vector<float> MyCaffe::Predict(const cv::Mat& img, caerFrameEvent *single_frame, bool showactivations) {
 
 	Blob<float>* input_layer = net_->input_blobs()[0];
-	input_layer->Reshape(1, num_channels_, input_geometry_.height,
-			input_geometry_.width);
+	input_layer->Reshape(1, num_channels_, input_geometry_.height, input_geometry_.width);
 	/* Forward dimension change to all layers. */
 	net_->Reshape();
 
@@ -223,10 +239,8 @@ std::vector<float> MyCaffe::Predict(const cv::Mat& img,
 			int n, c, h, w;
 			float data;
 
-			if (strcmp(layers[i]->type(), "Convolution") != 0
-					&& strcmp(layers[i]->type(), "ReLU") != 0
-					&& strcmp(layers[i]->type(), "Pooling") != 0
-					&& strcmp(layers[i]->type(), "InnerProduct") != 0) {
+			if (strcmp(layers[i]->type(), "Convolution") != 0 && strcmp(layers[i]->type(), "ReLU") != 0
+				&& strcmp(layers[i]->type(), "Pooling") != 0 && strcmp(layers[i]->type(), "InnerProduct") != 0) {
 				continue;
 			}
 
@@ -252,8 +266,7 @@ std::vector<float> MyCaffe::Predict(const cv::Mat& img,
 					for (int hh = 0; hh < h; hh++) {
 						//go over w
 						for (int ww = 0; ww < w; ww++) {
-							data = this_layer_blobs[i]->data_at(num, chan_num,
-									hh, ww);
+							data = this_layer_blobs[i]->data_at(num, chan_num, hh, ww);
 							newImage.at<float>(hh, ww) = data;
 						}
 					}
@@ -271,8 +284,7 @@ std::vector<float> MyCaffe::Predict(const cv::Mat& img,
 					//if(strcmp(layers[i]->type(),"InnerProduct") == 0){
 					//	;
 					//}else{
-					cv::normalize(newImage, newImage, 0.0, 65535,
-							cv::NORM_MINMAX, -1);
+					cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
 					//}
 					//cv::normalize(newImage, newImage, 0.0, 65535, cv::NORM_MINMAX, -1);
 					imageVector.push_back(newImage);
@@ -291,24 +303,21 @@ std::vector<float> MyCaffe::Predict(const cv::Mat& img,
 
 		// mat final Frame of activations
 		cv::Mat1f frame_activity(tmp_frame->lengthX, tmp_frame->lengthY);
-		int size_y_single_image = floor(
-				tmp_frame->lengthY / layersVector.size()); // num layers
+		int size_y_single_image = floor(tmp_frame->lengthY / layersVector.size()); // num layers
 		for (int layer_num = 0; layer_num < layersVector.size(); layer_num++) { //layersVector.size()
 			counter_y += 1; // count y position of image (layers)
 			counter_x = -1; // reset counter_x
 
 			// loop over all in/out filters for this layer
-			for (int img_num = 0; img_num < layersVector[layer_num].size();
-					img_num++) {
+			for (int img_num = 0; img_num < layersVector[layer_num].size(); img_num++) {
 
 				counter_x += 1; // count number of images on x (filters)
 
-				int size_x_single_image = floor(
-						tmp_frame->lengthX / layersVector[layer_num].size());
+				int size_x_single_image = floor(tmp_frame->lengthX / layersVector[layer_num].size());
 
 				if (size_x_single_image <= 0) {
 					caerLog(CAER_LOG_ERROR, __func__,
-							"Please check your: CAFFEVISUALIZERSIZE constant. Display size too small. Not displaying activations.");
+						"Please check your: CAFFEVISUALIZERSIZE constant. Display size too small. Not displaying activations.");
 					goto error_in_plotting;
 				}
 				cv::Size sizeI(size_x_single_image, size_y_single_image);
@@ -323,13 +332,12 @@ std::vector<float> MyCaffe::Predict(const cv::Mat& img,
 				yloc = (size_y_single_image) * counter_y;
 
 				data_tp.copyTo(
-						frame_activity.rowRange(xloc, xloc + rescaled.cols).colRange(
-								yloc, yloc + rescaled.rows));
+					frame_activity.rowRange(xloc, xloc + rescaled.cols).colRange(yloc, yloc + rescaled.rows));
 			}
 		}
 
 		cv::Mat data_frame = cv::Mat(frame_activity.cols, frame_activity.rows,
-				CV_16UC3);
+		CV_16UC3);
 		cv::transpose(frame_activity, data_frame);
 
 		// normalize output into [0,65535]
@@ -344,8 +352,7 @@ std::vector<float> MyCaffe::Predict(const cv::Mat& img,
 		// copy activations image into frame
 		for (int y = 0; y < tmp_frame->lengthY; y++) {
 			for (int x = 0; x < tmp_frame->lengthX; x++) {
-				caerFrameEventSetPixel(tmp_frame, x, y,
-						(uint16_t) data_frame.at<float>(y, x));
+				caerFrameEventSetPixel(tmp_frame, x, y, (uint16_t) data_frame.at<float>(y, x));
 			}
 		}
 		*single_frame = tmp_frame;
@@ -385,8 +392,7 @@ void MyCaffe::WrapInputLayer(std::vector<cv::Mat>* input_channels) {
 	}
 }
 
-void MyCaffe::Preprocess(const cv::Mat& img,
-		std::vector<cv::Mat>* input_channels) {
+void MyCaffe::Preprocess(const cv::Mat& img, std::vector<cv::Mat>* input_channels) {
 	/* Convert the input image to the input image format of the network. */
 
 	// std::cout << " Preprocess --- img.channnels() " << img.channels() << ", num_channels_" << num_channels_ << std::endl;
@@ -420,7 +426,7 @@ void MyCaffe::Preprocess(const cv::Mat& img,
 	//std::cout << " num_channels_:  " << num_channels_ << std::endl;
 	//std::cout << "input_channels->at(0).data" << reinterpret_cast<float*>(input_channels->at(0).data) << 
 	//		"or " << net_->input_blobs()[0]->gpu_data() << std::endl;
-	
+
 	//std::cout << " sample_resized " << sample_resized.size() << std::endl;
 
 	cv::subtract(sample_float, mean_, sample_normalized);
@@ -432,10 +438,10 @@ void MyCaffe::Preprocess(const cv::Mat& img,
 
 	CHECK(reinterpret_cast<float*>(input_channels->at(0).data)
 #ifdef CPU_ONLY
-			== net_->input_blobs()[0]->cpu_data())
+		== net_->input_blobs()[0]->cpu_data())
 #else
-			== net_->input_blobs()[0]->gpu_data())
+		== net_->input_blobs()[0]->gpu_data())
 #endif
-			<< "Input channels are not wrapping the input layer of the network.";
+		<< "Input channels are not wrapping the input layer of the network.";
 }
 
