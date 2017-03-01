@@ -77,12 +77,10 @@
 
 static bool mainloop_1(void);
 
-#ifdef DYNAPSEFX2
 #ifdef ENABLE_LEARNINGFILTER
 // create frame for displaying weight and synapse
 caerFrameEventPacket weightplot = NULL;
 caerFrameEventPacket synapseplot = NULL;
-#endif
 #endif
 
 static bool mainloop_1(void) {
@@ -134,7 +132,7 @@ static bool mainloop_1(void) {
 	caerPoint4DEventPacket ETFData  = caerEffectiveTransferFunction(13, spike);
 #endif
 
-#ifdef NABLE_LEARNINGFILTER
+#ifdef ENABLE_LEARNINGFILTER
 	caerLearningFilter(5, spike, &weightplot, &synapseplot);
 #endif
 

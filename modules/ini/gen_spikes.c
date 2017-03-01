@@ -877,7 +877,7 @@ void ClearAllCam(void *spikeGenState) {
 	int numConfig = -1;
 	for (uint32_t neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS; neuronId++) {
 		numConfig = -1;
-		for (uint32_t camId = 0; camId < DYNAPSE_X4BOARD_NEUX; camId++) {
+		for (uint32_t camId = 0; camId < DYNAPSE_CONFIG_NUMCAM; camId++) {
 			numConfig++;
 			bits[numConfig] = caerDynapseGenerateCamBits(0, neuronId, camId, 0);
 		}

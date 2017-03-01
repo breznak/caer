@@ -94,29 +94,30 @@ static void caerTrainingFromCaffeFilterRun(caerModuleData moduleData, size_t arg
 		caerDeviceConfigSet((caerDeviceHandle) stateSource->deviceState,
 		DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID, (uint32_t) atomic_load(&stateSource->genSpikeState.chip_id)); //select chip
 		caerLog(CAER_LOG_NOTICE, __func__, "Programming cam...");
-		for (int neuronId; neuronId < DYNAPSE_CONFIG_NUMNEURONS; neuronId++) {
-			for (int camId = 0; camId < DYNAPSE_CONFIG_NUMCAM; camId++) {
+		for (int coreId = 0; coreId < DYNAPSE_CONFIG_NUMCORES; coreId++) {
+			for (int neuronId = 0; neuronId < DYNAPSE_CONFIG_NUMNEURONS_CORE; neuronId++) {
+				for (int camId = 0; camId < DYNAPSE_CONFIG_NUMCAM; camId++) {
 
-				int coreid = 0;
-				int x = (int) neuronId % 32;
-				int y = (int) neuronId / 32;
-				if (x < 16 && y < 16) {
-					coreid = 0;
-				}
-				else if (x < 16 && y >= 16) {
-					coreid = 2;
-				}
-				else if (x >= 16 && y < 16) {
-					coreid = 1;
-				}
-				else if (x >= 16 && y >= 16) {
-					coreid = 3;
-				}
 
-				if (camId < 10) {
-					caerDynapseWriteCam(stateSource->deviceState, coreid+1, neuronId, camId, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
-				}else {
-					caerDynapseWriteCam(stateSource->deviceState, 0, neuronId, camId, DYNAPSE_CONFIG_CAMTYPE_F_INH);
+					if (camId < 10) {
+
+						if (caerDynapseWriteCam(stateSource->deviceState, coreId + 1, coreId << 8  | neuronId, camId,
+							DYNAPSE_CONFIG_CAMTYPE_F_EXC)) {
+							;
+						}
+						else {
+							caerLog(CAER_LOG_NOTICE, __func__, "cannot program CAM");
+						}
+					}
+					else {
+						if (caerDynapseWriteCam(stateSource->deviceState, 0, coreId << 8  | neuronId,  camId,
+							DYNAPSE_CONFIG_CAMTYPE_F_INH)) {
+							;
+						}
+						else {
+							caerLog(CAER_LOG_NOTICE, __func__, "cannot program CAM");
+						}
+					}
 				}
 			}
 		}
