@@ -229,49 +229,76 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 
 		//update frequencyMap
 		float phaseDur = atomic_load(
-			&stateSource->genSpikeState.ETFduration) /atomic_load(&stateSource->genSpikeState.ETFphase_num);
+			&stateSource->genSpikeState.ETFduration) / atomic_load(&stateSource->genSpikeState.ETFphase_num);
+		//caerLog(CAER_LOG_NOTICE, __func__, "Phase Duration %f\n", phaseDur);
 		for (int16_t x = 0; x < DYNAPSE_CONFIG_XCHIPSIZE; x++) {
 			for (int16_t y = 0; y < DYNAPSE_CONFIG_YCHIPSIZE; y++) {
 				// update freq map
 				state->ETFMapFreq->buffer2d[x][y] = (float) state->ETFMapSpike->buffer2d[x][y] / phaseDur;
+
 				//reset
 				state->ETFMapSpike->buffer2d[x][y] = 0;
 			}
 		}
 
-		float max_freq = 0.0f;
+		//float max_freq = 0.0f;
 		//loop over all cores
-		for (size_t corex = 0; corex < DYNAPSE_X4BOARD_COREX / 2; corex++) {
-			for (size_t corey = 0; corey < DYNAPSE_X4BOARD_COREY / 2; corey++) {
-				//get sum from core
-				for (int neuronid = 0; neuronid < DYNAPSE_CONFIG_NUMNEURONS_CORE; neuronid++) {
+		for (int16_t x = 0; x < DYNAPSE_CONFIG_XCHIPSIZE; x++) {
+			for (int16_t y = 0; y < DYNAPSE_CONFIG_YCHIPSIZE; y++) {
 
-					int x = neuronid % 32;
-					int y = neuronid / 32;
-
-					state->sum[state->stepnum][corex][corey] += state->ETFMapFreq->buffer2d[x][y]; //Hz
-					if (max_freq < state->ETFMapFreq->buffer2d[x][y]) {
-						max_freq = state->ETFMapFreq->buffer2d[x][y];
-					}
+				int corex = 0;
+				int corey = 0;
+				if (x < 16 && y < 16) {
+					corex = 0;
+					corey = 0;
 				}
+				else if (x < 16 && y >= 16) {
+					corex = 0;
+					corey = 1;
+				}
+				else if (x >= 16 && y < 16) {
+					corex = 1;
+					corey = 0;
+				}
+				else if (x >= 16 && y >= 16) {
+					corex = 1;
+					corey = 1;
+				}
+
+				state->sum[state->stepnum][corex][corey] += state->ETFMapFreq->buffer2d[x][y]; //Hz
+
 			}
 		}
-		for (size_t corex = 0; corex < DYNAPSE_X4BOARD_COREX / 2; corex++) {
-			for (size_t corey = 0; corey < DYNAPSE_X4BOARD_COREY / 2; corey++) {
+
+		for (int16_t x = 0; x < DYNAPSE_CONFIG_XCHIPSIZE; x++) {
+			for (int16_t y = 0; y < DYNAPSE_CONFIG_YCHIPSIZE; y++) {
+
+				int corex = 0;
+				int corey = 0;
+				if (x < 16 && y < 16) {
+					corex = 0;
+					corey = 0;
+				}
+				else if (x < 16 && y >= 16) {
+					corex = 0;
+					corey = 1;
+				}
+				else if (x >= 16 && y < 16) {
+					corex = 1;
+					corey = 0;
+				}
+				else if (x >= 16 && y >= 16) {
+					corex = 1;
+					corey = 1;
+				}
+
 				//calculate mean
 				state->mean[state->stepnum][corex][corey] = state->sum[state->stepnum][corex][corey]
 					/ (float) DYNAPSE_CONFIG_NUMNEURONS_CORE;
 
-				//calculate variance
-				for (int neuronid = 0; neuronid < DYNAPSE_CONFIG_NUMNEURONS_CORE; neuronid++) {
+				float f = (state->ETFMapFreq->buffer2d[x][y]) - state->mean[state->stepnum][corex][corey];
+				state->var[state->stepnum][corex][corey] += f * f;
 
-					int x = neuronid % 32;
-					int y = neuronid / 32;
-
-					float f = (state->ETFMapFreq->buffer2d[x][y]) - state->mean[state->stepnum][corex][corey];
-					state->var[state->stepnum][corex][corey] += f * f;
-
-				}
 			}
 		}
 
@@ -310,14 +337,25 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 						caerPoint4DEvent evt = caerPoint4DEventPacketGetEvent(*ETFData, counterEvs);
 						// ts as last ts
 						caerPoint4DEventSetTimestamp(evt, ts);
-						caerPoint4DEventSetX(evt, corex);
-						caerPoint4DEventSetY(evt, corey);
-						caerPoint4DEventSetZ(evt, state->mean[numS][corex][corey]);
-						caerPoint4DEventSetW(evt, state->var[numS][corex][corey]);
+						caerPoint4DEventSetX(evt, (float) corex);
+						caerPoint4DEventSetY(evt, (float) corey);
+						caerPoint4DEventSetZ(evt, (float) state->mean[numS][corex][corey]);
+						caerPoint4DEventSetW(evt, (float) state->var[numS][corex][corey]);
 
 						// validate event
 						caerPoint4DEventValidate(evt, *ETFData);
 						counterEvs++;
+					}
+				}
+			}
+
+			// reset
+			for (size_t x = 0; x < DYNAPSE_X4BOARD_COREX; x++) {
+				for (size_t y = 0; y < DYNAPSE_X4BOARD_COREY; y++) {
+					for (int step = 0; step < 10; step++) {
+						state->sum[step][x][y] = 0.0f;
+						state->mean[step][x][y] = 0.0f;
+						state->var[step][x][y] = 0.0f;
 					}
 				}
 			}
@@ -331,7 +369,7 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 	//int32_t timestamp = caerSpikeEventGetTimestamp(caerSpikeIteratorElement);
 		uint8_t chipid = caerSpikeEventGetChipID(caerSpikeIteratorElement);
 		uint32_t neuronid = caerSpikeEventGetNeuronID(caerSpikeIteratorElement);
-		//uint8_t coreid = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);
+		uint8_t coreid = caerSpikeEventGetSourceCoreID(caerSpikeIteratorElement);
 
 		int chipToMonitor = 0;
 		if (stateSource->genSpikeState.chip_id == 0) {
@@ -341,14 +379,15 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 			chipToMonitor = stateSource->genSpikeState.chip_id;
 		}
 		if (chipToMonitor == chipid) {
+			// neuron id
+			neuronid = ((uint32_t) coreid * 256) + neuronid;
 			//convert linear index to 2d
 			int x = neuronid % 32;
 			int y = neuronid / 32;
+
 			state->ETFMapSpike->buffer2d[x][y] += 1;
 		}CAER_SPIKE_ITERATOR_VALID_END
 
-	//caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString,
-	//							"update params ");
 	// update parameters
 	// this will update parameters, from user input
 	state->doMeasurement = sshsNodeGetBool(moduleData->moduleNode, "doMeasurement");
