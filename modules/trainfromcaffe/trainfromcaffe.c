@@ -48,7 +48,6 @@ static bool caerTrainingFromCaffeFilterInit(caerModuleData moduleData) {
 
 	state->doTraining = sshsNodeGetBool(moduleData->moduleNode, "doTraining");
 	state->freqStim = sshsNodeGetInt(moduleData->moduleNode, "freqStim");
-
 	state->init = false;
 
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
@@ -100,8 +99,7 @@ static void caerTrainingFromCaffeFilterRun(caerModuleData moduleData, size_t arg
 
 
 					if (camId < 10) {
-
-						if (caerDynapseWriteCam(stateSource->deviceState, coreId + 1, coreId << 8  | neuronId, camId,
+						if (caerDynapseWriteCam(stateSource->deviceState, coreId + 1, (coreId << 8)  | neuronId, camId,
 							DYNAPSE_CONFIG_CAMTYPE_F_EXC)) {
 							;
 						}
@@ -110,7 +108,7 @@ static void caerTrainingFromCaffeFilterRun(caerModuleData moduleData, size_t arg
 						}
 					}
 					else {
-						if (caerDynapseWriteCam(stateSource->deviceState, 0, coreId << 8  | neuronId,  camId,
+						if (caerDynapseWriteCam(stateSource->deviceState, 0, (coreId << 8)  | neuronId,  camId,
 							DYNAPSE_CONFIG_CAMTYPE_F_INH)) {
 							;
 						}
@@ -167,19 +165,47 @@ static void caerTrainingFromCaffeFilterRun(caerModuleData moduleData, size_t arg
 		state->init = true;
 	}
 	if (state->doTraining) {
+
+		sshsNode spikeGenNode = sshsGetRelativeNode(stateSource->eventSourceConfigNode, "DYNAPSEFX2/spikeGen/");
+		sshsNodePutBool(spikeGenNode, "doStim", false);
+		atomic_store(&stateSource->genSpikeState.doStim, false);
+
 		atomic_store(&stateSource->genSpikeState.stim_type, 2);
+		sshsNodePutInt(spikeGenNode, "stim_type", 2);
+
 		atomic_store(&stateSource->genSpikeState.core_d, 15);
-		atomic_store(&stateSource->genSpikeState.address, groupId);
-		caerLog(CAER_LOG_NOTICE, __func__, "GroupId %d", groupId);
+		sshsNodePutInt(spikeGenNode, "core_d", 15);
+
+		atomic_store(&stateSource->genSpikeState.address, groupId+1);
+		sshsNodePutInt(spikeGenNode, "address", groupId+1);
+
 		atomic_store(&stateSource->genSpikeState.dx, 0);
+		sshsNodePutInt(spikeGenNode, "dx", 0);
+
 		atomic_store(&stateSource->genSpikeState.dy, 0);
+		sshsNodePutInt(spikeGenNode, "dy", 0);
+
 		atomic_store(&stateSource->genSpikeState.sx, 0);
+		sshsNodePutInt(spikeGenNode, "sx", 0);
+
 		atomic_store(&stateSource->genSpikeState.sy, 0);
-		atomic_store(&stateSource->genSpikeState.stim_avr, 100);
+		sshsNodePutInt(spikeGenNode, "sy", 0);
+
+		atomic_store(&stateSource->genSpikeState.stim_avr, 30);
+		sshsNodePutInt(spikeGenNode, "stim_avr", 102);
+
 		atomic_store(&stateSource->genSpikeState.repeat, false);
-		atomic_store(&stateSource->genSpikeState.stim_duration, 0.5);
+		sshsNodePutBool(spikeGenNode, "repeat", false);
+
+		atomic_store(&stateSource->genSpikeState.stim_duration, 1);
+		sshsNodePutInt(spikeGenNode, "stim_duration", 1);
+
+		atomic_store(&stateSource->genSpikeState.chip_id, 0);
+		sshsNodePutInt(spikeGenNode, "chip_id", 0);
 
 		atomic_store(&stateSource->genSpikeState.doStim, true);				// pass it to the thread
+		sshsNodePutBool(spikeGenNode, "doStim", true);
+
 	}
 }
 
