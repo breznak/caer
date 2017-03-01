@@ -112,11 +112,9 @@ static void caerHelloWorldModuleRun(caerModuleData moduleData, size_t argsNumber
 	  	if(state->controlBiases){
 			uint32_t bits = 0 ;
 			if(neuronid == 150){
-				caerDynapseSetBias(stateSource, DYNAPSE_CONFIG_DYNAPSE_U2, 0,
-							"IF_DC_P", 1, 125, "HighBias", "Normal", "PBias", true);
+				caerDynapseSetBias(stateSource, DYNAPSE_CONFIG_DYNAPSE_U2, 0, "IF_DC_P", 1, 125, "HighBias", "PBias");
 			}else{
-				caerDynapseSetBias(stateSource, DYNAPSE_CONFIG_DYNAPSE_U2, 0,
-						"IF_DC_P", 4, 125, "HighBias", "Normal", "PBias", true);
+				caerDynapseSetBias(stateSource, DYNAPSE_CONFIG_DYNAPSE_U2, 0, "IF_DC_P", 4, 125, "HighBias", "PBias");
 			}
 	  	}
 	CAER_SPIKE_ITERATOR_VALID_END
