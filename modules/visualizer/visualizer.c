@@ -409,6 +409,9 @@ static bool caerVisualizerInitGraphics(caerVisualizerState state) {
 		return (false);
 	}
 
+	// Set display window name.
+	al_set_window_title(state->displayWindow, state->parentModule->moduleSubSystemString);
+
 	// Initialize window to all black.
 	al_set_target_backbuffer(state->displayWindow);
 	al_clear_to_color(al_map_rgb(0, 0, 0));
