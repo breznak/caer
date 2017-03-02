@@ -13,6 +13,12 @@ struct TFCFilter_state {
 	bool doTraining;
 	int32_t freqStim;
 	bool init;
+	// maps
+	simple2DBufferLong group_a;
+	simple2DBufferLong group_b;
+	simple2DBufferLong group_c;
+	simple2DBufferLong group_d;
+
 	// usb utils
 	caerInputDynapseState eventSourceModuleState;
 	sshsNode eventSourceConfigNode;
@@ -166,47 +172,44 @@ static void caerTrainingFromCaffeFilterRun(caerModuleData moduleData, size_t arg
 	}
 	if (state->doTraining) {
 
+		// teaching signal
 		sshsNode spikeGenNode = sshsGetRelativeNode(stateSource->eventSourceConfigNode, "DYNAPSEFX2/spikeGen/");
 		sshsNodePutBool(spikeGenNode, "doStim", false);
 		atomic_store(&stateSource->genSpikeState.doStim, false);
-
 		atomic_store(&stateSource->genSpikeState.stim_type, 2);
 		sshsNodePutInt(spikeGenNode, "stim_type", 2);
-
 		atomic_store(&stateSource->genSpikeState.core_d, 15);
 		sshsNodePutInt(spikeGenNode, "core_d", 15);
-
 		atomic_store(&stateSource->genSpikeState.address, groupId+1);
 		sshsNodePutInt(spikeGenNode, "address", groupId+1);
-
 		atomic_store(&stateSource->genSpikeState.dx, 0);
 		sshsNodePutInt(spikeGenNode, "dx", 0);
-
 		atomic_store(&stateSource->genSpikeState.dy, 0);
 		sshsNodePutInt(spikeGenNode, "dy", 0);
-
 		atomic_store(&stateSource->genSpikeState.sx, 0);
 		sshsNodePutInt(spikeGenNode, "sx", 0);
-
 		atomic_store(&stateSource->genSpikeState.sy, 0);
 		sshsNodePutInt(spikeGenNode, "sy", 0);
-
 		atomic_store(&stateSource->genSpikeState.stim_avr, 30);
 		sshsNodePutInt(spikeGenNode, "stim_avr", 102);
-
 		atomic_store(&stateSource->genSpikeState.repeat, false);
 		sshsNodePutBool(spikeGenNode, "repeat", false);
-
 		atomic_store(&stateSource->genSpikeState.stim_duration, 1);
 		sshsNodePutInt(spikeGenNode, "stim_duration", 1);
-
 		atomic_store(&stateSource->genSpikeState.chip_id, 0);
 		sshsNodePutInt(spikeGenNode, "chip_id", 0);
-
 		atomic_store(&stateSource->genSpikeState.doStim, true);				// pass it to the thread
 		sshsNodePutBool(spikeGenNode, "doStim", true);
 
 	}
+
+	//loop over all events and update activations Matrixes
+	CAER_SPIKE_ITERATOR_VALID_START(spike)
+
+
+
+	CAER_SPIKE_ITERATOR_VALID_END
+
 }
 
 static void caerTrainingFromCaffeFilterConfig(caerModuleData moduleData) {

@@ -96,6 +96,10 @@
 #include <libcaer/events/frame.h>
 #endif
 
+#ifdef ENABLE_ROTATEFILTER
+#include "modules/rotatefilter/rotatefilter.h"
+#endif
+
 #ifdef ENABLE_IMAGEGENERATOR
 #include "modules/imagegenerator/imagegenerator.h"
 #define CLASSIFYSIZE 64
@@ -189,6 +193,10 @@ static bool mainloop_1(void) {
 	// look to be uncorrelated with real scene changes (noise reduction).
 #ifdef ENABLE_BAFILTER
 	caerBackgroundActivityFilter(12, polarity_cam);
+#endif
+
+#ifdef ENABLE_ROTATEFILTER
+	caerRotateFilter(25, polarity_cam);
 #endif
 
 	// Filter that track one object by using the median position information
