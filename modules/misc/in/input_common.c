@@ -1477,7 +1477,7 @@ static bool addToPacketContainer(inputCommonState state, caerEventPacketHeader n
 		// Merge newPacket with '*packet'. Since packets from the same source,
 		// and having the same time, are guaranteed to have monotonic timestamps,
 		// the merge operation becomes a simple append operation.
-		caerEventPacketHeader mergedPacket = caerGenericEventPacketAppend(*packet, newPacket);
+		caerEventPacketHeader mergedPacket = caerEventPacketAppend(*packet, newPacket);
 		if (mergedPacket == NULL) {
 			caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,
 				"%s: Failed to allocate memory for packet merge operation.", __func__);
@@ -1862,7 +1862,7 @@ static int inputAssemblerThread(void *stateArg) {
 		// If validOnly flag is enabled, clean the packets up here, removing all
 		// invalid events prior to the get info and merge steps.
 		if (atomic_load_explicit(&state->validOnly, memory_order_relaxed)) {
-			caerCleanEventPacket(currPacket);
+			caerEventPacketClean(currPacket);
 		}
 
 		// Get info on the new packet.

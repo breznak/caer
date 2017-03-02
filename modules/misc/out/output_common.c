@@ -317,11 +317,11 @@ static void copyPacketsToTransferRing(outputCommonState state, size_t packetsLis
 
 		if (validOnly) {
 			caerEventPacketContainerSetEventPacket(eventPackets, (int32_t) idx,
-				caerCopyEventPacketOnlyValidEvents(packets[i]));
+				caerEventPacketCopyOnlyValidEvents(packets[i]));
 		}
 		else {
 			caerEventPacketContainerSetEventPacket(eventPackets, (int32_t) idx,
-				caerCopyEventPacketOnlyEvents(packets[i]));
+				caerEventPacketCopyOnlyEvents(packets[i]));
 		}
 
 		if (caerEventPacketContainerGetEventPacket(eventPackets, (int32_t) idx) == NULL) {

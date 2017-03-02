@@ -225,7 +225,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 			exit(1);
 		}
 
-		caerEventPacketHeader *onlyvalid = caerCopyEventPacketOnlyValidEvents(polarity);
+		caerEventPacketHeader *onlyvalid = caerEventPacketCopyOnlyValidEvents(polarity);
 		if (onlyvalid == NULL) {
 			return;
 		}
