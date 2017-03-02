@@ -209,7 +209,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 	if (polarity != NULL) {
 
 		float cam_sizeX = sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeX");
-		float cam_sizeY = sshsNodeGetShort(sourceInfoNodeCA, "dataSizeY");
+		float cam_sizeY = sshsNodeGetShort(sourceInfoNodeCA, "dvsSizeY");
 
 		if (cam_sizeX == 0 || cam_sizeY == 0) {
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
