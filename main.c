@@ -54,6 +54,9 @@
 #ifdef ENABLE_BAFILTER
 #include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
 #endif
+#ifdef ENABLE_SPATIALBANDPASSFILTER
+#include "modules/spatialbandpassfilter/spatialbandpassfilter.h"
+#endif
 #ifdef ENABLE_CAMERACALIBRATION
 #include "modules/cameracalibration/cameracalibration.h"
 #endif
@@ -248,6 +251,9 @@ static bool mainloop_1(void) {
 	caerPoseCalibration(6, polarity, frame);
 #endif
 
+#ifdef ENABLE_SPATIALBANDPASSFILTER
+	caerSpatialBandPassFilter(8, polarity);
+#endif
 	// A simple visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
 	caerVisualizer(60, "Polarity", &caerVisualizerRendererPolarityEvents, visualizerEventHandler, (caerEventPacketHeader) polarity);
