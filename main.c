@@ -54,6 +54,9 @@
 #ifdef ENABLE_BAFILTER
 #include "modules/backgroundactivityfilter/backgroundactivityfilter.h"
 #endif
+#ifdef ENABLE_REFRACTORYFILTER
+#include "modules/refractoryfilter/refractoryfilter.h"
+#endif
 #ifdef ENABLE_CAMERACALIBRATION
 #include "modules/cameracalibration/cameracalibration.h"
 #endif
@@ -246,6 +249,9 @@ static bool mainloop_1(void) {
 	//Enable camera pose estimation
 #ifdef ENABLE_POSEESTIMATION
 	caerPoseCalibration(6, polarity, frame);
+#endif
+#ifdef ENABLE_REFRACTORYFILTER
+	caerRefractoryFilter(7, polarity);
 #endif
 
 	// A simple visualizer exists to show what the output looks like.
