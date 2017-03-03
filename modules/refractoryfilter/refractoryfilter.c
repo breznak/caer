@@ -109,16 +109,16 @@ static void caerRefractoryFilterRun(caerModuleData moduleData, size_t argsNumber
 
 	// Get size information from source.
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(caerEventPacketHeaderGetEventSource(&polarity->packetHeader));
-	uint16_t sx = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-	uint16_t sy = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
+	auto sx = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
+	auto sy = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
 	// Iterate over events and filter out ones that are not supported by other
 	// events within a certain region in the specified timeframe.
 	CAER_POLARITY_ITERATOR_VALID_START(polarity)
 			// Get values on which to operate.
-		int64_t ts = caerPolarityEventGetTimestamp64(caerPolarityIteratorElement, polarity);
-		uint16_t x = caerPolarityEventGetX(caerPolarityIteratorElement);
-		uint16_t y = caerPolarityEventGetY(caerPolarityIteratorElement);
+		auto ts = caerPolarityEventGetTimestamp64(caerPolarityIteratorElement, polarity);
+		auto x = caerPolarityEventGetX(caerPolarityIteratorElement);
+		auto y = caerPolarityEventGetY(caerPolarityIteratorElement);
 
 		assert(x<=sx && x>=0 && y<=sy && y>=0);
 
@@ -127,8 +127,8 @@ static void caerRefractoryFilterRun(caerModuleData moduleData, size_t argsNumber
 		y = U16T(y >> state->subsampleBy);
 
 		// Get value from map.
-		int64_t lastTS = state->lastTimestamps[x][y];
-		int64_t deltat = (ts - lastTS);
+		auto lastTS = state->lastTimestamps[x][y];
+		auto deltat = (ts - lastTS);
 		// if refractoryPeriodUs==0, then all events with ISI==0 pass if passShortISIsEnabled
 		bool longISI = (deltat > I64T(state->refractoryPeriodUs)) || (lastTS == 0);
 
@@ -166,8 +166,8 @@ static void caerRefractoryFilterExit(caerModuleData moduleData) {
 static bool allocateRFilterTimestampMap(RFilterState state, int16_t sourceID) {
 	// Get size information from source.
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
-	uint16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-	uint16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
+	auto sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
+	auto sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
 	// Initialize double-indirection contiguous 2D array, so that array[x][y]
 	// is possible, see http://c-faq.com/aryptr/dynmuldimary.html for info. //TODO is there a shared method for 2D matrix allocation?
