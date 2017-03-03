@@ -763,7 +763,7 @@ void programBiasesDvsToDynapse(caerInputDynapseState state, DvsToDynapseState st
 				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_CASC_N", 7, 1, "HighBias", "NBias");
 				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_DC_P", 7, 2, "HighBias", "PBias");
 				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_NMDA_N", 7, 1, "HighBias", "NBias");
-				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_RFR_N", 2, 180, "HighBias", "NBias"); // 4
+				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_RFR_N", 3, 180, "HighBias", "NBias"); // 4
 				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_TAU1_N", 3, 10, "LowBias", "NBias");
 				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_TAU2_N", 6, 15, "LowBias", "NBias");
 				caerDynapseSetBias(state, (uint32_t) stateMod->chipId, coreId, "IF_THR_N", 2, 180, "HighBias", "NBias");

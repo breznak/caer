@@ -159,12 +159,12 @@ static void spikeConfigListener(sshsNode node, void *userData, enum sshs_node_at
 		if (changeType == SSHS_BOOL && caerStrEquals(changeKey, "doStim")) { // && caerStrEquals(changeKey, "doStimBias")
 		//atomic_load(&state->genSpikeState.doStim);
 			if (changeValue.boolean) {
-				caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation started.\n");
+				//caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation started.\n");
 				atomic_store(&state->genSpikeState.done, false); // we just started
 				atomic_store(&state->genSpikeState.started, true);
 			}
 			else {
-				caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation ended.\n");
+				//caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation ended.\n");
 				atomic_store(&state->genSpikeState.started, false);
 				atomic_store(&state->genSpikeState.done, true);
 			}

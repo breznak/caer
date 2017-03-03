@@ -304,7 +304,14 @@ static bool mainloop_1(void) {
 #endif
 
 #ifdef	ENABLE_TRAINFROMCAFFE
-	caerTrainingFromCaffeFilter(24, spike, classification_results_id[0]);
+	caerFrameEventPacket group_a = NULL;
+	caerFrameEventPacket group_b = NULL;
+	caerFrameEventPacket group_c = NULL;
+	caerFrameEventPacket group_d = NULL;
+	if(classification_results_id[0] > -1){
+		caerTrainingFromCaffeFilter(24, spike, classification_results_id[0]);
+		caerTrainFromMakeFrame(24,&group_a, &group_b, &group_c, &group_d, 64);
+	}
 #endif
 
 #ifdef ENABLE_GESTURELEARNINGFILTER
@@ -333,6 +340,20 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_MEANRATEFILTER_DVS
 	if(freqplot != NULL){
 		caerVisualizer(73, "MeanRateFrequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
+	}
+#endif
+#ifdef	ENABLE_TRAINFROMCAFFE
+	if(group_a != NULL){
+		caerVisualizer(74, "group_a", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_a);
+	}
+	if(group_b != NULL){
+		caerVisualizer(75, "group_b", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_b);
+	}
+	if(group_c != NULL){
+		caerVisualizer(76, "group_c", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_c);
+	}
+	if(group_d != NULL){
+		caerVisualizer(77, "group_d", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_d);
 	}
 #endif
 #endif
@@ -366,7 +387,7 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_FILE_OUTPUT
 	// Enable output to file (AEDAT 3.X format).
-	caerOutputFile(7, 2, spike, special);
+	caerOutputFile(7, 2, polarity_cam, special_cam);
 #endif
 
 #ifdef ENABLE_NETWORK_OUTPUT

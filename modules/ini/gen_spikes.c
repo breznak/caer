@@ -252,12 +252,12 @@ void spiketrainETF(void *spikeGenState) {
 
 	if (atomic_load(&state->genSpikeState.ETFduration) <= current_time) {
 		if (atomic_load(&state->genSpikeState.ETFstarted)) {
-			caerLog(CAER_LOG_NOTICE, __func__, "ETF stimulation finished.\n");
+			//caerLog(CAER_LOG_NOTICE, __func__, "ETF stimulation finished.\n");
 		}
 		atomic_store(&state->genSpikeState.ETFdone, true);
 		atomic_store(&state->genSpikeState.ETFstarted, false);
 		if (atomic_load(&state->genSpikeState.ETFrepeat)) {
-			caerLog(CAER_LOG_NOTICE, __func__, "ETF stimulation re-started.\n");
+			//caerLog(CAER_LOG_NOTICE, __func__, "ETF stimulation re-started.\n");
 			atomic_store(&state->genSpikeState.ETFstarted, true);
 			atomic_store(&state->genSpikeState.ETFdone, false);
 			goto LABELSTART;
@@ -478,12 +478,12 @@ void spiketrainReg(void *spikeGenState) {
 	if (atomic_load(&state->genSpikeState.stim_duration)
 		<= ((double) tend.tv_sec + 1.0e-9 * tend.tv_nsec) - ((double) tstart.tv_sec + 1.0e-9 * tstart.tv_nsec)) {
 		if (atomic_load(&state->genSpikeState.started)) {
-			caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation finished.\n");
+			//caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation finished.\n");
 		}
 		atomic_store(&state->genSpikeState.done, true);
 		atomic_store(&state->genSpikeState.started, false);
 		if (atomic_load(&state->genSpikeState.repeat)) {
-			caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation re-started.\n");
+			//caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation re-started.\n");
 			atomic_store(&state->genSpikeState.started, true);
 			atomic_store(&state->genSpikeState.done, false);
 			goto LABELSTART;
@@ -559,12 +559,12 @@ void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCH
 	if (atomic_load(&state->genSpikeState.stim_duration)
 		<= ((double) tend.tv_sec + 1.0e-9 * tend.tv_nsec) - ((double) tstart.tv_sec + 1.0e-9 * tstart.tv_nsec)) {
 		if (atomic_load(&state->genSpikeState.started)) {
-			caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation finished.\n");
+			//caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation finished.\n");
 		}
 		atomic_store(&state->genSpikeState.done, true);
 		atomic_store(&state->genSpikeState.started, false);
 		if (atomic_load(&state->genSpikeState.repeat)) {
-			caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation re-started.\n");
+			//caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation re-started.\n");
 			atomic_store(&state->genSpikeState.started, true);
 			atomic_store(&state->genSpikeState.done, false);
 			goto LABELSTART;
@@ -679,12 +679,12 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 	if (atomic_load(&state->genSpikeState.stim_duration)
 		<= ((double) tend.tv_sec + 1.0e-9 * tend.tv_nsec) - ((double) tstart.tv_sec + 1.0e-9 * tstart.tv_nsec)) {
 		if (atomic_load(&state->genSpikeState.started)) {
-			caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation finished.\n");
+			//caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation finished.\n");
 		}
 		atomic_store(&state->genSpikeState.done, true);
 		atomic_store(&state->genSpikeState.started, false);
 		if (atomic_load(&state->genSpikeState.repeat)) {
-			caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation re-started.\n");
+			//caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation re-started.\n");
 			atomic_store(&state->genSpikeState.started, true);
 			atomic_store(&state->genSpikeState.done, false);
 			goto LABELSTART;
