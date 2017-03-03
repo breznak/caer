@@ -14,6 +14,7 @@ struct BAFilter_state {
 	simple2DBufferLong timestampMap;
 	int32_t deltaT;
 	int8_t subSampleBy;
+	long invalidPointNum;
 };
 
 typedef struct BAFilter_state *BAFilterState;
@@ -42,11 +43,14 @@ void caerBackgroundActivityFilter(uint16_t moduleID, caerPolarityEventPacket pol
 static bool caerBackgroundActivityFilterInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "deltaT", 30000);
 	sshsNodePutByteIfAbsent(moduleData->moduleNode, "subSampleBy", 0);
+	sshsNodePutLongIfAbsent(moduleData->moduleNode, "invalidPointNum", 0);
+	sshsNodePutLong(moduleData->moduleNode, "invalidPointNum", 0);
 
 	BAFilterState state = moduleData->moduleState;
 
 	state->deltaT = sshsNodeGetInt(moduleData->moduleNode, "deltaT");
 	state->subSampleBy = sshsNodeGetByte(moduleData->moduleNode, "subSampleBy");
+	state->invalidPointNum = sshsNodeGetLong(moduleData->moduleNode, "invalidPointNum");
 
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
@@ -95,6 +99,9 @@ static void caerBackgroundActivityFilterRun(caerModuleData moduleData, size_t ar
 		if ((I64T(ts - lastTS) >= I64T(state->deltaT)) || (lastTS == 0)) {
 			// Filter out invalid.
 			caerPolarityEventInvalidate(caerPolarityIteratorElement, polarity);
+			state->invalidPointNum++;
+			sshsNodePutLong(moduleData->moduleNode, "invalidPointNum", state->invalidPointNum);
+
 		}
 
 		// Update neighboring region.
