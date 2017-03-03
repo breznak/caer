@@ -330,6 +330,7 @@ static bool mainloop_1(void) {
 		caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
 	}
 #endif
+	caerVisualizer(68, "UserSize", &caerVisualizerRendererSpikeEventsRaster, NULL, (caerEventPacketHeader) spike);
 #if defined(DAVISFX2) || defined(DAVISFX3) || defined(DVS128) || defined(ENABLE_FILE_INPUT)
 	caerVisualizer(66, "Polarity", &caerVisualizerRendererPolarityEvents, NULL, (caerEventPacketHeader) polarity_cam);
 #endif
@@ -344,16 +345,16 @@ static bool mainloop_1(void) {
 #endif
 #ifdef	ENABLE_TRAINFROMCAFFE
 	if(group_a != NULL){
-		caerVisualizer(74, "group_a", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_a);
+		caerVisualizer(74, "Paper", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_a);
 	}
 	if(group_b != NULL){
-		caerVisualizer(75, "group_b", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_b);
+		caerVisualizer(75, "Scissors", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_b);
 	}
 	if(group_c != NULL){
-		caerVisualizer(76, "group_c", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_c);
+		caerVisualizer(76, "Rock", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_c);
 	}
 	if(group_d != NULL){
-		caerVisualizer(77, "group_d", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_d);
+		caerVisualizer(77, "Background", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_d);
 	}
 #endif
 #endif
