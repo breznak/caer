@@ -119,7 +119,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Use cAER maximum UDP message size.
-	size_t dataBufferLength = MAX_OUTPUT_UDP_SIZE;
+	size_t dataBufferLength = AEDAT3_MAX_UDP_SIZE;
 	uint8_t *dataBuffer = malloc(dataBufferLength);
 	if (dataBuffer == NULL) {
 		close(listenUDPSocket);
@@ -218,7 +218,7 @@ static void rebuildUDPPackets(int64_t highestParsedSequenceNumber, udpPacket *in
 	}
 
 	// Verify data size. Can't ever be bigger than maximum UDP message size.
-	if (dataLength > MAX_OUTPUT_UDP_SIZE) {
+	if (dataLength > AEDAT3_MAX_UDP_SIZE) {
 		return;
 	}
 
@@ -255,8 +255,8 @@ static void rebuildUDPPackets(int64_t highestParsedSequenceNumber, udpPacket *in
 		}
 
 		// Calculate over how many UDP packets this event packet is split up.
-		size_t numUDPPackets = eventPacketSize / MAX_OUTPUT_UDP_SIZE;
-		if ((eventPacketSize % MAX_OUTPUT_UDP_SIZE) != 0) {
+		size_t numUDPPackets = eventPacketSize / AEDAT3_MAX_UDP_SIZE;
+		if ((eventPacketSize % AEDAT3_MAX_UDP_SIZE) != 0) {
 			numUDPPackets++;
 		}
 
@@ -315,7 +315,7 @@ static void rebuildUDPPackets(int64_t highestParsedSequenceNumber, udpPacket *in
 				int64_t sequencePosition = message->sequenceNumber - newPacket->startSequenceNumber;
 
 				// Copy content.
-				memcpy(((uint8_t *) newPacket->content) + (sequencePosition * MAX_OUTPUT_UDP_SIZE), message->message,
+				memcpy(((uint8_t *) newPacket->content) + (sequencePosition * AEDAT3_MAX_UDP_SIZE), message->message,
 					message->messageLength);
 				newPacket->udpPacketsReceived[sequencePosition] = true;
 
@@ -353,7 +353,7 @@ static void rebuildUDPPackets(int64_t highestParsedSequenceNumber, udpPacket *in
 				}
 
 				// Not duplicate, copy content.
-				memcpy(((uint8_t *) packet->content) + (sequencePosition * MAX_OUTPUT_UDP_SIZE), data, dataLength);
+				memcpy(((uint8_t *) packet->content) + (sequencePosition * AEDAT3_MAX_UDP_SIZE), data, dataLength);
 				packet->udpPacketsReceived[sequencePosition] = true;
 
 				return;

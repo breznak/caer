@@ -1146,7 +1146,7 @@ static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
 			firstChunk = false;
 
 			// Write data into second buffer.
-			size_t sendSize = (packetSize > MAX_OUTPUT_UDP_SIZE) ? (MAX_OUTPUT_UDP_SIZE) : (packetSize);
+			size_t sendSize = (packetSize > AEDAT3_MAX_UDP_SIZE) ? (AEDAT3_MAX_UDP_SIZE) : (packetSize);
 
 			libuvWriteBufInit(&buffers->buffers[1], sendSize);
 			if (buffers->buffers[1].buf.base == NULL) {
