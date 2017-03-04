@@ -223,6 +223,7 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 	}
 
 	// store measure and reset counts
+	// not the first time as we need to measure for at least a while
 	if (storeMeasure && (state->stepnum != 0)) {
 
 		caerLog(CAER_LOG_NOTICE, __func__, "ETF storeMeasure");

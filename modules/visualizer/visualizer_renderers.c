@@ -460,7 +460,7 @@ bool doClear) {
 		float corey = caerPoint4DEventGetY(caerPoint4DIteratorElement);
 		float mean = caerPoint4DEventGetZ(caerPoint4DIteratorElement);
 
-		int coreid = (int) corex * 1 + (int) corey;	// color
+		//int coreid = (int) corex * 1 + (int) corey;	// color
 
 		double range_check = floor( (double)mean * (double)scaley);
 		int32_t new_y = 0;
@@ -473,7 +473,25 @@ bool doClear) {
 		if(range_check < INT32_MAX && range_check > INT32_MIN ){
 			checked = (int32_t) range_check;
 		}
-		al_put_pixel((int32_t) sizeX - checked, (int32_t) new_y, al_map_rgb( (unsigned char) coreid * 80, 255, 0));
+
+		uint8_t coreId;
+		if(corex == 0 && corey == 0){ coreId = 0;}
+		if(corex == 0 && corey == 1){ coreId = 1;}
+		if(corex == 1 && corey == 0){ coreId = 2;}
+		if(corex == 1 && corey == 1){ coreId = 3;}
+
+		if (coreId == 0) {
+			al_put_pixel((int32_t) sizeX - checked, (int32_t) new_y,al_map_rgb(0, 255, 0));
+		}
+		else if (coreId == 1) {
+			al_put_pixel((int32_t) sizeX - checked, (int32_t) new_y,al_map_rgb(0, 0, 255));
+		}
+		else if (coreId == 2) {
+			al_put_pixel((int32_t) sizeX - checked, (int32_t) new_y,al_map_rgb(255, 0, 0));
+		}
+		else if (coreId == 3) {
+			al_put_pixel((int32_t) sizeX - checked, (int32_t) new_y,al_map_rgb(255, 255, 0));
+		}
 
 		if(counter == 5){
 			counter = 0;
