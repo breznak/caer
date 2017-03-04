@@ -1142,7 +1142,8 @@ static bool decompressFramePNG(inputCommonState state, caerEventPacketHeader pac
 	} eventMemory[eventNumber];
 
 	size_t currPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE; // Start here, no change to header.
-	size_t frameEventHeaderSize = sizeof(struct caer_frame_event);
+	// '- sizeof(uint16_t)' to compensate for pixels[1] at end of struct for C++ compatibility.
+	size_t frameEventHeaderSize = (sizeof(struct caer_frame_event) - sizeof(uint16_t));
 
 	// Gather information on events.
 	for (int32_t i = 0; i < eventNumber; i++) {
