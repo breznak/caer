@@ -557,7 +557,7 @@ void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCH
 	portable_clock_gettime_monotonic(&tend);
 
 	if (atomic_load(&state->genSpikeState.stim_duration)
-		<= ((double) tend.tv_sec + 1.0e-9 * tend.tv_nsec) - ((double) tstart.tv_sec + 1.0e-9 * tstart.tv_nsec)) {
+		<= ((double) tend.tv_sec + 1.0e-9 * (double) tend.tv_nsec) - ((double) tstart.tv_sec + 1.0e-9 * (double)  tstart.tv_nsec)) {
 		if (atomic_load(&state->genSpikeState.started)) {
 			//caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation finished.\n");
 		}
@@ -677,7 +677,7 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 	portable_clock_gettime_monotonic(&tend);
 
 	if (atomic_load(&state->genSpikeState.stim_duration)
-		<= ((double) tend.tv_sec + 1.0e-9 * tend.tv_nsec) - ((double) tstart.tv_sec + 1.0e-9 * tstart.tv_nsec)) {
+		<= ((double) tend.tv_sec + 1.0e-9 * (double)  tend.tv_nsec) - ((double) tstart.tv_sec + 1.0e-9 * (double)  tstart.tv_nsec)) {
 		if (atomic_load(&state->genSpikeState.started)) {
 			//caerLog(CAER_LOG_NOTICE, "spikeGen", "stimulation finished.\n");
 		}
