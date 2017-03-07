@@ -215,7 +215,7 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 		// init done
 		state->init = true;
 	}
-	int storeMeasure = false;
+	long int storeMeasure = false;
 
 	if (atomic_load(&state->eventSourceModuleState->genSpikeState.ETFphase_num) != state->stepnum) {
 		storeMeasure = true;
@@ -230,7 +230,7 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 
 		//update frequencyMap
 		float phaseDur = atomic_load(
-			&stateSource->genSpikeState.ETFduration) / atomic_load(&stateSource->genSpikeState.ETFphase_num);
+			&stateSource->genSpikeState.ETFduration) / atomic_load(&stateSource->genSpikeState.ETFstepnum);
 		//caerLog(CAER_LOG_NOTICE, __func__, "Phase Duration %f\n", phaseDur);
 		for (int16_t x = 0; x < DYNAPSE_CONFIG_XCHIPSIZE; x++) {
 			for (int16_t y = 0; y < DYNAPSE_CONFIG_YCHIPSIZE; y++) {

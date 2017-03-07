@@ -216,8 +216,8 @@ void spiketrainETF(void *spikeGenState) {
 
 	struct timespec tim;
 	tim.tv_sec = 0;
-	float measureMinTime = atomic_load(&state->genSpikeState.ETFduration);
-	int inFreqs[6] = { 5, 10, 20, 30, 50, 100 };
+	float measureMinTime = (float) atomic_load(&state->genSpikeState.ETFduration);
+	int inFreqs[6] = { 30, 30, 30, 30, 30, 30 };
 	int nSteps = 6;
 	state->genSpikeState.ETFstepnum = nSteps;
 	double stepDur = (double) measureMinTime / (double) nSteps;
