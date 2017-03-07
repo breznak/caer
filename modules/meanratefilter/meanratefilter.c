@@ -266,12 +266,12 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 					if( (state->targetFreq - mean[corex][corey]) > 0 ){
 						// we need to increase freq.. increase fine
 						if(fineValue < (255-step)){
-							fineValue = (ushort) fineValue + (ushort) step;
+							fineValue = (unsigned short ) fineValue + (unsigned short) step;
 							changed = true;
 						}else{
 							// if we did not reach the max value
 							if(coarseValue != 0){
-								fineValue = (ushort) step;
+								fineValue = (unsigned short) step;
 								coarseValue += -1; // coarse 0 is max 7 is min
 								changed = true;
 							}else{
@@ -282,12 +282,12 @@ static void caerMeanRateFilterRun(caerModuleData moduleData, size_t argsNumber, 
 					}else if( (state->targetFreq - mean[corex][corey]) < 0){
 						// we need to reduce freq
 						if( (fineValue - step) > 0){
-							fineValue = (ushort) fineValue - (ushort) step;
+							fineValue = (unsigned short) fineValue - (unsigned short) step;
 							changed = true;
 						}else{
 							// if we did not reach the max value
 							if(coarseValue != 7){
-								fineValue = (ushort) step;
+								fineValue = (unsigned short) step;
 								coarseValue += +1; // coarse 0 is max 7 is min
 								changed = true;
 							}else{
