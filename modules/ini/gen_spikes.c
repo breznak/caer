@@ -466,8 +466,8 @@ void spiketrainReg(void *spikeGenState) {
 	uint32_t value = (uint32_t) atomic_load(&state->genSpikeState.core_d) | 0 << 16 | 0 << 17 | 1 << 13
 		| (uint32_t) atomic_load(&state->genSpikeState.core_s) << 18
 		| (uint32_t) atomic_load(&state->genSpikeState.address) << 20
-		| (uint32_t) atomic_load(&state->genSpikeState.dx) << 4 | (uint) atomic_load(&state->genSpikeState.sx) << 6
-		| (uint32_t) atomic_load(&state->genSpikeState.dy) << 7 | (uint) atomic_load(&state->genSpikeState.sy) << 9;
+		| (uint32_t) atomic_load(&state->genSpikeState.dx) << 4 | (uint32_t) atomic_load(&state->genSpikeState.sx) << 6
+		| (uint32_t) atomic_load(&state->genSpikeState.dy) << 7 | (uint32_t) atomic_load(&state->genSpikeState.sy) << 9;
 
 	if (!atomic_load(&state->genSpikeState.started)) {
 		LABELSTART: portable_clock_gettime_monotonic(&tstart);
@@ -537,12 +537,12 @@ void spiketrainPat(void *spikeGenState, uint32_t spikePattern[DYNAPSE_CONFIG_XCH
 		for (colId = 0; colId < DYNAPSE_CONFIG_YCHIPSIZE; colId++) {
 			if (spikePattern[rowId][colId] == 1)
 				value = 0xf | 0 << 16 | 0 << 17 | 1 << 13
-					| (uint) (((rowId / DYNAPSE_CONFIG_NEUROW) << 1) | (uint) (colId / DYNAPSE_CONFIG_NEUCOL)) << 18
-					| (uint) (((rowId % DYNAPSE_CONFIG_NEUROW) << 4) | (uint) (colId % DYNAPSE_CONFIG_NEUCOL)) << 20
-					| (uint) atomic_load(&state->genSpikeState.dx) << 4
-					| (uint) atomic_load(&state->genSpikeState.sx) << 6
-					| (uint) atomic_load(&state->genSpikeState.dy) << 7
-					| (uint) atomic_load(&state->genSpikeState.sy) << 9;
+					| (uint32_t) (((rowId / DYNAPSE_CONFIG_NEUROW) << 1) | (uint32_t) (colId / DYNAPSE_CONFIG_NEUCOL)) << 18
+					| (uint32_t) (((rowId % DYNAPSE_CONFIG_NEUROW) << 4) | (uint32_t) (colId % DYNAPSE_CONFIG_NEUCOL)) << 20
+					| (uint32_t) atomic_load(&state->genSpikeState.dx) << 4
+					| (uint32_t) atomic_load(&state->genSpikeState.sx) << 6
+					| (uint32_t) atomic_load(&state->genSpikeState.dy) << 7
+					| (uint32_t) atomic_load(&state->genSpikeState.sy) << 9;
 			else {
 				value = 0;
 			}
@@ -622,10 +622,10 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 	// generate chip command for stimulating
 	uint32_t valueSent, valueSentTeaching, valueSentTeachingControl, valueSentInhibitory, valueSentInhibitoryControl;
 	uint32_t source_address;
-	valueSent = 0xf | 0 << 16 | 0 << 17 | 1 << 13 | (uint) (sourceAddress & 0xff) << 20
-		| (uint) ((sourceAddress & 0x300) >> 8) << 18 | (uint) atomic_load(&state->genSpikeState.dx) << 4
-		| (uint) atomic_load(&state->genSpikeState.sx) << 6 | (uint) atomic_load(&state->genSpikeState.dy) << 7
-		| (uint) atomic_load(&state->genSpikeState.sy) << 9;
+	valueSent = 0xf | 0 << 16 | 0 << 17 | 1 << 13 | (uint32_t) (sourceAddress & 0xff) << 20
+		| (uint32_t) ((sourceAddress & 0x300) >> 8) << 18 | (uint32_t) atomic_load(&state->genSpikeState.dx) << 4
+		| (uint32_t) atomic_load(&state->genSpikeState.sx) << 6 | (uint32_t) atomic_load(&state->genSpikeState.dy) << 7
+		| (uint32_t) atomic_load(&state->genSpikeState.sy) << 9;
 
 	source_address = 0;
 	if (pattern_number == 3) {
@@ -654,20 +654,20 @@ void spiketrainPatSingle(void *spikeGenState, uint32_t sourceAddress) {
 		}
 	}
 
-	valueSentTeaching = 0x8 | 0 << 16 | 0 << 17 | 1 << 13 | (uint) source_address << 20 | 0x3 << 18
-		| (uint) atomic_load(&state->genSpikeState.dx) << 4 | (uint) atomic_load(&state->genSpikeState.sx) << 6
-		| (uint) atomic_load(&state->genSpikeState.dy) << 7 | (uint) atomic_load(&state->genSpikeState.sy) << 9; //((sourceAddress & 0x300) >> 8) << 18
+	valueSentTeaching = 0x8 | 0 << 16 | 0 << 17 | 1 << 13 | (uint32_t) source_address << 20 | 0x3 << 18
+		| (uint32_t) atomic_load(&state->genSpikeState.dx) << 4 | (uint32_t) atomic_load(&state->genSpikeState.sx) << 6
+		| (uint32_t) atomic_load(&state->genSpikeState.dy) << 7 | (uint32_t) atomic_load(&state->genSpikeState.sy) << 9; //((sourceAddress & 0x300) >> 8) << 18
 
-	valueSentTeachingControl = 0xc | 0 << 16 | 0 << 17 | 1 << 13 | (uint) source_address << 20 | 0x3 << 18
-		| (uint) atomic_load(&state->genSpikeState.dx) << 4 | (uint) atomic_load(&state->genSpikeState.sx) << 6 | 1 << 7
+	valueSentTeachingControl = 0xc | 0 << 16 | 0 << 17 | 1 << 13 | (uint32_t) source_address << 20 | 0x3 << 18
+		| (uint32_t) atomic_load(&state->genSpikeState.dx) << 4 | (uint32_t) atomic_load(&state->genSpikeState.sx) << 6 | 1 << 7
 		| 1 << 9;
 
 	valueSentInhibitory = 0x8 | 0 << 16 | 0 << 17 | 1 << 13 | 3 << 20 | 0x3 << 18
-		| (uint) atomic_load(&state->genSpikeState.dx) << 4 | (uint) atomic_load(&state->genSpikeState.sx) << 6
-		| (uint) atomic_load(&state->genSpikeState.dy) << 7 | (uint) atomic_load(&state->genSpikeState.sy) << 9; //((sourceAddress & 0x300) >> 8) << 18
+		| (uint32_t) atomic_load(&state->genSpikeState.dx) << 4 | (uint32_t) atomic_load(&state->genSpikeState.sx) << 6
+		| (uint32_t) atomic_load(&state->genSpikeState.dy) << 7 | (uint32_t) atomic_load(&state->genSpikeState.sy) << 9; //((sourceAddress & 0x300) >> 8) << 18
 
 	valueSentInhibitoryControl = 0xc | 0 << 16 | 0 << 17 | 1 << 13 | 3 << 20 | 0x3 << 18
-		| (uint) atomic_load(&state->genSpikeState.dx) << 4 | (uint) atomic_load(&state->genSpikeState.sx) << 6 | 1 << 7
+		| (uint32_t) atomic_load(&state->genSpikeState.dx) << 4 | (uint32_t) atomic_load(&state->genSpikeState.sx) << 6 | 1 << 7
 		| 1 << 9;
 
 	if (!atomic_load(&state->genSpikeState.started)) {
@@ -808,8 +808,8 @@ void SetCamSingle(void *spikeGenState) {
 	caerLog(CAER_LOG_NOTICE, __func__, "Started programming cam..");
 	for (rowId = 0; rowId < DYNAPSE_CONFIG_XCHIPSIZE; rowId++) {
 		for (colId = 0; colId < DYNAPSE_CONFIG_YCHIPSIZE; colId++) {
-			neuronId = (uint) ((rowId & 0X10) >> 4) << 9 | (uint) ((colId & 0X10) >> 4) << 8 | (uint) (rowId & 0xf) << 4
-				| (uint) (colId & 0xf);
+			neuronId = (uint32_t) ((rowId & 0X10) >> 4) << 9 | (uint32_t) ((colId & 0X10) >> 4) << 8 | (uint32_t) (rowId & 0xf) << 4
+				| (uint32_t) (colId & 0xf);
 			if (spikePatternA[rowId][colId] == 1) {
 				caerDynapseWriteCam(state->deviceState, 1, neuronId, 0, DYNAPSE_CONFIG_CAMTYPE_F_EXC);
 			}
