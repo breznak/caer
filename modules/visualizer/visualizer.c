@@ -213,14 +213,15 @@ caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisu
 
 	// If parentModuleName is "UserSize" create bitmap of dimensions [userSizeX, userSizeY]
 	// If userSizeX/userSizeY is not specified in the device_common file, use default 64x64
-	char *data = sshsNodeGetName(state->parentModule->moduleNode);
+	const char *curr = sshsNodeGetName(state->parentModule->moduleNode);
 	char *next;
-	char *curr = data;
+
 	while ((next = strchr(curr, '-')) != NULL) {
 		curr = next + 1;
 	}
+
 	if (caerStrEquals(curr, "VisualizerUserSize")) {
-		caerLog(CAER_LOG_NOTICE, __func__, "init size from user defined Size \n");
+		caerLog(CAER_LOG_NOTICE, parentModule->moduleSubSystemString, "Initializing size from user defined size.");
 		state->bitmapRendererSizeX = userSizeX;
 		state->bitmapRendererSizeY = userSizeY;
 	}
