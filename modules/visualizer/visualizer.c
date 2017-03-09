@@ -117,7 +117,15 @@ void caerVisualizerSystemInit(void) {
 		exit(EXIT_FAILURE);
 	}
 
-	al_init_font_addon();
+	if (al_init_font_addon()) {
+		// Successfully initialized Allegro font addon.
+		caerLog(CAER_LOG_DEBUG, "Visualizer", "Allegro font addon initialized successfully.");
+	}
+	else {
+		// Failed to initialize Allegro font addon.
+		caerLog(CAER_LOG_EMERGENCY, "Visualizer", "Failed to initialize Allegro font addon.");
+		exit(EXIT_FAILURE);
+	}
 
 	if (al_init_ttf_addon()) {
 		// Successfully initialized Allegro TTF addon.
