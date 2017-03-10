@@ -88,11 +88,14 @@
 #ifdef ENABLE_OPENCVDISPLAY
 #include "modules/opencvdisplay/opencvdisplay_module.h"
 #endif
+#ifdef ENABLE_OPENCVOPTICFLOW
+#include "modules/opencvopticflow/opticflow.h"
+#endif
 
 #ifdef ENABLE_IMAGEGENERATOR
 #include "modules/imagegenerator/imagegenerator.h"
-#define CLASSIFYSIZE 64 
-#define DISPLAYIMGSIZE 64
+#define CLASSIFYSIZE 128
+#define DISPLAYIMGSIZE 128
 #endif
 #ifdef ENABLE_CAFFEINTERFACE
 #define CAFFEVISUALIZERSIZE 1024 
@@ -359,6 +362,11 @@ static bool mainloop_1(void) {
 	caerNullHopWrapper(22, classifyhist, haveimage, classification_results);
 #endif
 
+
+#if defined(ENABLE_OPENCVOPTICFLOW) && defined(ENABLE_IMAGEGENERATOR) && defined(ENABLE_VISUALIZER)
+	caerFrameEventPacket frameFlow = caerOpticFlow(19, imagegeneratorFrame);
+#endif
+
 	// add classification results to the image generator frame
 #ifdef ENABLE_IMAGEGENERATOR
 #if defined(ENABLE_CAFFEINTERFACE)
@@ -384,6 +392,10 @@ static bool mainloop_1(void) {
 	caerVisualizer(68, "ImageMedian", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) medianFrame);
 #endif
 
+
+#if defined(ENABLE_OPENCVOPTICFLOW) && defined(ENABLE_IMAGEGENERATOR)
+	caerVisualizer(71, "OpticFlow", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) frameFlow);
+#endif
 
 	return (true); // If false is returned, processing of this loop stops.
 }
