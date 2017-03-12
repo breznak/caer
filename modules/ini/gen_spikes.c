@@ -230,7 +230,7 @@ void spiketrainETF(void *spikeGenState) {
 	}
 
 	atomic_store(&state->genSpikeState.ETFphase_num, this_step);
-	if(this_step > 0 && this_step < nSteps){
+	if(this_step >= 0 && this_step < nSteps){
 		if (inFreqs[this_step] > 0) {
 			tim.tv_nsec = 1000000000L / inFreqs[this_step];	// select frequency
 		}
