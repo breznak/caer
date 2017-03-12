@@ -11,6 +11,7 @@
 #include <modules/refractoryfilter/refractoryfilter.h>
 #include "base/mainloop.h"
 #include "base/module.h"
+#include "ext/buffers.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -35,7 +36,7 @@ struct RFilter_state {
 	 */
 	int8_t subsampleBy;
 
-	int64_t **lastTimestamps;
+	simple2DBufferLong lastTimestamps;
 
 };
 typedef struct RFilter_state *RFilterState;
@@ -53,9 +54,10 @@ static void caerRefractoryFilterExit(caerModuleData moduleData);
 static bool allocateRFilterTimestampMap(RFilterState state, int16_t sourceID);
 
 static struct caer_module_functions caerRefractoryFilterFunctions =
-		{ .moduleInit = &caerRefractoryFilterInit, .moduleRun =
-				&caerRefractoryFilterRun, .moduleConfig =
-				&caerRefractoryFilterConfig, .moduleExit = &caerRefractoryFilterExit };
+		{ .moduleInit = &caerRefractoryFilterInit, 
+	.moduleRun =&caerRefractoryFilterRun, 
+	.moduleConfig =&caerRefractoryFilterConfig, 
+	.moduleExit = &caerRefractoryFilterExit };
 
 void caerRefractoryFilter(uint16_t moduleID, caerPolarityEventPacket polarity) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "RFilter", CAER_MODULE_PROCESSOR);
@@ -127,7 +129,7 @@ static void caerRefractoryFilterRun(caerModuleData moduleData, size_t argsNumber
 		y = U16T(y >> state->subsampleBy);
 
 		// Get value from map.
-		int64_t lastTS = state->lastTimestamps[x][y];
+		int64_t lastTS = state->lastTimestamps->buffer2d[x][y];
 		int64_t deltat = (ts - lastTS);
 		// if refractoryPeriodUs==0, then all events with ISI==0 pass if passShortISIsEnabled
 		bool longISI = (deltat > I64T(state->refractoryPeriodUs)) || (lastTS == 0);
@@ -137,7 +139,7 @@ static void caerRefractoryFilterRun(caerModuleData moduleData, size_t argsNumber
 			caerPolarityEventInvalidate(caerPolarityIteratorElement, polarity);
 		}
 
-		state->lastTimestamps[x][y] = ts;
+		state->lastTimestamps->buffer2d[x][y] = ts;
 
 	CAER_POLARITY_ITERATOR_VALID_END
 }
@@ -154,40 +156,21 @@ static void caerRefractoryFilterConfig(caerModuleData moduleData) {
 
 static void caerRefractoryFilterExit(caerModuleData moduleData) {
 	RFilterState state = moduleData->moduleState;
-
-	// Ensure map is freed.
-	if (state->lastTimestamps != NULL) {
-		free(state->lastTimestamps[0]);
-		free(state->lastTimestamps);
-		state->lastTimestamps = NULL;
-	}
+	simple2DBufferFreeLong(state->lastTimestamps); 
 }
 
 static bool allocateRFilterTimestampMap(RFilterState state, int16_t sourceID) {
 	// Get size information from source.
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID);
-	uint16_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-	uint16_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
+	uint16_t sizeX = (uint16_t) sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
+	uint16_t sizeY = (uint16_t) sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
 	// Initialize double-indirection contiguous 2D array, so that array[x][y]
-	// is possible, see http://c-faq.com/aryptr/dynmuldimary.html for info. //TODO is there a shared method for 2D matrix allocation?
-	state->lastTimestamps = calloc((size_t) sizeX, sizeof(int64_t *));
+	// is possible, see http://c-faq.com/aryptr/dynmuldimary.html for info.
+        state->lastTimestamps = simple2DBufferInitLong((size_t) sizeX, (size_t) sizeY);
 	if (state->lastTimestamps == NULL) {
 		return (false); // Failure.
 	}
-
-	state->lastTimestamps[0] = calloc((size_t) (sizeX * sizeY), sizeof(int64_t));
-	if (state->lastTimestamps[0] == NULL) {
-		free(state->lastTimestamps);
-		state->lastTimestamps = NULL;
-
-		return (false); // Failure.
-	}
-
-	for (size_t i = 1; i < (size_t) sizeX; i++) {
-		state->lastTimestamps[i] = state->lastTimestamps[0] + (i * (size_t) sizeY);
-	}
-
 
 	return (true);
 }
