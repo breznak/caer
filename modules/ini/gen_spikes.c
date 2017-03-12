@@ -118,25 +118,12 @@ bool caerGenSpikeInit(caerModuleData moduleData) {
 	atomic_store(&state->genSpikeState.started, false);
 	atomic_store(&state->genSpikeState.done, true);
 
-	sshsNodePutBoolIfAbsent(spikeNode, "ETFstarted", false);
-	sshsNodePutBool(spikeNode, "ETFstarted", false);
-	atomic_store(&state->genSpikeState.ETFstarted, sshsNodeGetBool(spikeNode, "ETFstarted"));
-
-	sshsNodePutBoolIfAbsent(spikeNode, "ETFdone", true);
-	sshsNodePutBool(spikeNode, "ETFdone", false);
-	atomic_store(&state->genSpikeState.ETFdone, sshsNodeGetBool(spikeNode, "ETFdone"));
-
-	sshsNodePutIntIfAbsent(spikeNode, "ETFchip_id", 0);
-	atomic_store(&state->genSpikeState.ETFchip_id, sshsNodeGetInt(spikeNode, "ETFchip_id"));
-
-	sshsNodePutIntIfAbsent(spikeNode, "ETFduration", 30);
-	atomic_store(&state->genSpikeState.ETFduration, sshsNodeGetInt(spikeNode, "ETFduration"));
-
-	sshsNodePutIntIfAbsent(spikeNode, "ETFphase_num", 0);
-	atomic_store(&state->genSpikeState.ETFphase_num, sshsNodeGetInt(spikeNode, "ETFphase_num"));
-
-	sshsNodePutBoolIfAbsent(spikeNode, "ETFrepeat", true);
-	atomic_store(&state->genSpikeState.ETFrepeat, sshsNodeGetBool(spikeNode, "ETFrepeat"));
+	atomic_store(&state->genSpikeState.ETFstarted, false);
+	atomic_store(&state->genSpikeState.ETFdone, false);
+	atomic_store(&state->genSpikeState.ETFchip_id, 0);
+	atomic_store(&state->genSpikeState.ETFduration, 30);
+	atomic_store(&state->genSpikeState.ETFphase_num, 0);
+	atomic_store(&state->genSpikeState.ETFrepeat, true);
 
 	state->genSpikeState.ETFstepnum = 6;	//internal
 
@@ -217,7 +204,7 @@ void spiketrainETF(void *spikeGenState) {
 	struct timespec tim;
 	tim.tv_sec = 0;
 	float measureMinTime = (float) atomic_load(&state->genSpikeState.ETFduration);
-	int inFreqs[6] = { 30, 30, 30, 30, 30, 30 };
+	int inFreqs[6] = { 30, 50, 70, 90, 100, 120 };
 	int nSteps = 6;
 	state->genSpikeState.ETFstepnum = nSteps;
 	double stepDur = (double) measureMinTime / (double) nSteps;
@@ -243,13 +230,16 @@ void spiketrainETF(void *spikeGenState) {
 	}
 
 	atomic_store(&state->genSpikeState.ETFphase_num, this_step);
-	if (inFreqs[this_step] > 0) {
-		tim.tv_nsec = 1000000000L / inFreqs[this_step];	// select frequency
+	if(this_step > 0 && this_step < nSteps){
+		if (inFreqs[this_step] > 0) {
+			tim.tv_nsec = 1000000000L / inFreqs[this_step];	// select frequency
+		}
+		else {
+			tim.tv_nsec = 999999999L;
+		}
+	}else{
+		tim.tv_nsec = 999999999L; // default value
 	}
-	else {
-		tim.tv_nsec = 999999999L;
-	}
-
 	if (atomic_load(&state->genSpikeState.ETFduration) <= current_time) {
 		if (atomic_load(&state->genSpikeState.ETFstarted)) {
 			//caerLog(CAER_LOG_NOTICE, __func__, "ETF stimulation finished.\n");
