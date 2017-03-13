@@ -11,6 +11,7 @@
 #include <modules/spatialbandpassfilter/spatialbandpassfilter.h>
 #include "base/mainloop.h"
 #include "base/module.h"
+#include "ext/buffers.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -28,8 +29,8 @@ struct SBPFilter_state {
 	// radius of surrounding region
 	int16_t surroundRadius;
 
-	int64_t **surroundTimestamps;
-	int64_t **centerTimestamps;
+	simple2DBufferLong surroundTimestamps;
+	simple2DBufferLong centerTimestamps;
 
 	uint16_t sizeX_SBPF;
 	uint16_t sizeY_SBPF;
@@ -123,13 +124,13 @@ static void caerSpatialBandPassFilterRun(caerModuleData moduleData, size_t argsN
 	// events within a certain region in the specified timeframe.
 	CAER_POLARITY_ITERATOR_VALID_START(polarity)
 			// Get values on which to operate.
-		auto ts = caerPolarityEventGetTimestamp64(caerPolarityIteratorElement, polarity);
-		auto x = caerPolarityEventGetX(caerPolarityIteratorElement);
-		auto y = caerPolarityEventGetY(caerPolarityIteratorElement);
+		int64_t ts = caerPolarityEventGetTimestamp64(caerPolarityIteratorElement, polarity);
+		uint16_t x = caerPolarityEventGetX(caerPolarityIteratorElement);
+		uint16_t y = caerPolarityEventGetY(caerPolarityIteratorElement);
 
 		// Get value from map.
-		auto lastTS = state->surroundTimestamps[x][y];
-		auto deltaT = ts - lastTS;
+		int64_t lastTS = state->surroundTimestamps->buffer2d[x][y];
+		int64_t deltaT = ts - lastTS;
 
 		// if the event occurred too close after a surround spike don't pass it.
 		if (deltaT < I64T(state->dtSurround)) {
@@ -147,7 +148,7 @@ static void caerSpatialBandPassFilterRun(caerModuleData moduleData, size_t argsN
 			if (ky < 0 || ky > state->sizeY_SBPF) {
 			    continue;
 			}
-			state->surroundTimestamps[kx][ky] = ts;
+			state->surroundTimestamps->buffer2d[kx][ky] = ts;
 		}
 	CAER_POLARITY_ITERATOR_VALID_END
 }
@@ -158,7 +159,7 @@ void computrOffsets(caerModuleData moduleData) {
 	SBPFilterState state = moduleData->moduleState;
 
 	int i = 0, j = 0 ;
-	for (int x = -state->surroundRadius; x <= state->surroundRadius; x++) {
+	for (int x = -state->surroundRadius; x <= state->surroundRadius; x++) {  //TODO optimize?
 		for (int y = -state->surroundRadius; y <= state->surroundRadius; y++) {
 
 			if ((x <= state->centerRadius && x >= -state->centerRadius
@@ -190,24 +191,15 @@ static void caerSpatialBandPassFilterExit(caerModuleData moduleData) {
 	SBPFilterState state = moduleData->moduleState;
 
 	// Ensure map is freed.
-	if (state->surroundTimestamps != NULL) {
-		free(state->surroundTimestamps[0]);
-		free(state->surroundTimestamps);
-		state->surroundTimestamps = NULL;
-	}
-
-	if (state->centerTimestamps != NULL) {
-		free(state->centerTimestamps[0]);
-		free(state->centerTimestamps);
-		state->centerTimestamps = NULL;
-	}
+	simple2DBufferFreeLong(       state->surroundTimestamps);
+	simple2DBufferFreeLong(state->centerTimestamps);
 }
 
 static bool allocateSBPFilterTimestampMap(SBPFilterState state, int16_t sourceID) {
 	// Get size information from source.
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo((uint16_t) sourceID); //sourcID == chip
-	auto sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-	auto sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
+	size_t sizeX = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
+	size_t sizeY = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
 
 	// Assign max ranges for arrays (0 to MAX-1).
 	state->sizeX_SBPF = (uint16_t) (sizeX - 1);
@@ -215,39 +207,14 @@ static bool allocateSBPFilterTimestampMap(SBPFilterState state, int16_t sourceID
 
 	// Initialize double-indirection contiguous 2D array, so that array[x][y]
 	// is possible, see http://c-faq.com/aryptr/dynmuldimary.html for info.
-	state->surroundTimestamps = calloc(sizeX, sizeof(int64_t *));
+	state->surroundTimestamps = simple2DBufferInitLong(sizeX, sizeY);
 	if (state->surroundTimestamps == NULL) {
 		return (false); // Failure.
 	}
 
-	state->surroundTimestamps[0] = calloc((size_t) (sizeX * sizeY), sizeof(int64_t));
-	if (state->surroundTimestamps[0] == NULL) {
-		free(state->surroundTimestamps);
-		state->surroundTimestamps = NULL;
-
-		return (false); // Failure.
-	}
-
-	for (size_t i = 1; i < sizeX; i++) {
-		state->surroundTimestamps[i] = state->surroundTimestamps[0] + (i * sizeY);
-	}
-
-	//////
-	state->centerTimestamps = calloc(sizeX, sizeof(int64_t *));
+	state->centerTimestamps = simple2DBufferInitLong(sizeX, sizeY);
 	if (state->centerTimestamps == NULL) {
 		return (false); // Failure.
-	}
-
-	state->centerTimestamps[0] = calloc((size_t) (sizeX * sizeY), sizeof(int64_t));
-	if (state->centerTimestamps[0] == NULL) {
-		free(state->centerTimestamps);
-		state->centerTimestamps = NULL;
-
-		return (false); // Failure.
-	}
-
-	for (size_t i = 1; i < sizeX; i++) {
-		state->centerTimestamps[i] = state->centerTimestamps[0] + (i * sizeY);
 	}
 
 	return (true);
