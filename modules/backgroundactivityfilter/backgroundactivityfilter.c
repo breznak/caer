@@ -15,6 +15,8 @@ struct BAFilter_state {
 	int32_t deltaT;
 	int8_t subSampleBy;
 	int64_t invalidPointNum;
+	int peopleNum;
+	int activityLevel;
 };
 
 typedef struct BAFilter_state *BAFilterState;
@@ -47,6 +49,8 @@ static bool caerBackgroundActivityFilterInit(caerModuleData moduleData) {
 	// Always initialize to zero at init.
 	// Corresponding variable is already zero in state memory.
 	sshsNodePutLong(moduleData->moduleNode, "invalidPointNum", 0);
+	sshsNodePutInt(moduleData->moduleNode, "peopleNum", 0);
+	sshsNodePutInt(moduleData->moduleNode, "activityLevel", 0);
 
 	BAFilterState state = moduleData->moduleState;
 
@@ -136,8 +140,12 @@ static void caerBackgroundActivityFilterRun(caerModuleData moduleData, size_t ar
 		}
 	CAER_POLARITY_ITERATOR_VALID_END
 
+	state->peopleNum = rand() % 20;
+	state->activityLevel = rand() % 4;
 	// Only update SSHS once per packet (expensive call).
 	sshsNodePutLong(moduleData->moduleNode, "invalidPointNum", state->invalidPointNum);
+	sshsNodePutInt(moduleData->moduleNode, "peopleNum", state->peopleNum);
+	sshsNodePutInt(moduleData->moduleNode, "activityLevel", state->activityLevel);
 }
 
 static void caerBackgroundActivityFilterConfig(caerModuleData moduleData) {
