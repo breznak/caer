@@ -17,6 +17,7 @@ struct BAFilter_state {
 	int64_t invalidPointNum;
 	int peopleNum;
 	int activityLevel;
+	bool testingMode;
 };
 
 typedef struct BAFilter_state *BAFilterState;
@@ -45,6 +46,7 @@ void caerBackgroundActivityFilter(uint16_t moduleID, caerPolarityEventPacket pol
 static bool caerBackgroundActivityFilterInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "deltaT", 30000);
 	sshsNodePutByteIfAbsent(moduleData->moduleNode, "subSampleBy", 0);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "testingMode", false);
 
 	// Always initialize to zero at init.
 	// Corresponding variable is already zero in state memory.
@@ -56,6 +58,7 @@ static bool caerBackgroundActivityFilterInit(caerModuleData moduleData) {
 
 	state->deltaT = sshsNodeGetInt(moduleData->moduleNode, "deltaT");
 	state->subSampleBy = sshsNodeGetByte(moduleData->moduleNode, "subSampleBy");
+	state->testingMode = sshsNodeGetBool(moduleData->moduleNode, "testingMode");
 
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
@@ -140,12 +143,14 @@ static void caerBackgroundActivityFilterRun(caerModuleData moduleData, size_t ar
 		}
 	CAER_POLARITY_ITERATOR_VALID_END
 
-	state->peopleNum = rand() % 20;
-	state->activityLevel = rand() % 4;
 	// Only update SSHS once per packet (expensive call).
-	sshsNodePutLong(moduleData->moduleNode, "invalidPointNum", state->invalidPointNum);
-	sshsNodePutInt(moduleData->moduleNode, "peopleNum", state->peopleNum);
-	sshsNodePutInt(moduleData->moduleNode, "activityLevel", state->activityLevel);
+	if (state->testingMode){
+		state->peopleNum = rand() % 20;
+		state->activityLevel = rand() % 4;
+		sshsNodePutLong(moduleData->moduleNode, "invalidPointNum", state->invalidPointNum);
+		sshsNodePutInt(moduleData->moduleNode, "peopleNum", state->peopleNum);
+		sshsNodePutInt(moduleData->moduleNode, "activityLevel", state->activityLevel);
+	}
 }
 
 static void caerBackgroundActivityFilterConfig(caerModuleData moduleData) {
@@ -155,6 +160,7 @@ static void caerBackgroundActivityFilterConfig(caerModuleData moduleData) {
 
 	state->deltaT = sshsNodeGetInt(moduleData->moduleNode, "deltaT");
 	state->subSampleBy = sshsNodeGetByte(moduleData->moduleNode, "subSampleBy");
+	state->testingMode = sshsNodeGetBool(moduleData->moduleNode, "testingMode");
 }
 
 static void caerBackgroundActivityFilterExit(caerModuleData moduleData) {
