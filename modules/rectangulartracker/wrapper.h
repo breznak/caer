@@ -5,7 +5,6 @@
 #define __WRAPPER_H
 #include <stdint.h>
 #include <libcaer/events/frame.h>
-//#include "modules/activityindicator/activityindicator.h"
 
 #ifdef __cplusplus
 extern "C" {

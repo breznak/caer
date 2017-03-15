@@ -89,6 +89,8 @@ struct RTFilter_state {
 	bool useNearestCluster;
 	float aspectRatio;
 	bool peopleCounting;
+	bool resetCountingNum;
+	int totalPeopleNum;
 	float botLine;
 	float topLine;
 	float leftLine;
@@ -236,6 +238,8 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "useNearestCluster", false);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "aspectRatio", 1.0f);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "peopleCounting", false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "resetCountingNum", false);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "totalPeopleNum", 0);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "botLine", 0.5f);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "topLine", 0.6f);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "leftLine", 0.01f);
@@ -263,6 +267,8 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 	state->useNearestCluster = sshsNodeGetBool(moduleData->moduleNode, "useNearestCluster");
 	state->aspectRatio = sshsNodeGetFloat(moduleData->moduleNode, "aspectRatio");
 	state->peopleCounting = sshsNodeGetBool(moduleData->moduleNode, "peopleCounting");
+	state->resetCountingNum = sshsNodeGetBool(moduleData->moduleNode, "resetCountingNum");
+	state->totalPeopleNum = sshsNodeGetInt(moduleData->moduleNode, "totalPeopleNum");
 	state->botLine = sshsNodeGetFloat(moduleData->moduleNode, "botLine");
 	state->topLine = sshsNodeGetFloat(moduleData->moduleNode, "topLine");
 	state->leftLine = sshsNodeGetFloat(moduleData->moduleNode, "leftLine");
@@ -1345,6 +1351,12 @@ static void checkCountingArea(caerModuleData moduleData, int16_t sizeX, int16_t 
 static void countPeople(caerFrameEvent singleplot, caerModuleData moduleData, int16_t sizeX, int16_t sizeY){
 	RTFilterState state = moduleData->moduleState;
 
+	if (state->resetCountingNum){
+		nIn = 0;
+		nOut = 0;
+		state->resetCountingNum = false;
+		sshsNodePutBool(moduleData->moduleNode, "resetCountingNum", false);
+	}
 	checkCountingArea(moduleData, sizeX, sizeY);
 	float by = state->botLine * sizeY;
 	float ty = state->topLine * sizeY;
@@ -1393,10 +1405,11 @@ static void countPeople(caerFrameEvent singleplot, caerModuleData moduleData, in
 			nOut++;
 		}
 	}
+	state->totalPeopleNum = (nIn - nOut) > 0 ? (nIn-nOut) : 0;
+	sshsNodePutInt(moduleData->moduleNode, "totalPeopleNum", state->totalPeopleNum);
+
 	//add OpenCV info to the frame
 	OpenCV_generate(state->cpp_class, nIn, nOut, &singleplot, sizeX, sizeY);
-	//printf("Num of In: %d", nIn);
-	//printf("  Num of Out: %d", nOut);
 }
 
 static void caerRectangulartrackerConfig(caerModuleData moduleData) {
@@ -1420,6 +1433,7 @@ static void caerRectangulartrackerConfig(caerModuleData moduleData) {
 	state->useNearestCluster = sshsNodeGetBool(moduleData->moduleNode, "useNearestCluster");
 	state->aspectRatio = sshsNodeGetFloat(moduleData->moduleNode, "aspectRatio");
 	state->peopleCounting = sshsNodeGetBool(moduleData->moduleNode, "peopleCounting");
+	state->resetCountingNum = sshsNodeGetBool(moduleData->moduleNode, "resetCountingNum");
 	state->botLine = sshsNodeGetFloat(moduleData->moduleNode, "botLine");
 	state->topLine = sshsNodeGetFloat(moduleData->moduleNode, "topLine");
 	state->leftLine = sshsNodeGetFloat(moduleData->moduleNode, "leftLine");

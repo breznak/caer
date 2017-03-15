@@ -15,7 +15,6 @@
 #include <utility>
 #include <vector>
 #include <libcaer/events/frame.h>
-//#include "modules/activityindicator/activityindicator.h"
 
 using std::string;
 
