@@ -11,8 +11,10 @@
 #include "main.h"
 
 #include <libcaer/events/polarity.h>
+#include <libcaer/events/frame.h>
 #define STATUSCHAR	1024
 
+typedef enum {Verylow, low, median, high} activityLevel;
 struct activity_results {
 	char stringValue[STATUSCHAR];
 	long activityValue;
@@ -20,6 +22,6 @@ struct activity_results {
 
 typedef struct activity_results *AResults;
 
-AResults caerActivityIndicator(uint16_t moduleID, caerPolarityEventPacket polarity);
+AResults caerActivityIndicator(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame);
 
 #endif /* ACTIVITYINDICATOR_H_ */

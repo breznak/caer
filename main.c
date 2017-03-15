@@ -220,7 +220,8 @@ static bool mainloop_1(void) {
 
 	// Show how crowed the areas is (Mensa project)
 #ifdef ENABLE_ACTIVITYINDICATOR
-	AResults rr = caerActivityIndicator(17, polarity);
+	caerFrameEventPacket activityFrame = NULL;
+	AResults rr = caerActivityIndicator(17, polarity, &activityFrame);
 #endif
 
 #if defined(ENABLE_OPENCVDISPLAY) && defined(ENABLE_ACTIVITYINDICATOR)
@@ -392,9 +393,12 @@ static bool mainloop_1(void) {
 	caerVisualizer(68, "ImageMedian", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) medianFrame);
 #endif
 
+#if defined(ENABLE_ACTIVITYINDICATOR) && defined (ENABLE_VISUALIZER)
+	caerVisualizer(69, "ImageActivity", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) activityFrame);
+#endif
 
 #if defined(ENABLE_OPENCVOPTICFLOW) && defined(ENABLE_IMAGEGENERATOR)
-	caerVisualizer(71, "OpticFlow", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) frameFlow);
+	caerVisualizer(72, "OpticFlow", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) frameFlow);
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.
