@@ -10,8 +10,8 @@ OpenCV* newOpenCV() {
 	return new OpenCV();
 }
 
-void OpenCV_generate(OpenCV* v, activityLevel status, int activeNum, caerFrameEvent *singleframe, int sizeX, int sizeY){
-	v->generate(status, activeNum, singleframe, sizeX, sizeY);
+void OpenCV_generate(OpenCV* v, activityLevel status, int activeNum, caerFrameEvent *singleframe, int sizeX, int sizeY, bool showEvents){
+	v->generate(status, activeNum, singleframe, sizeX, sizeY, showEvents);
 }
 
 void deleteOpenCV(OpenCV* v) {

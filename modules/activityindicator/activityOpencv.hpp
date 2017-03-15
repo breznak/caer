@@ -23,7 +23,7 @@ class OpenCV {
 private:
 
 public:
-	void generate(activityLevel status, int activeNum, caerFrameEvent *single_frame, int sizeX, int sizeY);
+	void generate(activityLevel status, int activeNum, caerFrameEvent *single_frame, int sizeX, int sizeY, bool showEvents);
 };
 
 #endif

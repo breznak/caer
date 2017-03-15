@@ -15,7 +15,7 @@ typedef struct OpenCV OpenCV;
 
 OpenCV* newOpenCV();
 
-void OpenCV_generate(OpenCV* v, activityLevel status, int activeNum, caerFrameEvent *singleframe, int sizeX, int sizeY);
+void OpenCV_generate(OpenCV* v, activityLevel status, int activeNum, caerFrameEvent *singleframe, int sizeX, int sizeY, bool showEvents);
 
 void deleteOpenCV(OpenCV* v);
 
