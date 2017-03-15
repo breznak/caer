@@ -11,6 +11,7 @@
 #include "ext/buffers.h"
 #include "math.h"
 #include "ext/colorjet/colorjet.h"
+#include "wrapper.h"
 
 typedef struct path {
 	float location_x;
@@ -95,6 +96,7 @@ struct RTFilter_state {
 	bool useOnePolarityOnlyEnabled;
 	bool useOffPolarityOnlyEnabled;
 	bool showAllClusters;
+	struct OpenCV* cpp_class;
 };
 
 // constants
@@ -202,8 +204,8 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 static void drawpath(caerFrameEvent singleplot, Path *path, int sizeX);
 static void updateCurrentClusterNum(caerModuleData moduleData);
 static void updateColor(Cluster *c);
-static void checkCountingArea(caerModuleData moduleDate, int16_t sizeX, int16_t sizeY);
-static void countPeople(caerFrameEvent singleplot, caerModuleData moduleDate, int16_t sizeX, int16_t sizeY);
+static void checkCountingArea(caerModuleData moduleData, int16_t sizeX, int16_t sizeY);
+static void countPeople(caerFrameEvent singleplot, caerModuleData moduleData, int16_t sizeX, int16_t sizeY);
 
 static struct caer_module_functions caerRectangulartrackerFunctions = { .moduleInit = &caerRectangulartrackerInit, .moduleRun = &caerRectangulartrackerRun, .moduleConfig = &caerRectangulartrackerConfig, .moduleExit = &caerRectangulartrackerExit, .moduleReset = &caerRectangulartrackerReset };
 
@@ -271,6 +273,7 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 
 
 	state->currentClusterNum = 0;
+	state->cpp_class = newOpenCV();
 
 	// initialize all cluster as empty
 	for (int i = 0; i < 10; i++) {
@@ -1304,8 +1307,8 @@ static void updateColor(Cluster *c){
 	c->color.b = (uint16_t)(65535.0f * brightness);
 }
 
-static void checkCountingArea(caerModuleData moduleDate, int16_t sizeX, int16_t sizeY){
-	RTFilterState state = moduleDate->moduleState;
+static void checkCountingArea(caerModuleData moduleData, int16_t sizeX, int16_t sizeY){
+	RTFilterState state = moduleData->moduleState;
 
 	if(state->botLine < 0.0f){
 		state->botLine = 0.0f;
@@ -1339,10 +1342,10 @@ static void checkCountingArea(caerModuleData moduleDate, int16_t sizeX, int16_t 
 	}
 }
 
-static void countPeople(caerFrameEvent singleplot, caerModuleData moduleDate, int16_t sizeX, int16_t sizeY){
-	RTFilterState state = moduleDate->moduleState;
+static void countPeople(caerFrameEvent singleplot, caerModuleData moduleData, int16_t sizeX, int16_t sizeY){
+	RTFilterState state = moduleData->moduleState;
 
-	checkCountingArea(moduleDate, sizeX, sizeY);
+	checkCountingArea(moduleData, sizeX, sizeY);
 	float by = state->botLine * sizeY;
 	float ty = state->topLine * sizeY;
 	float lx = state->leftLine * sizeX;
@@ -1390,8 +1393,10 @@ static void countPeople(caerFrameEvent singleplot, caerModuleData moduleDate, in
 			nOut++;
 		}
 	}
-	printf("Num of In: %d", nIn);
-	printf("  Num of Out: %d", nOut);
+	//add OpenCV info to the frame
+	OpenCV_generate(state->cpp_class, nIn, nOut, &singleplot, sizeX, sizeY);
+	//printf("Num of In: %d", nIn);
+	//printf("  Num of Out: %d", nOut);
 }
 
 static void caerRectangulartrackerConfig(caerModuleData moduleData) {
@@ -1428,6 +1433,8 @@ static void caerRectangulartrackerExit(caerModuleData moduleData) {
 	// Remove listener, which can reference invalid memory in userData.
 	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
+	RTFilterState state = moduleData->moduleState;
+	deleteOpenCV(state->cpp_class);
 }
 
 static void caerRectangulartrackerReset(caerModuleData moduleData, uint16_t resetCallSourceID) {
