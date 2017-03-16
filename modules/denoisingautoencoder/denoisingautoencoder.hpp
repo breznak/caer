@@ -62,8 +62,8 @@ public:
 	    Mat zOutput;
 	}SAA;
 
-    int epochs = 100; // per image
-    double lrate = 0.1;
+    int epochs = 20; // per image
+    double lrate = 0.001;
     int T = 200;
     double epsilon0 = 80.0;
     double f = 0.999;
@@ -71,12 +71,16 @@ public:
     double pf = 0.99;
     SA sa;
     SAA acti;
-    int hiddenSize = 200;
+    int hiddenSize = 500;
     bool init_done = false;
     Mat trainX; // vector
-    int batch_size = 300;
+    int batch_size = 350;
     int counter_img = 0;
     vector<Mat> vec;
+
+	double epsilont;
+	double pt;
+	int t;
 
 	//
 	int NL_Method = SIGMOID;

@@ -41,10 +41,10 @@ void MyDenAutoEncoder::generate(caerFrameEvent *single_frame, caerFrameEvent *en
 		if (!init_done) {
 			int nfeatures = trainX.rows;
 			int nsamples = trainX.cols;
-			cout << " init" << endl;
+			caerLog(CAER_LOG_NOTICE, __func__ , "Initializing random weights for Denoising Auto-Encoder");
 			weightRandomInit(nfeatures, hiddenSize, nsamples, 0.12);
 			init_done = true;
-			cout << " done." << endl;
+			caerLog(CAER_LOG_NOTICE, __func__ , "Initialization done for Denoising Auto-Encoder");
 
 		}
 		trainSparseAutoencoder(trainX, hiddenSize, 5e-4, 0.1, 3);
@@ -337,16 +337,10 @@ void MyDenAutoEncoder::trainSparseAutoencoder(Mat &data, int hiddenSize, double 
 		Mat v_b1 = Mat::zeros(sa.b1.rows, sa.b1.cols, CV_64FC1);
 		Mat v_b2 = Mat::zeros(sa.b2.rows, sa.b2.cols, CV_64FC1);
 
-		//int epochs = 3000;
-		//double lrate = 0.1;
-		//int T = 200;
-		//double epsilon0 = 80.0;
-		double epsilont;
-		//double f = 0.999;
-		//double pi = 0.5;
-		//double pf = 0.99;
-		double pt;
-		for (int t = 0; t < epochs; t++) {
+		//double epsilont;
+		//double pt;
+		int t_start= t;
+		for (t; t < (t_start+epochs); t++) {
 
 			if (t > T)
 				pt = pf;
@@ -374,7 +368,8 @@ void MyDenAutoEncoder::trainSparseAutoencoder(Mat &data, int hiddenSize, double 
 			sa.b1 += v_b1;
 			sa.b2 += v_b2;
 
-			cout << "epoch: " << t << ", Cost function value = " << sa.cost << endl;
+			caerLog(CAER_LOG_NOTICE, __func__ , "epoch %d Cost function value =  %f", t,  sa.cost);
+
 		}
 	}
 }
