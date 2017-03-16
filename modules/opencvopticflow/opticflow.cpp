@@ -19,6 +19,10 @@ bool OpticFlow::doOpticFlow(caerFrameEvent * frame, caerFrameEvent * frameInput,
 	//int channum = caerFrameEventGetChannelNumber(*frameInput);
 	//std::cout << "ch " << channum << std::endl;
 
+	if(*frame == NULL || *frameInput == NULL){
+		return(false);
+	}
+
 	// Loading frameInput to a mat
 	cv::Mat imgInput = cv::Mat(sizeX, sizeY, CV_8UC3);
 	for (size_t i = 0; i < sizeX; i++) {
@@ -41,8 +45,8 @@ bool OpticFlow::doOpticFlow(caerFrameEvent * frame, caerFrameEvent * frameInput,
 
 	if (init == false) {
 
-		cout << "rows: " << imgInput.rows << " cols: " << imgInput.cols;
-		cout << " ch: " << imgInput.channels() << " " << imgInput.isContinuous() << endl;
+		/*cout << "rows: " << imgInput.rows << " cols: " << imgInput.cols;
+		cout << " ch: " << imgInput.channels() << " " << imgInput.isContinuous() << endl;*/
 
 		//Mat for storing the downsized images.
 		smallImage =  Mat(imgInput.rows / ratio, imgInput.cols / ratio, CV_8UC3, Scalar(43, 87, 12));
