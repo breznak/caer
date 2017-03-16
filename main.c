@@ -91,6 +91,10 @@
 #ifdef ENABLE_OPENCVOPTICFLOW
 #include "modules/opencvopticflow/opticflow.h"
 #endif
+#ifdef ENABLE_DENOISINGAUTOENCODER
+#include "modules/denoisingautoencoder/denoisingautoencoder_module.h"
+#endif
+
 
 #ifdef ENABLE_IMAGEGENERATOR
 #include "modules/imagegenerator/imagegenerator.h"
@@ -365,11 +369,19 @@ static bool mainloop_1(void) {
 
 
 #if defined(ENABLE_OPENCVOPTICFLOW) && defined(ENABLE_IMAGEGENERATOR) && defined(ENABLE_VISUALIZER)
-	caerFrameEventPacket frameFlow = caerOpticFlow(19, imagegeneratorFrame);
+	caerFrameEventPacket frameFlow = NULL;
+	//caerFrameEventPacket frameFlow = caerOpticFlow(19, imagegeneratorFrame);
 #endif
 
+
+#ifdef ENABLE_DENOISINGAUTOENCODER
+	caerFrameEventPacket frameAutoEncoderFeatures = NULL;
+	frameAutoEncoderFeatures = caerDenAutoEncoder(24, imagegeneratorFrame);
+#endif
+
+
 	// add classification results to the image generator frame
-#ifdef ENABLE_IMAGEGENERATOR
+#ifdef ENABLE_IMAGEGENERATORq
 #if defined(ENABLE_CAFFEINTERFACE)
 	if(haveimage[0]){
 		caerImageGeneratorAddText(23, classifyhist, &imagegeneratorFrame, CLASSIFYSIZE, classification_results);
@@ -399,6 +411,10 @@ static bool mainloop_1(void) {
 
 #if defined(ENABLE_OPENCVOPTICFLOW) && defined(ENABLE_IMAGEGENERATOR)
 	caerVisualizer(72, "OpticFlow", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) frameFlow);
+#endif
+
+#if defined(ENABLE_DENOISINGAUTOENCODER) && defined(ENABLE_IMAGEGENERATOR)
+	caerVisualizer(73, "DenoiserAutoEncoder", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) frameAutoEncoderFeatures);
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.
