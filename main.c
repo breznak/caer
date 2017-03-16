@@ -374,14 +374,14 @@ static bool mainloop_1(void) {
 #endif
 
 
-#ifdef ENABLE_DENOISINGAUTOENCODER
+#if defined(ENABLE_DENOISINGAUTOENCODER) && defined(ENABLE_IMAGEGENERATOR) && defined(ENABLE_VISUALIZER)
 	caerFrameEventPacket frameAutoEncoderFeatures = NULL;
 	frameAutoEncoderFeatures = caerDenAutoEncoder(24, imagegeneratorFrame);
 #endif
 
 
 	// add classification results to the image generator frame
-#ifdef ENABLE_IMAGEGENERATORq
+#ifdef ENABLE_IMAGEGENERATOR
 #if defined(ENABLE_CAFFEINTERFACE)
 	if(haveimage[0]){
 		caerImageGeneratorAddText(23, classifyhist, &imagegeneratorFrame, CLASSIFYSIZE, classification_results);
@@ -413,7 +413,7 @@ static bool mainloop_1(void) {
 	caerVisualizer(72, "OpticFlow", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) frameFlow);
 #endif
 
-#if defined(ENABLE_DENOISINGAUTOENCODER) && defined(ENABLE_IMAGEGENERATOR)
+#if defined(ENABLE_DENOISINGAUTOENCODER) && defined(ENABLE_IMAGEGENERATOR) && defined(ENABLE_VISUALIZER)
 	caerVisualizer(73, "DenoiserAutoEncoder", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) frameAutoEncoderFeatures);
 #endif
 
