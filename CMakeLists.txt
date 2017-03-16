@@ -171,7 +171,7 @@ ENDIF()
 INCLUDE(FindPkgConfig)
 
 # Basic device support, XML configuration, networking and I/O.
-PKG_CHECK_MODULES(LIBCAER REQUIRED libcaer>=2.0.0)
+PKG_CHECK_MODULES(LIBCAER REQUIRED libcaer>=2.0.1)
 PKG_CHECK_MODULES(MXML REQUIRED mxml>=2.7)
 PKG_CHECK_MODULES(LIBUV REQUIRED libuv>=1.7.5)
 
