@@ -16,8 +16,8 @@
  *      wiring the LED panels to the Raspberry Pi can be done by connecting
  *
  *      	LED / GPIO
- *      CLK 	-> 	SCLK
- *      DATA 	->	MOSI
+ *      CI/CLK 	-> 	SCLK
+ *      DI/DATA ->	MOSI
  *      GND		->	GND
  *      5V		->	5V (from usb if a large number of LED is used)
  *
