@@ -359,7 +359,7 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_IMAGEGENERATOR
 #if defined(ENABLE_CAFFEINTERFACE)
         if(haveimage[0]){
-                caerImageGeneratorAddText(23, classifyhist, &imagegeneratorFrame, CLASSIFYSIZE, classification_results);
+                caerImageGeneratorAddText(23, classifyhist, &imagegeneratorFrame, CLASSIFYSIZE);
         }
 #endif
 #endif
@@ -376,26 +376,14 @@ static bool mainloop_1(void) {
 	caerNullHopWrapper(22, classifyhist, haveimage, classification_results);
 #endif
 
-
 #if defined(ENABLE_OPENCVOPTICFLOW) && defined(ENABLE_IMAGEGENERATOR) && defined(ENABLE_VISUALIZER)
 	caerFrameEventPacket frameFlow = NULL;
 	//caerFrameEventPacket frameFlow = caerOpticFlow(19, imagegeneratorFrame);
 #endif
 
-
 #if defined(ENABLE_DENOISINGAUTOENCODER) && defined(ENABLE_IMAGEGENERATOR) && defined(ENABLE_VISUALIZER)
 	caerFrameEventPacket frameAutoEncoderFeatures = NULL;
 	frameAutoEncoderFeatures = caerDenAutoEncoder(24, imagegeneratorFrame);
-#endif
-
-
-	// add classification results to the image generator frame
-#ifdef ENABLE_IMAGEGENERATOR
-#if defined(ENABLE_CAFFEINTERFACE)
-	if(haveimage[0]){
-		caerImageGeneratorAddText(23, classifyhist, &imagegeneratorFrame, CLASSIFYSIZE, classification_results);
-	}
-#endif
 #endif
 
 #if defined(ENABLE_VISUALIZER) && defined (ENABLE_IMAGEGENERATOR)
