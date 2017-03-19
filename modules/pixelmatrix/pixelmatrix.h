@@ -11,7 +11,6 @@
 
 #include <libcaer/events/polarity.h>
 
-void caerPixelMatrixFilter(uint16_t moduleID, caerPolarityEventPacket polarity,
-	char *classificationResults, int * classificationResultsID);
+void caerPixelMatrixFilter(uint16_t moduleID, int * classificationResultsID);
 
 #endif /* PIXELMATRIX_H_ */

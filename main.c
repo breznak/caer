@@ -367,7 +367,7 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_PIXELMATRIX
 #if defined(ENABLE_CAFFEINTERFACE)
        if(haveimage[0]){
-    	   caerPixelMatrixFilter(24, polarity, classification_results, classification_results_id);
+    	   caerPixelMatrixFilter(24, classification_results_id);
        }
 #endif
 #endif

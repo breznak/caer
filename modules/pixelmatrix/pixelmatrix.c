@@ -97,15 +97,13 @@ static struct caer_module_functions caerPixelMatrixFilterFunctions = { .moduleIn
 	.moduleRun = &caerPixelMatrixFilterRun, .moduleConfig = &caerPixelMatrixFilterConfig, .moduleExit =
 		&caerPixelMatrixFilterExit, .moduleReset = &caerPixelMatrixFilterReset };
 
-void caerPixelMatrixFilter(uint16_t moduleID, caerPolarityEventPacket polarity, char * classificationResults,
-	int * classificationResultsId) {
+void caerPixelMatrixFilter(uint16_t moduleID, int * classificationResultsId) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "PixelMatrix", CAER_MODULE_PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}
 
-	caerModuleSM(&caerPixelMatrixFilterFunctions, moduleData, sizeof(struct PMFilter_state), 3, polarity,
-		classificationResults, classificationResultsId);
+	caerModuleSM(&caerPixelMatrixFilterFunctions, moduleData, sizeof(struct PMFilter_state), 1, classificationResultsId);
 }
 
 static bool caerPixelMatrixFilterInit(caerModuleData moduleData) {
@@ -151,14 +149,7 @@ static bool caerPixelMatrixFilterInit(caerModuleData moduleData) {
 static void caerPixelMatrixFilterRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
 	UNUSED_ARGUMENT(argsNumber);
 
-	caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
-	char * classificationResults = va_arg(args, char*);
 	int * classificationResultsId = va_arg(args, int*);
-
-	// Only process packets with content.
-	if (polarity == NULL) {
-		return;
-	} // polarity is not used at the moment
 
 	PMFilterState state = moduleData->moduleState;
 
