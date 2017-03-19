@@ -3,15 +3,24 @@
  *  Created on: Dec, 2016
  *      Author: federico.corradi@inilabs.com
  *
- *      This module is intended for controlling LED strips (panels) via UDP
+ *      This module is intended for controlling LED strips (or panel) via UDP
  *
- *      The LED panel is controlled by a RaspberryPi which runs the python script
+ *      The LED panel is controlled from a RaspberryPi which runs the python script
  *      from https://github.com/scottjgibson/PixelPi
  *      LED compatible chips are: WS2801 or LPD8806 or LPD6803 or SM16716
  *
- *      example usage of pixelpi.py on RaspberryPi
- *      python pixelpi.py pixelinvaders --chip WS2801 --spi_dev /dev/spidev0.0
+ *      example usage of pixelpi.py on RaspberryPi:
+ *      $python pixelpi.py pixelinvaders --chip WS2801 --spi_dev /dev/spidev0.0
  *      --refresh_rate 10 --udp-ip 192.168.0.144 --udp-port 6500
+ *
+ *      wiring the LED panels to the Raspberry Pi can be done by connecting
+ *
+ *      	LED / GPIO
+ *      CLK 	-> 	SCLK
+ *      DATA 	->	MOSI
+ *      GND		->	GND
+ *      5V		->	5V (from usb if a large number of LED is used)
+ *
  */
 
 #include "pixelmatrix.h"
