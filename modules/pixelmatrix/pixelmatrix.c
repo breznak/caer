@@ -7,8 +7,6 @@
 #include "pixelmatrix.h"
 #include "base/mainloop.h"
 #include "base/module.h"
-#include "ext/buffers.h"
-#include "ext/colorjet/colorjet.h"
 
 // UDP
 #include <stdio.h>
@@ -20,7 +18,7 @@
 #define NCOLS 8
 #define PORT 6500
 
-int pattern_a[NROWS * NCOLS] = {
+const int pattern_a[NROWS * NCOLS] = {
 	255,255,255,  0,255,255,255,  0,255,255,255,  0,255,255,  0,255,255,255,
 	255,  0,255,  0,255,  0,255,  0,255,  0,255,  0,255,  0,  0,255,  0,255,
 	255,  0,255,  0,255,  0,255,  0,255,  0,255,  0,255,  0,  0,255,  0,255,
@@ -30,7 +28,7 @@ int pattern_a[NROWS * NCOLS] = {
 	255,  0,  0,  0,255,  0,255,  0,255,  0,  0,  0,255,255,  0,255,  0,255,
 	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0
 };
-int pattern_c[NROWS * NCOLS] = {
+const int pattern_c[NROWS * NCOLS] = {
 	255,255,255,  0,255,255,255,  0,255,255,255,  0,255,  0,255,  0,  0,  0,
 	255,  0,255,  0,255,  0,255,  0,255,  0,  0,  0,255,  0,255,  0,  0,  0,
 	255,  0,255,  0,255,  0,255,  0,255,  0,  0,  0,255,  0,255,  0,  0,  0,
@@ -40,7 +38,7 @@ int pattern_c[NROWS * NCOLS] = {
 	255,  0,255,  0,255,255,255,  0,255,255,255,  0,255,  0,255,  0,  0,  0,
 	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0
 };
-int pattern_b[NROWS * NCOLS] = {
+const int pattern_b[NROWS * NCOLS] = {
 	255,255,255,  0,255,255,255,  0,255,  0,255,255,255,  0,255,255,255,  0,
 	255,  0,  0,  0,255,  0,  0,  0,255,  0,255,  0,  0,  0,255,  0,  0,  0,
 	255,  0,  0,  0,255,  0,  0,  0,255,  0,255,  0,  0,  0,255,  0,  0,  0,
@@ -50,7 +48,7 @@ int pattern_b[NROWS * NCOLS] = {
 	255,255,255,  0,255,255,255,  0,255,  0,255,255,255,  0,255,255,255,  0,
 	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0
 };
-int pattern_d[NROWS * NCOLS] = {
+const int pattern_d[NROWS * NCOLS] = {
 	255,255,255,  0,255,255,255,  0,255,255,255,  0,255,  0,255,  0,  0,  0,
 	255,  0,255,  0,255,  0,255,  0,255,  0,  0,  0,255,  0,255,  0,  0,  0,
 	255,  0,255,  0,255,  0,255,  0,255,  0,  0,  0,255,  0,255,  0,  0,  0,
@@ -75,8 +73,6 @@ static void caerPixelMatrixFilterRun(caerModuleData moduleData, size_t argsNumbe
 static void caerPixelMatrixFilterConfig(caerModuleData moduleData);
 static void caerPixelMatrixFilterExit(caerModuleData moduleData);
 static void caerPixelMatrixFilterReset(caerModuleData moduleData, uint16_t resetCallSourceID);
-static bool allocateFrequencyPixelMap(PMFilterState state, int16_t sourceID);
-static bool allocateSpikeCountPixelMap(PMFilterState state, int16_t sourceID);
 
 static struct caer_module_functions caerPixelMatrixFilterFunctions = { .moduleInit = &caerPixelMatrixFilterInit,
 	.moduleRun = &caerPixelMatrixFilterRun, .moduleConfig = &caerPixelMatrixFilterConfig, .moduleExit =
@@ -88,10 +84,6 @@ void caerPixelMatrixFilter(uint16_t moduleID, caerPolarityEventPacket polarity, 
 	if (moduleData == NULL) {
 		return;
 	}
-
-	//caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
-	//char * classificationResults = va_arg(args, char*);
-	//int * classificationResultsId = va_arg(args, int*);
 
 	caerModuleSM(&caerPixelMatrixFilterFunctions, moduleData, sizeof(struct PMFilter_state), 3, polarity,
 		classificationResults, classificationResultsId);
@@ -147,7 +139,7 @@ static void caerPixelMatrixFilterRun(caerModuleData moduleData, size_t argsNumbe
 	// Only process packets with content.
 	if (polarity == NULL) {
 		return;
-	}
+	} // polarity is not used at the moment
 
 	PMFilterState state = moduleData->moduleState;
 
@@ -165,7 +157,6 @@ static void caerPixelMatrixFilterRun(caerModuleData moduleData, size_t argsNumbe
 				started = true;
 				cc = 0;
 				xs = x-1;
-				//printf("started at index x %d\n", x);
 			}
 			state->buffer[counter] = 1 & 0xFF;
 			if(started == true){
@@ -193,7 +184,6 @@ static void caerPixelMatrixFilterRun(caerModuleData moduleData, size_t argsNumbe
 				started = true;
 				cc = 0;
 				xs = x-1;
-				//printf("started at index x %d\n", x);
 			}
 			state->buffer[counter] = 0 & 0xFF;
 			if(started == true){
@@ -221,7 +211,6 @@ static void caerPixelMatrixFilterRun(caerModuleData moduleData, size_t argsNumbe
 				started = true;
 				cc = 0;
 				xs = x-1;
-				//printf("started at index x %d\n", x);
 			}
 			state->buffer[counter] = 0 & 0xFF;
 			if(started == true){
@@ -249,7 +238,6 @@ static void caerPixelMatrixFilterRun(caerModuleData moduleData, size_t argsNumbe
 				started = true;
 				cc = 0;
 				xs = x-1;
-				//printf("started at index x %d\n", x);
 			}
 			state->buffer[counter] = 1 & 0xFF;
 			if(started == true){
@@ -265,7 +253,6 @@ static void caerPixelMatrixFilterRun(caerModuleData moduleData, size_t argsNumbe
 		}
 	}
 
-	//caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Sending usb stuff");
 	// send info via udp
 	if (send(state->clientSocket, state->buffer, NROWS * NCOLS * 3 * 4, 0) == -1) {
 		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Sending udp error %d", errno);
