@@ -94,7 +94,9 @@
 #ifdef ENABLE_DENOISINGAUTOENCODER
 #include "modules/denoisingautoencoder/denoisingautoencoder_module.h"
 #endif
-
+#ifdef ENABLE_PIXELMATRIX
+#include "modules/pixelmatrix/pixelmatrix.h"
+#endif
 
 #ifdef ENABLE_IMAGEGENERATOR
 #include "modules/imagegenerator/imagegenerator.h"
@@ -362,6 +364,13 @@ static bool mainloop_1(void) {
 #endif
 #endif
 
+#ifdef ENABLE_PIXELMATRIX
+#if defined(ENABLE_CAFFEINTERFACE)
+       if(haveimage[0]){
+    	   caerPixelMatrixFilter(24, polarity, classification_results, classification_results_id);
+       }
+#endif
+#endif
 
 #ifdef ENABLE_NULLHOPINTERFACE
 	caerNullHopWrapper(22, classifyhist, haveimage, classification_results);
