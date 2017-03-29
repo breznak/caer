@@ -131,10 +131,11 @@ static void caerRefractoryFilterRun(caerModuleData moduleData, size_t argsNumber
 		// Get value from map.
 		int64_t lastTS = state->lastTimestamps->buffer2d[x][y];
 		int64_t deltat = (ts - lastTS);
-		// if refractoryPeriodUs==0, then all events with ISI==0 pass if passShortISIsEnabled
+		/* if refractoryPeriodUs==0, then all events with ISI==0 pass if passShortISIsEnabled
+			longISI means that this delay is considered "long", passShortISIsEnabled means we only let through short (not "long") */
 		bool longISI = (deltat > I64T(state->refractoryPeriodUs)) || (lastTS == 0);
 
-		if( longISI && state->passShortISIsEnabled){
+		if( (longISI && state->passShortISIsEnabled) || (!longISI && !state->passShortISIsEnabled) ){
 			// Filter out invalid.
 			caerPolarityEventInvalidate(caerPolarityIteratorElement, polarity);
 		}
