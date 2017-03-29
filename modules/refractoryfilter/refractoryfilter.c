@@ -26,6 +26,9 @@ struct RFilter_state {
 	 */
 	int32_t refractoryPeriodUs;
 
+	/** size X,Y of the camera's resolution */
+	uint16_t maxX, maxY;
+
     /**
 	 * the amount to subsample x and y event location by in bit shifts when
 	 * writing to past event times map. This effectively increases the range of
@@ -111,11 +114,6 @@ static void caerRefractoryFilterRun(caerModuleData moduleData, size_t argsNumber
 		return;
 	}
 
-	// Get size information from source.
-	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(caerEventPacketHeaderGetEventSource(&polarity->packetHeader));
-	uint16_t sx = sshsNodeGetShort(sourceInfoNode, "dvsSizeX");
-	uint16_t sy = sshsNodeGetShort(sourceInfoNode, "dvsSizeY");
-
 	// Iterate over events and filter out ones that are not supported by other
 	// events within a certain region in the specified timeframe.
 	CAER_POLARITY_ITERATOR_VALID_START(polarity)
@@ -124,7 +122,7 @@ static void caerRefractoryFilterRun(caerModuleData moduleData, size_t argsNumber
 		uint16_t x = caerPolarityEventGetX(caerPolarityIteratorElement);
 		uint16_t y = caerPolarityEventGetY(caerPolarityIteratorElement);
 
-		assert(x<=sx && x>=0 && y<=sy && y>=0);
+		assert(x<= state->maxX && x>=0 && y<= state->maxY && y>=0);
 
 		// Apply sub-sampling.
 		x = U16T(x >> state->subsampleBy);
@@ -174,6 +172,10 @@ static bool allocateRFilterTimestampMap(RFilterState state, int16_t sourceID) {
 	if (state->lastTimestamps == NULL) {
 		return (false); // Failure.
 	}
+
+	//also store the sizeX,Y information into state, as a performance optimization, as the operation is quite expensive
+	state->maxX = sizeX;
+	state->maxY = sizeY;
 
 	return (true);
 }
