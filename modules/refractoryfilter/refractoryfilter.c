@@ -36,15 +36,16 @@ struct RFilter_state {
 	 */
 	int8_t subsampleBy;
 
+     /** Inverts filtering so that only events with short ISIs are passed through.
+         * If refractoryPeriodUs==0, then you can block all events with idential timestamp from the same pixel.
+         */
+	bool passShortISIsEnabled;
+
+	/** 2D matrix of longs, holds timestamp activations */
 	simple2DBufferLong lastTimestamps;
 
 };
 typedef struct RFilter_state *RFilterState;
-
-/** Inverts filtering so that only events with short ISIs are passed through.
- * If refractoryPeriodUs==0, then you can block all events with idential timestamp from the same pixel.
- */
-bool passShortISIsEnabled = false;
 
 // required methods implementation
 static bool caerRefractoryFilterInit(caerModuleData moduleData);
@@ -69,13 +70,14 @@ void caerRefractoryFilter(uint16_t moduleID, caerPolarityEventPacket polarity) {
 static bool caerRefractoryFilterInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "refractoryPeriodUs", 586);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "subsampleBy", 0);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "passShortISIsEnabled", true); 
+
 
 	RFilterState state = moduleData->moduleState;
 
 	state->refractoryPeriodUs = sshsNodeGetInt(moduleData->moduleNode, "refractoryPeriodUs");
 	state->subsampleBy = sshsNodeGetInt(moduleData->moduleNode, "subsampleBy");
-
-	passShortISIsEnabled = true;
+	state->passShortISIsEnabled = sshsNodeGetBool(moduleData->moduleNode, "passShortISIsEnabled");
 
 	return (true);
 }
@@ -134,7 +136,7 @@ static void caerRefractoryFilterRun(caerModuleData moduleData, size_t argsNumber
 		// if refractoryPeriodUs==0, then all events with ISI==0 pass if passShortISIsEnabled
 		bool longISI = (deltat > I64T(state->refractoryPeriodUs)) || (lastTS == 0);
 
-		if( longISI && passShortISIsEnabled){
+		if( longISI && state->passShortISIsEnabled){
 			// Filter out invalid.
 			caerPolarityEventInvalidate(caerPolarityIteratorElement, polarity);
 		}
@@ -152,6 +154,7 @@ static void caerRefractoryFilterConfig(caerModuleData moduleData) {
 
 	state->refractoryPeriodUs = sshsNodeGetInt(moduleData->moduleNode, "refractoryPeriodUs");
 	state->subsampleBy = sshsNodeGetInt(moduleData->moduleNode, "subsampleBy");
+	state->passShortISIsEnabled = sshsNodeGetBool(moduleData->moduleNode, "passShortISIsEnabled"); 
 }
 
 static void caerRefractoryFilterExit(caerModuleData moduleData) {
