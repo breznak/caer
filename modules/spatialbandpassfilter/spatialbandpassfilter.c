@@ -23,6 +23,7 @@
 
 #include <math.h>
 #include <stdlib.h>
+#include <assert.h>
 
 struct SBPFilter_state {
 	/**
@@ -42,22 +43,6 @@ struct SBPFilter_state {
 
 };
 typedef struct SBPFilter_state *SBPFilterState;
-
-// Offset is a relative position
-typedef struct {
-	int16_t x;		// position x
-	int16_t y;		// position y
-}Offset;
-
-#define MAX_SURROUND_OFFSETS 8
-#define MAX_CENTER_OFFSETS 1
-
-
-// these arrays hold relative offsets to write to for center and surround timestamp splatts
-Offset centerOffsets[MAX_CENTER_OFFSETS], surroundOffsets[MAX_SURROUND_OFFSETS];
-
-// computes an array of offsets that we write to when we getString an event
-static void computeOffsets(caerModuleData moduleData);
 
 static bool caerSpatialBandPassFilterInit(caerModuleData moduleData);
 static void caerSpatialBandPassFilterRun(caerModuleData moduleData, size_t argsNumber, va_list args);
@@ -82,15 +67,8 @@ static bool caerSpatialBandPassFilterInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "surroundRadius", 1);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "dtSurround", 8000);
 
-	SBPFilterState state = moduleData->moduleState;
-
-	state->centerRadius = sshsNodeGetInt(moduleData->moduleNode, "centerRadius");
-	state->surroundRadius = sshsNodeGetInt(moduleData->moduleNode, "surroundRadius");
-	state->dtSurround = sshsNodeGetInt(moduleData->moduleNode, "dtSurround");
-
+	caerSpatialBandPassFilterConfig(moduleData);
 	//caerLog(CAER_LOG_WARNING, "spatial", "dtSurround: %zd", state->dtSurround);
-
-	computeOffsets(moduleData);
 
 	return (true);
 }
@@ -137,49 +115,39 @@ static void caerSpatialBandPassFilterRun(caerModuleData moduleData, size_t argsN
 		int64_t lastTS = state->surroundTimestamps->buffer2d[x][y];
 		int64_t deltaT = ts - lastTS;
 
-		// if the event occurred too close after a surround spike don't pass it.
+		// if the event occurred too close after a surround spike don't pass it. -> invalidate all evts in center
 		if (deltaT < I64T(state->dtSurround)) {
-			// Filter out invalid.
-			caerPolarityEventInvalidate(caerPolarityIteratorElement, polarity);
+			// Filter out invalid in center
+			for (int offsetCenterX = -state->centerRadius; offsetCenterX <= state->centerRadius; offsetCenterX++) {
+				for (int offsetCenterY = -state->centerRadius; offsetCenterY <= state->centerRadius; offsetCenterY++) {
+					// skip those out-of-bounds
+					int cx = x + offsetCenterX;
+					int cy = y + offsetCenterY;
+					if (cx < 0 || cx > state->sizeX_SBPF || cy < 0 || cy > state->sizeY_SBPF) {
+						continue;
+					} else { //invalidate
+					
+						caerPolarityEventInvalidate(caerPolarityIteratorElement, polarity);
 		}
+				}
+			}
+		} //end if-deltaT
 
-		// write surround
-		for( int i = 0; i< MAX_SURROUND_OFFSETS ; i++){
-			uint16_t kx = x + surroundOffsets[i].x ;
-			if (kx < 0 || kx > state->sizeX_SBPF) {
-			    continue;
+		// update surround & let evt pass
+		for (int offsetSurroundX = -state->surroundRadius; offsetSurroundX <= state-> surroundRadius; offsetSurroundX++) {
+			for (int offsetSurroundY = -state->surroundRadius; offsetSurroundY <= state->surroundRadius; offsetSurroundY ++) {
+				int sx = x + offsetSurroundX;
+				int sy = y + offsetSurroundY;
+				if (sx <0 || sx > state->sizeX_SBPF || sy < 0 || sy > state->sizeY_SBPF) { //out of bounds
+					continue;
+				} else if (abs(offsetSurroundX) <= state->centerRadius && abs(offsetSurroundY) <= state->centerRadius) { //within center -> skip
+					continue;
+				} else { // inside neighborhood -> update timestamps
+					state->surroundTimestamps->buffer2d[sx][sy] = ts;
+				}
 			}
-			uint16_t ky = y + surroundOffsets[i].y;
-			if (ky < 0 || ky > state->sizeY_SBPF) {
-			    continue;
-			}
-			state->surroundTimestamps->buffer2d[kx][ky] = ts;
-		}
+		} //end outer for
 	CAER_POLARITY_ITERATOR_VALID_END
-}
-
-//private method
-void computeOffsets(caerModuleData moduleData) {
-
-	SBPFilterState state = moduleData->moduleState;
-
-	uint16_t i = 0, j = 0 ;
-	for (int x = -state->surroundRadius; x <= state->surroundRadius; x++) { 
-		for (int y = -state->surroundRadius; y <= state->surroundRadius; y++) {
-
-			if ((x <= state->centerRadius && x >= -state->centerRadius
-					&& y <= state->centerRadius && y >= -state->centerRadius)) {
-				// if we are in center we are not surround
-				centerOffsets[j].x = x;
-				centerOffsets[j].y = y;
-				j++;
-			} else {
-				surroundOffsets[i].x = x;
-				surroundOffsets[i].y = y;
-				i++;
-			}
-		}
-	}
 }
 
 static void caerSpatialBandPassFilterConfig(caerModuleData moduleData) {
@@ -189,7 +157,10 @@ static void caerSpatialBandPassFilterConfig(caerModuleData moduleData) {
 
 	state->centerRadius = sshsNodeGetInt(moduleData->moduleNode, "centerRadius");
 	state->surroundRadius = sshsNodeGetInt(moduleData->moduleNode, "surroundRadius");
+	assert(state->centerRadius < state->surroundRadius);
+
 	state->dtSurround = sshsNodeGetInt(moduleData->moduleNode, "dtSurround");
+	assert(state->dtSurround > 0); 
 }
 
 static void caerSpatialBandPassFilterExit(caerModuleData moduleData) {
