@@ -8,6 +8,14 @@
  *  @author lnguyen
  */
 
+/**
+ * nice description of spatial band-pass filters: http://ict.udlap.mx/people/oleg/docencia/IMAGENES/chapter3/image_321_IS548.html
+ * this implementation of SBPF will: 
+ *	- given time window dtSurround (us) and Neighborhood (as surrounding of shape "O" with range= (centerRadius, surroundRadius> )
+ *	- if an event happens within (time now - dtSurround, time now) in the Neighborhood, then
+ * 	- invalidate all events in the center (radius=(0, centerRadius>) 
+ */
+
 #include <modules/spatialbandpassfilter/spatialbandpassfilter.h>
 #include "base/mainloop.h"
 #include "base/module.h"
@@ -21,13 +29,11 @@ struct SBPFilter_state {
 	 * the time in timestamp ticks (1us at present) that a spike in surround
 	 * will inhibit a spike from center passing through.
 	 */
-	int64_t dtSurround;
+	uint64_t dtSurround;
 
-	// radius of center
-	int16_t centerRadius;
-
-	// radius of surrounding region
-	int16_t surroundRadius;
+	// radius of surrounding region, computed as: Center~~~(centerRadius-----------------surroundRadius>......
+	uint16_t centerRadius;//aka max distance for center, aka min distance of surround radius
+	uint16_t surroundRadius;// aka max distance of surround radius
 
 	simple2DBufferLong surroundTimestamps;
 
@@ -158,7 +164,7 @@ void computeOffsets(caerModuleData moduleData) {
 	SBPFilterState state = moduleData->moduleState;
 
 	uint16_t i = 0, j = 0 ;
-	for (int x = -state->surroundRadius; x <= state->surroundRadius; x++) {  //TODO optimize?
+	for (int x = -state->surroundRadius; x <= state->surroundRadius; x++) { 
 		for (int y = -state->surroundRadius; y <= state->surroundRadius; y++) {
 
 			if ((x <= state->centerRadius && x >= -state->centerRadius
