@@ -30,7 +30,6 @@ struct SBPFilter_state {
 	int16_t surroundRadius;
 
 	simple2DBufferLong surroundTimestamps;
-	simple2DBufferLong centerTimestamps;
 
 	uint16_t sizeX_SBPF;
 	uint16_t sizeY_SBPF;
@@ -192,7 +191,6 @@ static void caerSpatialBandPassFilterExit(caerModuleData moduleData) {
 
 	// Ensure map is freed.
 	simple2DBufferFreeLong(       state->surroundTimestamps);
-	simple2DBufferFreeLong(state->centerTimestamps);
 }
 
 static bool allocateSBPFilterTimestampMap(SBPFilterState state, int16_t sourceID) {
@@ -209,11 +207,6 @@ static bool allocateSBPFilterTimestampMap(SBPFilterState state, int16_t sourceID
 	// is possible, see http://c-faq.com/aryptr/dynmuldimary.html for info.
 	state->surroundTimestamps = simple2DBufferInitLong(sizeX, sizeY);
 	if (state->surroundTimestamps == NULL) {
-		return (false); // Failure.
-	}
-
-	state->centerTimestamps = simple2DBufferInitLong(sizeX, sizeY);
-	if (state->centerTimestamps == NULL) {
 		return (false); // Failure.
 	}
 
