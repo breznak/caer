@@ -52,7 +52,7 @@ typedef struct {
 Offset centerOffsets[MAX_CENTER_OFFSETS], surroundOffsets[MAX_SURROUND_OFFSETS];
 
 // computes an array of offsets that we write to when we getString an event
-static void computrOffsets(caerModuleData moduleData);
+static void computeOffsets(caerModuleData moduleData);
 
 static bool caerSpatialBandPassFilterInit(caerModuleData moduleData);
 static void caerSpatialBandPassFilterRun(caerModuleData moduleData, size_t argsNumber, va_list args);
@@ -85,7 +85,7 @@ static bool caerSpatialBandPassFilterInit(caerModuleData moduleData) {
 
 	//caerLog(CAER_LOG_WARNING, "spatial", "dtSurround: %zd", state->dtSurround);
 
-	computrOffsets(moduleData);
+	computeOffsets(moduleData);
 
 	return (true);
 }
@@ -144,7 +144,7 @@ static void caerSpatialBandPassFilterRun(caerModuleData moduleData, size_t argsN
 			if (kx < 0 || kx > state->sizeX_SBPF) {
 			    continue;
 			}
-			int ky = y + surroundOffsets[i].y;
+			uint16_t ky = y + surroundOffsets[i].y;
 			if (ky < 0 || ky > state->sizeY_SBPF) {
 			    continue;
 			}
@@ -154,11 +154,11 @@ static void caerSpatialBandPassFilterRun(caerModuleData moduleData, size_t argsN
 }
 
 //private method
-void computrOffsets(caerModuleData moduleData) {
+void computeOffsets(caerModuleData moduleData) {
 
 	SBPFilterState state = moduleData->moduleState;
 
-	int i = 0, j = 0 ;
+	uint16_t i = 0, j = 0 ;
 	for (int x = -state->surroundRadius; x <= state->surroundRadius; x++) {  //TODO optimize?
 		for (int y = -state->surroundRadius; y <= state->surroundRadius; y++) {
 
