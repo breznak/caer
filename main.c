@@ -72,6 +72,9 @@
 #ifdef ENABLE_RECTANGULARTRACKER
 #include "modules/rectangulartracker/rectangulartracker.h"
 #endif
+#ifdef ENABLE_RECTANGULARTRACKER_DYNAMIC
+#include "modules/rectangulartracker_dynamic/rectangulartracker_dynamic.h"
+#endif
 #ifdef ENABLE_MEDIANTRACKER
 #include "modules/mediantracker/mediantracker.h"
 #endif
@@ -212,10 +215,16 @@ static bool mainloop_1(void) {
 	caerRotateFilter(16, polarity);
 #endif
 
-	// Filters that track multiple objects by using rectangular clusters
+	// Filters that track multiple objects by using rectangular clusters (fixed length array version)
 #ifdef ENABLE_RECTANGULARTRACKER
 	caerFrameEventPacket rectangularFrame = NULL;
 	caerRectangulartrackerFilter(12, polarity, &rectangularFrame);
+#endif
+
+	// Filters that track multiple objects by using rectangular clusters (dynamic linked list version)
+#ifdef ENABLE_RECTANGULARTRACKER_DYNAMIC
+	caerFrameEventPacket rectangularDynamicFrame = NULL;
+	caerRectangulartrackerDynamicFilter(120, polarity, &rectangularDynamicFrame);
 #endif
 
 	// Filter that track one object by using the median position information
@@ -396,6 +405,10 @@ static bool mainloop_1(void) {
 
 #if defined(ENABLE_RECTANGULARTRACKER) && defined (ENABLE_VISUALIZER)
 	caerVisualizer(67, "ImageClusters", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) rectangularFrame);
+#endif
+
+#if defined(ENABLE_RECTANGULARTRACKER_DYNAMIC) && defined (ENABLE_VISUALIZER)
+	caerVisualizer(670, "ImageClusters", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) rectangularDynamicFrame);
 #endif
 
 #if defined(ENABLE_MEDIANTRACKER) && defined (ENABLE_VISUALIZER)
