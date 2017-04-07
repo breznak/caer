@@ -11,6 +11,11 @@
 
 void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLEGRO_EVENT event) {
 	if (event.type == ALLEGRO_EVENT_MOUSE_BUTTON_UP) {
+		// Check events come from an actual device.
+		if (strstr(sshsNodeGetName(state->eventSourceConfigNode), "DYNAPSEFX2") == NULL) {
+			return;
+		}
+
 		double posx, posy;
 		posx = (double) U32T(event.mouse.x);
 		posy = (double) U32T(event.mouse.y);
@@ -87,10 +92,9 @@ void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLE
 		if (indexLin > 255) {
 			indexLin = 255;
 		}
-		caerDeviceConfigSet(((caerInputDynapseState) state->eventSourceModuleState)->deviceState, DYNAPSE_CONFIG_CHIP,
-			DYNAPSE_CONFIG_CHIP_ID, (uint32_t) chipId);
-		caerDeviceConfigSet(((caerInputDynapseState) state->eventSourceModuleState)->deviceState,
-			DYNAPSE_CONFIG_MONITOR_NEU, coreid, indexLin);
+
+		caerDeviceConfigSet(state->eventSourceModuleState, DYNAPSE_CONFIG_CHIP,DYNAPSE_CONFIG_CHIP_ID, (uint32_t) chipId);
+		caerDeviceConfigSet(state->eventSourceModuleState, DYNAPSE_CONFIG_MONITOR_NEU, coreid, indexLin);
 
 		if (chipId == 0) {
 			caerLog(CAER_LOG_NOTICE, "Visualizer",
@@ -108,6 +112,5 @@ void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLE
 			caerLog(CAER_LOG_NOTICE, "Visualizer",
 				"Monitoring neuron from DYNAPSE_U3 id %d, neuron number %d of core %d\n", chipId, indexLin, coreid);
 		}
-
 	}
 }
