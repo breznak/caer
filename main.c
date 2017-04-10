@@ -408,7 +408,7 @@ static bool mainloop_1(void) {
 #endif
 
 #if defined(ENABLE_RECTANGULARTRACKER_DYNAMIC) && defined (ENABLE_VISUALIZER)
-	caerVisualizer(670, "ImageClusters", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) rectangularDynamicFrame);
+	caerVisualizer(670, "ImageClusters", &caerVisualizerRendererFrameEvents, &caerVisualizerEventHandlerFrameEvents, (caerEventPacketHeader) rectangularDynamicFrame);
 #endif
 
 #if defined(ENABLE_MEDIANTRACKER) && defined (ENABLE_VISUALIZER)

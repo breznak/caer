@@ -56,6 +56,7 @@ bool doClear);
 
 // Default event handlers.
 void caerVisualizerEventHandlerSpikeEvents(caerVisualizerPublicState state, ALLEGRO_EVENT event);
+void caerVisualizerEventHandlerFrameEvents(caerVisualizerPublicState state, ALLEGRO_EVENT event);
 
 // Event packet container visualizer (multiple packets).
 void caerVisualizerMulti(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer,

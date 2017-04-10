@@ -45,7 +45,7 @@ IF (ENABLE_VISUALIZER)
 	SET(VISUALIZER_INCDIRS ${VISUALIZER_INCDIRS} ${ALLEGRO5_PRIMITIVES_INCLUDE_DIRS} ${ALLEGRO5_FONT_INCLUDE_DIRS} ${ALLEGRO5_TTF_INCLUDE_DIRS})
 	SET(VISUALIZER_LIBDIRS ${VISUALIZER_LIBDIRS} ${ALLEGRO5_PRIMITIVES_LIBRARY_DIRS} ${ALLEGRO5_FONT_LIBRARY_DIRS} ${ALLEGRO5_TTF_LIBRARY_DIRS})
 
-	SET(VISUALIZER_SRC_FILES modules/visualizer/visualizer.c modules/visualizer/visualizer_renderers.c modules/visualizer/visualizer_handlers.c)
+	SET(VISUALIZER_SRC_FILES modules/visualizer/visualizer.c modules/visualizer/visualizer_renderers.c modules/visualizer/visualizer_handlers.c modules/visualizer/visualizer_handlers_frame.c)
 
 	# Copy resources to build directory.
 	FILE(COPY ${CMAKE_SOURCE_DIR}/ext/resources/LiberationSans-Regular.ttf DESTINATION ${CM_BUILD_DIR}/ext/resources)

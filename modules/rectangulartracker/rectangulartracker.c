@@ -1218,11 +1218,11 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 		for(y = ys; y <= yl; y++) {
 			x = xs;
 			if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
-				return;
+				continue;
 			}
 			p = 3*(y*sizeX + x);
 			if ((p < 0) || (p > 3 * sizeX * sizeY)){
-				return;
+				continue;
 			}
 			singleplot->pixels[p] = (uint16_t) ( (int) 65000);			// red
 			singleplot->pixels[p + 1] = (uint16_t) ( (int) 65000);		// green
@@ -1233,11 +1233,11 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 		for(x = xs; x <= xl; x++) {
 			y = ys;
 			if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
-				return;
+				continue;
 			}
 			p = 3*(y*sizeX + x);
 			if ((p < 0) || (p > 3 * sizeX * sizeY)){
-				return;
+				continue;
 			}
 			singleplot->pixels[p] = (uint16_t) ( (int) 65000);			// red
 			singleplot->pixels[p + 1] = (uint16_t) ( (int) 65000);		// green
@@ -1251,11 +1251,11 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 			for(x = xs; x <= xl; x++) {
 				y = (round)(y2 - ((y2-y1)/(x2-x1)) * (x2-(float)x));
 				if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
-					return;
+					continue;
 				}
 				p = 3*(y*sizeX + x);
 				if ((p < 0) || (p > 3 * sizeX * sizeY)){
-					return;
+					continue;
 				}
 				singleplot->pixels[p] = (uint16_t) ( (int) 65000);			// red
 				singleplot->pixels[p + 1] = (uint16_t) ( (int) 65000);		// green
@@ -1266,11 +1266,11 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 			for(y = ys; y <= yl; y++) {
 				x = (round)(x2 - ((x2-x1)/(y2-y1)) * (y2-(float)y));
 				if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
-					return;
+					continue;
 				}
 				p = 3*(y*sizeX + x);
 				if ((p < 0) || (p > 3 * sizeX * sizeY)){
-					return;
+					continue;
 				}
 				singleplot->pixels[p] = (uint16_t) ( (int) 65000);			// red
 				singleplot->pixels[p + 1] = (uint16_t) ( (int) 65000);		// green
