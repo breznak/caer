@@ -28,10 +28,10 @@ void OpenCV::generate(int nIn, int nOut, caerFrameEvent *single_frame, int sizeX
 	std::string numIn = std::to_string(nIn);
 	std::string numOut = std::to_string(nOut);
 
-	cv::putText(img, peopleIn, cv::Point(30,25), CV_FONT_NORMAL, 0.5, cv::Scalar(255,255,255));
-	cv::putText(img, numIn, cv::Point(60,25), CV_FONT_NORMAL, 0.5, cv::Scalar(255,255,255));
-	cv::putText(img, peopleOut, cv::Point(30,50), CV_FONT_NORMAL, 0.5, cv::Scalar(255,255,255));
-	cv::putText(img, numOut, cv::Point(70,50), CV_FONT_NORMAL, 0.5, cv::Scalar(255,255,255));
+	cv::putText(img, peopleIn, cv::Point(20,15), CV_FONT_NORMAL, 0.3, cv::Scalar(255,255,255));
+	cv::putText(img, numIn, cv::Point(40,15), CV_FONT_NORMAL, 0.3, cv::Scalar(255,255,255));
+	cv::putText(img, peopleOut, cv::Point(70,15), CV_FONT_NORMAL, 0.3, cv::Scalar(255,255,255));
+	cv::putText(img, numOut, cv::Point(100,15), CV_FONT_NORMAL, 0.3, cv::Scalar(255,255,255));
 
 	// Put img back to the frame
 	for (int j = 0; j < sizeX; j++) {

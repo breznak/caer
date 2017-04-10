@@ -116,6 +116,11 @@ struct RTFilter_state {
 	float mixingFactor;
 	int peopleIn;
 	int peopleOut;
+	bool disableEvents;
+	int disableArea_small_x;
+	int disableArea_small_y;
+	int disableArea_big_x;
+	int disableArea_big_y;
 };
 
 // constants
@@ -265,6 +270,11 @@ static bool caerRectangulartrackerDynamicInit(caerModuleData moduleData) {
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "mixingFactor", 0.005f);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "peopleIn", 0);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "peopleOut", 0);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "disableEvents", false);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "disableArea_small_x", 0);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "disableArea_small_y", 0);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "disableArea_big_x", 0);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "disableArea_big_y", 0);
 
 	RTFilterState state = moduleData->moduleState;
 
@@ -306,6 +316,13 @@ static bool caerRectangulartrackerDynamicInit(caerModuleData moduleData) {
 	// people counting initialization
 	state->peopleIn = 0;
 	state->peopleOut = 0;
+
+	// disable events initialization
+	state->disableEvents = false;
+	state->disableArea_small_x = 0;
+	state->disableArea_small_y = 0;
+	state->disableArea_big_x = 0;
+	state->disableArea_big_y = 0;
 
 	state->clusterBegin = &clusterBeginPointer;
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
@@ -363,6 +380,11 @@ static void caerRectangulartrackerDynamicRun(caerModuleData moduleData, size_t a
 	}
 	if ((x >= sizeX) || (y >= sizeY)) {
 		continue;
+	}
+	if (state->disableEvents){
+		if ((x > state->disableArea_small_x) && (x < state->disableArea_big_x) && (y > state->disableArea_small_y) && (y < state->disableArea_big_y)){
+			continue;
+		}
 	}
 
 	if (state->useOnePolarityOnlyEnabled) {
@@ -1469,6 +1491,11 @@ static void caerRectangulartrackerDynamicConfig(caerModuleData moduleData) {
 	state->clusterMassDecayTauUs = sshsNodeGetInt(moduleData->moduleNode, "clusterMassDecayTauUs");
 	state->pathLength = sshsNodeGetInt(moduleData->moduleNode, "pathLength");
 	state->mixingFactor = sshsNodeGetFloat(moduleData->moduleNode, "mixingFactor");
+	state->disableEvents = sshsNodeGetBool(moduleData->moduleNode, "disableEvents");
+	state->disableArea_small_x = sshsNodeGetInt(moduleData->moduleNode, "disableArea_small_x");
+	state->disableArea_small_y = sshsNodeGetInt(moduleData->moduleNode, "disableArea_small_y");
+	state->disableArea_big_x = sshsNodeGetInt(moduleData->moduleNode, "disableArea_big_x");
+	state->disableArea_big_y = sshsNodeGetInt(moduleData->moduleNode, "disableArea_big_y");
 }
 
 static void caerRectangulartrackerDynamicExit(caerModuleData moduleData) {
