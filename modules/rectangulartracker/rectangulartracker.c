@@ -1217,11 +1217,11 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 	if (xs == xl){
 		for(y = ys; y <= yl; y++) {
 			x = xs;
-			if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
+			if ((x >= sizeX) || (x < 0) || (y >= sizeY) || (y < 0)){
 				continue;
 			}
 			p = 3*(y*sizeX + x);
-			if ((p < 0) || (p > 3 * sizeX * sizeY)){
+			if ((p < 0) || (p >= 3 * sizeX * sizeY)){
 				continue;
 			}
 			singleplot->pixels[p] = (uint16_t) ( (int) 65000);			// red
@@ -1232,11 +1232,11 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 	else if (ys == yl){
 		for(x = xs; x <= xl; x++) {
 			y = ys;
-			if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
+			if ((x >= sizeX) || (x < 0) || (y >= sizeY) || (y < 0)){
 				continue;
 			}
 			p = 3*(y*sizeX + x);
-			if ((p < 0) || (p > 3 * sizeX * sizeY)){
+			if ((p < 0) || (p >= 3 * sizeX * sizeY)){
 				continue;
 			}
 			singleplot->pixels[p] = (uint16_t) ( (int) 65000);			// red
@@ -1250,11 +1250,11 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 		if (dx > dy){
 			for(x = xs; x <= xl; x++) {
 				y = (round)(y2 - ((y2-y1)/(x2-x1)) * (x2-(float)x));
-				if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
+				if ((x >= sizeX) || (x < 0) || (y >= sizeY) || (y < 0)){
 					continue;
 				}
 				p = 3*(y*sizeX + x);
-				if ((p < 0) || (p > 3 * sizeX * sizeY)){
+				if ((p < 0) || (p >= 3 * sizeX * sizeY)){
 					continue;
 				}
 				singleplot->pixels[p] = (uint16_t) ( (int) 65000);			// red
@@ -1265,11 +1265,11 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 		else {
 			for(y = ys; y <= yl; y++) {
 				x = (round)(x2 - ((x2-x1)/(y2-y1)) * (y2-(float)y));
-				if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
+				if ((x >= sizeX) || (x < 0) || (y >= sizeY) || (y < 0)){
 					continue;
 				}
 				p = 3*(y*sizeX + x);
-				if ((p < 0) || (p > 3 * sizeX * sizeY)){
+				if ((p < 0) || (p >= 3 * sizeX * sizeY)){
 					continue;
 				}
 				singleplot->pixels[p] = (uint16_t) ( (int) 65000);			// red

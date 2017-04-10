@@ -70,6 +70,8 @@ typedef struct cluster {
 	float distanceToLastEvent_y;
 	float mass;
 	int64_t vFilterTime;
+	bool inBotZone;
+	bool inTopZone;
 } Cluster;
 
 typedef struct clusterList {
@@ -112,6 +114,8 @@ struct RTFilter_state {
 	int clusterMassDecayTauUs;
 	int pathLength;
 	float mixingFactor;
+	int peopleIn;
+	int peopleOut;
 };
 
 // constants
@@ -157,11 +161,6 @@ static float velocityTauMs = 100.0f;
 static float initialAngle = 0.0f;
 static float averageVelocityPPT_x = 0.0f;
 static float averageVelocityPPT_y = 0.0f;
-
-static int nIn = 0;
-static int nOut = 0;
-//static bool inBotZone[10];
-//static bool inTopZone[10];
 
 // cluster list always begine from this pointer
 ClusterList * clusterBeginPointer = NULL;
@@ -264,6 +263,8 @@ static bool caerRectangulartrackerDynamicInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "clusterMassDecayTauUs", 10000);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "pathLength", 100);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "mixingFactor", 0.005f);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "peopleIn", 0);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "peopleOut", 0);
 
 	RTFilterState state = moduleData->moduleState;
 
@@ -302,12 +303,9 @@ static bool caerRectangulartrackerDynamicInit(caerModuleData moduleData) {
 	state->clusterCounter = 0;
 	state->cpp_class = newOpenCV();
 
-	//TODO people counting initialization
-	// initialize all cluster as empty
-//	for (int i = 0; i < 10; i++) {
-//		inBotZone[i] = false;
-//		inTopZone[i] = false;
-//	}
+	// people counting initialization
+	state->peopleIn = 0;
+	state->peopleOut = 0;
 
 	state->clusterBegin = &clusterBeginPointer;
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
@@ -580,6 +578,8 @@ static Cluster * generateNewCluster(RTFilterState state, uint16_t x, uint16_t y,
 	clusterNew->mass = 1.0f;
 	clusterNew->vFilterTime = 0.0f;
 	clusterNew->path = NULL;
+	clusterNew->inBotZone = false;
+	clusterNew->inTopZone = false;
 	return (clusterNew);
 }
 
@@ -1173,11 +1173,11 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 	if (xs == xl){
 		for(y = ys; y <= yl; y++) {
 			x = xs;
-			if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
+			if ((x >= sizeX) || (x < 0) || (y >= sizeY) || (y < 0)){
 				continue;
 			}
 			p = 3*(y*sizeX + x);
-			if ((p < 0) || (p > 3 * sizeX * sizeY)){
+			if ((p < 0) || (p >= 3 * sizeX * sizeY)){
 				continue;
 			}
 			singleplot->pixels[p] = color.r;			// red
@@ -1188,11 +1188,11 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 	else if (ys == yl){
 		for(x = xs; x <= xl; x++) {
 			y = ys;
-			if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
+			if ((x >= sizeX) || (x < 0) || (y >= sizeY) || (y < 0)){
 				continue;
 			}
 			p = 3*(y*sizeX + x);
-			if ((p < 0) || (p > 3 * sizeX * sizeY)){
+			if ((p < 0) || (p >= 3 * sizeX * sizeY)){
 				continue;
 			}
 			singleplot->pixels[p] = color.r;			// red
@@ -1206,11 +1206,11 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 		if (dx > dy){
 			for(x = xs; x <= xl; x++) {
 				y = (round)(y2 - ((y2-y1)/(x2-x1)) * (x2-(float)x));
-				if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
+				if ((x >= sizeX) || (x < 0) || (y >= sizeY) || (y < 0)){
 					continue;
 				}
 				p = 3*(y*sizeX + x);
-				if ((p < 0) || (p > 3 * sizeX * sizeY)){
+				if ((p < 0) || (p >= 3 * sizeX * sizeY)){
 					continue;
 				}
 				singleplot->pixels[p] = color.r;			// red
@@ -1221,11 +1221,11 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 		else {
 			for(y = ys; y <= yl; y++) {
 				x = (round)(x2 - ((x2-x1)/(y2-y1)) * (y2-(float)y));
-				if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
+				if ((x >= sizeX) || (x < 0) || (y >= sizeY) || (y < 0)){
 					continue;
 				}
 				p = 3*(y*sizeX + x);
-				if ((p < 0) || (p > 3 * sizeX * sizeY)){
+				if ((p < 0) || (p >= 3 * sizeX * sizeY)){
 					continue;
 				}
 				singleplot->pixels[p] = color.r;			// red
@@ -1308,8 +1308,8 @@ static void countPeople(caerFrameEvent singleplot, caerModuleData moduleData, in
 	RTFilterState state = moduleData->moduleState;
 
 	if (state->resetCountingNum){
-		nIn = 0;
-		nOut = 0;
+		state->peopleIn = 0;
+		state->peopleOut = 0;
 		state->resetCountingNum = false;
 		sshsNodePutBool(moduleData->moduleNode, "resetCountingNum", false);
 	}
@@ -1319,56 +1319,47 @@ static void countPeople(caerFrameEvent singleplot, caerModuleData moduleData, in
 	float lx = state->leftLine * sizeX;
 	float rx = state->rightLine * sizeX;
 
-	uint32_t counter = 0;
-	for (size_t y = 0; y < sizeY; y++) {
-		for (size_t x = 0; x < sizeX; x++) {
-			if ((x == (int)rx && y <= ty && y >= by) ||
-					(x == (int)lx && y <= ty && y >= by) ||
-					(y == (int)ty && x <= rx && x >= lx) ||
-					(y == (int)by && x <= rx && x >= lx))
-			{
-				singleplot->pixels[counter] = (uint16_t) ( (int) 65000);			// red
-				singleplot->pixels[counter + 1] = (uint16_t) ( (int) 65000);		// green
-				singleplot->pixels[counter + 2] = (uint16_t) ( (int) 65000);	// blue
-			}
-			counter += 3;
-		}
-	}
+	COLOUR lineColor;
+	lineColor.b = 65535;
+	lineColor.r = 65535;
+	lineColor.g = 65535;
+
+	drawline(singleplot, lx, ty, rx, ty, sizeX, sizeY, lineColor);
+	drawline(singleplot, lx, by, rx, by, sizeX, sizeY, lineColor);
+	drawline(singleplot, lx, ty, lx, by, sizeX, sizeY, lineColor);
+	drawline(singleplot, rx, ty, rx, by, sizeX, sizeY, lineColor);
 
 	//TODO make algorithm for x dimension.
-	//updateCurrentClusterNum(state);
-	//ClusterList * current = *(state->clusterBegin);
-//	for (int i=0; i<state->currentClusterNum; i++){
-//		if((current->cluster == NULL) && inBotZone[i]){
-//			inBotZone[i] = false;
-//		}
-//		if(state->clusterList[i].isEmpty && inTopZone[i]){
-//			inTopZone[i] = false;
-//		}
-//		if(state->clusterList[i].isEmpty || !state->clusterList[i].visibilityFlag){
-//			continue;
-//		}
-//		if((state->clusterList[i].location_y < by) && !inBotZone[i]){
-//			inBotZone[i] = true;
-//		}
-//		if((state->clusterList[i].location_y > ty) && !inTopZone[i]){
-//			inTopZone[i] = true;
-//		}
-//		if((state->clusterList[i].location_y < by) && inTopZone[i]){
-//			inTopZone[i] = false;
-//			nIn++;
-//		}
-//		if((state->clusterList[i].location_y > ty) && inBotZone[i]){
-//			inBotZone[i] = false;
-//			nOut++;
-//		}
-//		current = current->next;
-//	}
-	state->totalPeopleNum = (nIn - nOut) > 0 ? (nIn-nOut) : 0;
+	updateCurrentClusterNum(state);
+	ClusterList * current = *(state->clusterBegin);
+	for (int i=0; i<state->currentClusterNum; i++){
+		if(!current->cluster->visibilityFlag){
+			current = current->next;
+			continue;
+		}
+		if((current->cluster->location_y < by) && !current->cluster->inBotZone){
+			current->cluster->inBotZone = true;
+		}
+		if((current->cluster->location_y > ty) && !current->cluster->inTopZone){
+			current->cluster->inTopZone = true;
+		}
+		if((current->cluster->location_y < by) && current->cluster->inTopZone){
+			current->cluster->inTopZone = false;
+			state->peopleIn++;
+		}
+		if((current->cluster->location_y > ty) && current->cluster->inBotZone){
+			current->cluster->inBotZone = false;
+			state->peopleOut++;
+		}
+		current = current->next;
+	}
+	state->totalPeopleNum = (state->peopleIn - state->peopleOut) > 0 ? (state->peopleIn-state->peopleOut) : 0;
+	sshsNodePutInt(moduleData->moduleNode, "peopleIn", state->peopleIn);
+	sshsNodePutInt(moduleData->moduleNode, "peopleOut", state->peopleOut);
 	sshsNodePutInt(moduleData->moduleNode, "totalPeopleNum", state->totalPeopleNum);
 
 	//add OpenCV info to the frame
-	OpenCV_generate(state->cpp_class, nIn, nOut, &singleplot, sizeX, sizeY);
+	OpenCV_generate(state->cpp_class, state->peopleIn, state->peopleOut, &singleplot, sizeX, sizeY);
 }
 
 static void addCluster(ClusterList ** head, Cluster * newClusterPointer) {
