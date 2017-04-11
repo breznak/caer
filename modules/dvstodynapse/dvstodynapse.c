@@ -116,19 +116,19 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 	// program as destination all chips in board
 	if (state->init) {
 
-		int allChips[3] = { DYNAPSE_CONFIG_DYNAPSE_U1, DYNAPSE_CONFIG_DYNAPSE_U2, DYNAPSE_CONFIG_DYNAPSE_U3 };
-		for (size_t this_chip = 0; this_chip < 3; this_chip++) {
+		int allChips[1] = { DYNAPSE_CONFIG_DYNAPSE_U3 };
+		for (size_t this_chip = 0; this_chip < 1; this_chip++) {
 			state->chipId = allChips[this_chip];
 			sshsNodePutInt(moduleData->moduleNode, "chipId", allChips[this_chip]);
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Programming chip id %d,", state->chipId);
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
 				(uint32_t) state->chipId);
 			programMapInCam(stateSource, state);
-			programBiasesDvsToDynapse(stateSource, state);
+//			programBiasesDvsToDynapse(stateSource, state);
 		}
 		// init done
 		state->init = false;
-		programConvolutionMappingSram(stateSource, state, moduleData);
+//		programConvolutionMappingSram(stateSource, state, moduleData);
 
 	}
 
@@ -237,12 +237,14 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 		}
 
 		// only positives spikes, usb bandwidth reduction
-		if (pol_pol == 1) {
-			state->DownsampledMap->buffer2d[new_x][new_y] += 1;
-		}
-		else {
-			state->DownsampledMap->buffer2d[new_x][new_y] -= 1;
-		}CAER_POLARITY_ITERATOR_VALID_END
+		state->DownsampledMap->buffer2d[new_x][new_y] += 1;
+//		if (pol_pol == 1) {
+//			state->DownsampledMap->buffer2d[new_x][new_y] += 1;
+//		}
+//		else {
+//			state->DownsampledMap->buffer2d[new_x][new_y] -= 1;
+//		}
+	CAER_POLARITY_ITERATOR_VALID_END
 
 	// prepare data for usb transfer
 
@@ -332,7 +334,7 @@ static void caerDvsToDynapseRun(caerModuleData moduleData, size_t argsNumber, va
 		if (state->chipId == DYNAPSE_CONFIG_DYNAPSE_U0 || state->chipId == DYNAPSE_CONFIG_DYNAPSE_U1
 			|| state->chipId == DYNAPSE_CONFIG_DYNAPSE_U2 || state->chipId == DYNAPSE_CONFIG_DYNAPSE_U3) {
 			caerDeviceConfigSet(stateSource->deviceState, DYNAPSE_CONFIG_CHIP, DYNAPSE_CONFIG_CHIP_ID,
-				(uint32_t) state->chipId);
+					DYNAPSE_CONFIG_DYNAPSE_U3); //(uint32_t) state->chipId);
 		}
 		else {
 			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
