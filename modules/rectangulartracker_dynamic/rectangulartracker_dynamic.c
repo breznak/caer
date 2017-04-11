@@ -121,6 +121,7 @@ struct RTFilter_state {
 	int disableArea_small_y;
 	int disableArea_big_x;
 	int disableArea_big_y;
+	int currentVisibleNum;
 };
 
 // constants
@@ -275,6 +276,7 @@ static bool caerRectangulartrackerDynamicInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "disableArea_small_y", 0);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "disableArea_big_x", 0);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "disableArea_big_y", 0);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "currentVisibleNum", 0);
 
 	RTFilterState state = moduleData->moduleState;
 
@@ -310,6 +312,7 @@ static bool caerRectangulartrackerDynamicInit(caerModuleData moduleData) {
 	state->mixingFactor = sshsNodeGetFloat(moduleData->moduleNode, "mixingFactor");
 
 	state->currentClusterNum = 0;
+	state->currentVisibleNum = 0;
 	state->clusterCounter = 0;
 	state->cpp_class = newOpenCV();
 
@@ -443,6 +446,11 @@ static void caerRectangulartrackerDynamicRun(caerModuleData moduleData, size_t a
 			int xxx = caerPolarityEventGetX(caerPolarityIteratorElement);
 			int yyy = caerPolarityEventGetY(caerPolarityIteratorElement);
 			int pol = caerPolarityEventGetPolarity(caerPolarityIteratorElement);
+			if (state->disableEvents){
+				if ((xxx > state->disableArea_small_x) && (xxx < state->disableArea_big_x) && (yyy > state->disableArea_small_y) && (yyy < state->disableArea_big_y)){
+					continue;
+				}
+			}
 			int address = 3 * (yyy * sizeX + xxx);
 			if (pol == 0) {
 				singleplot->pixels[address] = 65000; // red
@@ -476,6 +484,8 @@ static void caerRectangulartrackerDynamicRun(caerModuleData moduleData, size_t a
 	if(state->peopleCounting) {
 		countPeople(caerFrameEventPacketGetEvent(*frame, 0), moduleData, sizeX, sizeY);
 	}
+
+	sshsNodePutInt(moduleData->moduleNode, "currentVisibleNum", state->currentVisibleNum);
 }
 
 static Cluster * getNearestCluster(RTFilterState state, uint16_t x, uint16_t y, int64_t ts) {
@@ -1115,6 +1125,12 @@ static bool hasHitEdge(Cluster *c, int16_t sizeX, int16_t sizeY) {
 
 static bool isOverlapping(Cluster *c1, Cluster *c2) {
 	bool overlapping = (distanceC1C2(c1, c2) < (c1->radius + c2->radius));
+
+	// This way makes sure that the clusters have overlapping at all
+//	float dx = fabsf(c1->location_x - c2->location_x);
+//	float dy = fabsf(c1->location_y - c2->location_y);
+//	bool overlapping = (dx < (c1->radius_x + c2->radius_x)) && (dy < (c1->radius_y + c2->radius_y));
+
 	return (overlapping);
 }
 
@@ -1276,10 +1292,14 @@ static void drawpath(caerFrameEvent singleplot, Path *path, int sizeX){
 static void updateCurrentClusterNum(RTFilterState state){
 
 	state->currentClusterNum = 0;
+	state->currentVisibleNum = 0;
 
 	ClusterList * current = *(state->clusterBegin);
 	while (current != NULL) {
 		state->currentClusterNum++;
+		if (current->cluster->visibilityFlag){
+			state->currentVisibleNum++;
+		}
 		current = current->next;
 	}
 
