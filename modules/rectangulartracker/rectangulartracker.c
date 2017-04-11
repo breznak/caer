@@ -11,6 +11,7 @@
 #include "ext/buffers.h"
 #include "math.h"
 #include "ext/colorjet/colorjet.h"
+#include "wrapper.h"
 
 typedef struct path {
 	float location_x;
@@ -88,6 +89,8 @@ struct RTFilter_state {
 	bool useNearestCluster;
 	float aspectRatio;
 	bool peopleCounting;
+	bool resetCountingNum;
+	int totalPeopleNum;
 	float botLine;
 	float topLine;
 	float leftLine;
@@ -95,6 +98,7 @@ struct RTFilter_state {
 	bool useOnePolarityOnlyEnabled;
 	bool useOffPolarityOnlyEnabled;
 	bool showAllClusters;
+	struct OpenCV* cpp_class;
 };
 
 // constants
@@ -202,8 +206,8 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 static void drawpath(caerFrameEvent singleplot, Path *path, int sizeX);
 static void updateCurrentClusterNum(caerModuleData moduleData);
 static void updateColor(Cluster *c);
-static void checkCountingArea(caerModuleData moduleDate, int16_t sizeX, int16_t sizeY);
-static void countPeople(caerFrameEvent singleplot, caerModuleData moduleDate, int16_t sizeX, int16_t sizeY);
+static void checkCountingArea(caerModuleData moduleData, int16_t sizeX, int16_t sizeY);
+static void countPeople(caerFrameEvent singleplot, caerModuleData moduleData, int16_t sizeX, int16_t sizeY);
 
 static struct caer_module_functions caerRectangulartrackerFunctions = { .moduleInit = &caerRectangulartrackerInit, .moduleRun = &caerRectangulartrackerRun, .moduleConfig = &caerRectangulartrackerConfig, .moduleExit = &caerRectangulartrackerExit, .moduleReset = &caerRectangulartrackerReset };
 
@@ -234,6 +238,8 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "useNearestCluster", false);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "aspectRatio", 1.0f);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "peopleCounting", false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "resetCountingNum", false);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "totalPeopleNum", 0);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "botLine", 0.5f);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "topLine", 0.6f);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "leftLine", 0.01f);
@@ -261,6 +267,8 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 	state->useNearestCluster = sshsNodeGetBool(moduleData->moduleNode, "useNearestCluster");
 	state->aspectRatio = sshsNodeGetFloat(moduleData->moduleNode, "aspectRatio");
 	state->peopleCounting = sshsNodeGetBool(moduleData->moduleNode, "peopleCounting");
+	state->resetCountingNum = sshsNodeGetBool(moduleData->moduleNode, "resetCountingNum");
+	state->totalPeopleNum = sshsNodeGetInt(moduleData->moduleNode, "totalPeopleNum");
 	state->botLine = sshsNodeGetFloat(moduleData->moduleNode, "botLine");
 	state->topLine = sshsNodeGetFloat(moduleData->moduleNode, "topLine");
 	state->leftLine = sshsNodeGetFloat(moduleData->moduleNode, "leftLine");
@@ -271,6 +279,7 @@ static bool caerRectangulartrackerInit(caerModuleData moduleData) {
 
 
 	state->currentClusterNum = 0;
+	state->cpp_class = newOpenCV();
 
 	// initialize all cluster as empty
 	for (int i = 0; i < 10; i++) {
@@ -371,7 +380,7 @@ static void caerRectangulartrackerRun(caerModuleData moduleData, size_t argsNumb
 	if (!caerPolarityEventIsValid(caerPolarityIteratorElement)){
 		continue;
 	}
-	if ((x > sizeX) || (y > sizeY)) {
+	if ((x >= sizeX) || (y >= sizeY)) {
 		continue;
 	}
 
@@ -1208,12 +1217,12 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 	if (xs == xl){
 		for(y = ys; y <= yl; y++) {
 			x = xs;
-			if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
-				return;
+			if ((x >= sizeX) || (x < 0) || (y >= sizeY) || (y < 0)){
+				continue;
 			}
 			p = 3*(y*sizeX + x);
-			if ((p < 0) || (p > 3 * sizeX * sizeY)){
-				return;
+			if ((p < 0) || (p >= 3 * sizeX * sizeY)){
+				continue;
 			}
 			singleplot->pixels[p] = (uint16_t) ( (int) 65000);			// red
 			singleplot->pixels[p + 1] = (uint16_t) ( (int) 65000);		// green
@@ -1223,12 +1232,12 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 	else if (ys == yl){
 		for(x = xs; x <= xl; x++) {
 			y = ys;
-			if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
-				return;
+			if ((x >= sizeX) || (x < 0) || (y >= sizeY) || (y < 0)){
+				continue;
 			}
 			p = 3*(y*sizeX + x);
-			if ((p < 0) || (p > 3 * sizeX * sizeY)){
-				return;
+			if ((p < 0) || (p >= 3 * sizeX * sizeY)){
+				continue;
 			}
 			singleplot->pixels[p] = (uint16_t) ( (int) 65000);			// red
 			singleplot->pixels[p + 1] = (uint16_t) ( (int) 65000);		// green
@@ -1241,12 +1250,12 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 		if (dx > dy){
 			for(x = xs; x <= xl; x++) {
 				y = (round)(y2 - ((y2-y1)/(x2-x1)) * (x2-(float)x));
-				if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
-					return;
+				if ((x >= sizeX) || (x < 0) || (y >= sizeY) || (y < 0)){
+					continue;
 				}
 				p = 3*(y*sizeX + x);
-				if ((p < 0) || (p > 3 * sizeX * sizeY)){
-					return;
+				if ((p < 0) || (p >= 3 * sizeX * sizeY)){
+					continue;
 				}
 				singleplot->pixels[p] = (uint16_t) ( (int) 65000);			// red
 				singleplot->pixels[p + 1] = (uint16_t) ( (int) 65000);		// green
@@ -1256,12 +1265,12 @@ static void drawline(caerFrameEvent singleplot, float x1, float y1, float x2, fl
 		else {
 			for(y = ys; y <= yl; y++) {
 				x = (round)(x2 - ((x2-x1)/(y2-y1)) * (y2-(float)y));
-				if ((x > sizeX) || (x < 0) || (y > sizeY) || (y < 0)){
-					return;
+				if ((x >= sizeX) || (x < 0) || (y >= sizeY) || (y < 0)){
+					continue;
 				}
 				p = 3*(y*sizeX + x);
-				if ((p < 0) || (p > 3 * sizeX * sizeY)){
-					return;
+				if ((p < 0) || (p >= 3 * sizeX * sizeY)){
+					continue;
 				}
 				singleplot->pixels[p] = (uint16_t) ( (int) 65000);			// red
 				singleplot->pixels[p + 1] = (uint16_t) ( (int) 65000);		// green
@@ -1304,8 +1313,8 @@ static void updateColor(Cluster *c){
 	c->color.b = (uint16_t)(65535.0f * brightness);
 }
 
-static void checkCountingArea(caerModuleData moduleDate, int16_t sizeX, int16_t sizeY){
-	RTFilterState state = moduleDate->moduleState;
+static void checkCountingArea(caerModuleData moduleData, int16_t sizeX, int16_t sizeY){
+	RTFilterState state = moduleData->moduleState;
 
 	if(state->botLine < 0.0f){
 		state->botLine = 0.0f;
@@ -1339,10 +1348,16 @@ static void checkCountingArea(caerModuleData moduleDate, int16_t sizeX, int16_t 
 	}
 }
 
-static void countPeople(caerFrameEvent singleplot, caerModuleData moduleDate, int16_t sizeX, int16_t sizeY){
-	RTFilterState state = moduleDate->moduleState;
+static void countPeople(caerFrameEvent singleplot, caerModuleData moduleData, int16_t sizeX, int16_t sizeY){
+	RTFilterState state = moduleData->moduleState;
 
-	checkCountingArea(moduleDate, sizeX, sizeY);
+	if (state->resetCountingNum){
+		nIn = 0;
+		nOut = 0;
+		state->resetCountingNum = false;
+		sshsNodePutBool(moduleData->moduleNode, "resetCountingNum", false);
+	}
+	checkCountingArea(moduleData, sizeX, sizeY);
 	float by = state->botLine * sizeY;
 	float ty = state->topLine * sizeY;
 	float lx = state->leftLine * sizeX;
@@ -1390,8 +1405,11 @@ static void countPeople(caerFrameEvent singleplot, caerModuleData moduleDate, in
 			nOut++;
 		}
 	}
-	printf("Num of In: %d", nIn);
-	printf("  Num of Out: %d", nOut);
+	state->totalPeopleNum = (nIn - nOut) > 0 ? (nIn-nOut) : 0;
+	sshsNodePutInt(moduleData->moduleNode, "totalPeopleNum", state->totalPeopleNum);
+
+	//add OpenCV info to the frame
+	OpenCV_generate(state->cpp_class, nIn, nOut, &singleplot, sizeX, sizeY);
 }
 
 static void caerRectangulartrackerConfig(caerModuleData moduleData) {
@@ -1415,6 +1433,7 @@ static void caerRectangulartrackerConfig(caerModuleData moduleData) {
 	state->useNearestCluster = sshsNodeGetBool(moduleData->moduleNode, "useNearestCluster");
 	state->aspectRatio = sshsNodeGetFloat(moduleData->moduleNode, "aspectRatio");
 	state->peopleCounting = sshsNodeGetBool(moduleData->moduleNode, "peopleCounting");
+	state->resetCountingNum = sshsNodeGetBool(moduleData->moduleNode, "resetCountingNum");
 	state->botLine = sshsNodeGetFloat(moduleData->moduleNode, "botLine");
 	state->topLine = sshsNodeGetFloat(moduleData->moduleNode, "topLine");
 	state->leftLine = sshsNodeGetFloat(moduleData->moduleNode, "leftLine");
@@ -1428,6 +1447,8 @@ static void caerRectangulartrackerExit(caerModuleData moduleData) {
 	// Remove listener, which can reference invalid memory in userData.
 	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
 
+	RTFilterState state = moduleData->moduleState;
+	deleteOpenCV(state->cpp_class);
 }
 
 static void caerRectangulartrackerReset(caerModuleData moduleData, uint16_t resetCallSourceID) {

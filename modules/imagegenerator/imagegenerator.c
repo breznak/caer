@@ -336,7 +336,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 }
 
 void caerImageGeneratorAddText(uint16_t moduleID, int * hist_packet, caerFrameEventPacket *imagegeneratorFrame,
-	int size, char * classification_results) {
+	int size) {
 
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageGenerator", CAER_MODULE_PROCESSOR);
 

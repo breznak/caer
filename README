@@ -7,8 +7,8 @@ REQUIREMENTS:
 
 Linux, MacOS X or Windows (for Windows build instructions see README.Windows)
 cmake >= 2.6
-gcc >= 4.9 or clang >= 3.6
-libcaer >= 2.0.0
+gcc >= 5.2 or clang >= 3.6
+libcaer >= 2.0.1
 mini-xml (mxml) >= 2.7
 libuv >= 1.7.5
 Optional: libpng >= 1.6 (input/output frame PNG compression)

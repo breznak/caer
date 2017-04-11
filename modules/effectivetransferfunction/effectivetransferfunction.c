@@ -146,44 +146,44 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 				(uint32_t) state->chipId);
 			// set biases for input spikes
 			for (uint32_t coreId = 0; coreId < 4; coreId++) {
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias", "NBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_AHTHR_N", 7, 1, "HighBias", "NBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_AHW_P", 7, 1, "HighBias", "PBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_BUF_P", 3, 80, "HighBias", "PBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_CASC_N", 7, 1, "HighBias", "NBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_DC_P", 7, 2, "HighBias", "PBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_NMDA_N", 7, 1, "HighBias", "PBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_RFR_N", 0, 108, "HighBias", "NBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_TAU1_N", 6, 24, "LowBias", "NBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_TAU2_N", 5, 15, "HighBias", "NBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "IF_THR_N", 3, 20, "HighBias", "NBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "NPDPIE_TAU_F_P", 5, 41, "HighBias",
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "IF_AHTAU_N", 7, 35, "LowBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "IF_AHTHR_N", 7, 1, "HighBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "IF_AHW_P", 7, 1, "HighBias", "PBias");
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "IF_BUF_P", 3, 80, "HighBias", "PBias");
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "IF_CASC_N", 7, 1, "HighBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "IF_DC_P", 7, 2, "HighBias", "PBias");
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "IF_NMDA_N", 7, 1, "HighBias", "PBias");
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "IF_RFR_N", 0, 108, "HighBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "IF_TAU1_N", 6, 24, "LowBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "IF_TAU2_N", 5, 15, "HighBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "IF_THR_N", 3, 20, "HighBias", "NBias");
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "NPDPIE_TAU_F_P", 5, 41, "HighBias",
 					"PBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "NPDPIE_TAU_S_P", 7, 40, "HighBias",
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "NPDPIE_TAU_S_P", 7, 40, "HighBias",
 					"NBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "NPDPIE_THR_F_P", 2, 200, "HighBias",
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "NPDPIE_THR_F_P", 2, 200, "HighBias",
 					"PBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "NPDPIE_THR_S_P", 7, 0, "HighBias",
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "NPDPIE_THR_S_P", 7, 0, "HighBias",
 					"PBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "NPDPII_TAU_F_P", 7, 40, "HighBias",
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "NPDPII_TAU_F_P", 7, 40, "HighBias",
 					"NBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "NPDPII_TAU_S_P", 7, 40, "HighBias",
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "NPDPII_TAU_S_P", 7, 40, "HighBias",
 					"NBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "NPDPII_THR_F_P", 7, 40, "HighBias",
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "NPDPII_THR_F_P", 7, 40, "HighBias",
 					"PBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "NPDPII_THR_S_P", 7, 40, "HighBias",
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "NPDPII_THR_S_P", 7, 40, "HighBias",
 					"PBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 216, "HighBias",
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "PS_WEIGHT_EXC_F_N", 0, 216, "HighBias",
 					"NBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "PS_WEIGHT_EXC_S_N", 7, 1, "HighBias",
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "PS_WEIGHT_EXC_S_N", 7, 1, "HighBias",
 					"NBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "PS_WEIGHT_INH_F_N", 7, 1, "HighBias",
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "PS_WEIGHT_INH_F_N", 7, 1, "HighBias",
 					"NBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "PS_WEIGHT_INH_S_N", 7, 1, "HighBias",
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "PS_WEIGHT_INH_S_N", 7, 1, "HighBias",
 					"NBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "PULSE_PWLK_P", 0, 43, "HighBias",
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "PULSE_PWLK_P", 0, 43, "HighBias",
 					"PBias");
-				caerDynapseSetBias(stateSource, (uint) state->chipId, coreId, "R2R_P", 4, 85, "HighBias", "PBias");
+				caerDynapseSetBias(stateSource, (uint32_t) state->chipId, coreId, "R2R_P", 4, 85, "HighBias", "PBias");
 			}
 			caerLog(CAER_LOG_NOTICE, moduleData->moduleSubSystemString, "Started clearing cam..");
 			uint32_t bits[DYNAPSE_CONFIG_NUMNEURONS * DYNAPSE_X4BOARD_NEUX];
@@ -215,7 +215,7 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 		// init done
 		state->init = true;
 	}
-	int storeMeasure = false;
+	long int storeMeasure = false;
 
 	if (atomic_load(&state->eventSourceModuleState->genSpikeState.ETFphase_num) != state->stepnum) {
 		storeMeasure = true;
@@ -223,13 +223,14 @@ static void caerEffectiveTransferFunctionRun(caerModuleData moduleData, size_t a
 	}
 
 	// store measure and reset counts
+	// not the first time as we need to measure for at least a while
 	if (storeMeasure && (state->stepnum != 0)) {
 
 		caerLog(CAER_LOG_NOTICE, __func__, "ETF storeMeasure");
 
 		//update frequencyMap
 		float phaseDur = atomic_load(
-			&stateSource->genSpikeState.ETFduration) / atomic_load(&stateSource->genSpikeState.ETFphase_num);
+			&stateSource->genSpikeState.ETFduration) / stateSource->genSpikeState.ETFstepnum;
 		//caerLog(CAER_LOG_NOTICE, __func__, "Phase Duration %f\n", phaseDur);
 		for (int16_t x = 0; x < DYNAPSE_CONFIG_XCHIPSIZE; x++) {
 			for (int16_t y = 0; y < DYNAPSE_CONFIG_YCHIPSIZE; y++) {

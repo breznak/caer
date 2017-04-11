@@ -119,11 +119,11 @@ static bool mainloop_1(void);
 
 #ifdef ENABLE_GESTURELEARNINGFILTER
 	// create frame for displaying weight and synapse
-	caerFrameEventPacket weightplotG = NULL;
-	caerFrameEventPacket synapseplotG = NULL;
+	caerFrameEventPacket synapseplotGF1 = NULL;
+	caerFrameEventPacket synapseplotGF2 = NULL;
+	caerFrameEventPacket synapseplotGF3 = NULL;
+	caerFrameEventPacket synapseplotGO = NULL;
 #endif
-
-
 
 static bool mainloop_1(void) {
 
@@ -315,7 +315,7 @@ static bool mainloop_1(void) {
 #endif
 
 #ifdef ENABLE_GESTURELEARNINGFILTER
-	caerGestureLearningFilter(11, 10, spike, &weightplotG, &synapseplotG);
+	caerGestureLearningFilter(11, 10, spike, &synapseplotGF1, &synapseplotGF2, &synapseplotGF3, &synapseplotGO);
 #endif
 
 #ifdef ENABLE_MONITORNEUFILTER
@@ -330,12 +330,15 @@ static bool mainloop_1(void) {
 		caerVisualizer(65, "Frequency", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) freqplot);
 	}
 #endif
+	caerVisualizer(68, "UserSize", &caerVisualizerRendererSpikeEventsRaster, NULL, (caerEventPacketHeader) spike);
 #if defined(DAVISFX2) || defined(DAVISFX3) || defined(DVS128) || defined(ENABLE_FILE_INPUT)
 	caerVisualizer(66, "Polarity", &caerVisualizerRendererPolarityEvents, NULL, (caerEventPacketHeader) polarity_cam);
 #endif
 #ifdef ENABLE_GESTURELEARNINGFILTER
-	caerVisualizer(69, "Weight", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) weightplotG);
-	caerVisualizer(70, "Synapse", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplotG);
+	caerVisualizer(80, "SynapseGF1", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplotGF1);
+	caerVisualizer(81, "SynapseGF2", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplotGF2);
+	caerVisualizer(82, "SynapseGF3", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplotGF3);
+	caerVisualizer(83, "SynapseGO", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) synapseplotGO);
 #endif
 #ifdef ENABLE_MEANRATEFILTER_DVS
 	if(freqplot != NULL){
@@ -344,16 +347,16 @@ static bool mainloop_1(void) {
 #endif
 #ifdef	ENABLE_TRAINFROMCAFFE
 	if(group_a != NULL){
-		caerVisualizer(74, "group_a", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_a);
+		caerVisualizer(74, "Paper", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_a);
 	}
 	if(group_b != NULL){
-		caerVisualizer(75, "group_b", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_b);
+		caerVisualizer(75, "Scissors", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_b);
 	}
 	if(group_c != NULL){
-		caerVisualizer(76, "group_c", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_c);
+		caerVisualizer(76, "Rock", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_c);
 	}
 	if(group_d != NULL){
-		caerVisualizer(77, "group_d", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_d);
+		caerVisualizer(77, "Background", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) group_d);
 	}
 #endif
 #endif
@@ -436,3 +439,4 @@ int main(int argc, char **argv) {
 
 	return (EXIT_SUCCESS);
 }
+

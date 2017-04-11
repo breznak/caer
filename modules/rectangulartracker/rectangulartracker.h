@@ -8,7 +8,8 @@
 #ifndef RECTANGULARTRACKER_H_
 #define RECTANGULARTRACKER_H_
 
-#include "main.h"
+#define _USE_MATH_DEFINES
+#include <math.h> // defines M_PI
 
 #include <libcaer/events/polarity.h>
 #include <libcaer/events/frame.h>

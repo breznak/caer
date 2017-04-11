@@ -19,6 +19,7 @@ ADD_SUBDIRECTORY(nullhopinterface)
 ADD_SUBDIRECTORY(infofilter)
 ADD_SUBDIRECTORY(rectangulartracker)
 ADD_SUBDIRECTORY(refractoryfilter)
+ADD_SUBDIRECTORY(rectangulartracker_dynamic)
 ADD_SUBDIRECTORY(mediantracker)
 ADD_SUBDIRECTORY(dvstodynapse)
 ADD_SUBDIRECTORY(learningfilter)
@@ -29,7 +30,9 @@ ADD_SUBDIRECTORY(effectivetransferfunction)
 ADD_SUBDIRECTORY(activityindicator)
 ADD_SUBDIRECTORY(opencvdisplay)
 ADD_SUBDIRECTORY(trainfromcaffe)
-#ADD_SUBDIRECTORY(pixelmatrix)
+ADD_SUBDIRECTORY(opencvopticflow)
+ADD_SUBDIRECTORY(denoisingautoencoder)
+ADD_SUBDIRECTORY(pixelmatrix)
 
 # Support private modules that don't get considered for commit,
 # by reserving a directory called PrivateModules with its own

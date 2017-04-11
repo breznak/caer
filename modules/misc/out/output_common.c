@@ -784,7 +784,8 @@ static inline bool caerFrameEventPNGCompress(uint8_t **outBuffer, size_t *outSiz
 
 static size_t compressFramePNG(outputCommonState state, caerEventPacketHeader packet) {
 	size_t currPacketOffset = CAER_EVENT_PACKET_HEADER_SIZE; // Start here, no change to header.
-	size_t frameEventHeaderSize = sizeof(struct caer_frame_event);
+	// '- sizeof(uint16_t)' to compensate for pixels[1] at end of struct for C++ compatibility.
+	size_t frameEventHeaderSize = (sizeof(struct caer_frame_event) - sizeof(uint16_t));
 
 	CAER_FRAME_ITERATOR_ALL_START((caerFrameEventPacket) packet)
 		size_t pixelSize = caerFrameEventGetPixelsSize(caerFrameIteratorElement);
@@ -1146,7 +1147,7 @@ static void writePacket(outputCommonState state, libuvWriteBuf packetBuffer) {
 			firstChunk = false;
 
 			// Write data into second buffer.
-			size_t sendSize = (packetSize > MAX_OUTPUT_UDP_SIZE) ? (MAX_OUTPUT_UDP_SIZE) : (packetSize);
+			size_t sendSize = (packetSize > AEDAT3_MAX_UDP_SIZE) ? (AEDAT3_MAX_UDP_SIZE) : (packetSize);
 
 			libuvWriteBufInit(&buffers->buffers[1], sendSize);
 			if (buffers->buffers[1].buf.base == NULL) {

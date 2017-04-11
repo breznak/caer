@@ -268,6 +268,11 @@ static void caerTrainingFromCaffeFilterRun(caerModuleData moduleData, size_t arg
 					|| (state->group_a->buffer2d[x][y] > state->threshold && state->group_c->buffer2d[x][y] > state->threshold)
 					|| (state->group_b->buffer2d[x][y] > state->threshold && state->group_c->buffer2d[x][y] > state->threshold)) {
 
+					//caerLog(CAER_LOG_NOTICE, __func__, "Done GroupA:%d GroupB:%d GroupC:%d GroupD:%d\n",
+					//	state->group_a->buffer2d[x][y], state->group_b->buffer2d[x][y], state->group_c->buffer2d[x][y],
+					//	state->group_d->buffer2d[x][y]);
+
+
 					if (x >= DYNAPSE_CONFIG_XCHIPSIZE && y < DYNAPSE_CONFIG_YCHIPSIZE) {
 						changing = true;
 						chipid = DYNAPSE_CONFIG_DYNAPSE_U2;
@@ -283,9 +288,9 @@ static void caerTrainingFromCaffeFilterRun(caerModuleData moduleData, size_t arg
 					//caerLog(CAER_LOG_NOTICE, __func__, "pixel %d,%d need a new feature", x, y);
 				}
 
-				if ((state->group_a->buffer2d[x][y] < 0.1 && state->group_b->buffer2d[x][y] < 0.1)
-					|| (state->group_a->buffer2d[x][y] < 0.1 && state->group_c->buffer2d[x][y] < 0.1)
-					|| (state->group_b->buffer2d[x][y] < 0.1 && state->group_c->buffer2d[x][y] < 0.1)) {
+				if ((state->group_a->buffer2d[x][y] < 10 && state->group_b->buffer2d[x][y] < 10)
+					|| (state->group_a->buffer2d[x][y] < 10 && state->group_c->buffer2d[x][y] < 10)
+					|| (state->group_b->buffer2d[x][y] < 10 && state->group_c->buffer2d[x][y] < 10)) {
 
 					if (x >= DYNAPSE_CONFIG_XCHIPSIZE && y < DYNAPSE_CONFIG_YCHIPSIZE) {
 						changing = true;
@@ -402,7 +407,7 @@ static void caerTrainingFromCaffeFilterRun(caerModuleData moduleData, size_t arg
 			} // loop y
 		} // loop x
 
-		 caerLog(CAER_LOG_NOTICE, __func__, "Synapses selected num %d (before applying prob)", changed_num);
+		 caerLog(CAER_LOG_NOTICE, __func__, "Neuron selected num %d (before applying prob)", changed_num);
 
 		 resetMap_a(moduleData, DYNAPSE_X4BOARD_NEUX);
 		 resetMap_b(moduleData, DYNAPSE_X4BOARD_NEUX);

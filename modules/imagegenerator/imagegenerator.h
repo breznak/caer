@@ -22,6 +22,6 @@
 
 void caerImageGenerator(uint16_t moduleID, caerPolarityEventPacket polarity, int classify_img_size, int * hist_packet, bool *haveimg);
 void caerImageGeneratorMakeFrame(uint16_t moduleID, int * hist_packet,  caerFrameEventPacket *imagegeneratorFrame, int size);
-void caerImageGeneratorAddText(uint16_t moduleID, int * hist_packet,  caerFrameEventPacket *imagegeneratorFrame, int size, char * classification_results);
+void caerImageGeneratorAddText(uint16_t moduleID, int * hist_packet,  caerFrameEventPacket *imagegeneratorFrame, int size);
 
 #endif /* IMAGEGENERATOR_H_ */

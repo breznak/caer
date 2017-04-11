@@ -10,8 +10,8 @@
 #include "base/module.h"
 #include "ext/buffers.h"
 #include "math.h"
+#include "wrapper.h"
 
-typedef enum {Verylow, low, median, high} activityLevel;
 
 struct AI_state {
 	int64_t LastUpdateTime;
@@ -20,10 +20,12 @@ struct AI_state {
 	int low;
 	int median;
 	int high;
-	long activeNum;
+	int activeNum;
 	activityLevel areaActivity;
 	simple2DBufferLong spikeCountMap;
 	simple2DBufferInt activeCountMap;
+	struct OpenCV* cpp_class;
+	bool showEvents;
 };
 
 typedef struct AI_state *AIState;
@@ -40,7 +42,7 @@ static bool allocateActiveCountMap(AIState state, int16_t sourceID);
 
 static struct caer_module_functions caerActivityIndicatorFunctions = { .moduleInit = &caerActivityIndicatorInit, .moduleRun = &caerActivityIndicatorRun, .moduleConfig = &caerActivityIndicatorConfig, .moduleExit = &caerActivityIndicatorExit, .moduleReset = &caerActivityIndicatorReset };
 
-AResults caerActivityIndicator(uint16_t moduleID, caerPolarityEventPacket polarity) {
+AResults caerActivityIndicator(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame) {
 
 	AResults number = malloc(sizeof(struct activity_results));
 	caerMainloopFreeAfterLoop(&free, number);
@@ -51,7 +53,7 @@ AResults caerActivityIndicator(uint16_t moduleID, caerPolarityEventPacket polari
 	if (moduleData == NULL) {
 		return(number);
 	}
-	caerModuleSM(&caerActivityIndicatorFunctions, moduleData, sizeof(struct AI_state), 2, polarity, number);
+	caerModuleSM(&caerActivityIndicatorFunctions, moduleData, sizeof(struct AI_state), 3, polarity, frame, number);
 
 	return(number);
 }
@@ -62,6 +64,7 @@ static bool caerActivityIndicatorInit(caerModuleData moduleData) {
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "low", 100);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "median", 1000);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "high", 4000);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "showEvents", true);
 
 	AIState state = moduleData->moduleState;
 
@@ -70,9 +73,11 @@ static bool caerActivityIndicatorInit(caerModuleData moduleData) {
 	state->low = sshsNodeGetInt(moduleData->moduleNode, "low");
 	state->median = sshsNodeGetInt(moduleData->moduleNode, "median");
 	state->high = sshsNodeGetInt(moduleData->moduleNode, "high");
+	state->showEvents = sshsNodeGetBool(moduleData->moduleNode, "showEvents");
 
 	state->LastUpdateTime = 0;
 	state->activeNum = 0;
+	state->cpp_class = newOpenCV();
 
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
@@ -84,6 +89,7 @@ static void caerActivityIndicatorRun(caerModuleData moduleData, size_t argsNumbe
 	UNUSED_ARGUMENT(argsNumber);
 
 	caerPolarityEventPacket polarity = va_arg(args, caerPolarityEventPacket);
+	caerFrameEventPacket *frame = va_arg(args, caerFrameEventPacket*);
 	AResults results = va_arg(args, AResults);
 
 	//Only process packets with content.
@@ -187,7 +193,47 @@ static void caerActivityIndicatorRun(caerModuleData moduleData, size_t argsNumbe
 		//printf("real number %d\n", state->activeNum);
 		results->activityValue = state->activeNum;
 	}
+
+	int16_t channelNum = 1;
+	if (state->showEvents){
+		channelNum = 3;
+	}
+	*frame = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, sizeX, sizeY, channelNum);
+	caerMainloopFreeAfterLoop(&free, *frame);
+	if (*frame != NULL) {
+		caerFrameEvent singleplot = caerFrameEventPacketGetEvent(*frame, 0);
+		//add info to the frame
+		caerFrameEventSetLengthXLengthYChannelNumber(singleplot, sizeX, sizeY, channelNum, *frame);
+		if (state->showEvents){
+			CAER_POLARITY_ITERATOR_VALID_START(polarity)
+				int xxx = caerPolarityEventGetX(caerPolarityIteratorElement);
+				int yyy = caerPolarityEventGetY(caerPolarityIteratorElement);
+				int pol = caerPolarityEventGetPolarity(caerPolarityIteratorElement);
+				int address = 3 * (yyy * sizeX + xxx);
+				if (pol == 0) {
+					singleplot->pixels[address] = 65000; // red
+					singleplot->pixels[address + 1] = 1; // green
+					singleplot->pixels[address + 2] = 1; // blue
+				}
+				else {
+					singleplot->pixels[address] = 1; //65000; // red
+					singleplot->pixels[address + 1] = 65000; // green
+					singleplot->pixels[address + 2] = 1; // blue
+				}
+			CAER_POLARITY_ITERATOR_VALID_END
+		}
+		//add OpenCV info to the frame
+		OpenCV_generate(state->cpp_class, state->areaActivity, state->activeNum, &singleplot, sizeX, sizeY, state->showEvents);
+		//validate frame
+		if (singleplot != NULL) {
+			caerFrameEventValidate(singleplot, *frame);
+		}
+		else {
+			*frame = NULL;
+		}
+	}
 }
+
 
 static bool allocateSpikeCountMap(AIState state, int16_t sourceID) {
 	// Get size information from source.
@@ -251,6 +297,7 @@ static void caerActivityIndicatorConfig(caerModuleData moduleData) {
 	state->low = sshsNodeGetInt(moduleData->moduleNode, "low");
 	state->median = sshsNodeGetInt(moduleData->moduleNode, "median");
 	state->high = sshsNodeGetInt(moduleData->moduleNode, "high");
+	state->showEvents = sshsNodeGetBool(moduleData->moduleNode, "showEvents");
 }
 
 static void caerActivityIndicatorExit(caerModuleData moduleData) {
@@ -262,6 +309,7 @@ static void caerActivityIndicatorExit(caerModuleData moduleData) {
 	// Ensure maps are freed.
 	simple2DBufferResetLong(state->spikeCountMap);
 	simple2DBufferResetInt(state->activeCountMap);
+	deleteOpenCV(state->cpp_class);
 }
 
 static void caerActivityIndicatorReset(caerModuleData moduleData, uint16_t resetCallSourceID) {

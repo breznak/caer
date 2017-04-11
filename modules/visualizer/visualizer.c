@@ -205,14 +205,15 @@ caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisu
 
 	// If parentModuleName is "UserSize" create bitmap of dimensions [userSizeX, userSizeY]
 	// If userSizeX/userSizeY is not specified in the device_common file, use default 64x64
-	char *data = sshsNodeGetName(state->parentModule->moduleNode);
+	const char *curr = sshsNodeGetName(state->parentModule->moduleNode);
 	char *next;
-	char *curr = data;
+
 	while ((next = strchr(curr, '-')) != NULL) {
 		curr = next + 1;
 	}
+
 	if (caerStrEquals(curr, "VisualizerUserSize")) {
-		caerLog(CAER_LOG_NOTICE, __func__, "init size from user defined Size \n");
+		caerLog(CAER_LOG_NOTICE, parentModule->moduleSubSystemString, "Initializing size from user defined size.");
 		state->bitmapRendererSizeX = userSizeX;
 		state->bitmapRendererSizeY = userSizeY;
 	}
@@ -383,10 +384,10 @@ void caerVisualizerExit(caerVisualizerState state) {
 	// Then the statistics string.
 	caerStatisticsStringExit(&state->packetStatistics);
 
+	caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Visualizer: Exited successfully.");
+
 	// And finally the state memory.
 	free(state);
-
-	caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Visualizer: Exited successfully.");
 }
 
 void caerVisualizerReset(caerVisualizerState state) {
@@ -449,7 +450,7 @@ static bool caerVisualizerInitGraphics(caerVisualizerState state) {
 		return (false);
 	}
 
-	state->displayTimer = al_create_timer((double)1.0f / (double)VISUALIZER_REFRESH_RATE);
+	state->displayTimer = al_create_timer((double) (1.00f / VISUALIZER_REFRESH_RATE));
 	if (state->displayTimer == NULL) {
 		// Clean up all memory that may have been used.
 		caerVisualizerExitGraphics(state);

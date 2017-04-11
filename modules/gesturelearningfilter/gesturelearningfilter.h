@@ -1,39 +1,113 @@
 /*
- * Created on: Dec, 2016
+ * Created on: Feb. 2016
  * Author: dongchen@ini.uzh.ch
  */
 
 #ifndef LEARNINGFILTER_H_
 #define LEARNINGFILTER_H_
 
+//for learning algorithm
+#define COMPENSATE_RATIO (1/2) //(4/5) //(1/4) //(1/2) //1 //(1/2) //(1/5) //1 //(1/5)
+
+#define EX_IN_BALANCE_THRESHOLD_L 0 //5 //5 //20
+#define EX_IN_BALANCE_THRESHOLD_H 160 //140 //160 //80
+#define EX_FS_THRESHOLD 40 //40
+#define IN_FS_THRESHOLD -40 //0 //0
+
+#define NEURON_LOW_HIGH_ACTIVITY_THRESHOLD 140 //1000
+
+#define WEIGHT_IN_TOTAL 200 //120 //1010 //1000
+
+#define WEIGHT_EX_UP_THRESHOLD 160 //80 //60 fine //40 //20 //60 //200 //100 //2 //100 //100
+#define WEIGHT_IN_UP_THRESHOLD -200 //-200 //-100 //-2 //100 //100
+#define ROUNDED_WEIGHT_EX_UP_THRESHOLD 2 //100 //100
+#define ROUNDED_WEIGHT_IN_UP_THRESHOLD -2 //100 //100
+
+#define PROBABILITY 0.2f //1 //0.1f //0.2f //1 //0.5f //0.1f //1 //0.01f //0.5f //(1/2) //1 //(1/2) //0.5 //0.5
+#define PROBABILITY_INJECTING 0.05f
+#define PALASTICITY_PROBABILITY 0.02f
+#define OUTPUT_PROBABILITY 0.2f //0.02f
+
+#define FORWARD_LEARNING_RATE 1
+#define FORWARD_LEARNING_RATE_F1 1 //0.1 //10 //(1/2) //1 //5 //1
+#define FORWARD_LEARNING_RATE_F2 0.1 //0.1 //10 //(1/2) //1 //5 //1
+#define BACKWARD_LEARNING_RATE 1 //0.1 //1
+
+#define REPLACE_TAG 1
+
+//for USB packet
+#define USB_PACKET_MAXIMUM_SIZE_INITIALIZATION 1024 //1366
+#define USB_PACKET_MAXIMUM_SIZE_LEARNING 1024 //1366 //2 //64 //1366 //16 is good //128   32 4 is not good
+
+//period for one pattern
+#define PATTERN_PERIOD_LEARNING 10 //5 //60 //20
+#define PATTERN_PERIOD_TESTING 10 //5
+#define PATTERN_PERIOD_INTERVAL 4 //2 //5 //2 //0 //2 //1 //2
+
+//parameter determined by the main loop
+#define EVENTSOURCEID 1
+
 //for visualizer
 #define VMIN 0
 #define VMAX 20
+#define WHITE_EDGE_COLOR_VALUE 0.5f
 
-#define DELTA_WEIGHT_LUT_LENGTH 80 //800 //80
+//loop-up table parameters for synapse weight updating
+#define DELTA_WEIGHT_LUT_LENGTH 80 //8000 //20000 //80 //800 //80
 #define SYNAPSE_UPGRADE_THRESHOLD_LUT_LENGTH 128 //800 //80
-#define SPIKE_QUEUE_LENGTH 500
-#define SPIKE_QUEUE_WIDTH 2
-#define MAXIMUM_CONSIDERED_SPIKE_DELAY 800 //80 //???what is the unit of timestamp???
-#define MINIMUM_CONSIDERED_SPIKE_NUM 100 //10
 
-//for configuring the deep spiking neural network on chip
+//spike queue parameters
+#define SPIKE_QUEUE_LENGTH 200000 //2000 //20000 //10000 //1000 //500
+#define SPIKE_QUEUE_WIDTH 2
+#define DYNAPSE_CONFIG_DYNAPSE_U0_SPECIAL 1
+
+//learning algorithm parameters
+#define MAXIMUM_CONSIDERED_SPIKE_INTERVAL 80 //8000 //80 //10*1000 //80 //80 //1000 //200 //80 //???what is the unit of time stamps??? microsecond
+#define MINIMUM_CONSIDERED_SPIKE_INTERVAL 0 //0 //2
+#define MAXIMUM_CONSIDERED_SPIKE_NUM 100000 //10000 //200 //500 //50 //200 //100 //10
+#define MINIMUM_CONSIDERED_SPIKE_NUM 100 //200 //500 //50 //200 //100 //10
+
+//memory offset for neuron addresses
 #define MEMORY_NEURON_ADDR_OFFSET 1024
 
+//chip parameters
+#define DYNAPSE_CORE_SIZE_X 16
+#define DYNAPSE_CORE_SIZE_Y 16
 #define TOTAL_NEURON_NUM_IN_CORE 256
+#define TOTAL_NEURON_NUM_ON_CHIP_X 32
+#define TOTAL_NEURON_NUM_ON_CHIP_Y 32
 #define TOTAL_NEURON_NUM_ON_CHIP 1024
 #define TOTAL_NEURON_NUM_ON_BOARD (TOTAL_NEURON_NUM_ON_CHIP * 4)
-#define TOTAL_CAM_NUM 64
-#define TOTAL_CAM_NUM_LEARNING 63 //60
-#define TOTAL_SRAM_NUM 4
-#define MAXIMUM_FILTER_SIZE 17*17
-#define FILTER_MAP_SIZE_WIDTH 1
-#define CAM_SIZE_WIDTH 1
 
+//total CAM number and available CAM number for learning
+#define FIRST_CAM_ID 0
+#define TOTAL_CAM_NUM 64
+#define TOTAL_CAM_NUM_LEARNING_F1 64 //(64-3-1) //61 //INHIBITORY synapses from 3 other cores
+#define TOTAL_CAM_NUM_LEARNING_F2 64
+#define TOTAL_CAM_NUM_LEARNING_F3 64 //(64-3) //64 //(64-2-3) //64 //(64-20 //49
+#define TOTAL_CAM_NUM_LEARNING_O 49 //49
+#define TOTAL_CAM_NUM_LEARNING_O_EX 3 //7 //8
+#define TOTAL_CAM_NUM_LEARNING_O_IN 12 //8
+
+//total SRAM number
+#define TOTAL_SRAM_NUM 4
+
+//maximum filter size in the whole network
+#define MAXIMUM_FILTER_SIZE (256*3) //FILTER1_N
+
+//memory space size
+#define CAM_MAP_SIZE_WIDTH 1
+#define FILTER_MAP_SIZE_WIDTH 1
+#define FILTER_MAP_HIGHEST_WIDTH 1
+#define FILTER_MAP_LOWEST_WIDTH 1
+
+//synapse type for initializing the network connectivity
 #define VIRTUAL_SYNAPSE 0
 #define REAL_SYNAPSE 1
 #define EXTERNAL_REAL_SYNAPSE 2
+#define REAL_SYNAPSE_WITHOUT_LEARNING 3
 
+//chip & core ID in standard neuron address format
 #define VIRTUAL_CHIP_ID 0
 #define CHIP_UP_LEFT_ID 1
 #define CHIP_UP_RIGHT_ID 2
@@ -41,63 +115,112 @@
 #define CHIP_DOWN_RIGHT_ID 4
 
 #define CORE_UP_LEFT_ID 0
-#define CORE_UP_RIGHT_ID 1
-#define CORE_DOWN_LEFT_ID 2
+#define CORE_UP_RIGHT_ID 2
+#define CORE_DOWN_LEFT_ID 1
 #define CORE_DOWN_RIGHT_ID 3
 
-#define INPUT_L 32
-#define INPUT_W 32
-#define INPUT_N (INPUT_L * INPUT_W)
+//size of layers
+#define INPUT_LAYER_L 32
+#define INPUT_LAYER_W 32
+#define INPUT_LAYER_N (INPUT_LAYER_L * INPUT_LAYER_W)
 
-#define FILTER1_L 17
-#define FILTER1_W 17
+#define FEATURE_LAYER1_L 7 //16
+#define FEATURE_LAYER1_W 7 //16
+#define FEATURE_LAYER1_N (FEATURE_LAYER1_L * FEATURE_LAYER1_W)
+#define FEATURE_LAYER1_NUM 16 //64 //4
+#define FEATURE_LAYER1_MAPS_NUM 1
+
+#define FEATURE_LAYER2_L 5 //16
+#define FEATURE_LAYER2_W 5 //16
+#define FEATURE_LAYER2_N (FEATURE_LAYER2_L * FEATURE_LAYER2_W)
+#define FEATURE_LAYER2_NUM 36 //64 //4
+#define FEATURE_LAYER2_MAPS_NUM 1
+
+#define FEATURE_LAYER3_N 256 //25 //256
+#define FEATURE_LAYER3_NUM 3 //4
+
+#define OUTPUT_LAYER_N 4 //25 //256
+#define OUTPUT_LAYER_NUM 4 //4
+
+//filter size
+#define FILTER1_L 8 //17
+#define FILTER1_W 8 //17
+#define FILTER1_STEP_L 4
+#define FILTER1_STEP_W 4
 #define FILTER1_N (FILTER1_L * FILTER1_W)
-#define FEATURE1_L 16
-#define FEATURE1_W 16
-#define FEATURE1_N (FEATURE1_L * FEATURE1_W)
-#define FEATURE1_LAYERS_N 3
-#define FEATURE1_CAM_INHIBITORY_N (FEATURE1_LAYERS_N - 1)
 
-#define VISUALIZER_HEIGHT_FEATURE (FILTER1_L * FEATURE1_L * (4/2))+32*2-2 //FEATURE1_LAYERS_N
-#define VISUALIZER_WIDTH_FEATURE (FILTER1_W * FEATURE1_W * (4/2))+32*2-2 //FEATURE1_LAYERS_N
-
-#define VISUALIZER_HEIGHT_OUTPUT (FEATURE1_L * FEATURE1_LAYERS_N) //FEATURE1_LAYERS_N
-#define VISUALIZER_WIDTH_OUTPUT (FEATURE1_W * OUTPUT2_N) //FEATURE1_LAYERS_N
-
-#define POOLING1_L 8
-#define POOLING1_W 8
-#define POOLING1_N (POOLING1_L*POOLING1_W)
-#define POOLING1_LAYERS_N 4
-#define POOLING1_CAM_INHIBITORY_N (POOLING1_LAYERS_N - 1)
-
-#define FILTER2_L 5
-#define FILTER2_W 5
+#define FILTER2_L 3 //17
+#define FILTER2_W 3 //17
+#define FILTER2_STEP_L 1 //17
+#define FILTER2_STEP_W 1 //17
 #define FILTER2_N (FILTER2_L * FILTER2_W)
-#define FEATURE2_L 4
-#define FEATURE2_W 4
-#define FEATURE2_N (FEATURE2_L * FEATURE2_W)
-#define FEATURE2_LAYERS_N 32
-#define FEATURE2_CAM_INHIBITORY_N (FEATURE2_LAYERS_N - 1)
 
-#define POOLING2_L 2
-#define POOLING2_W 2
-#define POOLING2_N (POOLING2_L*POOLING2_W)
-#define POOLING2_LAYERS_N 32
-#define POOLING2_CAM_INHIBITORY_N (POOLING2_LAYERS_N - 1)
+//visualizer size
+//for feature layer 1
+#define VISUALIZER_FEATURE1_MAP_X ((1+(FILTER1_L+1)*FEATURE_LAYER1_L)+1)
+#define VISUALIZER_FEATURE1_MAP_Y ((1+(FILTER1_W+1)*FEATURE_LAYER1_W)+1)
 
-#define OUTPUT1_N 512
-#define OUTPUT2_N 3 //3 or 4
+#define VISUALIZER_HEIGHT_FEATURE1 ((1 + (FILTER1_L+1) * FEATURE_LAYER1_L + 1) * (int)(28/FEATURE_LAYER1_L) - 1)
+#define VISUALIZER_WIDTH_FEATURE1 ((1 + (FILTER1_W+1) * FEATURE_LAYER1_W + 1) * (int)(28/FEATURE_LAYER1_W) - 1)
+
+#define VISUALIZER_Y_FEATURE1 ((1 + (FILTER1_L+1) * FEATURE_LAYER1_L + 1) * (int)(28/FEATURE_LAYER1_L) - 1)
+#define VISUALIZER_X_FEATURE1 ((1 + (FILTER1_W+1) * FEATURE_LAYER1_W + 1) * (int)(28/FEATURE_LAYER1_W) - 1)
+
+//for feature layer 2
+#define VISUALIZER_FEATURE2_MAP_X (1 + (FILTER2_L+1) * 4 + 1)
+#define VISUALIZER_FEATURE2_MAP_Y (1 + (FILTER2_W+1) * 4 + 1)
+
+#define VISUALIZER_FEATURE2_MAPS_X (VISUALIZER_FEATURE2_MAP_X * 5 + 1)
+#define VISUALIZER_FEATURE2_MAPS_Y (VISUALIZER_FEATURE2_MAP_Y * 5 + 1)
+
+#define VISUALIZER_HEIGHT_FEATURE2 (VISUALIZER_FEATURE2_MAPS_X * 6 - 2)
+#define VISUALIZER_WIDTH_FEATURE2 (VISUALIZER_FEATURE2_MAPS_X * 6 - 2)
+
+#define VISUALIZER_Y_FEATURE2 (VISUALIZER_FEATURE2_MAPS_X * 6 - 2)
+#define VISUALIZER_X_FEATURE2 (VISUALIZER_FEATURE2_MAPS_X * 6 - 2)
+
+//for feature layer 3
+#define VISUALIZER_FEATURE3_MAP_X ((1 + (8 + 1) * 8) + 1)
+#define VISUALIZER_FEATURE3_MAP_Y ((1 + (8 + 1) * 8) + 1)
+
+#define VISUALIZER_FEATURE3_MAPS_X (VISUALIZER_FEATURE3_MAP_X * 2 + 1)
+#define VISUALIZER_FEATURE3_MAPS_Y (VISUALIZER_FEATURE3_MAP_Y * 2 + 1)
+
+#define VISUALIZER_HEIGHT_FEATURE3 (VISUALIZER_FEATURE3_MAPS_X * 2 - 2)
+#define VISUALIZER_WIDTH_FEATURE3 (VISUALIZER_FEATURE3_MAPS_Y * 2 - 2)
+
+#define VISUALIZER_Y_FEATURE3 (VISUALIZER_FEATURE3_MAPS_X * 2 - 2)
+#define VISUALIZER_X_FEATURE3 (VISUALIZER_FEATURE3_MAPS_Y * 2 - 2)
+
+//for output layer
+#define VISUALIZER_OUTPUT_MAP_X ((1 + (16 + 1) * 2) + 1)
+#define VISUALIZER_OUTPUT_MAP_Y ((1 + (16 + 1) * 2) + 1)
+
+#define VISUALIZER_OUTPUT_MAPS_X (VISUALIZER_OUTPUT_MAP_X * 2 + 1)
+#define VISUALIZER_OUTPUT_MAPS_Y (VISUALIZER_OUTPUT_MAP_Y * 2 + 1)
+
+#define VISUALIZER_HEIGHT_OUTPUT (VISUALIZER_OUTPUT_MAPS_X * 2 - 2)
+#define VISUALIZER_WIDTH_OUTPUT (VISUALIZER_OUTPUT_MAPS_Y * 2 - 2)
+
+#define VISUALIZER_X_OUTPUT (VISUALIZER_OUTPUT_MAPS_X * 2 - 2)
+#define VISUALIZER_Y_OUTPUT (VISUALIZER_OUTPUT_MAPS_Y * 2 - 2)
+
+//for all the visualizers
+#define VISUALIZER_HEIGHT_FEATURE VISUALIZER_HEIGHT_FEATURE2
+#define VISUALIZER_WIDTH_FEATURE VISUALIZER_WIDTH_FEATURE2
+
+#define VISUALIZER_X_FEATURE VISUALIZER_X_FEATURE2
+#define VISUALIZER_Y_FEATURE VISUALIZER_Y_FEATURE2
 
 //for encoding the chip input commands
-#define CXQ_PROGRAM (1 << 17) // (0x80 << 10)
-#define CXQ_EVENT (0x8 << 10)
+#define CXQ_PROGRAM  (0x80 << 10)
 
-#define CXQ_CHIPID_SHIFT 30
 #define CXQ_ADDR_SHIFT 20
 #define CXQ_SOURCE_CORE_SHIFT 18
-#define CXQ_COREID_SHIFT 8
-#define CXQ_ROW_SHIFT 4
-#define CXQ_COLUMN_SHIFT 0
+
+#define CXQ_PROGRAM_COREID_SHIFT 15
+#define CXQ_PROGRAM_ROW_SHIFT 5
+#define CXQ_PROGRAM_COLUMN_SHIFT 0
 
 #define CXQ_SRAM_VIRTUAL_SOURCE_CORE_SHIFT 28
 #define CXQ_SRAM_SY_SHIFT 27
@@ -106,66 +229,83 @@
 #define CXQ_SRAM_DX_SHIFT 22
 #define CXQ_SRAM_DEST_CORE_SHIFT 18
 
-#define CXQ_PROGRAM_COREID_SHIFT 15
-#define CXQ_PROGRAM_ROW_SHIFT 5
-#define CXQ_PROGRAM_COLUMN_SHIFT 0
-
 #define CXQ_CAM_EI_SHIFT 29
 #define CXQ_CAM_FS_SHIFT 28
-#define CXQ_EVENT_SY 9
-#define CXQ_EVENT_DY 7
-#define CXQ_EVENT_SX 6
-#define CXQ_EVENT_DX 4
-#define CXQ_EVENT_CORE_D 0
 
-#define INPUT_CHIP_ID 1
-#define INPUT_CHIP_SY 0
-#define INPUT_CHIP_DY 1
-#define INPUT_CHIP_SX 0
-#define INPUT_CHIP_DX 0
-
+//chip core neuron ID bits and shift for configuration command
 #define NEURON_ADDRESS_BITS 0xff
+#define NEURON_NEURONID_BITS 0xff
 #define NEURON_COREID_BITS 0x300
-#define NEURON_COREID_SHIFT 8
+#define NEURON_CHIPID_BITS 0x3c00
+
 #define NEURON_CHIPID_SHIFT 10
+#define NEURON_COREID_SHIFT 8
+#define NEURON_NEURONID_SHIFT 0
 
 #define NEURON_ROW_BITS 0xf0
 #define NEURON_COL_BITS 0xf
 #define NEURON_ROW_SHIFT 4
 #define CAM_NEURON_ROW_SHIFT 6
 
-#define FAST_SYNAPSE_ID 2
-#define SLOW_SYNAPSE_ID 1
+//chip core ID bits and shift for SRAM memory
+#define CHIPCOREID_CHIPID_SHIFT 6
+#define DESTINATION_COREID_BITS 0xf
+#define CHIPCOREID_SOURCECOREID_BITS 0x30
+#define CHIPCOREID_SOURCECOREID_SHIFT 4
+
+//SRAM address coding
+#define SRAM_NEURON_ROW_SHIFT 6
+#define SRAM_NEURON_COL_SHIFT 2
+#define SRAM_COL_VALUE 16
+
+//synapses ID and values
+#define FAST_EX_SYNAPSE_VALUE 2
+#define SLOW_EX_SYNAPSE_VALUE 1
+#define FAST_IN_SYNAPSE_VALUE (-2)
+#define SLOW_IN_SYNAPSE_VALUE (-1)
+
+#define FAST_SYNAPSE_VALUE 2
+#define SLOW_SYNAPSE_VALUE 1
+#define FAST_SYNAPSE_ID 1
+#define SLOW_SYNAPSE_ID 0
+#define EXCITATORY_SYNAPSE_ID 1
+#define INHIBITORY_SYNAPSE_ID 0
+
 #define NO_SYNAPSE_ID 0
-#define NO_SYNAPSE_ADDRESS 0
-#define NO_SYNAPSE_CORE 0
+#define NO_SYNAPSE_ADDRESS 0xff //0
+#define NO_SYNAPSE_CORE 0x3 //0
+
 #define EXCITATORY_SYNAPSE_SIGN 1
 #define EXCITATORY_FAST_SYNAPSE_ID (EXCITATORY_SYNAPSE_SIGN * FAST_SYNAPSE_ID)
 #define EXCITATORY_SLOW_SYNAPSE_ID (EXCITATORY_SYNAPSE_SIGN * SLOW_SYNAPSE_ID)
-#define EXCITATORY_SYNAPSE 1
-#define INHIBITORY_SYNAPSE 0
-#define FAST_SYNAPSE 1
-#define SLOW_SYNAPSE 0
 
-#define BOARD_HEIGHT 2
-#define BOARD_WIDTH 2
+//synapse bits and shift
+#define SYNAPSE_EI_TYPE_BITS 1
+#define SYNAPSE_FS_TYPE_BITS 1
+#define SYNAPSE_EI_TYPE_SHIFT 1
+#define SYNAPSE_FS_TYPE_SHIFT 0
 
+//board size
+#define BOARD_CHIPS_Y_NUM 2
+#define BOARD_CHIPS_X_NUM 2
+
+//event routing directions
 #define EVENT_DIRECTION_Y_UP 0
 #define EVENT_DIRECTION_Y_DOWN 1
 #define EVENT_DIRECTION_X_RIGHT 0
 #define EVENT_DIRECTION_X_LEFT 1
 
-#define SRAM_NEURON_ROW_SHIFT 6
-#define SRAM_NEURON_COL_SHIFT 2
-#define SRAM_COL_VALUE 16
-
 #include "main.h"
 #include "modules/ini/dynapse_common.h"
 
 #include <libcaer/events/spike.h>
-#include <libcaer/events/frame.h> //display
+#include <libcaer/events/frame.h> //for display
 
 void caerGestureLearningFilter(uint16_t moduleID, int fileInputModuleID, caerSpikeEventPacket spike,
-		caerFrameEventPacket *weightplotfeature, caerFrameEventPacket *synapseplotfeature);
+		caerFrameEventPacket *synapsePlotInputFeature1,
+		caerFrameEventPacket *synapsePlotFeature1Feature2,
+		caerFrameEventPacket *synapsePlotFeature2Feature3,
+		caerFrameEventPacket *synapsePlotFeature3Output);
 
 #endif /* LEARNINGFILTER_H_ */
+
