@@ -1,16 +1,3 @@
-//#define HEART "/home/dongchen/Desktop/poker_dvs/cards_1.aedat"
-//#define SPADE "/home/dongchen/Desktop/poker_dvs/cards_1.aedat"
-//#define CLUB "/home/dongchen/Desktop/poker_dvs/cards_1.aedat"
-//#define DIAMOND "/home/dongchen/Desktop/poker_dvs/cards_1.aedat"
-
-
-#define HEART "/home/dongchen/Desktop/Card/heart.aedat"
-#define SPADE "/home/dongchen/Desktop/Card/spade.aedat"
-#define CLUB "/home/dongchen/Desktop/Card/club.aedat"
-#define DIAMOND "/home/dongchen/Desktop/Card/diamond.aedat"
-
-
-//#define PAPER "/home/dongchen/Desktop/gestures/paper.aedat"
-//#define ROCK "/home/dongchen/Desktop/gestures/rock.aedat"
-//#define SCISSORS "/home/dongchen/Desktop/gestures/scissors.aedat"
-
+#define PAPER "/media/federico/space/inilabs/data/GesturesRecordings/Paper/caerOut-2017_01_31_22_11_50.aedat"
+#define ROCK "/media/federico/space/inilabs/data/GesturesRecordings/Rock/caerOut-2017_01_31_22_09_26.aedat"
+#define SCISSORS "/media/federico/space/inilabs/data/GesturesRecordings/Scissors/caerOut-2017_01_31_22_10_12.aedat"
