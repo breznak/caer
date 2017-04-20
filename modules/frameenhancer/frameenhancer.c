@@ -38,7 +38,7 @@ static bool caerFrameEnhancerInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doDemosaic", false);
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doContrast", false);
 
-#ifdef LIBCAER_HAVE_OPENCV
+#if defined(LIBCAER_HAVE_OPENCV) && LIBCAER_HAVE_OPENCV == 1
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "demosaicType", "opencv_edge_aware");
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "contrastType", "opencv_normalization");
 #else
@@ -71,7 +71,7 @@ static void caerFrameEnhancerRun(caerModuleData moduleData, size_t argsNumber, v
 	FrameEnhancerState state = moduleData->moduleState;
 
 	if (state->doDemosaic) {
-#ifdef LIBCAER_HAVE_OPENCV
+#if defined(LIBCAER_HAVE_OPENCV) && LIBCAER_HAVE_OPENCV == 1
 		switch (state->demosaicType) {
 			case 0:
 				*enhancedFrame = caerFrameUtilsDemosaic(frame);
@@ -95,7 +95,7 @@ static void caerFrameEnhancerRun(caerModuleData moduleData, size_t argsNumber, v
 	}
 
 	if (state->doContrast) {
-#ifdef LIBCAER_HAVE_OPENCV
+#if defined(LIBCAER_HAVE_OPENCV) && LIBCAER_HAVE_OPENCV == 1
 		switch (state->contrastType) {
 			case 0:
 				caerFrameUtilsContrast(*enhancedFrame);
