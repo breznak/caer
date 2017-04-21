@@ -1989,7 +1989,8 @@ static int inputAssemblerThread(void *stateArg) {
 static const UT_icd ut_caerEventPacketHeader_icd = { sizeof(caerEventPacketHeader), NULL, NULL, NULL };
 
 bool caerInputCommonInit(caerModuleData moduleData, int readFd, bool isNetworkStream,
-bool isNetworkMessageBased) {
+			bool isNetworkMessageBased) {
+
 	inputCommonState state = moduleData->moduleState;
 
 	state->parentModule = moduleData;
@@ -2096,6 +2097,11 @@ bool isNetworkMessageBased) {
 
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerInputCommonConfigListener);
+
+	// send TS reset packet (as autoReset will re-start this module -> init will be called again
+	handleTSReset(state);
+	caerLog(CAER_LOG_WARNING, state->parentModule->moduleSubSystemString, "Sending TS_RESET packet from init.");
+
 
 	return (true);
 }
