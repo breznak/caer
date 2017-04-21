@@ -141,6 +141,14 @@ static bool updateTimeInitialized = false;
 static int64_t nextUpdateTimeUs = 0;
 static int updateIntervalUs = 1000;
 
+// write out the people number each seconds
+static int64_t nextOutputTimeUs = 0;
+static int outputIntervalUs = 1000000;
+
+static float mergeFactor = 0.8f;
+static bool useMergeFactor = false;
+
+
 static float smoothWeight = 100.0f;
 static float smoothPosition = 0.001f;
 static float smoothIntegral = 0.001f;
@@ -428,12 +436,22 @@ static void caerRectangulartrackerDynamicRun(caerModuleData moduleData, size_t a
 	if (!updateTimeInitialized) {
 		nextUpdateTimeUs = ts + updateIntervalUs;
 		updateTimeInitialized = true;
+
+		nextOutputTimeUs = ts + outputIntervalUs;
 	}
 	if (ts > nextUpdateTimeUs) {
 		nextUpdateTimeUs = ts + updateIntervalUs;
 		updateCurrentClusterNum(state);
 		updateClusterList(state, ts, sizeX, sizeY);
 	}
+
+//	if (ts > nextOutputTimeUs) {
+//		nextOutputTimeUs = ts + outputIntervalUs;
+//		fopen()
+//
+//	}
+
+
 
 	CAER_POLARITY_ITERATOR_VALID_END
 
@@ -1124,12 +1142,22 @@ static bool hasHitEdge(Cluster *c, int16_t sizeX, int16_t sizeY) {
 }
 
 static bool isOverlapping(Cluster *c1, Cluster *c2) {
-	bool overlapping = (distanceC1C2(c1, c2) < (c1->radius + c2->radius));
+	bool overlapping;
+	if (!useMergeFactor || c1->aspectRatio == 1){
+		overlapping = (distanceC1C2(c1, c2) < (c1->radius + c2->radius));
+	}
 
-	// This way makes sure that the clusters have overlapping at all
-//	float dx = fabsf(c1->location_x - c2->location_x);
-//	float dy = fabsf(c1->location_y - c2->location_y);
-//	bool overlapping = (dx < (c1->radius_x + c2->radius_x)) && (dy < (c1->radius_y + c2->radius_y));
+	else if(c1->aspectRatio > 1){
+		float dx = fabsf(c1->location_x - c2->location_x);
+		float dy = fabsf(c1->location_y - c2->location_y);
+		overlapping = (dx < mergeFactor*(c1->radius_x + c2->radius_x)) && (dy < (c1->radius_y + c2->radius_y));
+	}
+
+	else{
+		float dx = fabsf(c1->location_x - c2->location_x);
+		float dy = fabsf(c1->location_y - c2->location_y);
+		overlapping = (dx < (c1->radius_x + c2->radius_x)) && (dy < mergeFactor*(c1->radius_y + c2->radius_y));
+	}
 
 	return (overlapping);
 }
@@ -1298,6 +1326,7 @@ static void updateCurrentClusterNum(RTFilterState state){
 	while (current != NULL) {
 		state->currentClusterNum++;
 		if (current->cluster->visibilityFlag){
+		//if (current->cluster->visibilityFlag && (current->cluster->color.b == 65535.0f)){
 			state->currentVisibleNum++;
 		}
 		current = current->next;
