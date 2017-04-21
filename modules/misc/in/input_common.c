@@ -21,7 +21,7 @@
 #include <libcaer/events/polarity.h>
 #include <libcaer/events/frame.h>
 
-#define MAX_HEADER_LINE_SIZE 1024
+const size_t MAX_HEADER_LINE_SIZE = 1024; 
 
 enum input_reader_state {
 	READER_OK = 0, EOF_REACHED = 1, ERROR_READ = -1, ERROR_HEADER = -2, ERROR_DATA = -3,
@@ -297,7 +297,7 @@ static bool parseNetworkHeader(inputCommonState state) {
 
 	// TODO: Network: get sourceInfo node info via config-server side-channel.
 	state->header.sourceID = networkHeader.sourceID;
-	sshsNodePutShort(state->sourceInfoNode, "dvsSizeX", 240);
+	sshsNodePutShort(state->sourceInfoNode, "dvsSizeX", 240); // updated to different HW models in parseSourceString() 
 	sshsNodePutShort(state->sourceInfoNode, "dvsSizeY", 180);
 	sshsNodePutShort(state->sourceInfoNode, "apsSizeX", 240);
 	sshsNodePutShort(state->sourceInfoNode, "apsSizeY", 180);
