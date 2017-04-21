@@ -2100,7 +2100,7 @@ bool caerInputCommonInit(caerModuleData moduleData, int readFd, bool isNetworkSt
 
 	// send TS reset packet (as autoReset will re-start this module -> init will be called again
 	handleTSReset(state);
-	caerLog(CAER_LOG_WARNING, state->parentModule->moduleSubSystemString, "Sending TS_RESET packet from init.");
+	caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Sending TS_RESET packet from init.");
 
 
 	return (true);
@@ -2209,6 +2209,8 @@ void caerInputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list ar
 
 		sshsNodePutLong(state->sourceInfoNode, "highestTimestamp",
 			caerEventPacketContainerGetHighestEventTimestamp(*container));
+size_t a =caerEventPacketContainerGetHighestEventTimestamp(*container);
+caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,"TS= %ul", a);
 
 		caerEventPacketHeader special = caerEventPacketContainerGetEventPacket(*container, SPECIAL_EVENT);
 
