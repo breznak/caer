@@ -100,6 +100,9 @@
 #ifdef ENABLE_PIXELMATRIX
 #include "modules/pixelmatrix/pixelmatrix.h"
 #endif
+#ifdef ENABLE_DEPRESSINGSYNAPSEFILTER
+#include "modules/depressingsynapsefilter/depressingsynapsefilter.h"
+#endif
 
 #ifdef ENABLE_IMAGEGENERATOR
 #include "modules/imagegenerator/imagegenerator.h"
@@ -213,6 +216,11 @@ static bool mainloop_1(void) {
 	// Filter that rotate events in different ways
 #ifdef ENABLE_ROTATEFILTER
 	caerRotateFilter(16, polarity);
+#endif
+
+	// Filters out rapidly firing input using depressing probabilistic synapse model
+#ifdef ENABLE_DEPRESSINGSYNAPSEFILTER
+	caerDepressingSynapseFilter(25, polarity);
 #endif
 
 	// Filters that track multiple objects by using rectangular clusters (fixed length array version)

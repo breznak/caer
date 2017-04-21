@@ -32,6 +32,7 @@ ADD_SUBDIRECTORY(trainfromcaffe)
 ADD_SUBDIRECTORY(opencvopticflow)
 ADD_SUBDIRECTORY(denoisingautoencoder)
 ADD_SUBDIRECTORY(pixelmatrix)
+ADD_SUBDIRECTORY(depressingsynapsefilter)
 
 # Support private modules that don't get considered for commit,
 # by reserving a directory called PrivateModules with its own
