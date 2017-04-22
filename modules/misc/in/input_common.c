@@ -2027,7 +2027,9 @@ bool caerInputCommonInit(caerModuleData moduleData, int readFd, bool isNetworkSt
 	state->sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
 	sshsNodePutLongIfAbsent(state->sourceInfoNode, "highestTimestamp", 0);
         sshsNodePutLongIfAbsent(state->sourceInfoNode, "_highestTimestamp", 0); //only set during absolutely 1st run
-	sshsNodePutLongIfAbsent(state->sourceInfoNode, "_lowestTimestamp", INT32_MAX); //high < low -> will be recomputed in 1st iter of run() 
+	sshsNodePutLongIfAbsent(state->sourceInfoNode, "_lowestTimestamp", INT32_MAX); //high < low -> will be recomputed in 1st iter of run()
+        sshsNodePutLongIfAbsent(state->sourceInfoNode, "carryTS", 0); 
+ 
 
 	// Check for invalid file descriptors.
 	if (readFd < -1) {
