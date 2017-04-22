@@ -88,6 +88,9 @@ void caerStatisticsStringUpdate(caerEventPacketHeader packetHeader, caerStatisti
 	if (packetHeader != NULL) {
 		state->totalEventsCounter += U64T(caerEventPacketHeaderGetEventNumber(packetHeader));
 		state->validEventsCounter += U64T(caerEventPacketHeaderGetEventValid(packetHeader));
+
+	// update Counts buffer
+	state->bufferCounts[(state->bufferIdx++)%MAX_BUFFER_SIZE] = state->validEventsCounter; //storing counts of valid evts in buffer
 	}
 
 	// Print up-to-date statistic roughly every second, taking into account possible deviations.
