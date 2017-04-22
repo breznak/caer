@@ -39,7 +39,7 @@ static void caerStatisticsRun(caerModuleData moduleData, size_t argsNumber, va_l
 
 	caerStatisticsStringUpdate(packetHeader, state);
 
-	fprintf(stdout, "\r%s - %s - %s", state->currentStatisticsStringTotal, state->currentStatisticsStringValid, state->currentStatisticsStringStats);
+	fprintf(stdout, "\r%s \t %s \t %s", state->currentStatisticsStringTotal, state->currentStatisticsStringValid, state->currentStatisticsStringStats);
 	fflush(stdout);
 }
 
@@ -101,6 +101,10 @@ void caerStatisticsStringUpdate(caerEventPacketHeader packetHeader, caerStatisti
 
 	// update Counts buffer
 	state->bufferCounts[(state->bufferIdx++)%MAX_BUFFER_SIZE] = state->validEventsCounter; //storing counts of valid evts in buffer
+	//compute stats
+	state->currMax = maxArr(state->bufferCounts);
+	state->currMin = minArr(state->bufferCounts);
+	state->currAvg = avgArr(state->bufferCounts);
 	}
 
 	// Print up-to-date statistic roughly every second, taking into account possible deviations.
@@ -118,8 +122,11 @@ void caerStatisticsStringUpdate(caerEventPacketHeader packetHeader, caerStatisti
 		uint64_t validEventsPerTime = (state->validEventsCounter * (1000000000LLU / state->divisionFactor))
 			/ diffNanoTime;
 
+		//update the strings here
 		sprintf(state->currentStatisticsStringTotal, CAER_STATISTICS_STRING_TOTAL, totalEventsPerTime);
 		sprintf(state->currentStatisticsStringValid, CAER_STATISTICS_STRING_VALID, validEventsPerTime);
+                sprintf(state->currentStatisticsStringStats, CAER_STATISTICS_STRING_STATS, state->currMin, state->currMax, state->currAvg);
+
 
 		// Reset for next update.
 		state->totalEventsCounter = 0;
@@ -152,9 +159,26 @@ void caerStatisticsStringReset(caerStatisticsState state) {
 
 // private
 uint64_t maxArr(uint64_t arr[]) {
-  uint64_t amax =  arr[0];
-  for(size_t i=0; i< sizeof(arr)/sizeof(amax); i++) {
-    if(arr[i] > amax) amax = arr[i];
+  uint64_t a =  arr[0];
+  for(size_t i=0; i< sizeof(arr)/sizeof(a); i++) {
+    if(arr[i] > a) a = arr[i];
   }
-  return amax;
+  return a;
 }
+
+uint64_t minArr(uint64_t arr[]) {
+  uint64_t a =  arr[0];
+  for(size_t i=0; i< sizeof(arr)/sizeof(a); i++) {
+    if(arr[i] < a) a = arr[i];
+  }
+  return a;
+}
+
+double avgArr(uint64_t arr[]) {
+  double a =  0;
+  for(size_t i=0; i< sizeof(arr)/sizeof(a); i++) {
+    a += arr[i];
+  }
+  return a/(double)MAX_BUFFER_SIZE; //TODO there's error for first evts until buffer is onced fully filled (keeping track of evts in buff may not be worth it)
+}
+
