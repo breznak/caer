@@ -130,7 +130,7 @@ void caerVisualizerSystemInit(void) {
 	}
 
 	// Determine biggest possible statistics string.
-	size_t maxStatStringLength = (size_t) snprintf(NULL, 0, CAER_STATISTICS_STRING_TOTAL, UINT64_MAX);
+	size_t maxStatStringLength = (size_t) snprintf(NULL, 0, CAER_STATISTICS_STRING_STATS, UINT64_MAX);  //FIXME make this computed for each str independently, don't assume to know a larger string; or just put 1500?
 
 	char maxStatString[maxStatStringLength + 1];
 	snprintf(maxStatString, maxStatStringLength + 1, CAER_STATISTICS_STRING_TOTAL, UINT64_MAX);
@@ -144,7 +144,7 @@ void caerVisualizerSystemInit(void) {
 
 	// Determine statistics string width.
 	if (font != NULL) {
-		STATISTICS_WIDTH = (2 * GLOBAL_FONT_SPACING) + al_get_text_width(font, maxStatString);
+		STATISTICS_WIDTH = (2* GLOBAL_FONT_SPACING) + al_get_text_width(font, maxStatString);
 
 		STATISTICS_HEIGHT = (3 * GLOBAL_FONT_SPACING) + (2 * GLOBAL_FONT_SIZE);
 
@@ -657,6 +657,10 @@ static void caerVisualizerUpdateScreen(caerVisualizerState state) {
 
 			al_draw_text(state->displayFont, al_map_rgb(255, 255, 255), GLOBAL_FONT_SPACING,
 				(2 * GLOBAL_FONT_SPACING) + GLOBAL_FONT_SIZE, 0, state->packetStatistics.currentStatisticsStringValid);
+
+                        al_draw_text(state->displayFont, al_map_rgb(255, 255, 255), GLOBAL_FONT_SPACING,
+                                (3 * GLOBAL_FONT_SPACING) + GLOBAL_FONT_SIZE, 0, state->packetStatistics.currentStatisticsStringStats);
+
 		}
 
 		// Blit bitmap to screen.
