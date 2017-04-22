@@ -210,7 +210,7 @@ static caerEventPacketContainer generatePacketContainer(inputCommonState state, 
 static void commitPacketContainer(inputCommonState state, bool forceFlush);
 static void doTimeDelay(inputCommonState state);
 static void doPacketContainerCommit(inputCommonState state, caerEventPacketContainer packetContainer, bool force);
-static bool handleTSReset(inputCommonState state);
+static bool handleTSReset(caerModuleData moduleData);
 static void getPacketInfo(caerEventPacketHeader packet, packetData packetInfoData);
 static int inputAssemblerThread(void *stateArg);
 
@@ -962,14 +962,15 @@ static int aedat3GetPacket(inputCommonState state, bool isAEDAT30) {
 		}
 
 		// Update timestamp information and insert packet into meta-data list.
+		size_t carry = sshsNodeGetLong(state->sourceInfoNode, "carryTS");
 		void *firstEvent = caerGenericEventGetEvent(state->packets.currPacket, 0);
 		state->packets.currPacketData->startTimestamp = caerGenericEventGetTimestamp64(firstEvent,
-			state->packets.currPacket);
+			state->packets.currPacket) + carry;
 
 		void *lastEvent = caerGenericEventGetEvent(state->packets.currPacket,
 			state->packets.currPacketData->eventNumber - 1);
 		state->packets.currPacketData->endTimestamp = caerGenericEventGetTimestamp64(lastEvent,
-			state->packets.currPacket);
+			state->packets.currPacket) + carry;
 
 		// If the file was in AEDAT 3.0 format, we must change X/Y coordinate origin
 		// for Polarity and Frame events. We do this after parsing and decompression.
@@ -1757,9 +1758,13 @@ static void doPacketContainerCommit(inputCommonState state, caerEventPacketConta
 	}
 }
 
-static bool handleTSReset(inputCommonState state) {
+static bool handleTSReset(caerModuleData moduleData) {
+	const inputCommonState state = moduleData->moduleState;
+
 	// Commit all current content.
 	commitPacketContainer(state, true);
+        caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Sending TS_RESET packet.");
+
 
 	// Send lone packet container with just TS_RESET.
 	// Allocate packet container just for this event.
@@ -1793,9 +1798,32 @@ static bool handleTSReset(inputCommonState state) {
 
 	// Prepare for the new event timeline coming with the next packet.
 	// Reset all time related counters to initial state.
+        sshsNodePutBoolIfAbsent(state->sourceInfoNode, "autoRestart", true);
+	if(sshsNodeGetBool(state->sourceInfoNode, "autoRestart")) {
+		size_t highest = sshsNodeGetLong(state->sourceInfoNode, "_highestTimestamp"); // highest running TS from only 1st iteration
+		size_t lowest = sshsNodeGetLong(state->sourceInfoNode, "_lowestTimestamp"); // only used here once for diff highest-lowest; value of 1st event.TS
+                size_t highestRunning = sshsNodeGetLong(state->sourceInfoNode, "highestTimestamp"); // highest running TS (from repeated cycles, not only from 1 iteration)
+
+caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "hi = %u hi Run = %u" ,            highest, highestRunning);
+
+                sshsNodePutLongIfAbsent(state->sourceInfoNode, "carryTS", 0);
+		size_t carryTS = sshsNodeGetLong(state->sourceInfoNode, "carryTS");
+
+		if(highest > lowest &&  highest==highestRunning && carryTS == 0) { 
+			carryTS = highest - lowest; //carry is either 0 and later always this.
+caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Setting FIRST Carry TS on autoRestart = %u" ,            carryTS);
+		} else  {
+			carryTS += carryTS; // increment carry with another iteration	
+		}
+                sshsNodePutLong(state->sourceInfoNode, "carryTS", carryTS);
+
+caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "Carry TS on autoRestart = %u" ,            carryTS);
+	}
+ 
 	state->packetContainer.lastPacketTimestamp = 0;
 	state->packetContainer.lastTimestampOverflow = 0;
 	state->packetContainer.newContainerTimestampEnd = -1;
+
 
 	return (true);
 }
@@ -1991,12 +2019,15 @@ static const UT_icd ut_caerEventPacketHeader_icd = { sizeof(caerEventPacketHeade
 bool caerInputCommonInit(caerModuleData moduleData, int readFd, bool isNetworkStream,
 			bool isNetworkMessageBased) {
 
-	inputCommonState state = moduleData->moduleState;
+	const inputCommonState state = moduleData->moduleState;
+
 
 	state->parentModule = moduleData;
 	state->mainloopReference = caerMainloopGetReference();
 	state->sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
-	sshsNodePutLong(state->sourceInfoNode, "highestTimestamp", -1);
+	sshsNodePutLongIfAbsent(state->sourceInfoNode, "highestTimestamp", 0);
+        sshsNodePutLongIfAbsent(state->sourceInfoNode, "_highestTimestamp", 0); //only set during absolutely 1st run
+	sshsNodePutLongIfAbsent(state->sourceInfoNode, "_lowestTimestamp", INT32_MAX); //high < low -> will be recomputed in 1st iter of run() 
 
 	// Check for invalid file descriptors.
 	if (readFd < -1) {
@@ -2010,8 +2041,8 @@ bool caerInputCommonInit(caerModuleData moduleData, int readFd, bool isNetworkSt
 	state->isNetworkStream = isNetworkStream;
 	state->isNetworkMessageBased = isNetworkMessageBased;
 
-	// Add auto-restart setting.
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "autoRestart", true);
+        // Add auto-restart setting.
+        sshsNodePutBoolIfAbsent(moduleData->moduleNode, "autoRestart", true);
 
 	// Handle configuration.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "validOnly", false); // only send valid events
@@ -2095,22 +2126,21 @@ bool caerInputCommonInit(caerModuleData moduleData, int readFd, bool isNetworkSt
 		return (false);
 	}
 
+
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerInputCommonConfigListener);
-
-	// send TS reset packet (as autoReset will re-start this module -> init will be called again
-	handleTSReset(state);
-	caerLog(CAER_LOG_DEBUG, state->parentModule->moduleSubSystemString, "Sending TS_RESET packet from init.");
-
+        // send TS reset packet (as autoReset will re-start this module -> init will be called again in modules that receive it
+        handleTSReset(moduleData);
 
 	return (true);
 }
 
 void caerInputCommonExit(caerModuleData moduleData) {
+inputCommonState state = ((inputCommonState)moduleData->moduleState);
+
 	// Remove listener, which can reference invalid memory in userData.
 	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerInputCommonConfigListener);
 
-	inputCommonState state = moduleData->moduleState;
 
 	// Stop input threads and wait on them.
 	atomic_store(&state->running, false);
@@ -2207,19 +2237,39 @@ void caerInputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list ar
 		atomic_fetch_sub_explicit(&state->mainloopReference->dataAvailable, 1, memory_order_relaxed);
 		atomic_fetch_sub_explicit(&state->dataAvailableModule, 1, memory_order_relaxed);
 
-		sshsNodePutLong(state->sourceInfoNode, "highestTimestamp",
-			caerEventPacketContainerGetHighestEventTimestamp(*container));
-size_t a =caerEventPacketContainerGetHighestEventTimestamp(*container);
-caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString,"TS= %ul", a);
+		// handle TS_RESET
+                caerEventPacketHeader special = caerEventPacketContainerGetEventPacket(*container, SPECIAL_EVENT);
 
-		caerEventPacketHeader special = caerEventPacketContainerGetEventPacket(*container, SPECIAL_EVENT);
+                if ((special != NULL) && (caerEventPacketHeaderGetEventType(special) == SPECIAL_EVENT)
+                        && (caerEventPacketHeaderGetEventNumber(special) == 1)
+                        && (caerSpecialEventPacketFindEventByType((caerSpecialEventPacket) special, TIMESTAMP_RESET) != NULL)) {
+                        caerMainloopResetProcessors(moduleData->moduleID);
+                        caerMainloopResetOutputs(moduleData->moduleID);
+			return;
+                }
 
-		if ((special != NULL) && (caerEventPacketHeaderGetEventType(special) == SPECIAL_EVENT)
-			&& (caerEventPacketHeaderGetEventNumber(special) == 1)
-			&& (caerSpecialEventPacketFindEventByType((caerSpecialEventPacket) special, TIMESTAMP_RESET) != NULL)) {
-			caerMainloopResetProcessors(moduleData->moduleID);
-			caerMainloopResetOutputs(moduleData->moduleID);
+
+		size_t localHigh =            caerEventPacketContainerGetHighestEventTimestamp(*container);
+		// update lowest once
+		size_t storedLowest = sshsNodeGetLong(state->sourceInfoNode, "_lowestTimestamp");
+		if(storedLowest > localHigh ) { 
+			size_t firstLowest = caerEventPacketContainerGetLowestEventTimestamp(*container);  
+			sshsNodePutLong(state->sourceInfoNode, "_lowestTimestamp", firstLowest);
+
+caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "First evt TS ~ Carry TS lowest = %u" ,            firstLowest);
 		}
+
+                // update lowest once
+                size_t storedHighest = sshsNodeGetLong(state->sourceInfoNode, "_highestTimestamp");
+                if(storedHighest < localHigh ) { //first run
+                        sshsNodePutLong(state->sourceInfoNode, "_highestTimestamp", localHigh);
+
+// caerLog(CAER_LOG_ERROR, state->parentModule->moduleSubSystemString, "First evt TS ~ Carry TS  highest = %u" ,            localHigh); //spams for the very first iteration
+                }
+
+
+		sshsNodePutLong(state->sourceInfoNode, "highestTimestamp", localHigh + sshsNodeGetLong(state->sourceInfoNode, "carryTS")); //carryTS is computed in handleTS //TODO is this enough to update evts' timestamp? 
+
 	}
 }
 
