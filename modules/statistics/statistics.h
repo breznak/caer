@@ -9,6 +9,8 @@
 
 #define CAER_STATISTICS_STRING_TOTAL "Total events/second: %10" PRIu64
 #define CAER_STATISTICS_STRING_VALID "Valid events/second: %10" PRIu64
+#define CAER_STATISTICS_STRING_STATS "Event counts: Min=  %10" PRIu64 "  Max=  %10" PRIu64 "  Avg=  %10" PRIu64
+
 
 #define MAX_BUFFER_SIZE  20 // max size for buffer of counts
 
@@ -16,10 +18,14 @@ struct caer_statistics_state {
 	uint64_t divisionFactor;
 	char *currentStatisticsStringTotal;
 	char *currentStatisticsStringValid;
+	char *currentStatisticsStringStats;
 	// Internal book-keeping.
 	struct timespec lastTime;
 	uint64_t totalEventsCounter;
 	uint64_t validEventsCounter;
+	uint64_t currMin;
+	uint64_t currMax;
+	uint64_t currAvg;
 	uint64_t bufferCounts[MAX_BUFFER_SIZE]; 
 	size_t bufferIdx;
 };
@@ -35,6 +41,6 @@ void caerStatisticsStringReset(caerStatisticsState state);
 void caerStatistics(uint16_t moduleID, caerEventPacketHeader packetHeader, size_t divisionFactor);
 
 //private
-
+uint64_t maxArray(uint64_t arr[]);
 
 #endif /* STATISTICS_H_ */

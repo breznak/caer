@@ -39,7 +39,7 @@ static void caerStatisticsRun(caerModuleData moduleData, size_t argsNumber, va_l
 
 	caerStatisticsStringUpdate(packetHeader, state);
 
-	fprintf(stdout, "\r%s - %s", state->currentStatisticsStringTotal, state->currentStatisticsStringValid);
+	fprintf(stdout, "\r%s - %s - %s", state->currentStatisticsStringTotal, state->currentStatisticsStringValid, state->currentStatisticsStringStats);
 	fflush(stdout);
 }
 
@@ -58,21 +58,31 @@ static void caerStatisticsReset(caerModuleData moduleData, uint16_t resetCallSou
 }
 
 bool caerStatisticsStringInit(caerStatisticsState state) {
-	// Total and Valid parts have same length.
-	size_t maxSplitStatStringLength = (size_t) snprintf(NULL, 0, CAER_STATISTICS_STRING_TOTAL, UINT64_MAX);
 
-	state->currentStatisticsStringTotal = calloc(maxSplitStatStringLength + 1, sizeof(char)); // +1 for NUL termination.
+	state->currentStatisticsStringTotal = calloc(((size_t) snprintf(NULL, 0, CAER_STATISTICS_STRING_TOTAL, UINT64_MAX)) + 1, sizeof(char)); // +1 for NUL termination.
 	if (state->currentStatisticsStringTotal == NULL) {
 		return (false);
 	}
 
-	state->currentStatisticsStringValid = calloc(maxSplitStatStringLength + 1, sizeof(char)); // +1 for NUL termination.
+	state->currentStatisticsStringValid = calloc(((size_t) snprintf(NULL, 0, CAER_STATISTICS_STRING_VALID, UINT64_MAX)) + 1, sizeof(char)); // +1 for NUL termination.
 	if (state->currentStatisticsStringValid == NULL) {
 		free(state->currentStatisticsStringTotal);
 		state->currentStatisticsStringTotal = NULL;
 
 		return (false);
 	}
+
+        state->currentStatisticsStringStats = calloc( ((size_t) snprintf(NULL, 0, CAER_STATISTICS_STRING_STATS, UINT64_MAX)) + 1, sizeof(char)); // +1 for NUL termination.
+        if (state->currentStatisticsStringStats == NULL) {
+                free(state->currentStatisticsStringTotal);
+                state->currentStatisticsStringTotal = NULL;
+		free(state->currentStatisticsStringValid);
+		state->currentStatisticsStringValid = NULL;
+
+                return (false);
+        }
+
+
 
 	// Initialize to current time.
 	portable_clock_gettime_monotonic(&state->lastTime);
@@ -138,4 +148,13 @@ void caerStatisticsStringReset(caerStatisticsState state) {
 
 	// Update to current time.
 	portable_clock_gettime_monotonic(&state->lastTime);
+}
+
+// private
+uint64_t maxArr(uint64_t arr[]) {
+  uint64_t amax =  arr[0];
+  for(size_t i=0; i< sizeof(arr)/sizeof(amax); i++) {
+    if(arr[i] > amax) amax = arr[i];
+  }
+  return amax;
 }
